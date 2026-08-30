@@ -1,0 +1,745 @@
+from __future__ import annotations
+
+import secrets
+import string
+from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from database.models import (
+    AnswerOption,
+    Category,
+    ExamCode,
+    ExamRequest,
+    ExamResult,
+    Position,
+    Question,
+    Rank,
+    Restaurant,
+    RestaurantManager,
+    RestaurantRequest,
+    TestResult,
+    User,
+    UserAnswer,
+    Vacancy,
+)
+
+
+# ---------- Пользователи ----------
+
+async def get_or_create_user(
+    session: AsyncSession,
+    telegram_id: int,
+    username: str | None,
+    full_name: str | None,
+) -> User:
+    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(telegram_id=telegram_id, username=username, full_name=full_name)
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return user
+
+    changed = False
+    if username is not None and user.username != username:
+        user.username = username
+        changed = True
+    if full_name is not None and user.full_name != full_name:
+        user.full_name = full_name
+        changed = True
+    if changed:
+        await session.commit()
+    return user
+
+
+async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | None:
+    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
+    return await session.get(User, user_id)
+
+
+async def set_user_position(session: AsyncSession, user: User, position_id: int) -> None:
+    user.current_position_id = position_id
+    await session.commit()
+
+
+async def set_user_restaurant(session: AsyncSession, user: User, restaurant_id: int) -> None:
+    user.restaurant_id = restaurant_id
+    await session.commit()
+
+
+# ---------- Должности / категории / вопросы ----------
+
+async def get_active_positions(
+    session: AsyncSession, restaurant_id: int | None = None
+) -> list[Position]:
+    """Общие должности (restaurant_id is NULL) видны всем. Если передан
+    restaurant_id — дополнительно показываются уникальные должности именно
+    этого заведения (например, тесты по меню конкретного ресторана)."""
+    if restaurant_id is None:
+        condition = Position.restaurant_id.is_(None)
+    else:
+        condition = (Position.restaurant_id.is_(None)) | (Position.restaurant_id == restaurant_id)
+
+    result = await session.execute(
+        select(Position)
+        .where(Position.is_active.is_(True), condition)
+        .order_by(Position.order, Position.id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_position_by_id(session: AsyncSession, position_id: int) -> Position | None:
+    return await session.get(Position, position_id)
+
+
+async def get_categories_for_position(session: AsyncSession, position_id: int) -> list[Category]:
+    result = await session.execute(
+        select(Category).where(Category.position_id == position_id).order_by(Category.order)
+    )
+    return list(result.scalars().all())
+
+
+async def get_category_by_id(session: AsyncSession, category_id: int) -> Category | None:
+    return await session.get(Category, category_id)
+
+
+async def get_questions_with_options(session: AsyncSession, category_id: int) -> list[Question]:
+    result = await session.execute(
+        select(Question)
+        .where(Question.category_id == category_id)
+        .options(selectinload(Question.options))
+        .order_by(Question.order)
+    )
+    return list(result.scalars().all())
+
+
+async def get_question_with_options(session: AsyncSession, question_id: int) -> Question | None:
+    result = await session.execute(
+        select(Question)
+        .where(Question.id == question_id)
+        .options(selectinload(Question.options))
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_answer_option(session: AsyncSession, option_id: int) -> AnswerOption | None:
+    return await session.get(AnswerOption, option_id)
+
+
+# ---------- Прохождение теста ----------
+
+async def create_test_result(session: AsyncSession, user_id: int, category_id: int) -> TestResult:
+    tr = TestResult(user_id=user_id, category_id=category_id, correct_count=0, total_count=0, percentage=0.0)
+    session.add(tr)
+    await session.commit()
+    await session.refresh(tr)
+    return tr
+
+
+async def save_user_answer(
+    session: AsyncSession,
+    test_result_id: int,
+    question_id: int,
+    answer_option_id: int,
+    is_correct: bool,
+) -> None:
+    ua = UserAnswer(
+        test_result_id=test_result_id,
+        question_id=question_id,
+        answer_option_id=answer_option_id,
+        is_correct=is_correct,
+    )
+    session.add(ua)
+    await session.commit()
+
+
+async def finalize_test_result(
+    session: AsyncSession, test_result_id: int, correct_count: int, total_count: int
+) -> TestResult:
+    test_result = await session.get(TestResult, test_result_id)
+    test_result.correct_count = correct_count
+    test_result.total_count = total_count
+    test_result.percentage = round((correct_count / total_count) * 100, 1) if total_count else 0.0
+    await session.commit()
+    await session.refresh(test_result)
+    return test_result
+
+
+# ---------- Статистика / рейтинг ----------
+
+async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
+    result = await session.execute(select(TestResult).where(TestResult.user_id == user_id))
+    results = list(result.scalars().all())
+    tests_completed = len(results)
+    correct_total = sum(r.correct_count for r in results)
+    wrong_total = sum((r.total_count - r.correct_count) for r in results)
+    avg_percentage = (
+        round(sum(r.percentage for r in results) / tests_completed, 1) if tests_completed else 0.0
+    )
+    return {
+        "tests_completed": tests_completed,
+        "correct_total": correct_total,
+        "wrong_total": wrong_total,
+        "avg_percentage": avg_percentage,
+    }
+
+
+async def _all_users_scored(session: AsyncSession) -> list[tuple[User, dict]]:
+    result = await session.execute(select(User))
+    users = list(result.scalars().all())
+    scored: list[tuple[User, dict]] = []
+    for user in users:
+        stats = await get_user_stats(session, user.id)
+        if stats["tests_completed"] > 0:
+            scored.append((user, stats))
+    scored.sort(key=lambda item: (-item[1]["avg_percentage"], -item[1]["tests_completed"]))
+    return scored
+
+
+async def get_leaderboard(session: AsyncSession, limit: int = 10) -> list[dict]:
+    scored = await _all_users_scored(session)
+    return [{"user": user, **stats} for user, stats in scored[:limit]]
+
+
+async def get_user_rank(session: AsyncSession, user_id: int) -> int | None:
+    scored = await _all_users_scored(session)
+    for idx, (user, _stats) in enumerate(scored, start=1):
+        if user.id == user_id:
+            return idx
+    return None
+
+
+async def get_all_users_with_stats(session: AsyncSession) -> list[dict]:
+    result = await session.execute(select(User).order_by(User.id))
+    users = list(result.scalars().all())
+    data = []
+    for user in users:
+        stats = await get_user_stats(session, user.id)
+        position = (
+            await session.get(Position, user.current_position_id)
+            if user.current_position_id
+            else None
+        )
+        data.append({"user": user, "position": position, **stats})
+    return data
+
+
+# ---------- Ранги и опыт (XP) ----------
+
+XP_PER_DIFFICULTY = 10  # базовое количество XP за правильный ответ на вопрос сложности 1
+
+
+async def get_ranks_for_position(session: AsyncSession, position_id: int) -> list[Rank]:
+    result = await session.execute(
+        select(Rank).where(Rank.position_id == position_id).order_by(Rank.level)
+    )
+    return list(result.scalars().all())
+
+
+async def get_user_xp_for_position(session: AsyncSession, user_id: int, position_id: int) -> int:
+    """Суммарный опыт пользователя по конкретной должности (по всем пройденным тестам)."""
+    stmt = (
+        select(UserAnswer.is_correct, Question.difficulty)
+        .join(Question, UserAnswer.question_id == Question.id)
+        .join(TestResult, UserAnswer.test_result_id == TestResult.id)
+        .join(Category, TestResult.category_id == Category.id)
+        .where(TestResult.user_id == user_id, Category.position_id == position_id)
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
+    return sum(difficulty * XP_PER_DIFFICULTY for is_correct, difficulty in rows if is_correct)
+
+
+async def get_exam_bonus_xp_for_position(
+    session: AsyncSession, user_id: int, position_id: int
+) -> int:
+    """Бонусный XP от успешно сданных экзаменов по одноразовым кодам."""
+    result = await session.execute(
+        select(ExamResult.bonus_xp_awarded).where(
+            ExamResult.user_id == user_id,
+            ExamResult.position_id == position_id,
+            ExamResult.passed.is_(True),
+        )
+    )
+    return sum(result.scalars().all())
+
+
+async def get_total_xp_for_position(session: AsyncSession, user_id: int, position_id: int) -> int:
+    """Обычный XP за тесты + бонусный XP за сданные экзамены — используется
+    везде, где показывается ранг пользователя."""
+    regular = await get_user_xp_for_position(session, user_id, position_id)
+    bonus = await get_exam_bonus_xp_for_position(session, user_id, position_id)
+    return regular + bonus
+
+
+def get_rank_for_xp(ranks: list[Rank], xp: int) -> Rank | None:
+    """Возвращает наивысший ранг, порог которого достигнут указанным опытом."""
+    current = None
+    for rank in ranks:  # ranks уже отсортированы по level по возрастанию
+        if xp >= rank.min_xp:
+            current = rank
+        else:
+            break
+    return current
+
+
+async def get_xp_earned_for_test_result(session: AsyncSession, test_result_id: int) -> int:
+    """XP, полученный за один конкретный тест (для показа в результатах)."""
+    stmt = (
+        select(UserAnswer.is_correct, Question.difficulty)
+        .join(Question, UserAnswer.question_id == Question.id)
+        .where(UserAnswer.test_result_id == test_result_id)
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
+    return sum(difficulty * XP_PER_DIFFICULTY for is_correct, difficulty in rows if is_correct)
+
+
+def get_next_rank(ranks: list[Rank], current_rank: Rank | None) -> Rank | None:
+    if current_rank is None:
+        return ranks[0] if ranks else None
+    for rank in ranks:
+        if rank.level == current_rank.level + 1:
+            return rank
+    return None
+
+
+async def get_recent_results_for_user(
+    session: AsyncSession, user_id: int, limit: int = 10
+) -> list[TestResult]:
+    result = await session.execute(
+        select(TestResult)
+        .where(TestResult.user_id == user_id)
+        .options(selectinload(TestResult.category))
+        .order_by(TestResult.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+# ---------- Вакансии ----------
+# Сами вакансии публикуются ботом в Telegram-канал (VACANCIES_CHANNEL).
+# Здесь только копия записи — для истории/учёта в админ-панели.
+
+async def create_vacancy(
+    session: AsyncSession,
+    title: str,
+    description: str,
+    salary: str | None,
+    location: str | None,
+    created_by_telegram_id: int,
+    created_by_name: str | None,
+) -> Vacancy:
+    vacancy = Vacancy(
+        title=title,
+        description=description,
+        salary=salary,
+        location=location,
+        created_by_telegram_id=created_by_telegram_id,
+        created_by_name=created_by_name,
+    )
+    session.add(vacancy)
+    await session.commit()
+    await session.refresh(vacancy)
+    return vacancy
+
+
+async def get_all_vacancies(session: AsyncSession) -> list[Vacancy]:
+    """Список всех опубликованных вакансий (для админ-панели)."""
+    result = await session.execute(select(Vacancy).order_by(Vacancy.created_at.desc()))
+    return list(result.scalars().all())
+
+
+async def get_vacancy_by_id(session: AsyncSession, vacancy_id: int) -> Vacancy | None:
+    return await session.get(Vacancy, vacancy_id)
+
+
+async def delete_vacancy(session: AsyncSession, vacancy_id: int) -> None:
+    vacancy = await session.get(Vacancy, vacancy_id)
+    if vacancy is not None:
+        await session.delete(vacancy)
+        await session.commit()
+
+
+# ---------- Заведения (рестораны) ----------
+
+async def create_restaurant(
+    session: AsyncSession, name: str, first_manager_telegram_id: int, first_manager_name: str | None = None
+) -> Restaurant:
+    """Создаёт заведение и сразу назначает первого администратора
+    (создателя/того, кому его назначили). Дальше администраторов может
+    добавить любой существующий администратор — см. add_restaurant_manager."""
+    restaurant = Restaurant(name=name)
+    session.add(restaurant)
+    await session.flush()  # получить restaurant.id
+
+    session.add(
+        RestaurantManager(
+            restaurant_id=restaurant.id,
+            telegram_id=first_manager_telegram_id,
+            name=first_manager_name,
+            added_by_telegram_id=None,  # первый администратор — назначен при создании
+        )
+    )
+    await session.commit()
+    await session.refresh(restaurant)
+    return restaurant
+
+
+async def get_restaurants_managed_by(session: AsyncSession, telegram_id: int) -> list[Restaurant]:
+    """Все заведения, где этот пользователь — администратор (их может быть
+    несколько, если он администрирует не одно заведение)."""
+    result = await session.execute(
+        select(Restaurant)
+        .join(RestaurantManager, RestaurantManager.restaurant_id == Restaurant.id)
+        .where(RestaurantManager.telegram_id == telegram_id)
+        .order_by(Restaurant.name)
+    )
+    return list(result.scalars().unique().all())
+
+
+async def is_restaurant_manager(session: AsyncSession, restaurant_id: int, telegram_id: int) -> bool:
+    result = await session.execute(
+        select(RestaurantManager).where(
+            RestaurantManager.restaurant_id == restaurant_id,
+            RestaurantManager.telegram_id == telegram_id,
+        )
+    )
+    return result.scalars().first() is not None
+
+
+async def get_restaurant_managers(session: AsyncSession, restaurant_id: int) -> list[RestaurantManager]:
+    result = await session.execute(
+        select(RestaurantManager)
+        .where(RestaurantManager.restaurant_id == restaurant_id)
+        .order_by(RestaurantManager.created_at)
+    )
+    return list(result.scalars().all())
+
+
+async def add_restaurant_manager(
+    session: AsyncSession,
+    restaurant_id: int,
+    telegram_id: int,
+    name: str | None,
+    added_by_telegram_id: int,
+) -> RestaurantManager | None:
+    """Возвращает None, если этот человек уже администратор этого заведения."""
+    already = await is_restaurant_manager(session, restaurant_id, telegram_id)
+    if already:
+        return None
+
+    manager = RestaurantManager(
+        restaurant_id=restaurant_id,
+        telegram_id=telegram_id,
+        name=name,
+        added_by_telegram_id=added_by_telegram_id,
+    )
+    session.add(manager)
+    await session.commit()
+    await session.refresh(manager)
+    return manager
+
+
+async def remove_restaurant_manager(session: AsyncSession, restaurant_id: int, telegram_id: int) -> bool:
+    """Возвращает False, если это последний администратор заведения (нельзя
+    оставить заведение вообще без администратора) или если такого
+    администратора не найдено."""
+    managers = await get_restaurant_managers(session, restaurant_id)
+    if len(managers) <= 1:
+        return False
+
+    target = next((m for m in managers if m.telegram_id == telegram_id), None)
+    if target is None:
+        return False
+
+    await session.delete(target)
+    await session.commit()
+    return True
+
+
+async def get_all_restaurants(session: AsyncSession) -> list[Restaurant]:
+    result = await session.execute(select(Restaurant).order_by(Restaurant.created_at.desc()))
+    return list(result.scalars().all())
+
+
+async def get_restaurant_by_id(session: AsyncSession, restaurant_id: int) -> Restaurant | None:
+    return await session.get(Restaurant, restaurant_id)
+
+
+async def get_restaurant_by_manager(
+    session: AsyncSession, manager_telegram_id: int
+) -> Restaurant | None:
+    """Оставлено для обратной совместимости — возвращает первое заведение,
+    где этот пользователь администратор. Если он администрирует несколько,
+    используйте get_restaurants_managed_by."""
+    restaurants = await get_restaurants_managed_by(session, manager_telegram_id)
+    return restaurants[0] if restaurants else None
+
+
+async def get_restaurant_by_group_chat_id(
+    session: AsyncSession, group_chat_id: int
+) -> Restaurant | None:
+    result = await session.execute(
+        select(Restaurant).where(Restaurant.group_chat_id == group_chat_id)
+    )
+    return result.scalars().first()
+
+
+async def set_restaurant_group_chat_id(
+    session: AsyncSession, restaurant_id: int, group_chat_id: int
+) -> None:
+    restaurant = await session.get(Restaurant, restaurant_id)
+    if restaurant is not None:
+        restaurant.group_chat_id = group_chat_id
+        await session.commit()
+
+
+async def get_employees_for_restaurant(session: AsyncSession, restaurant_id: int) -> list[dict]:
+    """Список сотрудников заведения со статистикой — для панели менеджера."""
+    result = await session.execute(
+        select(User).where(User.restaurant_id == restaurant_id).order_by(User.id)
+    )
+    users = list(result.scalars().all())
+    data = []
+    for user in users:
+        stats = await get_user_stats(session, user.id)
+        position = (
+            await session.get(Position, user.current_position_id)
+            if user.current_position_id
+            else None
+        )
+        data.append({"user": user, "position": position, **stats})
+    return data
+
+
+async def get_restaurant_leaderboard(session: AsyncSession) -> list[dict]:
+    """Рейтинг заведений: средний результат тестов среди их сотрудников."""
+    restaurants = await get_all_restaurants(session)
+    leaderboard = []
+    for restaurant in restaurants:
+        employees = await get_employees_for_restaurant(session, restaurant.id)
+        scored = [e for e in employees if e["tests_completed"] > 0]
+        if not scored:
+            continue
+        avg_percentage = round(sum(e["avg_percentage"] for e in scored) / len(scored), 1)
+        leaderboard.append(
+            {
+                "restaurant": restaurant,
+                "avg_percentage": avg_percentage,
+                "employees_count": len(scored),
+            }
+        )
+    leaderboard.sort(key=lambda item: (-item["avg_percentage"], -item["employees_count"]))
+    return leaderboard
+
+
+async def get_user_rank_within_restaurant(
+    session: AsyncSession, user_id: int, restaurant_id: int
+) -> int | None:
+    """Место пользователя в рейтинге внутри своего заведения (по среднему %)."""
+    employees = await get_employees_for_restaurant(session, restaurant_id)
+    scored = [e for e in employees if e["tests_completed"] > 0]
+    scored.sort(key=lambda item: (-item["avg_percentage"], -item["tests_completed"]))
+    for idx, entry in enumerate(scored, start=1):
+        if entry["user"].id == user_id:
+            return idx
+    return None
+
+
+# ---------- Заявки на добавление заведения ----------
+
+async def create_restaurant_request(
+    session: AsyncSession,
+    name: str,
+    requested_by_telegram_id: int,
+    requested_by_name: str | None,
+) -> RestaurantRequest:
+    request = RestaurantRequest(
+        name=name,
+        requested_by_telegram_id=requested_by_telegram_id,
+        requested_by_name=requested_by_name,
+        status="pending",
+    )
+    session.add(request)
+    await session.commit()
+    await session.refresh(request)
+    return request
+
+
+async def get_restaurant_request_by_id(
+    session: AsyncSession, request_id: int
+) -> RestaurantRequest | None:
+    return await session.get(RestaurantRequest, request_id)
+
+
+async def set_restaurant_request_status(
+    session: AsyncSession, request_id: int, status: str
+) -> None:
+    request = await session.get(RestaurantRequest, request_id)
+    if request is not None:
+        request.status = status
+        request.decided_at = datetime.utcnow()
+        await session.commit()
+
+
+# ---------- Экзамены по одноразовым кодам ----------
+
+def _generate_exam_code() -> str:
+    """Короткий, легко надиктовываемый код: 6 символов, только заглавные буквы и цифры."""
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(6))
+
+
+async def create_exam_code(
+    session: AsyncSession,
+    restaurant_id: int,
+    position_id: int,
+    created_by_telegram_id: int,
+    time_limit_seconds: int = 180,
+) -> ExamCode:
+    code = ExamCode(
+        restaurant_id=restaurant_id,
+        position_id=position_id,
+        code=_generate_exam_code(),
+        time_limit_seconds=time_limit_seconds,
+        created_by_telegram_id=created_by_telegram_id,
+    )
+    session.add(code)
+    await session.commit()
+    await session.refresh(code)
+    return code
+
+
+async def get_exam_code_by_code(session: AsyncSession, code: str) -> ExamCode | None:
+    result = await session.execute(select(ExamCode).where(ExamCode.code == code))
+    return result.scalars().first()
+
+
+async def mark_exam_code_used(session: AsyncSession, exam_code_id: int, user_id: int) -> None:
+    exam_code = await session.get(ExamCode, exam_code_id)
+    if exam_code is not None:
+        exam_code.used_by_user_id = user_id
+        exam_code.used_at = datetime.utcnow()
+        await session.commit()
+
+
+async def get_hard_questions_for_position(
+    session: AsyncSession, position_id: int, difficulty: int = 3
+) -> list[Question]:
+    """Самые сложные вопросы (по одному на категорию) — основа для экзамена."""
+    result = await session.execute(
+        select(Question)
+        .join(Category, Question.category_id == Category.id)
+        .where(Category.position_id == position_id, Question.difficulty == difficulty)
+        .options(selectinload(Question.options))
+        .order_by(Category.order)
+    )
+    return list(result.scalars().all())
+
+
+async def create_exam_result(
+    session: AsyncSession,
+    exam_code_id: int,
+    user_id: int,
+    position_id: int,
+    correct_count: int,
+    total_count: int,
+    passed: bool,
+    bonus_xp_awarded: int,
+) -> ExamResult:
+    exam_result = ExamResult(
+        exam_code_id=exam_code_id,
+        user_id=user_id,
+        position_id=position_id,
+        correct_count=correct_count,
+        total_count=total_count,
+        passed=passed,
+        bonus_xp_awarded=bonus_xp_awarded,
+    )
+    session.add(exam_result)
+    await session.commit()
+    await session.refresh(exam_result)
+    return exam_result
+
+
+# ---------- Запросы сотрудников на выдачу кода экзамена ----------
+
+async def create_exam_request(
+    session: AsyncSession,
+    user_id: int,
+    restaurant_id: int,
+    position_id: int,
+    target_manager_telegram_id: int,
+) -> ExamRequest:
+    request = ExamRequest(
+        user_id=user_id,
+        restaurant_id=restaurant_id,
+        position_id=position_id,
+        target_manager_telegram_id=target_manager_telegram_id,
+        status="pending",
+    )
+    session.add(request)
+    await session.commit()
+    await session.refresh(request)
+    return request
+
+
+async def get_exam_request_by_id(session: AsyncSession, request_id: int) -> ExamRequest | None:
+    return await session.get(ExamRequest, request_id)
+
+
+async def fulfill_exam_request(session: AsyncSession, request_id: int, exam_code_id: int) -> None:
+    request = await session.get(ExamRequest, request_id)
+    if request is not None:
+        request.status = "fulfilled"
+        request.exam_code_id = exam_code_id
+        request.decided_at = datetime.utcnow()
+        await session.commit()
+
+
+async def decline_exam_request(session: AsyncSession, request_id: int) -> None:
+    request = await session.get(ExamRequest, request_id)
+    if request is not None:
+        request.status = "declined"
+        request.decided_at = datetime.utcnow()
+        await session.commit()
+
+
+# ---------- История экзаменов сотрудника (для панели администратора) ----------
+
+async def get_exam_history_for_user(session: AsyncSession, user_id: int) -> list[dict]:
+    """Для каждого сданного/проваленного экзамена — должность, баллы, статус
+    и кто из администраторов выдал код (т.е. допустил до попытки)."""
+    result = await session.execute(
+        select(ExamResult)
+        .where(ExamResult.user_id == user_id)
+        .options(selectinload(ExamResult.exam_code))
+        .order_by(ExamResult.created_at.desc())
+    )
+    exam_results = list(result.scalars().all())
+
+    history = []
+    for exam_result in exam_results:
+        position = await session.get(Position, exam_result.position_id)
+        issuer_telegram_id = exam_result.exam_code.created_by_telegram_id if exam_result.exam_code else None
+        history.append(
+            {
+                "position": position,
+                "correct_count": exam_result.correct_count,
+                "total_count": exam_result.total_count,
+                "passed": exam_result.passed,
+                "bonus_xp_awarded": exam_result.bonus_xp_awarded,
+                "issued_by_telegram_id": issuer_telegram_id,
+                "created_at": exam_result.created_at,
+            }
+        )
+    return history

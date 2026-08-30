@@ -1,0 +1,60 @@
+import asyncio
+import logging
+
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+
+from config import BOT_TOKEN
+from data.seed import seed_data, seed_restaurant_positions
+from database.database import async_session, init_db
+from handlers import (
+    admin,
+    exams,
+    manager,
+    positions,
+    profile,
+    rating,
+    restaurant_requests,
+    restaurants,
+    start,
+    tests,
+    vacancies,
+)
+from handlers import help as help_handlers
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+async def main() -> None:
+    await init_db()
+    async with async_session() as session:
+        await seed_data(session)
+        await seed_restaurant_positions(session)
+
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher()
+
+    # Порядок важен: более специфичные роутеры регистрируются раньше,
+    # но т.к. фильтры не пересекаются, порядок здесь не критичен.
+    dp.include_router(start.router)
+    dp.include_router(restaurants.router)
+    dp.include_router(restaurant_requests.router)
+    dp.include_router(positions.router)
+    dp.include_router(tests.router)
+    dp.include_router(profile.router)
+    dp.include_router(rating.router)
+    dp.include_router(vacancies.router)
+    dp.include_router(exams.router)
+    dp.include_router(manager.router)
+    dp.include_router(help_handlers.router)
+    dp.include_router(admin.router)
+
+    logger.info("Бот запускается...")
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
