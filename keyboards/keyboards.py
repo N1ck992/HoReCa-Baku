@@ -34,6 +34,16 @@ def main_menu_kb(show_exam_button: bool = False) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def open_private_chat_kb(bot_username: str) -> InlineKeyboardMarkup:
+    """Кнопка-ссылка, которая открывает личный чат с ботом (используется в
+    сообщениях внутри групп заведений — чтобы сотрудник мог сразу перейти
+    в личку одним кликом, а не искать бота вручную)."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💬 Открыть бота в личке", url=f"https://t.me/{bot_username}?start=from_group")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def profile_kb() -> InlineKeyboardMarkup:
     """Клавиатура экрана профиля: тесты, рейтинг, назад."""
     builder = InlineKeyboardBuilder()

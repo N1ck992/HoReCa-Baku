@@ -5,7 +5,13 @@ from aiogram.types import CallbackQuery, Message
 
 from database import crud
 from database.database import async_session
-from keyboards.keyboards import MAIN_MENU_BUTTON_TEXT, main_menu_kb, persistent_menu_kb
+from keyboards.keyboards import (
+    MAIN_MENU_BUTTON_TEXT,
+    main_menu_kb,
+    open_private_chat_kb,
+    persistent_menu_kb,
+)
+from utils import get_bot_username
 
 router = Router(name="start")
 
@@ -46,8 +52,14 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
 
         await message.answer(
             f"✅ Вы прикреплены к заведению «{restaurant.name}»!\n"
-            "Напишите мне в личные сообщения /start, чтобы проходить тесты.",
+            "Чтобы проходить тесты и открыть полное меню, напишите мне "
+            "в личные сообщения /start — самый быстрый способ ниже 👇",
             reply_markup=persistent_menu_kb(),
+        )
+        username = await get_bot_username(message.bot)
+        await message.answer(
+            "Нажмите, чтобы сразу перейти в личный чат со мной:",
+            reply_markup=open_private_chat_kb(username),
         )
         return
 
