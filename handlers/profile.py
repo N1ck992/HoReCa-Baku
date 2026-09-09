@@ -9,57 +9,55 @@ from services.rating import display_name, rank_progress_text
 router = Router(name="profile")
 
 
-@router.callback_query(F.data == "menu:profile")
-async def cb_profile(callback: CallbackQuery) -> None:
-    async with async_session() as session:
-        user = await crud.get_or_create_user(
-            session,
-            telegram_id=callback.from_user.id,
-            username=callback.from_user.username,
-            full_name=callback.from_user.full_name,
-        )
-        stats = await crud.get_user_stats(session, user.id)
-        leaderboard_rank = await crud.get_user_rank(session, user.id)
-        position = (
-            await crud.get_position_by_id(session, user.current_position_id)
-            if user.current_position_id
-            else None
-        )
+async def build_profile_view(session, telegram_id: int, username: str | None, full_name: str | None):
+    """Собирает текст и клавиатуру экрана профиля. Вынесено отдельно, чтобы
+    использовать и в обычном меню (cb_profile), и при переходе из группы
+    заведения по кнопке «Мой профиль» (handlers/start.py)."""
+    user = await crud.get_or_create_user(
+        session, telegram_id=telegram_id, username=username, full_name=full_name
+    )
+    stats = await crud.get_user_stats(session, user.id)
+    leaderboard_rank = await crud.get_user_rank(session, user.id)
+    position = (
+        await crud.get_position_by_id(session, user.current_position_id)
+        if user.current_position_id
+        else None
+    )
 
-        # Если сотрудник привязан к заведению — покажем его заведение и
-        # личное место в рейтинге внутри этого заведения (отдельно от
-        # общего рейтинга среди вообще всех пользователей бота).
-        restaurant = None
-        restaurant_rank = None
-        if user.restaurant_id is not None:
-            restaurant = await crud.get_restaurant_by_id(session, user.restaurant_id)
-            if restaurant is not None:
-                restaurant_rank = await crud.get_user_rank_within_restaurant(
-                    session, user.id, restaurant.id
-                )
-
-        # Ранг по текущей выбранной должности (показываем отдельной строкой сверху)
-        current_job_rank_line = None
-        if position is not None:
-            xp = await crud.get_total_xp_for_position(session, user.id, position.id)
-            ranks = await crud.get_ranks_for_position(session, position.id)
-            current_rank = crud.get_rank_for_xp(ranks, xp)
-            next_rank = crud.get_next_rank(ranks, current_rank)
-            current_job_rank_line = rank_progress_text(current_rank, next_rank, xp)
-
-        # Ранги по всем должностям — раньше это была отдельная кнопка "🎖 Мои ранги"
-        all_positions = await crud.get_active_positions(session, user.restaurant_id)
-        all_ranks_lines = []
-        for pos in all_positions:
-            xp = await crud.get_total_xp_for_position(session, user.id, pos.id)
-            ranks = await crud.get_ranks_for_position(session, pos.id)
-            if not ranks:
-                continue
-            current_rank = crud.get_rank_for_xp(ranks, xp)
-            next_rank = crud.get_next_rank(ranks, current_rank)
-            all_ranks_lines.append(
-                f"{pos.emoji} {pos.name}: {rank_progress_text(current_rank, next_rank, xp)}"
+    # Если сотрудник привязан к заведению — покажем его заведение и
+    # личное место в рейтинге внутри этого заведения (отдельно от
+    # общего рейтинга среди вообще всех пользователей бота).
+    restaurant = None
+    restaurant_rank = None
+    if user.restaurant_id is not None:
+        restaurant = await crud.get_restaurant_by_id(session, user.restaurant_id)
+        if restaurant is not None:
+            restaurant_rank = await crud.get_user_rank_within_restaurant(
+                session, user.id, restaurant.id
             )
+
+    # Ранг по текущей выбранной должности (показываем отдельной строкой сверху)
+    current_job_rank_line = None
+    if position is not None:
+        xp = await crud.get_total_xp_for_position(session, user.id, position.id)
+        ranks = await crud.get_ranks_for_position(session, position.id)
+        current_rank = crud.get_rank_for_xp(ranks, xp)
+        next_rank = crud.get_next_rank(ranks, current_rank)
+        current_job_rank_line = rank_progress_text(current_rank, next_rank, xp)
+
+    # Ранги по всем должностям — раньше это была отдельная кнопка "🎖 Мои ранги"
+    all_positions = await crud.get_active_positions(session, user.restaurant_id)
+    all_ranks_lines = []
+    for pos in all_positions:
+        xp = await crud.get_total_xp_for_position(session, user.id, pos.id)
+        ranks = await crud.get_ranks_for_position(session, pos.id)
+        if not ranks:
+            continue
+        current_rank = crud.get_rank_for_xp(ranks, xp)
+        next_rank = crud.get_next_rank(ranks, current_rank)
+        all_ranks_lines.append(
+            f"{pos.emoji} {pos.name}: {rank_progress_text(current_rank, next_rank, xp)}"
+        )
 
     position_text = f"{position.emoji} {position.name}" if position else "не выбрана"
     leaderboard_rank_text = f"#{leaderboard_rank}" if leaderboard_rank else "нет данных (пройдите тест)"
@@ -91,5 +89,14 @@ async def cb_profile(callback: CallbackQuery) -> None:
     if all_ranks_lines:
         text += "\n\n🎖 Ранги по должностям:\n" + "\n".join(all_ranks_lines)
 
-    await callback.message.edit_text(text, reply_markup=profile_kb())
+    return text, profile_kb()
+
+
+@router.callback_query(F.data == "menu:profile")
+async def cb_profile(callback: CallbackQuery) -> None:
+    async with async_session() as session:
+        text, kb = await build_profile_view(
+            session, callback.from_user.id, callback.from_user.username, callback.from_user.full_name
+        )
+    await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()

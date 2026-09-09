@@ -175,6 +175,35 @@ async def finalize_test_result(
 
 # ---------- Статистика / рейтинг ----------
 
+async def get_user_stats_for_restaurant(
+    session: AsyncSession, user_id: int, restaurant_id: int
+) -> dict:
+    """Статистика сотрудника ТОЛЬКО по тестам, созданным для его заведения
+    (Position.restaurant_id == restaurant_id) — исключая общие/публичные
+    тесты, доступные всем пользователям бота. Используется в панели
+    менеджера и в общем рейтинге заведений, чтобы результаты по чужим,
+    общим тестам не влияли на оценку сотрудника его работодателем."""
+    result = await session.execute(
+        select(TestResult)
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(TestResult.user_id == user_id, Position.restaurant_id == restaurant_id)
+    )
+    results = list(result.scalars().all())
+    tests_completed = len(results)
+    correct_total = sum(r.correct_count for r in results)
+    wrong_total = sum((r.total_count - r.correct_count) for r in results)
+    avg_percentage = (
+        round(sum(r.percentage for r in results) / tests_completed, 1) if tests_completed else 0.0
+    )
+    return {
+        "tests_completed": tests_completed,
+        "correct_total": correct_total,
+        "wrong_total": wrong_total,
+        "avg_percentage": avg_percentage,
+    }
+
+
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
     result = await session.execute(select(TestResult).where(TestResult.user_id == user_id))
     results = list(result.scalars().all())
@@ -504,14 +533,17 @@ async def set_restaurant_group_chat_id(
 
 
 async def get_employees_for_restaurant(session: AsyncSession, restaurant_id: int) -> list[dict]:
-    """Список сотрудников заведения со статистикой — для панели менеджера."""
+    """Список сотрудников заведения со статистикой — для панели менеджера.
+    Статистика (tests_completed, avg_percentage) считается ТОЛЬКО по
+    тестам, созданным для этого заведения — общие/публичные тесты сюда
+    не входят (см. get_user_stats_for_restaurant)."""
     result = await session.execute(
         select(User).where(User.restaurant_id == restaurant_id).order_by(User.id)
     )
     users = list(result.scalars().all())
     data = []
     for user in users:
-        stats = await get_user_stats(session, user.id)
+        stats = await get_user_stats_for_restaurant(session, user.id, restaurant_id)
         position = (
             await session.get(Position, user.current_position_id)
             if user.current_position_id

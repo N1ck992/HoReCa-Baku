@@ -5,6 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import crud
 from database.database import async_session
+from handlers.restaurants import _employees_kb
 from services.rating import display_name
 
 router = Router(name="manager")
@@ -35,6 +36,9 @@ MANAGER_HELP_TEXT = (
 
 def manager_menu_kb(restaurant_id: int):
     builder = InlineKeyboardBuilder()
+    builder.button(
+        text="➕ Добавить персонал", callback_data=f"manager_assign_start:{restaurant_id}"
+    )
     builder.button(
         text="👥 Результаты сотрудников", callback_data=f"manager_employees:{restaurant_id}"
     )
@@ -129,17 +133,11 @@ async def cb_manager_help(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("manager_employees:"))
-async def cb_manager_employees(callback: CallbackQuery) -> None:
-    restaurant_id = int(callback.data.split(":")[1])
-    async with async_session() as session:
-        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
-        if restaurant is None or not await crud.is_restaurant_manager(
-            session, restaurant_id, callback.from_user.id
-        ):
-            await callback.answer("⛔ Нет доступа.", show_alert=True)
-            return
-        employees = await crud.get_employees_for_restaurant(session, restaurant_id)
+async def build_employees_list_view(session, restaurant):
+    """Собирает текст и клавиатуру списка сотрудников заведения. Вынесено
+    отдельно, чтобы использовать и в обычной панели (cb_manager_employees),
+    и при переходе из группы по кнопке «Список персонала»."""
+    employees = await crud.get_employees_for_restaurant(session, restaurant.id)
 
     builder = InlineKeyboardBuilder()
     if not employees:
@@ -152,12 +150,48 @@ async def cb_manager_employees(callback: CallbackQuery) -> None:
             position_text = f" — {position.name}" if position else ""
             builder.button(
                 text=f"{display_name(user)}{position_text} ({item['avg_percentage']}%)",
-                callback_data=f"manager_employee_detail:{restaurant_id}:{user.id}",
+                callback_data=f"manager_employee_detail:{restaurant.id}:{user.id}",
             )
-    builder.button(text="⬅️ Назад", callback_data=f"manager_menu:{restaurant_id}")
+    builder.button(text="⬅️ Назад", callback_data=f"manager_menu:{restaurant.id}")
     builder.adjust(1)
+    return text, builder.as_markup()
 
-    await callback.message.edit_text(text, reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith("manager_assign_start:"))
+async def cb_manager_assign_start(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        if not await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+        employees = await crud.get_employees_for_restaurant(session, restaurant_id)
+
+    if not employees:
+        await callback.answer(
+            "Пока никто из сотрудников не прикрепился к заведению.", show_alert=True
+        )
+        return
+
+    await callback.message.edit_text(
+        "Выберите сотрудника, которому нужно назначить должность:",
+        reply_markup=_employees_kb(restaurant_id, employees),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("manager_employees:"))
+async def cb_manager_employees(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        if restaurant is None or not await crud.is_restaurant_manager(
+            session, restaurant_id, callback.from_user.id
+        ):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+        text, kb = await build_employees_list_view(session, restaurant)
+
+    await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
 
@@ -177,7 +211,7 @@ async def cb_manager_employee_detail(callback: CallbackQuery) -> None:
             await callback.answer("Сотрудник не найден.", show_alert=True)
             return
 
-        stats = await crud.get_user_stats(session, user_id)
+        stats = await crud.get_user_stats_for_restaurant(session, user_id, restaurant_id)
         position = (
             await crud.get_position_by_id(session, target_user.current_position_id)
             if target_user.current_position_id

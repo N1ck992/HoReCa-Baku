@@ -44,6 +44,29 @@ def open_private_chat_kb(bot_username: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def group_menu_kb(bot_username: str, restaurant_id: int) -> InlineKeyboardMarkup:
+    """Единое меню группы заведения — видно всем участникам (ограничение
+    Telegram — иначе никак). Три первые кнопки — обычные ссылки: по
+    нажатию человек попадает в СВОЮ личку с ботом, приватно.
+
+    Кнопка «Панель администратора» сделана НЕ ссылкой, а обычной
+    callback-кнопкой: нажатие сначала уходит боту, тот проверяет, реальный
+    ли это администратор заведения, и либо показывает alert «недостаточно
+    прав» (не открывая личку), либо сам открывает личку на панели
+    администратора — см. cb_group_admin_open в handlers/restaurants.py."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="👤 Мой профиль", url=f"https://t.me/{bot_username}?start=profile_{restaurant_id}")
+    builder.button(text="🎓 Пройти тест", url=f"https://t.me/{bot_username}?start=tests_{restaurant_id}")
+    builder.button(
+        text="📩 Запросить экзамен", url=f"https://t.me/{bot_username}?start=examcode_{restaurant_id}"
+    )
+    builder.button(
+        text="🧑‍💼 Панель администратора", callback_data=f"group_admin_open:{restaurant_id}"
+    )
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def profile_kb() -> InlineKeyboardMarkup:
     """Клавиатура экрана профиля: тесты, рейтинг, назад."""
     builder = InlineKeyboardBuilder()

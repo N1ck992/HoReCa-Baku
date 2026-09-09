@@ -7,7 +7,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import crud
 from database.database import async_session
+from keyboards.keyboards import group_menu_kb
 from services.rating import display_name
+from utils import get_bot_username
 
 router = Router(name="restaurants")
 
@@ -31,6 +33,30 @@ async def _require_group_manager(message_or_callback, chat_id: int, telegram_id:
             return None, "⛔ Эта команда доступна только администраторам заведения."
 
         return restaurant, None
+
+
+@router.callback_query(F.data.startswith("group_admin_open:"))
+async def cb_group_admin_open(callback: CallbackQuery) -> None:
+    """Кнопка «Панель администратора» в едином меню группы. Нажатие сначала
+    приходит боту (это не ссылка), и только после проверки прав бот сам
+    решает: показать alert «недостаточно прав» (персоналу) или открыть
+    личный чат на панели администратора (реальному менеджеру) — через
+    параметр url в answerCallbackQuery, который Telegram поддерживает
+    специально для ссылок вида t.me/бот?start=..."""
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        is_manager = await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id)
+
+    if not is_manager:
+        await callback.answer(
+            "⛔ У вас недостаточно прав для этого раздела. "
+            "Доступно только администраторам заведения.",
+            show_alert=True,
+        )
+        return
+
+    username = await get_bot_username(callback.bot)
+    await callback.answer(url=f"https://t.me/{username}?start=manageropen_{restaurant_id}")
 
 
 @router.message(Command("link_restaurant"))
@@ -82,13 +108,29 @@ async def cmd_link_restaurant(message: Message, command: CommandObject) -> None:
 
     await message.answer(
         f"✅ Группа привязана к заведению «{restaurant.name}»!\n\n"
-        "Теперь любой сотрудник, кто отправит /start в этой группе, "
-        "будет автоматически прикреплён к заведению.\n\n"
         "Полезные команды прямо в этой группе:\n"
         "/assign — назначить сотруднику должность\n"
         "/managers — добавить или убрать администратора\n"
         "/manager_help — как пользоваться ботом администратору"
     )
+
+    # Единое закреплённое меню группы (см. пояснение в group_menu_kb).
+    username = await get_bot_username(message.bot)
+    menu_message = await message.answer(
+        f"📌 Меню заведения «{restaurant.name}»:",
+        reply_markup=group_menu_kb(username, restaurant.id),
+    )
+    try:
+        await message.bot.pin_chat_message(
+            chat_id=message.chat.id, message_id=menu_message.message_id, disable_notification=True
+        )
+    except Exception:
+        await message.answer(
+            "⚠️ Не получилось закрепить меню автоматически — закрепите "
+            "сообщение выше вручную (нужны права администратора у бота в "
+            "этой группе: «Изменить группу» → права бота → «Закрепление "
+            "сообщений»)."
+        )
 
 
 # ---------- Назначение должностей сотрудникам (прямо в группе) ----------
