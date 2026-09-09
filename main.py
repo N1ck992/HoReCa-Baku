@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiohttp import web
 
 from config import BOT_TOKEN
 from data.seed import seed_data, seed_restaurant_positions
@@ -25,6 +27,26 @@ from handlers import help as help_handlers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+async def start_web_server() -> None:
+    """Крошечный веб-сервер без реальной работы — нужен только для того,
+    чтобы бесплатный Web Service на Render считал приложение "живым"
+    (иначе он ожидает, что что-то слушает порт, и останавливает сервис).
+    Локально на своём компьютере эта часть тоже безопасно запускается,
+    просто никто на неё не заходит."""
+
+    async def health(request: web.Request) -> web.Response:
+        return web.Response(text="Бот работает")
+
+    app = web.Application()
+    app.router.add_get("/", health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", "10000"))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"Служебный веб-сервер запущен на порту {port} (для Render)")
 
 
 async def main() -> None:
@@ -53,7 +75,10 @@ async def main() -> None:
 
     logger.info("Бот запускается...")
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    await asyncio.gather(
+        dp.start_polling(bot),
+        start_web_server(),
+    )
 
 
 if __name__ == "__main__":
