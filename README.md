@@ -463,3 +463,5 @@ python main.py
 - aiogram 3.x (асинхронный Telegram Bot API framework)
 - SQLAlchemy 2.0 (async ORM) + aiosqlite
 - python-dotenv для конфигурации через `.env`
+
+<!-- Claude подключён к репозиторию и может вносить правки напрямую -->
