@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -25,7 +26,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(Integer, unique=True, index=True, nullable=False)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_position_id: Mapped[int | None] = mapped_column(
@@ -184,7 +185,7 @@ class Vacancy(Base):
     description: Mapped[str] = mapped_column(Text)
     salary: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_by_telegram_id: Mapped[int] = mapped_column(Integer)
+    created_by_telegram_id: Mapped[int] = mapped_column(BigInteger)
     created_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -201,7 +202,7 @@ class Restaurant(Base):
     name: Mapped[str] = mapped_column(String(255))
     # ID Telegram-группы заведения. Заполняется, когда менеджер отправляет
     # /link_restaurant <id> внутри своей группы. Пока не заполнено — None.
-    group_chat_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
+    group_chat_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     managers: Mapped[list["RestaurantManager"]] = relationship(back_populates="restaurant")
@@ -217,9 +218,9 @@ class RestaurantManager(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id"))
-    telegram_id: Mapped[int] = mapped_column(Integer)
+    telegram_id: Mapped[int] = mapped_column(BigInteger)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    added_by_telegram_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    added_by_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     restaurant: Mapped["Restaurant"] = relationship(back_populates="managers")
@@ -234,7 +235,7 @@ class RestaurantRequest(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
-    requested_by_telegram_id: Mapped[int] = mapped_column(Integer)
+    requested_by_telegram_id: Mapped[int] = mapped_column(BigInteger)
     requested_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # status: "pending" | "approved" | "rejected"
     status: Mapped[str] = mapped_column(String(20), default="pending")
@@ -257,7 +258,7 @@ class ExamCode(Base):
     position_id: Mapped[int] = mapped_column(ForeignKey("positions.id"))
     code: Mapped[str] = mapped_column(String(20), unique=True)
     time_limit_seconds: Mapped[int] = mapped_column(Integer, default=180)
-    created_by_telegram_id: Mapped[int] = mapped_column(Integer)
+    created_by_telegram_id: Mapped[int] = mapped_column(BigInteger)
     used_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -278,7 +279,7 @@ class ExamRequest(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id"))
     position_id: Mapped[int] = mapped_column(ForeignKey("positions.id"))
-    target_manager_telegram_id: Mapped[int] = mapped_column(Integer)
+    target_manager_telegram_id: Mapped[int] = mapped_column(BigInteger)
     # status: "pending" | "fulfilled" | "declined"
     status: Mapped[str] = mapped_column(String(20), default="pending")
     exam_code_id: Mapped[int | None] = mapped_column(ForeignKey("exam_codes.id"), nullable=True)
