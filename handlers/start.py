@@ -3,6 +3,7 @@ from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+import config
 from database import crud
 from database.database import async_session
 from handlers.exams import ExamStates
@@ -15,6 +16,7 @@ from keyboards.keyboards import (
     main_menu_kb,
     persistent_menu_kb,
     positions_kb,
+    webapp_test_kb,
 )
 from utils import get_bot_username
 
@@ -109,15 +111,25 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 await crud.set_user_restaurant(session, user, restaurant_id)
 
             if action == "tests":
+                await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
+
+                if config.WEBAPP_URL:
+                    webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}"
+                    await message.answer(
+                        "Нажмите кнопку ниже, чтобы открыть тест:",
+                        reply_markup=webapp_test_kb(webapp_link),
+                    )
+                    return
+
+                # Запасной вариант, если ссылка на сайт ещё не настроена —
+                # старое текстовое меню выбора должности прямо в чате.
                 async with async_session() as session:
                     positions = await crud.get_active_positions(session, restaurant_id)
                 if not positions:
                     await message.answer(
-                        "Для вашего заведения пока не настроены должности с тестами.",
-                        reply_markup=persistent_menu_kb(),
+                        "Для вашего заведения пока не настроены должности с тестами."
                     )
                     return
-                await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
                 await message.answer("Выберите должность:", reply_markup=positions_kb(positions))
                 return
 

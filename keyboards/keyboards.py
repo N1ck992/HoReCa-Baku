@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database.models import AnswerOption, Category, Position, Vacancy
@@ -15,6 +15,17 @@ def persistent_menu_kb() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         is_persistent=True,
     )
+
+
+def webapp_test_kb(url: str) -> InlineKeyboardMarkup:
+    """Кнопка, открывающая сайт с тестами прямо внутри Telegram (Mini App).
+    Работает только в личных сообщениях — таково ограничение Telegram
+    для кнопок такого типа."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🎓 Открыть тест", web_app=WebAppInfo(url=url))
+    builder.button(text="⬅️ Главное меню", callback_data="menu:main")
+    builder.adjust(1)
+    return builder.as_markup()
 
 
 def main_menu_kb(show_exam_button: bool = False) -> InlineKeyboardMarkup:
