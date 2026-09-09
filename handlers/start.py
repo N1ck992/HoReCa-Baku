@@ -16,7 +16,7 @@ from keyboards.keyboards import (
     main_menu_kb,
     persistent_menu_kb,
     positions_kb,
-    webapp_test_kb,
+    webapp_open_kb,
 )
 from utils import get_bot_username
 
@@ -114,10 +114,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
 
                 if config.WEBAPP_URL:
-                    webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}"
+                    webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=tests"
                     await message.answer(
                         "Нажмите кнопку ниже, чтобы открыть тест:",
-                        reply_markup=webapp_test_kb(webapp_link),
+                        reply_markup=webapp_open_kb(webapp_link, "🎓 Открыть тест"),
                     )
                     return
 
@@ -134,8 +134,18 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 return
 
             if action == "examcode":
-                await state.set_state(ExamStates.entering_code)
                 await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
+
+                if config.WEBAPP_URL:
+                    webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=examcode"
+                    await message.answer(
+                        "Нажмите кнопку ниже, чтобы открыть экзамен:",
+                        reply_markup=webapp_open_kb(webapp_link, "🎓 Открыть экзамен"),
+                    )
+                    return
+
+                # Запасной вариант — старый текстовый ввод кода прямо в чате.
+                await state.set_state(ExamStates.entering_code)
                 await message.answer(
                     "🎓 Введите одноразовый код на экзамен, который вам выдал "
                     "менеджер, или запросите код прямо сейчас.",
@@ -145,6 +155,16 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
 
             if action == "profile":
                 await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
+
+                if config.WEBAPP_URL:
+                    webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=profile"
+                    await message.answer(
+                        "Нажмите кнопку ниже, чтобы открыть профиль:",
+                        reply_markup=webapp_open_kb(webapp_link, "👤 Открыть профиль"),
+                    )
+                    return
+
+                # Запасной вариант — старый текстовый профиль.
                 async with async_session() as session:
                     text, kb = await build_profile_view(
                         session, message.from_user.id, message.from_user.username, message.from_user.full_name
@@ -167,6 +187,16 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 return
 
             await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
+
+            if config.WEBAPP_URL:
+                webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
+                await message.answer(
+                    "Нажмите кнопку ниже, чтобы открыть панель администратора:",
+                    reply_markup=webapp_open_kb(webapp_link, "🧑‍💼 Открыть панель"),
+                )
+                return
+
+            # Запасной вариант — старая текстовая панель администратора.
             await _show_manager_menu(restaurant, message.answer)
             return
 

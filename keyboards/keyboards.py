@@ -17,12 +17,14 @@ def persistent_menu_kb() -> ReplyKeyboardMarkup:
     )
 
 
-def webapp_test_kb(url: str) -> InlineKeyboardMarkup:
-    """Кнопка, открывающая сайт с тестами прямо внутри Telegram (Mini App).
+def webapp_open_kb(url: str, button_text: str = "🎓 Открыть тест") -> InlineKeyboardMarkup:
+    """Кнопка, открывающая сайт прямо внутри Telegram (Mini App).
     Работает только в личных сообщениях — таково ограничение Telegram
-    для кнопок такого типа."""
+    для кнопок такого типа. Используется для теста, профиля, экзамена
+    и панели администратора — просто с разным текстом и разной ссылкой
+    (параметр ?screen=... в URL определяет, какой экран сайта открыть)."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="🎓 Открыть тест", web_app=WebAppInfo(url=url))
+    builder.button(text=button_text, web_app=WebAppInfo(url=url))
     builder.button(text="⬅️ Главное меню", callback_data="menu:main")
     builder.adjust(1)
     return builder.as_markup()
