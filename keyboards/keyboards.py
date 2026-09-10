@@ -30,19 +30,17 @@ def webapp_open_kb(url: str, button_text: str = "🎓 Открыть тест") 
     return builder.as_markup()
 
 
-def main_menu_kb(show_exam_button: bool = False) -> InlineKeyboardMarkup:
-    """show_exam_button=True только для сотрудников, прикреплённых к
-    заведению — у остальных пользователей кнопки экзамена быть не должно.
-    «➕ Добавить заведение» теперь не отдельная кнопка, а находится внутри
-    экрана «Рейтинг заведений» (см. handlers/rating.py)."""
+def main_menu_kb() -> InlineKeyboardMarkup:
+    """Общее (гостевое) меню бота. Кнопки экзамена тут больше нет —
+    сдать экзамен можно только внутри меню своего заведения (кнопка
+    «📩 Запросить экзамен» в join_menu_kb), потому что экзамен принимает
+    именно тот менеджер, который пригласил человека своей ссылкой."""
     builder = InlineKeyboardBuilder()
     builder.button(text="🎯 Пробный тест", callback_data="menu:positions")
     builder.button(text="🏢 Рейтинг заведений", callback_data="menu:leaderboard")
     builder.button(text="👤 Мой профиль", callback_data="menu:profile")
     builder.button(text="💼 Вакансии", callback_data="menu:vacancies")
     builder.button(text="❓ Помощь", callback_data="menu:help")
-    if show_exam_button:
-        builder.button(text="🎓 Сдать экзамен", callback_data="menu:exam")
     builder.adjust(1)
     return builder.as_markup()
 

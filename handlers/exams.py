@@ -225,11 +225,7 @@ async def _finish_exam_from_callback(
         full_name=callback.from_user.full_name,
     )
 
-    async with async_session() as session:
-        user = await crud.get_user_by_telegram_id(session, callback.from_user.id)
-        show_exam_button = user is not None and user.restaurant_id is not None
-
-    await callback.message.answer(text, reply_markup=main_menu_kb(show_exam_button))
+    await callback.message.answer(text, reply_markup=main_menu_kb())
 
 
 async def _complete_exam(

@@ -141,4 +141,4 @@ async def cb_leave_restaurant_do(callback: CallbackQuery) -> None:
     await callback.message.edit_text(
         "Вы вышли из заведения. Теперь вам доступно только общее меню бота.",
     )
-    await callback.message.answer("Главное меню:", reply_markup=main_menu_kb(False))
+    await callback.message.answer("Главное меню:", reply_markup=main_menu_kb())

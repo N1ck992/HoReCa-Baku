@@ -143,12 +143,12 @@ async def publish_location(message: Message, state: FSMContext, bot: Bot) -> Non
             "❌ Не удалось опубликовать вакансию в канале.\n"
             "Проверьте, что бот добавлен в канал администратором с правом "
             f"публикации сообщений.\n\nТехническая причина: {error}",
-            reply_markup=main_menu_kb(user.restaurant_id is not None),
+            reply_markup=main_menu_kb(),
         )
         return
 
     await message.answer(
         f"✅ Вакансия «{vacancy.title}» опубликована!\n{vacancies_channel_url()}\n\n"
         "Главное меню:",
-        reply_markup=main_menu_kb(user.restaurant_id is not None),
+        reply_markup=main_menu_kb(),
     )

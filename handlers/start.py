@@ -110,7 +110,7 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
         )
         return
 
-    await message.answer("Главное меню:", reply_markup=main_menu_kb(False))
+    await message.answer("Главное меню:", reply_markup=main_menu_kb())
 
 
 @router.message(CommandStart())
@@ -346,7 +346,7 @@ async def btn_main_menu(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "confirm_leave_to_general")
 async def cb_confirm_leave_to_general(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("Главное меню:", reply_markup=main_menu_kb(False))
+    await callback.message.edit_text("Главное меню:", reply_markup=main_menu_kb())
     await callback.answer()
 
 
@@ -421,15 +421,5 @@ async def cb_join_request_reject(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "menu:main")
 async def cb_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    async with async_session() as session:
-        user = await crud.get_or_create_user(
-            session,
-            telegram_id=callback.from_user.id,
-            username=callback.from_user.username,
-            full_name=callback.from_user.full_name,
-        )
-        show_exam_button = user.restaurant_id is not None
-    await callback.message.edit_text(
-        "Главное меню:", reply_markup=main_menu_kb(show_exam_button)
-    )
+    await callback.message.edit_text("Главное меню:", reply_markup=main_menu_kb())
     await callback.answer()

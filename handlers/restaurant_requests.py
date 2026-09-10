@@ -64,7 +64,7 @@ async def process_restaurant_name(message: Message, state: FSMContext, bot: Bot)
     await message.answer(
         f"✅ Заявка на заведение «{name}» отправлена администратору. "
         "Мы сообщим вам, как только её рассмотрят.",
-        reply_markup=main_menu_kb(user.restaurant_id is not None),
+        reply_markup=main_menu_kb(),
     )
 
     if ADMIN_ID != 0:
