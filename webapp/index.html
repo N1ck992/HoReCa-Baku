@@ -27,78 +27,23 @@
   *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   html,body{
-    margin:0; padding:0; height:100%;
-    background: var(--bg);
+    margin:0; padding:0; min-height:100vh; min-height:100dvh;
+    background: var(--paper);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--ink);
-    display:flex; align-items:center; justify-content:center;
-    overflow:hidden;
   }
 
-  .phone{
-    position:relative;
-    width:390px; height:800px;
-    max-width:100vw; max-height:100vh;
-    background:#e9e3d8;
-    border-radius:44px;
-    overflow:hidden;
-    box-shadow: 0 30px 80px rgba(30,28,22,0.35);
-  }
-
-  /* ---------- Фон: групповой чат (виден только на первом экране) ---------- */
-  .chat{
-    position:absolute; inset:0;
-    background: linear-gradient(180deg,#dfe7ee 0%, #cfd9e3 100%);
-    filter: blur(2px) saturate(0.9);
-    transform: scale(1.03);
-  }
-  .chat-header{
-    height:96px; background:#5b7fa6; display:flex; align-items:flex-end;
-    padding:0 18px 14px; color:#fff; font-weight:600; font-size:16px;
-  }
-  .bubble{
-    max-width:78%; margin:10px 14px; padding:10px 14px; border-radius:16px;
-    background:#ffffff; font-size:13px; line-height:1.4; color:#333;
-    box-shadow:0 1px 2px rgba(0,0,0,0.06);
-  }
-  .bubble.pinned{ background:#fff9e6; border:1px solid #f0e2a8; }
-  .pin-btns{ display:flex; flex-direction:column; gap:6px; margin-top:8px; }
-  .pin-btns div{
-    background:#eef3f8; border-radius:8px; padding:8px 10px; font-size:12.5px;
-    color:#3a6ea5; text-align:center; font-weight:500;
-  }
-  .pin-btns div.active{ background:#5b7fa6; color:#fff; }
-
-  .scrim{
-    position:absolute; inset:0; background:rgba(20,18,14,0.42);
-    transition: opacity .4s ease;
-  }
-  .scrim.hidden{ opacity:0; pointer-events:none; }
-
-  /* ---------- Bottom sheet ---------- */
+  /* ---------- Обёртка на весь реальный экран (без демо-рамки телефона) ---------- */
   .sheet{
-    position:absolute; left:0; right:0; bottom:0;
-    height:92%;
+    position:relative;
+    width:100%; min-height:100vh; min-height:100dvh;
     background: var(--paper);
-    border-radius: 28px 28px 0 0;
-    box-shadow: 0 -12px 40px rgba(30,28,22,0.28);
-    animation: slideUp 0.55s cubic-bezier(.22,.9,.32,1) both;
     overflow:hidden;
-  }
-  @keyframes slideUp{
-    from{ transform: translateY(100%); }
-    to{ transform: translateY(0); }
-  }
-
-  .handle{
-    width:36px; height:4px; border-radius:2px; background:var(--plaster-dark);
-    margin:12px auto 0; flex-shrink:0;
   }
 
   .sheet-body{
     position:relative;
-    height: calc(100% - 16px);
-    overflow:hidden;
+    min-height:100vh; min-height:100dvh;
   }
 
   /* ---------- Экраны-страницы (слайдер) ---------- */
@@ -106,6 +51,8 @@
     position:absolute; inset:0;
     display:flex; flex-direction:column;
     padding: 22px 26px 26px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling: touch;
     transition: transform .38s cubic-bezier(.3,.85,.35,1), opacity .3s ease;
   }
   .screen[data-state="active"]{ transform: translateX(0); opacity:1; z-index:2; }
@@ -249,8 +196,9 @@
   .option.dim{ opacity:0.55; }
 
   .next-wrap{
-    position:relative; z-index:2;
-    margin-top:auto; padding-top:18px;
+    position:sticky; bottom:0; z-index:3;
+    margin-top:auto; padding:18px 0 4px;
+    background: var(--paper);
     opacity:0; transform: translateY(8px);
     transition: opacity .25s ease, transform .25s ease;
     pointer-events:none;
@@ -291,7 +239,10 @@
   }
   .rank-pill .dot{ width:6px; height:6px; border-radius:50%; background:var(--accent); }
 
-  .result-actions{ position:relative; z-index:2; width:100%; }
+  .result-actions{
+    position:sticky; bottom:0; z-index:3;
+    width:100%; background: var(--paper); padding-bottom:4px;
+  }
   .btn-ghost{
     width:100%; padding:14px; border:1px solid var(--divider); border-radius:14px;
     background:transparent; color:var(--ink-soft); font-size:14px; font-weight:500;
@@ -369,26 +320,7 @@
 </head>
 <body>
 
-<div class="phone">
-
-  <div class="chat" id="chatBg">
-    <div class="chat-header">🍽 Мичели — команда</div>
-    <div class="bubble pinned">
-      📌 Меню заведения «Мичели»:
-      <div class="pin-btns">
-        <div>👤 Мой профиль</div>
-        <div class="active">🎓 Пройти тест</div>
-        <div>📩 Запросить экзамен</div>
-        <div>🧑‍💼 Панель администратора</div>
-      </div>
-    </div>
-    <div class="bubble">Юлия: всем привет, не забудьте пройти тест до пятницы 🙏</div>
-  </div>
-
-  <div class="scrim" id="scrim"></div>
-
   <div class="sheet">
-    <div class="handle"></div>
     <div class="sheet-body" id="sheetBody">
 
       <!-- ============ ЭКРАН 1: выбор должности ============ -->
@@ -597,7 +529,6 @@
 
     </div>
   </div>
-</div>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
@@ -855,9 +786,9 @@ function showResult(){
 function restart(){ goTo('positions','right'); }
 
 function closeApp(){
-  document.getElementById('scrim').classList.add('hidden');
-  document.querySelector('.sheet').style.transition = 'transform .35s ease';
-  document.querySelector('.sheet').style.transform = 'translateY(100%)';
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
+    window.Telegram.WebApp.close();
+  }
 }
 
 /* ---------------- Панель администратора ---------------- */
