@@ -24,29 +24,31 @@ from handlers import (
     vacancies,
 )
 from handlers import help as help_handlers
+from webapp_api import routes as webapp_routes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 async def start_web_server() -> None:
-    """Крошечный веб-сервер без реальной работы — нужен только для того,
-    чтобы бесплатный Web Service на Render считал приложение "живым"
-    (иначе он ожидает, что что-то слушает порт, и останавливает сервис).
-    Локально на своём компьютере эта часть тоже безопасно запускается,
-    просто никто на неё не заходит."""
+    """Веб-сервер на том же процессе, что и бот — без него бесплатный
+    Web Service на Render считает приложение "неживым" и останавливает
+    (см. пояснение ниже про порт). Заодно тут же обслуживаются настоящие
+    API-запросы от сайта (Mini App) — см. webapp_api.py."""
 
     async def health(request: web.Request) -> web.Response:
         return web.Response(text="Бот работает")
 
     app = web.Application()
     app.router.add_get("/", health)
+    app.add_routes(webapp_routes)
+
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.getenv("PORT", "10000"))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logger.info(f"Служебный веб-сервер запущен на порту {port} (для Render)")
+    logger.info(f"Веб-сервер (сайт + служебная проверка) запущен на порту {port}")
 
 
 async def main() -> None:
