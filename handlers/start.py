@@ -82,40 +82,40 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
             full_name=message.from_user.full_name,
         )
 
-        # Если человек уже привязан к заведению (как сотрудник или как
-        # менеджер) — сразу показываем меню этого заведения вместо общего
-        # гостевого меню с "Добавить заведение"/"Вакансии", которые ему
-        # уже не нужны. Гостевое меню остаётся только у тех, кто вообще
-        # ни к какому заведению не привязан.
-        restaurant_id = user.restaurant_id
-        is_manager = False
-        multi_managed = None
-        if restaurant_id is not None:
-            is_manager = await crud.is_restaurant_manager(session, restaurant_id, message.from_user.id)
-        else:
-            managed = await crud.get_restaurants_managed_by(session, message.from_user.id)
-            if len(managed) == 1:
-                restaurant_id = managed[0].id
-                is_manager = True
-            elif len(managed) > 1:
-                # Управляет несколькими заведениями и не привязан как
-                # сотрудник ни к одному — нужно спросить, с каким работать.
-                multi_managed = managed
+        # Собираем ВСЕ заведения, к которым человек имеет отношение —
+        # и то, где он сотрудник, и все, которыми он управляет, разом
+        # (а не "либо то, либо это", как было раньше — из-за чего человек,
+        # который одновременно сотрудник одного заведения и менеджер
+        # другого, мог случайно попадать в общее меню).
+        options: dict[int, tuple] = {}
 
-        restaurant = (
-            await crud.get_restaurant_by_id(session, restaurant_id) if restaurant_id else None
-        )
+        if user.restaurant_id is not None:
+            staff_restaurant = await crud.get_restaurant_by_id(session, user.restaurant_id)
+            if staff_restaurant is not None:
+                staff_is_manager = await crud.is_restaurant_manager(
+                    session, staff_restaurant.id, message.from_user.id
+                )
+                options[staff_restaurant.id] = (staff_restaurant, staff_is_manager)
+            # Если staff_restaurant is None — значит запись устарела
+            # (заведение удалено); просто её игнорируем, не застреваем.
+
+        managed = await crud.get_restaurants_managed_by(session, message.from_user.id)
+        for managed_restaurant in managed:
+            options[managed_restaurant.id] = (managed_restaurant, True)
+
+        options_list = list(options.values())
 
     await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
 
-    if multi_managed is not None:
+    if len(options_list) > 1:
         await message.answer(
-            "Вы администратор нескольких заведений. С каким работать?",
-            reply_markup=restaurant_switch_kb(multi_managed),
+            "Вы связаны с несколькими заведениями. С каким работать?",
+            reply_markup=restaurant_switch_kb([r for r, _ in options_list]),
         )
         return
 
-    if restaurant is not None:
+    if len(options_list) == 1:
+        restaurant, is_manager = options_list[0]
         username = await get_bot_username(message.bot)
         await message.answer(
             f"Меню «{restaurant.name}»:",
