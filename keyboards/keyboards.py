@@ -40,10 +40,14 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     """Общее (гостевое) меню бота. Кнопки экзамена тут больше нет —
     сдать экзамен можно только внутри меню своего заведения (кнопка
     «📩 Запросить экзамен» в join_menu_kb), потому что экзамен принимает
-    именно тот менеджер, который пригласил человека своей ссылкой."""
+    именно тот менеджер, который пригласил человека своей ссылкой.
+    «🏢 Моё заведение» — путь назад для тех, кто уже связан с каким-либо
+    заведением (сотрудник или менеджер); у остальных при нажатии просто
+    появится подсказка, что заведения пока нет."""
     builder = InlineKeyboardBuilder()
     builder.button(text="🎯 Пробный тест", callback_data="menu:positions")
     builder.button(text="🏢 Рейтинг заведений", callback_data="menu:leaderboard")
+    builder.button(text="🏠 Моё заведение", callback_data="menu:my_restaurant")
     builder.button(text="👤 Мой профиль", callback_data="menu:profile")
     builder.button(text="💼 Вакансии", callback_data="menu:vacancies")
     builder.button(text="❓ Помощь", callback_data="menu:help")
@@ -83,6 +87,7 @@ def join_menu_kb(bot_username: str, restaurant_id: int, is_manager: bool = False
             text="🧑‍💼 Панель администратора",
             url=f"https://t.me/{bot_username}?start=manageropen_{restaurant_id}",
         )
+    builder.button(text="🚪 Выйти в главное меню", callback_data="ask_leave_to_general")
     builder.adjust(1)
     return builder.as_markup()
 

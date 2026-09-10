@@ -75,35 +75,15 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
 
     # Обычная логика в личных сообщениях
     async with async_session() as session:
-        user = await crud.get_or_create_user(
+        await crud.get_or_create_user(
             session,
             telegram_id=message.from_user.id,
             username=message.from_user.username,
             full_name=message.from_user.full_name,
         )
-
-        # Собираем ВСЕ заведения, к которым человек имеет отношение —
-        # и то, где он сотрудник, и все, которыми он управляет, разом
-        # (а не "либо то, либо это", как было раньше — из-за чего человек,
-        # который одновременно сотрудник одного заведения и менеджер
-        # другого, мог случайно попадать в общее меню).
-        options: dict[int, tuple] = {}
-
-        if user.restaurant_id is not None:
-            staff_restaurant = await crud.get_restaurant_by_id(session, user.restaurant_id)
-            if staff_restaurant is not None:
-                staff_is_manager = await crud.is_restaurant_manager(
-                    session, staff_restaurant.id, message.from_user.id
-                )
-                options[staff_restaurant.id] = (staff_restaurant, staff_is_manager)
-            # Если staff_restaurant is None — значит запись устарела
-            # (заведение удалено); просто её игнорируем, не застреваем.
-
-        managed = await crud.get_restaurants_managed_by(session, message.from_user.id)
-        for managed_restaurant in managed:
-            options[managed_restaurant.id] = (managed_restaurant, True)
-
-        options_list = list(options.values())
+        # Все заведения, к которым человек имеет отношение — и как
+        # сотрудник, и как менеджер, разом (см. подробности в crud.py).
+        options_list = await crud.get_user_restaurant_options(session, message.from_user.id)
 
     await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
 
@@ -313,6 +293,22 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     await run_start_logic(message, state)
 
 
+async def _ask_leave_to_general(send_func) -> None:
+    """Показывает подтверждение выхода в общее меню. Вынесено отдельно,
+    чтобы использовать и из постоянной кнопки внизу экрана, и из явной
+    кнопки «Выйти в главное меню» прямо в меню заведения."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Да, выйти в общее меню", callback_data="confirm_leave_to_general")
+    builder.button(text="Остаться", callback_data="cancel_leave_to_general")
+    builder.adjust(1)
+    await send_func(
+        "⚠️ Вы сейчас в меню своего заведения. Общее меню бота содержит "
+        "пробный тест, общий рейтинг и вакансии — не относится к вашему "
+        "заведению. Выйти туда?",
+        reply_markup=builder.as_markup(),
+    )
+
+
 @router.message(F.text == MAIN_MENU_BUTTON_TEXT)
 async def btn_main_menu(message: Message, state: FSMContext) -> None:
     """Нажатие постоянной кнопки. Спрашиваем подтверждение, только если
@@ -343,16 +339,49 @@ async def btn_main_menu(message: Message, state: FSMContext) -> None:
         await run_start_logic(message, state)
         return
 
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Да, выйти в общее меню", callback_data="confirm_leave_to_general")
-    builder.button(text="Остаться", callback_data="cancel_leave_to_general")
-    builder.adjust(1)
-    await message.answer(
-        "⚠️ Вы сейчас в меню своего заведения. Общее меню бота содержит "
-        "пробный тест, общий рейтинг и вакансии — не относится к вашему "
-        "заведению. Выйти туда?",
-        reply_markup=builder.as_markup(),
+    await _ask_leave_to_general(message.answer)
+
+
+@router.callback_query(F.data == "ask_leave_to_general")
+async def cb_ask_leave_to_general(callback: CallbackQuery) -> None:
+    """Явная кнопка «🚪 Выйти в главное меню» прямо в меню заведения —
+    делает ровно то же самое, что и постоянная кнопка внизу, просто более
+    заметно и понятно, где именно её искать."""
+    await _ask_leave_to_general(callback.message.answer)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:my_restaurant")
+async def cb_my_restaurant(callback: CallbackQuery, state: FSMContext) -> None:
+    async with async_session() as session:
+        options_list = await crud.get_user_restaurant_options(session, callback.from_user.id)
+
+    if not options_list:
+        await callback.answer(
+            "У вас пока нет заведения. Используйте «➕ Добавить моё заведение» "
+            "в разделе «Рейтинг заведений», чтобы зарегистрировать своё, или "
+            "попросите у администратора личную ссылку, чтобы присоединиться "
+            "к уже существующему.",
+            show_alert=True,
+        )
+        return
+
+    await state.update_data(in_general_menu=False)
+
+    if len(options_list) > 1:
+        await callback.message.edit_text(
+            "Вы связаны с несколькими заведениями. С каким работать?",
+            reply_markup=restaurant_switch_kb([r for r, _ in options_list]),
+        )
+        await callback.answer()
+        return
+
+    restaurant, is_manager = options_list[0]
+    username = await get_bot_username(callback.bot)
+    await callback.message.edit_text(
+        f"Меню «{restaurant.name}»:", reply_markup=join_menu_kb(username, restaurant.id, is_manager)
     )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "confirm_leave_to_general")

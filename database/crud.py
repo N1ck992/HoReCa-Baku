@@ -496,6 +496,32 @@ async def get_restaurants_managed_by(session: AsyncSession, telegram_id: int) ->
     return list(result.scalars().unique().all())
 
 
+async def get_user_restaurant_options(
+    session: AsyncSession, telegram_id: int
+) -> list[tuple[Restaurant, bool]]:
+    """Все заведения, с которыми человек как-либо связан — и то, где он
+    просто сотрудник, и все, которыми он управляет, объединённые в один
+    список без повторов. Каждый элемент — (заведение, является ли
+    менеджером именно этого заведения). Используется, чтобы решить, какое
+    меню показать по /start или по кнопке «Моё заведение» — раньше эти
+    две привязки проверялись по отдельности, из-за чего человек, который
+    одновременно сотрудник одного заведения и менеджер другого, мог
+    случайно попадать в общее меню."""
+    options: dict[int, tuple[Restaurant, bool]] = {}
+
+    user = await get_user_by_telegram_id(session, telegram_id)
+    if user is not None and user.restaurant_id is not None:
+        staff_restaurant = await get_restaurant_by_id(session, user.restaurant_id)
+        if staff_restaurant is not None:
+            is_mgr = await is_restaurant_manager(session, staff_restaurant.id, telegram_id)
+            options[staff_restaurant.id] = (staff_restaurant, is_mgr)
+
+    for managed_restaurant in await get_restaurants_managed_by(session, telegram_id):
+        options[managed_restaurant.id] = (managed_restaurant, True)
+
+    return list(options.values())
+
+
 async def is_restaurant_manager(session: AsyncSession, restaurant_id: int, telegram_id: int) -> bool:
     result = await session.execute(
         select(RestaurantManager).where(
