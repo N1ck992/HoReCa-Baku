@@ -18,6 +18,7 @@ from keyboards.keyboards import (
     main_menu_kb,
     persistent_menu_kb,
     positions_kb,
+    restaurant_switch_kb,
     webapp_open_kb,
 )
 from utils import get_bot_username
@@ -88,6 +89,7 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
         # ни к какому заведению не привязан.
         restaurant_id = user.restaurant_id
         is_manager = False
+        multi_managed = None
         if restaurant_id is not None:
             is_manager = await crud.is_restaurant_manager(session, restaurant_id, message.from_user.id)
         else:
@@ -95,12 +97,23 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
             if len(managed) == 1:
                 restaurant_id = managed[0].id
                 is_manager = True
+            elif len(managed) > 1:
+                # Управляет несколькими заведениями и не привязан как
+                # сотрудник ни к одному — нужно спросить, с каким работать.
+                multi_managed = managed
 
         restaurant = (
             await crud.get_restaurant_by_id(session, restaurant_id) if restaurant_id else None
         )
 
     await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
+
+    if multi_managed is not None:
+        await message.answer(
+            "Вы администратор нескольких заведений. С каким работать?",
+            reply_markup=restaurant_switch_kb(multi_managed),
+        )
+        return
 
     if restaurant is not None:
         username = await get_bot_username(message.bot)
@@ -362,6 +375,27 @@ async def cb_confirm_leave_to_general(callback: CallbackQuery, state: FSMContext
 async def cb_cancel_leave_to_general(callback: CallbackQuery) -> None:
     await callback.message.delete()
     await callback.answer("Остаётесь в меню заведения")
+
+
+@router.callback_query(F.data.startswith("choose_restaurant:"))
+async def cb_choose_restaurant(callback: CallbackQuery, state: FSMContext) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        if restaurant is None:
+            await callback.answer("Заведение не найдено.", show_alert=True)
+            return
+        is_manager = await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id)
+        if not is_manager:
+            await callback.answer("⛔ Вы больше не администратор этого заведения.", show_alert=True)
+            return
+
+    await state.update_data(in_general_menu=False)
+    username = await get_bot_username(callback.bot)
+    await callback.message.edit_text(
+        f"Меню «{restaurant.name}»:", reply_markup=join_menu_kb(username, restaurant_id, is_manager)
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("join_request_approve:"))

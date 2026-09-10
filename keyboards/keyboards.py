@@ -77,6 +77,18 @@ def join_menu_kb(bot_username: str, restaurant_id: int, is_manager: bool = False
     return builder.as_markup()
 
 
+def restaurant_switch_kb(restaurants) -> InlineKeyboardMarkup:
+    """Список заведений для человека, который администрирует несколько —
+    нажатие сразу открывает личное меню выбранного заведения (не просто
+    панель администратора, а полное меню — на случай если он там ещё и
+    сотрудник)."""
+    builder = InlineKeyboardBuilder()
+    for restaurant in restaurants:
+        builder.button(text=restaurant.name, callback_data=f"choose_restaurant:{restaurant.id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def group_menu_kb(bot_username: str, restaurant_id: int) -> InlineKeyboardMarkup:
     """Единое меню группы заведения — видно всем участникам (ограничение
     Telegram — иначе никак). Три первые кнопки — обычные ссылки: по
