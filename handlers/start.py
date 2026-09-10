@@ -477,6 +477,25 @@ async def cb_open_examcode(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("open_myresults:"))
+async def cb_open_myresults(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=myresults"
+        await callback.message.edit_text(
+            "Нажмите кнопку ниже, чтобы посмотреть свои результаты:",
+            reply_markup=webapp_open_kb(
+                webapp_link, "📊 Открыть результаты", back_callback=f"back_to_restaurant:{restaurant_id}"
+            ),
+        )
+        await callback.answer()
+        return
+
+    # Запасной вариант, если сайт ещё не настроен — используем "Мой профиль".
+    await callback.answer("Раздел пока доступен только в профиле.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("open_admin:"))
 async def cb_open_admin(callback: CallbackQuery) -> None:
     restaurant_id = int(callback.data.split(":")[1])

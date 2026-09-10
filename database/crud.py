@@ -236,6 +236,25 @@ async def finalize_test_result(
 
 # ---------- Статистика / рейтинг ----------
 
+async def get_recent_results_for_user_in_restaurant(
+    session: AsyncSession, user_id: int, restaurant_id: int, limit: int = 10
+) -> list[TestResult]:
+    """История тестов пользователя, отфильтрованная так же, как и
+    get_user_stats_for_restaurant — только тесты, созданные для этого
+    конкретного заведения. Используется в личном разделе "Мои результаты"
+    на сайте."""
+    result = await session.execute(
+        select(TestResult)
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(TestResult.user_id == user_id, Position.restaurant_id == restaurant_id)
+        .options(selectinload(TestResult.category).selectinload(Category.position))
+        .order_by(TestResult.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def get_user_stats_for_restaurant(
     session: AsyncSession, user_id: int, restaurant_id: int
 ) -> dict:
@@ -408,7 +427,7 @@ async def get_recent_results_for_user(
     result = await session.execute(
         select(TestResult)
         .where(TestResult.user_id == user_id)
-        .options(selectinload(TestResult.category))
+        .options(selectinload(TestResult.category).selectinload(Category.position))
         .order_by(TestResult.created_at.desc())
         .limit(limit)
     )

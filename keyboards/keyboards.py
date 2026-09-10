@@ -78,6 +78,7 @@ def join_menu_kb(bot_username: str, restaurant_id: int, is_manager: bool = False
     builder = InlineKeyboardBuilder()
     builder.button(text="👤 Мой профиль", callback_data="menu:profile")
     builder.button(text="🎓 Пройти тест", callback_data=f"open_tests:{restaurant_id}")
+    builder.button(text="📊 Мои результаты", callback_data=f"open_myresults:{restaurant_id}")
     if not is_manager:
         builder.button(text="📩 Запросить экзамен", callback_data=f"open_examcode:{restaurant_id}")
     if is_manager:

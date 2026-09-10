@@ -521,6 +521,23 @@
         <div class="footnote">Мичели · панель сотрудника</div>
       </section>
 
+      <!-- ============ ЭКРАН 7: мои результаты ============ -->
+      <section class="screen" data-screen="myResults" data-state="right">
+        <div class="top-row">
+          <span class="restaurant-name">Мои результаты</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Мои<br>результаты</h1>
+        <div class="stat-card">
+          <div class="stat-grid">
+            <div class="stat-box"><div class="stat-num" id="myTestsCount">0</div><div class="stat-label">тестов</div></div>
+            <div class="stat-box"><div class="stat-num" id="myAvgPct">0%</div><div class="stat-label">средний балл</div></div>
+          </div>
+        </div>
+        <p class="sub" style="margin-top:4px;">История тестов</p>
+        <div class="row-list" id="myResultsHistory"></div>
+      </section>
+
       <!-- ============ ЭКРАН 8: панель администратора — меню ============ -->
       <section class="screen" data-screen="adminMenu" data-state="right">
         <div class="top-row">
@@ -916,6 +933,26 @@ function submitExamCode(){
   `;
 }
 
+/* ---------------- Мои результаты ---------------- */
+async function loadMyResults(){
+  const hist = document.getElementById('myResultsHistory');
+  hist.innerHTML = '<p class="sub">Загрузка…</p>';
+  try {
+    const data = await apiGet('/api/my_results', { restaurant_id: restaurantId });
+    document.getElementById('myTestsCount').textContent = data.tests_completed;
+    document.getElementById('myAvgPct').textContent = data.avg_percentage + '%';
+    hist.innerHTML = data.history.length
+      ? data.history.map(h => `
+          <div class="row-item">
+            <span>${h.position || ''}${h.category ? ' · ' + h.category : ''}</span>
+            <span style="color:${h.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.correct_count}/${h.total_count} (${h.percentage}%)</span>
+          </div>`).join('')
+      : '<div class="row-item"><span>Тестов пока не было</span></div>';
+  } catch (e) {
+    showError(hist, e.message);
+  }
+}
+
 /* ---------------- Запуск: какой экран открыть по ссылке ---------------- */
 function initFromQuery(){
   const params = new URLSearchParams(window.location.search);
@@ -923,6 +960,9 @@ function initFromQuery(){
 
   if(screen === 'admin'){
     setActive('adminMenu');
+  } else if(screen === 'myresults'){
+    setActive('myResults');
+    loadMyResults();
   } else {
     // screen === 'tests' или отсутствует — экран выбора должности
     renderPositions();

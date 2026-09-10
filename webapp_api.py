@@ -251,6 +251,57 @@ async def finish_test(request: web.Request) -> web.Response:
     )
 
 
+@routes.get("/api/my_results")
+async def my_results(request: web.Request) -> web.Response:
+    """Личные результаты тестов текущего пользователя — доступны кому
+    угодно (не только менеджеру) для СВОИХ данных, определяемых по
+    initData, а не по параметру в ссылке — иначе можно было бы посмотреть
+    чужие результаты, просто подставив другой user_id."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    restaurant_id = int(restaurant_id) if restaurant_id and restaurant_id.isdigit() else None
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+        if restaurant_id is not None:
+            stats = await crud.get_user_stats_for_restaurant(session, user.id, restaurant_id)
+            raw_history = await crud.get_recent_results_for_user_in_restaurant(
+                session, user.id, restaurant_id
+            )
+        else:
+            stats = await crud.get_user_stats(session, user.id)
+            raw_history = await crud.get_recent_results_for_user(session, user.id)
+
+    history = [
+        {
+            "category": r.category.name if r.category else None,
+            "position": r.category.position.name if r.category and r.category.position else None,
+            "correct_count": r.correct_count,
+            "total_count": r.total_count,
+            "percentage": r.percentage,
+            "date": r.created_at.strftime("%d.%m.%Y") if r.created_at else None,
+        }
+        for r in raw_history
+    ]
+
+    return _json(
+        {
+            "tests_completed": stats["tests_completed"],
+            "avg_percentage": stats["avg_percentage"],
+            "history": history,
+        }
+    )
+
+
 @routes.get("/api/employees")
 async def get_employees(request: web.Request) -> web.Response:
     """Список персонала для панели администратора — доступен только
