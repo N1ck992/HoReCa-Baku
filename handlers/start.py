@@ -80,12 +80,37 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
             username=message.from_user.username,
             full_name=message.from_user.full_name,
         )
-        show_exam_button = user.restaurant_id is not None
 
-    # Reply-клавиатуру (постоянную кнопку под полем ввода) и инлайн-меню
-    # Telegram не может показать в одном сообщении — отправляем отдельно.
+        # Если человек уже привязан к заведению (как сотрудник или как
+        # менеджер) — сразу показываем меню этого заведения вместо общего
+        # гостевого меню с "Добавить заведение"/"Вакансии", которые ему
+        # уже не нужны. Гостевое меню остаётся только у тех, кто вообще
+        # ни к какому заведению не привязан.
+        restaurant_id = user.restaurant_id
+        is_manager = False
+        if restaurant_id is not None:
+            is_manager = await crud.is_restaurant_manager(session, restaurant_id, message.from_user.id)
+        else:
+            managed = await crud.get_restaurants_managed_by(session, message.from_user.id)
+            if len(managed) == 1:
+                restaurant_id = managed[0].id
+                is_manager = True
+
+        restaurant = (
+            await crud.get_restaurant_by_id(session, restaurant_id) if restaurant_id else None
+        )
+
     await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
-    await message.answer("Главное меню:", reply_markup=main_menu_kb(show_exam_button))
+
+    if restaurant is not None:
+        username = await get_bot_username(message.bot)
+        await message.answer(
+            f"Меню «{restaurant.name}»:",
+            reply_markup=join_menu_kb(username, restaurant.id, is_manager),
+        )
+        return
+
+    await message.answer("Главное меню:", reply_markup=main_menu_kb(False))
 
 
 @router.message(CommandStart())

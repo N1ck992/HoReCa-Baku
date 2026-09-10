@@ -59,12 +59,13 @@ def open_private_chat_kb(bot_username: str) -> InlineKeyboardMarkup:
 
 def join_menu_kb(bot_username: str, restaurant_id: int, is_manager: bool = False) -> InlineKeyboardMarkup:
     """Личное меню сотрудника заведения — открывается сразу в личке по
-    персональной пригласительной ссылке, без всякой группы. Первые три
-    кнопки — обычные ссылки на Mini App (работают у любого сотрудника).
-    Кнопка администратора — только если человек уже добавлен менеджером
-    этого заведения (проверяется на сервере, см. cb_admin_check)."""
+    персональной пригласительной ссылке, без всякой группы. «Мой профиль» —
+    настоящий экран с реальными данными и кнопкой выхода из заведения
+    (это работающая функция, поэтому не через макет сайта). Остальные —
+    ссылки на Mini App. Кнопка администратора — только если человек уже
+    добавлен менеджером этого заведения (проверяется на сервере)."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="👤 Мой профиль", url=f"https://t.me/{bot_username}?start=profile_{restaurant_id}")
+    builder.button(text="👤 Мой профиль", callback_data="menu:profile")
     builder.button(text="🎓 Пройти тест", url=f"https://t.me/{bot_username}?start=tests_{restaurant_id}")
     builder.button(
         text="📩 Запросить экзамен", url=f"https://t.me/{bot_username}?start=examcode_{restaurant_id}"
@@ -101,11 +102,16 @@ def group_menu_kb(bot_username: str, restaurant_id: int) -> InlineKeyboardMarkup
     return builder.as_markup()
 
 
-def profile_kb() -> InlineKeyboardMarkup:
-    """Клавиатура экрана профиля: тесты, рейтинг, назад."""
+def profile_kb(restaurant_id: int | None = None) -> InlineKeyboardMarkup:
+    """Клавиатура экрана профиля: тесты, рейтинг, назад. Если сотрудник
+    привязан к заведению — добавляется кнопка выхода из него."""
     builder = InlineKeyboardBuilder()
     builder.button(text="📝 Мои тесты", callback_data="menu:my_tests")
     builder.button(text="🏢 Рейтинг заведений", callback_data="menu:leaderboard")
+    if restaurant_id is not None:
+        builder.button(
+            text="🚪 Покинуть заведение", callback_data=f"leave_restaurant_ask:{restaurant_id}"
+        )
     builder.button(text="⬅️ Главное меню", callback_data="menu:main")
     builder.adjust(1)
     return builder.as_markup()

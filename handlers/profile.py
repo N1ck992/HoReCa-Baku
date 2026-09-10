@@ -1,9 +1,10 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import crud
 from database.database import async_session
-from keyboards.keyboards import profile_kb
+from keyboards.keyboards import main_menu_kb, profile_kb
 from services.rating import display_name, rank_progress_text
 
 router = Router(name="profile")
@@ -89,7 +90,7 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
     if all_ranks_lines:
         text += "\n\n🎖 Ранги по должностям:\n" + "\n".join(all_ranks_lines)
 
-    return text, profile_kb()
+    return text, profile_kb(restaurant.id if restaurant is not None else None)
 
 
 @router.callback_query(F.data == "menu:profile")
@@ -100,3 +101,44 @@ async def cb_profile(callback: CallbackQuery) -> None:
         )
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("leave_restaurant_ask:"))
+async def cb_leave_restaurant_ask(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+    name = restaurant.name if restaurant else "заведения"
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="⚠️ Да, покинуть", callback_data=f"leave_restaurant_do:{restaurant_id}")
+    builder.button(text="Отмена", callback_data="menu:profile")
+    builder.adjust(1)
+
+    await callback.message.edit_text(
+        f"Вы уверены, что хотите покинуть «{name}»? Вы потеряете доступ к "
+        "тестам и результатам этого заведения. Чтобы вернуться, понадобится "
+        "новая ссылка от администратора.",
+        reply_markup=builder.as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("leave_restaurant_do:"))
+async def cb_leave_restaurant_do(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        user = await crud.get_user_by_telegram_id(session, callback.from_user.id)
+        removed = user is not None and await crud.remove_user_from_restaurant(
+            session, restaurant_id, user.id
+        )
+
+    if not removed:
+        await callback.answer("Вы уже не в этом заведении.", show_alert=True)
+    else:
+        await callback.answer("Вы покинули заведение")
+
+    await callback.message.edit_text(
+        "Вы вышли из заведения. Теперь вам доступно только общее меню бота.",
+    )
+    await callback.message.answer("Главное меню:", reply_markup=main_menu_kb(False))
