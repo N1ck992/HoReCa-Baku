@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiohttp import web
 
 from config import BOT_TOKEN
-from data.seed import seed_data, seed_restaurant_positions
+from data.seed import seed_data, seed_restaurant_positions, sync_new_questions
 from database.database import async_session, init_db
 from handlers import (
     admin,
@@ -56,6 +56,7 @@ async def main() -> None:
     async with async_session() as session:
         await seed_data(session)
         await seed_restaurant_positions(session)
+        await sync_new_questions(session)
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()

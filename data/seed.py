@@ -586,6 +586,61 @@ POSITIONS: list[dict] = [
                         "correct_index": 0,
                         "difficulty": 3,
                     },
+                    {
+                        "text": "Для какого напитка используется бокал на высокой ножке с узким верхом (флюте)?",
+                        "options": [
+                            "Игристое вино или шампанское",
+                            "Пиво",
+                            "Крепкий алкоголь со льдом",
+                            "Горячий чай",
+                        ],
+                        "correct_index": 0,
+                        "difficulty": 2,
+                    },
+                    {
+                        "text": "Где по правилам сервировки должна лежать вилка относительно тарелки?",
+                        "options": [
+                            "Слева от тарелки",
+                            "Справа от тарелки",
+                            "Поверх тарелки",
+                            "Не имеет значения",
+                        ],
+                        "correct_index": 0,
+                        "difficulty": 1,
+                    },
+                    {
+                        "text": "Что нужно сделать в первую очередь, заметив на подносе шаткий или треснувший бокал?",
+                        "options": [
+                            "Убрать его и заменить на целый, не подавать гостю",
+                            "Всё равно подать, если трещина небольшая",
+                            "Протереть салфеткой и подать",
+                            "Отдать гостю на выбор — брать или нет",
+                        ],
+                        "correct_index": 0,
+                        "difficulty": 2,
+                    },
+                    {
+                        "text": "Зачем перед началом смены официант проверяет наличие расходников (салфетки, приборы, бланки заказов)?",
+                        "options": [
+                            "Чтобы не отвлекаться на это во время наплыва гостей и не заставлять их ждать",
+                            "Это не обязанность официанта",
+                            "Только по указанию менеджера",
+                            "Достаточно проверить один раз в неделю",
+                        ],
+                        "correct_index": 0,
+                        "difficulty": 1,
+                    },
+                    {
+                        "text": "Как правильно переносить поднос с несколькими напитками?",
+                        "options": [
+                            "На раскрытой ладони на уровне плеча, распределив вес равномерно",
+                            "В одной вытянутой вниз руке",
+                            "Прижав к груди двумя руками",
+                            "Не имеет значения, главное — не разлить",
+                        ],
+                        "correct_index": 0,
+                        "difficulty": 2,
+                    },
                 ],
             },
             {
@@ -878,12 +933,82 @@ async def seed_data(session: AsyncSession) -> None:
     см. seed_restaurant_positions() ниже."""
     result = await session.execute(select(Position).where(Position.restaurant_id.is_(None)))
     if result.scalars().first() is not None:
-        return  # общие должности уже созданы — ничего не делаем
+        return  # общие должности уже созданы — переходим к досеиванию новых вопросов
+        # (см. sync_new_questions ниже — вызывается отдельно в main.py)
 
     for position_data in POSITIONS:
         await _seed_position(session, position_data, restaurant_id=None)
 
     await session.commit()
+
+
+async def sync_new_questions(session: AsyncSession) -> None:
+    """Безопасно добавляет в уже существующие общие категории вопросы,
+    которых там ещё нет — сравнение идёт по точному тексту вопроса.
+    Позволяет пополнять список вопросов в этом файле (data/seed.py) и
+    видеть изменения на уже работающем сервере после обычного
+    перезапуска бота — без необходимости очищать базу данных."""
+    added = 0
+    for position_data in POSITIONS:
+        result = await session.execute(
+            select(Position).where(
+                Position.code == position_data["code"], Position.restaurant_id.is_(None)
+            )
+        )
+        position = result.scalars().first()
+        if position is None:
+            continue  # должность появится при следующем полном сидировании
+
+        for category_data in position_data["categories"]:
+            result = await session.execute(
+                select(Category).where(
+                    Category.position_id == position.id, Category.code == category_data["code"]
+                )
+            )
+            category = result.scalars().first()
+            if category is None:
+                continue
+
+            result = await session.execute(
+                select(Question.text).where(Question.category_id == category.id)
+            )
+            existing_texts = {row[0] for row in result.all()}
+
+            result = await session.execute(
+                select(Question.order)
+                .where(Question.category_id == category.id)
+                .order_by(Question.order.desc())
+                .limit(1)
+            )
+            next_order = (result.scalar() or 0) + 1
+
+            for question_data in category_data["questions"]:
+                if question_data["text"] in existing_texts:
+                    continue
+
+                question = Question(
+                    category_id=category.id,
+                    text=question_data["text"],
+                    order=next_order,
+                    difficulty=question_data.get("difficulty", 1),
+                )
+                session.add(question)
+                await session.flush()
+                next_order += 1
+                added += 1
+
+                for o_order, option_text in enumerate(question_data["options"]):
+                    session.add(
+                        AnswerOption(
+                            question_id=question.id,
+                            text=option_text,
+                            is_correct=(o_order == question_data["correct_index"]),
+                            order=o_order,
+                        )
+                    )
+
+    if added:
+        await session.commit()
 
 
 # ---------- Уникальные должности отдельных заведений ----------

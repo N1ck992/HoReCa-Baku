@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import random
 
 from aiohttp import web
 
@@ -96,7 +97,7 @@ async def get_categories(request: web.Request) -> web.Response:
             questions_counts.append(len(questions))
 
     data = [
-        {"id": c.id, "name": c.name, "emoji": c.emoji, "question_count": n}
+        {"id": c.id, "name": c.name, "emoji": c.emoji, "question_count": min(n, 5), "pool_size": n}
         for c, n in zip(categories, questions_counts)
     ]
     return _json(data)
@@ -157,17 +158,26 @@ async def start_test(request: web.Request) -> web.Response:
             full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
         )
         test_result = await crud.create_test_result(session, user.id, category_id)
-        questions = await crud.get_questions_with_options(session, category_id)
-        questions_data = [
-            {
-                "id": q.id,
-                "text": q.text,
-                "options": [
-                    {"id": o.id, "text": o.text} for o in sorted(q.options, key=lambda o: o.order)
-                ],
-            }
-            for q in questions
-        ]
+        all_questions = await crud.get_questions_with_options(session, category_id)
+
+        # Если вопросов в категории больше 5 — берём 5 случайных, а не
+        # всегда одни и те же первые. Порядок вариантов ответа тоже
+        # перемешиваем при каждой попытке — иначе правильный ответ мог
+        # случайно оказаться, например, всегда первым в списке.
+        selected = random.sample(all_questions, 5) if len(all_questions) > 5 else list(all_questions)
+        random.shuffle(selected)
+
+        questions_data = []
+        for q in selected:
+            options = list(q.options)
+            random.shuffle(options)
+            questions_data.append(
+                {
+                    "id": q.id,
+                    "text": q.text,
+                    "options": [{"id": o.id, "text": o.text} for o in options],
+                }
+            )
 
     return _json({"test_result_id": test_result.id, "questions": questions_data})
 

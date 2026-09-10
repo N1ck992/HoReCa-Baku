@@ -696,7 +696,7 @@ async function selectPosition(positionId, positionName){
         <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
         <div class="card-text">
           <div class="card-title">${c.emoji || ''} ${c.name}</div>
-          <div class="card-meta">${c.question_count} вопросов</div>
+          <div class="card-meta">${c.question_count}${c.pool_size > c.question_count ? ' из ' + c.pool_size : ''} вопросов</div>
         </div>
         <div class="chevron">›</div>
       </div>
