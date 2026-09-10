@@ -273,7 +273,6 @@ async def _complete_exam(
     text += f"Правильных ответов: {correct_count}/{total_count}\n"
 
     if result["passed"]:
-        level_names = {1: "лёгкий", 2: "средний", 3: "сложный"}
         new_rank = result["new_rank"]
         new_next_rank = result["new_next_rank"]
         text += (
@@ -281,12 +280,6 @@ async def _complete_exam(
             f"🎊 Новый ранг: {new_rank.emoji} {new_rank.title}!\n"
             f"{rank_progress_text(new_rank, new_next_rank, result['new_total_xp'])}"
         )
-        new_level = result["new_level"]
-        if new_level and new_level > 1:
-            text += (
-                f"\n\n🔓 Открыт новый уровень вопросов в обычных тестах этой "
-                f"должности: {level_names.get(new_level, new_level)}."
-            )
     else:
         text += "❌ Экзамен не сдан. Обратитесь к менеджеру за новым кодом, когда будете готовы."
 

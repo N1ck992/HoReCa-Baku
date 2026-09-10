@@ -423,6 +423,34 @@
         <div class="footnote">Мичели · панель сотрудника</div>
       </section>
 
+      <!-- ============ ЭКРАН 2.1: выбор уровня ============ -->
+      <section class="screen" data-screen="levelPicker" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('categories','right')">‹</button>
+          <span class="restaurant-name" id="levelCategoryName">Категория</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Выберите<br>уровень</h1>
+        <p class="sub">Все уровни доступны сразу — без экзамена. Чем выше уровень, тем длиннее и сложнее тест.</p>
+        <div class="cards">
+          <div class="card" onclick="startTestAtLevel(1)">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg></div>
+            <div class="card-text"><div class="card-title">Уровень 1 · лёгкий</div><div class="card-meta">5 вопросов</div></div>
+            <div class="chevron">›</div>
+          </div>
+          <div class="card" onclick="startTestAtLevel(2)">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></div>
+            <div class="card-text"><div class="card-title">Уровень 2 · средний</div><div class="card-meta">10 вопросов</div></div>
+            <div class="chevron">›</div>
+          </div>
+          <div class="card" onclick="startTestAtLevel(3)">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg></div>
+            <div class="card-text"><div class="card-title">Уровень 3 · сложный</div><div class="card-meta">15 вопросов</div></div>
+            <div class="chevron">›</div>
+          </div>
+        </div>
+      </section>
+
       <!-- ============ ЭКРАН 3: вопрос теста ============ -->
       <section class="screen" data-screen="question" data-state="right">
         <div class="top-row">
@@ -759,7 +787,7 @@ async function selectPosition(positionId, positionName){
         <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
         <div class="card-text">
           <div class="card-title">${c.emoji || ''} ${c.name}</div>
-          <div class="card-meta">${c.question_count}${c.pool_size > c.question_count ? ' из ' + c.pool_size : ''} вопросов</div>
+          <div class="card-meta">${c.pool_size} вопросов в пуле · 3 уровня на выбор</div>
         </div>
         <div class="chevron">›</div>
       </div>
@@ -777,13 +805,21 @@ function goTo(name, fromSide){
   });
 }
 
-async function selectCategory(categoryId, categoryName){
+let currentCategoryId = null;
+
+function selectCategory(categoryId, categoryName){
+  currentCategoryId = categoryId;
+  document.getElementById('levelCategoryName').textContent = categoryName;
   document.getElementById('quizCategoryName').textContent = categoryName;
+  goTo('levelPicker','left');
+}
+
+async function startTestAtLevel(level){
   document.getElementById('qText').textContent = 'Загрузка…';
   document.getElementById('optionsList').innerHTML = '';
   goTo('question','left');
   try {
-    const data = await apiPost('/api/start_test', { category_id: categoryId });
+    const data = await apiPost('/api/start_test', { category_id: currentCategoryId, level });
     currentTestResultId = data.test_result_id;
     quizQuestions = data.questions;
     quizIndex = 0; quizCorrect = 0; answered = false;
@@ -1235,9 +1271,6 @@ async function finishExam(forcedTimeout){
     icon.textContent = '🎉';
     title.textContent = 'Экзамен сдан!';
     sub.textContent = `Правильных ответов: ${result.correct_count}/${result.total_count}. Новый ранг: ${result.new_rank_emoji || ''} ${result.new_rank || ''}.`;
-    if (result.new_level > 1) {
-      sub.textContent += ' Открыт новый уровень вопросов в обычных тестах этой должности.';
-    }
   } else {
     icon.textContent = '📚';
     title.textContent = 'Экзамен не сдан';

@@ -106,7 +106,7 @@ async def get_categories(request: web.Request) -> web.Response:
             questions_counts.append(len(questions))
 
     data = [
-        {"id": c.id, "name": c.name, "emoji": c.emoji, "question_count": min(n, 5), "pool_size": n}
+        {"id": c.id, "name": c.name, "emoji": c.emoji, "pool_size": n}
         for c, n in zip(categories, questions_counts)
     ]
     return _json(data)
@@ -156,8 +156,11 @@ async def start_test(request: web.Request) -> web.Response:
         return _auth_error()
 
     category_id = body.get("category_id")
+    level = body.get("level", 1)
     if not isinstance(category_id, int):
         return _json({"error": "category_id обязателен"}, status=400)
+    if level not in (1, 2, 3):
+        level = 1
 
     async with async_session() as session:
         user = await crud.get_or_create_user(
@@ -169,26 +172,15 @@ async def start_test(request: web.Request) -> web.Response:
         test_result = await crud.create_test_result(session, user.id, category_id)
         all_questions = await crud.get_questions_with_options(session, category_id)
 
-        # Уровни сложности касаются ТОЛЬКО уникальных тестов заведения —
-        # общие/пробные тесты (Position.restaurant_id is None) всегда
-        # показывают вопросы любой сложности, без прогрессии.
-        category = await crud.get_category_by_id(session, category_id)
-        if category is not None:
-            position = await crud.get_position_by_id(session, category.position_id)
-            if position is not None and position.restaurant_id is not None:
-                unlocked = await crud.get_unlocked_difficulty(session, user.id, position.id)
-                limited = [q for q in all_questions if q.difficulty <= unlocked]
-                # Если после фильтра вопросов совсем не осталось (например,
-                # для лёгкого уровня их ещё не добавили) — лучше показать
-                # что есть, чем пустой тест.
-                if limited:
-                    all_questions = limited
+        # Уровни 1/2/3 доступны сразу всем, без сдачи экзамена — уровень
+        # просто определяет и сложность (вопросы этого уровня и легче), и
+        # длину теста: уровень 1 — 5 вопросов, уровень 2 — 10, уровень 3 — 15.
+        pool = [q for q in all_questions if q.difficulty <= level]
+        if not pool:
+            pool = all_questions  # на случай, если вопросов этого уровня ещё не добавили
 
-        # Если вопросов в категории больше 5 — берём 5 случайных, а не
-        # всегда одни и те же первые. Порядок вариантов ответа тоже
-        # перемешиваем при каждой попытке — иначе правильный ответ мог
-        # случайно оказаться, например, всегда первым в списке.
-        selected = random.sample(all_questions, 5) if len(all_questions) > 5 else list(all_questions)
+        wanted = level * 5
+        selected = random.sample(pool, min(wanted, len(pool)))
         random.shuffle(selected)
 
         questions_data = []
@@ -703,6 +695,5 @@ async def finish_exam(request: web.Request) -> web.Response:
             "total_count": result["total_count"],
             "new_rank": result["new_rank"].title if result["new_rank"] else None,
             "new_rank_emoji": result["new_rank"].emoji if result["new_rank"] else None,
-            "new_level": result["new_level"],
         }
     )

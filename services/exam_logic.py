@@ -45,10 +45,6 @@ async def complete_exam(
         bonus_xp_awarded=bonus_xp,
     )
 
-    new_level = None
-    if passed:
-        new_level = await crud.unlock_next_difficulty(session, user_id, position_id)
-
     new_total_xp = current_xp + bonus_xp
     new_rank = crud.get_rank_for_xp(ranks, new_total_xp)
     new_next_rank = crud.get_next_rank(ranks, new_rank)
@@ -59,7 +55,6 @@ async def complete_exam(
         "correct_count": correct_count,
         "total_count": total_count,
         "bonus_xp": bonus_xp,
-        "new_level": new_level,
         "new_rank": new_rank,
         "new_next_rank": new_next_rank,
         "new_total_xp": new_total_xp,
