@@ -243,6 +243,25 @@ class RestaurantRequest(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class RestaurantJoinRequest(Base):
+    """Заявка человека на вступление в заведение как сотрудник — создаётся
+    при переходе по личной ссылке join_{id} (см. handlers/start.py).
+    Требует подтверждения от менеджера заведения, прежде чем человек
+    получит доступ к тестам — иначе по утёкшей ссылке мог бы подключиться
+    кто угодно."""
+
+    __tablename__ = "restaurant_join_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id"))
+    telegram_id: Mapped[int] = mapped_column(BigInteger)
+    telegram_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # status: "pending" | "approved" | "rejected"
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ExamCode(Base):
     """Одноразовый код на экзамен, который менеджер выдаёт сотруднику.
 

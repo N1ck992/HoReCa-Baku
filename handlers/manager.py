@@ -5,7 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import crud
 from database.database import async_session
-from handlers.restaurants import _employees_kb, _managers_list_kb
+from handlers.restaurants import _employees_kb, _managers_list_kb, _remove_employee_kb
 from services.rating import display_name
 from utils import get_bot_username
 
@@ -45,6 +45,9 @@ def manager_menu_kb(restaurant_id: int):
     )
     builder.button(
         text="👥 Результаты сотрудников", callback_data=f"manager_employees:{restaurant_id}"
+    )
+    builder.button(
+        text="🗑 Удалить персонал", callback_data=f"manager_remove_start:{restaurant_id}"
     )
     builder.button(
         text="🧑‍💼 Администраторы заведения", callback_data=f"manager_show_admins:{restaurant_id}"
@@ -212,6 +215,64 @@ async def cb_manager_show_admins(callback: CallbackQuery) -> None:
         "\n".join(lines), reply_markup=_managers_list_kb(restaurant_id, managers)
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("manager_remove_start:"))
+async def cb_manager_remove_start(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        if not await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+        employees = await crud.get_employees_for_restaurant(session, restaurant_id)
+
+    if not employees:
+        await callback.answer("Пока никто из сотрудников не прикрепился к заведению.", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        "⚠️ Выберите сотрудника, которого нужно убрать из заведения "
+        "(он потеряет доступ к тестам этого заведения):",
+        reply_markup=_remove_employee_kb(restaurant_id, employees),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("manager_remove_confirm:"))
+async def cb_manager_remove_confirm(callback: CallbackQuery) -> None:
+    _, restaurant_id_str, user_id_str = callback.data.split(":")
+    restaurant_id = int(restaurant_id_str)
+    user_id = int(user_id_str)
+
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        if restaurant is None or not await crud.is_restaurant_manager(
+            session, restaurant_id, callback.from_user.id
+        ):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+
+        target_user = await crud.get_user_by_id(session, user_id)
+        removed = await crud.remove_user_from_restaurant(session, restaurant_id, user_id)
+
+    if not removed:
+        await callback.answer("Сотрудник не найден.", show_alert=True)
+        return
+
+    await callback.answer("Сотрудник удалён из заведения")
+    await callback.message.edit_text(
+        f"✅ {display_name(target_user)} убран(а) из «{restaurant.name}».",
+        reply_markup=manager_menu_kb(restaurant_id),
+    )
+
+    try:
+        await callback.bot.send_message(
+            chat_id=target_user.telegram_id,
+            text=f"Вас удалили из заведения «{restaurant.name}». "
+            "Чтобы снова получить доступ, обратитесь к администратору за новой ссылкой.",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("manager_assign_start:"))

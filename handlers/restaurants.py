@@ -149,6 +149,20 @@ def _employees_kb(restaurant_id: int, employees: list[dict]):
     return builder.as_markup()
 
 
+def _remove_employee_kb(restaurant_id: int, employees: list[dict]):
+    builder = InlineKeyboardBuilder()
+    for item in employees:
+        user = item["user"]
+        position = item["position"]
+        position_text = f" ({position.name})" if position else ""
+        builder.button(
+            text=f"🗑 {display_name(user)}{position_text}",
+            callback_data=f"manager_remove_confirm:{restaurant_id}:{user.id}",
+        )
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def _positions_kb(restaurant_id: int, user_id: int, positions):
     builder = InlineKeyboardBuilder()
     for position in positions:

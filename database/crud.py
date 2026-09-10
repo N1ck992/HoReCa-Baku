@@ -18,6 +18,7 @@ from database.models import (
     Question,
     Rank,
     Restaurant,
+    RestaurantJoinRequest,
     RestaurantManager,
     RestaurantRequest,
     TestResult,
@@ -68,6 +69,66 @@ async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
 async def set_user_position(session: AsyncSession, user: User, position_id: int) -> None:
     user.current_position_id = position_id
     await session.commit()
+
+
+# ---------- Заявки на вступление персонала (личная ссылка join_{id}) ----------
+
+async def create_join_request(
+    session: AsyncSession,
+    restaurant_id: int,
+    telegram_id: int,
+    telegram_name: str | None,
+) -> RestaurantJoinRequest:
+    request = RestaurantJoinRequest(
+        restaurant_id=restaurant_id,
+        telegram_id=telegram_id,
+        telegram_name=telegram_name,
+        status="pending",
+    )
+    session.add(request)
+    await session.commit()
+    await session.refresh(request)
+    return request
+
+
+async def get_pending_join_request(
+    session: AsyncSession, restaurant_id: int, telegram_id: int
+) -> RestaurantJoinRequest | None:
+    result = await session.execute(
+        select(RestaurantJoinRequest).where(
+            RestaurantJoinRequest.restaurant_id == restaurant_id,
+            RestaurantJoinRequest.telegram_id == telegram_id,
+            RestaurantJoinRequest.status == "pending",
+        )
+    )
+    return result.scalars().first()
+
+
+async def get_join_request_by_id(
+    session: AsyncSession, request_id: int
+) -> RestaurantJoinRequest | None:
+    return await session.get(RestaurantJoinRequest, request_id)
+
+
+async def set_join_request_status(session: AsyncSession, request_id: int, status: str) -> None:
+    request = await session.get(RestaurantJoinRequest, request_id)
+    if request is not None:
+        request.status = status
+        request.decided_at = datetime.utcnow()
+        await session.commit()
+
+
+async def remove_user_from_restaurant(session: AsyncSession, restaurant_id: int, user_id: int) -> bool:
+    """Убирает сотрудника из заведения (используется кнопкой «Удалить
+    персонал» в панели менеджера). Возвращает True, если сотрудник был
+    найден именно в этом заведении и убран."""
+    user = await session.get(User, user_id)
+    if user is None or user.restaurant_id != restaurant_id:
+        return False
+    user.restaurant_id = None
+    user.current_position_id = None
+    await session.commit()
+    return True
 
 
 async def set_user_restaurant(session: AsyncSession, user: User, restaurant_id: int) -> None:

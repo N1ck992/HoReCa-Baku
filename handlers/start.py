@@ -2,6 +2,7 @@ from aiogram import F, Router
 from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
 from database import crud
@@ -107,23 +108,75 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 if restaurant is None:
                     await message.answer("Эта ссылка больше не действительна.")
                     return
+
+                is_manager = await crud.is_restaurant_manager(
+                    session, restaurant_id, message.from_user.id
+                )
                 user = await crud.get_or_create_user(
                     session,
                     telegram_id=message.from_user.id,
                     username=message.from_user.username,
                     full_name=message.from_user.full_name,
                 )
-                await crud.set_user_restaurant(session, user, restaurant_id)
-                is_manager = await crud.is_restaurant_manager(
-                    session, restaurant_id, message.from_user.id
-                )
+                already_staff = is_manager or user.restaurant_id == restaurant_id
+
+                if not already_staff:
+                    pending = await crud.get_pending_join_request(
+                        session, restaurant_id, message.from_user.id
+                    )
 
             await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
-            username = await get_bot_username(message.bot)
+
+            # Менеджеров и уже одобренных сотрудников пускаем сразу —
+            # подтверждение нужно только новым людям.
+            if already_staff:
+                username = await get_bot_username(message.bot)
+                await message.answer(
+                    f"👋 С возвращением в «{restaurant.name}»! Выберите, что нужно:",
+                    reply_markup=join_menu_kb(username, restaurant_id, is_manager),
+                )
+                return
+
+            if pending is not None:
+                await message.answer(
+                    f"⏳ Ваш запрос на вступление в «{restaurant.name}» уже отправлен "
+                    "администратору. Дождитесь подтверждения — бот пришлёт "
+                    "сообщение, как только вас одобрят."
+                )
+                return
+
+            # Новый человек — создаём заявку и уведомляем всех менеджеров.
+            async with async_session() as session:
+                request = await crud.create_join_request(
+                    session,
+                    restaurant_id=restaurant_id,
+                    telegram_id=message.from_user.id,
+                    telegram_name=message.from_user.full_name,
+                )
+                managers = await crud.get_restaurant_managers(session, restaurant_id)
+
             await message.answer(
-                f"👋 Добро пожаловать в «{restaurant.name}»! Выберите, что нужно:",
-                reply_markup=join_menu_kb(username, restaurant_id, is_manager),
+                f"⏳ Ваш запрос на вступление в «{restaurant.name}» отправлен "
+                "администратору заведения. Как только вас подтвердят, бот "
+                "пришлёт сообщение с меню."
             )
+
+            builder = InlineKeyboardBuilder()
+            builder.button(text="✅ Одобрить", callback_data=f"join_request_approve:{request.id}")
+            builder.button(text="❌ Отклонить", callback_data=f"join_request_reject:{request.id}")
+            builder.adjust(2)
+            notify_text = (
+                f"🔔 Новый запрос на вступление в «{restaurant.name}»:\n\n"
+                f"{message.from_user.full_name or 'Без имени'} "
+                f"(ID {message.from_user.id})"
+            )
+            for manager in managers:
+                try:
+                    await message.bot.send_message(
+                        chat_id=manager.telegram_id, text=notify_text, reply_markup=builder.as_markup()
+                    )
+                except Exception:
+                    pass
             return
 
         # ---------- Кнопки персонала: прикрепляем к заведению и открываем нужный раздел ----------
@@ -233,6 +286,68 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
 @router.message(F.text == MAIN_MENU_BUTTON_TEXT)
 async def btn_main_menu(message: Message, state: FSMContext) -> None:
     await run_start_logic(message, state)
+
+
+@router.callback_query(F.data.startswith("join_request_approve:"))
+async def cb_join_request_approve(callback: CallbackQuery) -> None:
+    request_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        request = await crud.get_join_request_by_id(session, request_id)
+        if request is None or request.status != "pending":
+            await callback.answer("Заявка уже обработана.", show_alert=True)
+            return
+        if not await crud.is_restaurant_manager(session, request.restaurant_id, callback.from_user.id):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+
+        restaurant = await crud.get_restaurant_by_id(session, request.restaurant_id)
+        user = await crud.get_or_create_user(
+            session, telegram_id=request.telegram_id, username=None, full_name=request.telegram_name
+        )
+        await crud.set_user_restaurant(session, user, request.restaurant_id)
+        await crud.set_join_request_status(session, request_id, "approved")
+
+    await callback.message.edit_text(
+        f"✅ Заявка от {request.telegram_name or request.telegram_id} одобрена."
+    )
+    await callback.answer()
+
+    try:
+        username = await get_bot_username(callback.bot)
+        await callback.bot.send_message(
+            chat_id=request.telegram_id,
+            text=f"✅ Вас подтвердили в «{restaurant.name}»! Выберите, что нужно:",
+            reply_markup=join_menu_kb(username, request.restaurant_id, False),
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("join_request_reject:"))
+async def cb_join_request_reject(callback: CallbackQuery) -> None:
+    request_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        request = await crud.get_join_request_by_id(session, request_id)
+        if request is None or request.status != "pending":
+            await callback.answer("Заявка уже обработана.", show_alert=True)
+            return
+        if not await crud.is_restaurant_manager(session, request.restaurant_id, callback.from_user.id):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+        await crud.set_join_request_status(session, request_id, "rejected")
+
+    await callback.message.edit_text(
+        f"❌ Заявка от {request.telegram_name or request.telegram_id} отклонена."
+    )
+    await callback.answer()
+
+    try:
+        await callback.bot.send_message(
+            chat_id=request.telegram_id,
+            text="❌ Ваш запрос на вступление отклонён администратором заведения.",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "menu:main")
