@@ -531,7 +531,7 @@
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
         <h1 class="headline">На какую<br>должность?</h1>
-        <p class="sub">Показаны только должности, где вы набрали 80%+ в обычном тесте.</p>
+        <p class="sub">Показаны только должности, где вы сдали на 80%+ все три уровня обычного теста.</p>
         <div class="cards" id="examRequestPositionsList"></div>
       </section>
 
@@ -1053,7 +1053,7 @@ async function openExamRequestPositions(){
   try {
     const positions = await apiGet('/api/eligible_exam_positions', { restaurant_id: restaurantId });
     if (!positions.length) {
-      el.innerHTML = '<p class="sub">Пока нет доступных должностей — наберите 80%+ в обычном тесте, чтобы появилась возможность запросить экзамен.</p>';
+      el.innerHTML = '<p class="sub">Пока нет доступных должностей — сдайте на 80%+ все три уровня обычного теста, чтобы появилась возможность запросить экзамен.</p>';
       return;
     }
     el.innerHTML = positions.map(p => `

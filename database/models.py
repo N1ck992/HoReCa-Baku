@@ -152,6 +152,9 @@ class TestResult(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
+    # Уровень (1/2/3), на котором проходился именно этот тест — нужен,
+    # чтобы проверять допуск к экзамену: пройдены ли все три уровня.
+    level: Mapped[int] = mapped_column(Integer, default=1)
     correct_count: Mapped[int] = mapped_column(Integer, default=0)
     total_count: Mapped[int] = mapped_column(Integer, default=0)
     percentage: Mapped[float] = mapped_column(Float, default=0.0)

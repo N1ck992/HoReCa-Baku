@@ -169,7 +169,7 @@ async def start_test(request: web.Request) -> web.Response:
             username=tg_user.get("username"),
             full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
         )
-        test_result = await crud.create_test_result(session, user.id, category_id)
+        test_result = await crud.create_test_result(session, user.id, category_id, level)
         all_questions = await crud.get_questions_with_options(session, category_id)
 
         # Уровни 1/2/3 доступны сразу всем, без сдачи экзамена — уровень
@@ -444,7 +444,7 @@ async def get_employee_detail(request: web.Request) -> web.Response:
 
 @routes.get("/api/eligible_exam_positions")
 async def eligible_exam_positions(request: web.Request) -> web.Response:
-    """Должности, по которым сотрудник уже набрал 80%+ в обычном тесте
+    """Должности, по которым сотрудник уже сдал на 80%+ все три уровня обычного теста
     этого заведения — только по ним разрешено запрашивать экзамен."""
     init_data = request.query.get("initData", "")
     tg_user = await _get_telegram_user(init_data)
@@ -491,7 +491,7 @@ async def restaurant_managers_list(request: web.Request) -> web.Response:
 @routes.post("/api/request_exam")
 async def request_exam(request: web.Request) -> web.Response:
     """Отправляет выбранному администратору запрос на экзамен —
-    проверяет допуск (80%+) заново на сервере, а не доверяет тому, что
+    проверяет допуск (все три уровня на 80%+) заново на сервере, а не доверяет тому, что
     прислал браузер."""
     try:
         body = await request.json()
@@ -520,7 +520,7 @@ async def request_exam(request: web.Request) -> web.Response:
         eligible = await crud.get_eligible_positions_for_exam(session, user.id, restaurant_id)
         if not any(p.id == position_id for p in eligible):
             return _json(
-                {"error": "Пока недостаточно 80% в обычном тесте по этой должности."}, status=403
+                {"error": "Пока не пройдены все три уровня на 80%+ по этой должности."}, status=403
             )
 
         restaurant = await crud.get_restaurant_by_id(session, restaurant_id)

@@ -239,8 +239,13 @@ async def get_answer_option(session: AsyncSession, option_id: int) -> AnswerOpti
 
 # ---------- Прохождение теста ----------
 
-async def create_test_result(session: AsyncSession, user_id: int, category_id: int) -> TestResult:
-    tr = TestResult(user_id=user_id, category_id=category_id, correct_count=0, total_count=0, percentage=0.0)
+async def create_test_result(
+    session: AsyncSession, user_id: int, category_id: int, level: int = 1
+) -> TestResult:
+    tr = TestResult(
+        user_id=user_id, category_id=category_id, level=level,
+        correct_count=0, total_count=0, percentage=0.0,
+    )
     session.add(tr)
     await session.commit()
     await session.refresh(tr)
@@ -497,11 +502,11 @@ async def get_position_progress_for_user(session: AsyncSession, user_id: int) ->
 async def get_eligible_positions_for_exam(
     session: AsyncSession, user_id: int, restaurant_id: int, threshold: float = 80.0
 ) -> list[Position]:
-    """Должности, по которым сотрудник уже набрал в среднем не меньше
-    threshold% по внутренним тестам заведения — только по ним разрешено
-    запрашивать экзамен. Считается именно средний балл по тестам ЭТОЙ
-    должности (не всего заведения сразу), и только если хотя бы один
-    тест уже пройден."""
+    """Должности, по которым сотрудник уже сдал на threshold%+ все ТРИ
+    уровня сложности (в любой из категорий этой должности) — только по
+    ним разрешено запрашивать экзамен. Раньше проверялся общий средний
+    балл, теперь — именно прогресс по уровням, раз уровни сами по себе
+    больше не привязаны к сдаче экзамена."""
     positions = await get_active_positions(session, restaurant_id)
     eligible = []
     for position in positions:
@@ -511,10 +516,10 @@ async def get_eligible_positions_for_exam(
             .where(TestResult.user_id == user_id, Category.position_id == position.id)
         )
         results = list(result.scalars().all())
-        if not results:
-            continue
-        avg = sum(r.percentage for r in results) / len(results)
-        if avg >= threshold:
+        passed_levels = {
+            r.level for r in results if r.percentage >= threshold and r.level in (1, 2, 3)
+        }
+        if {1, 2, 3}.issubset(passed_levels):
             eligible.append(position)
     return eligible
 
