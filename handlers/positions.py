@@ -64,29 +64,3 @@ async def cb_position_selected(callback: CallbackQuery) -> None:
 
     await callback.message.edit_text(text, reply_markup=categories_kb(categories, position.id))
     await callback.answer()
-
-
-@router.callback_query(F.data == "menu:my_tests")
-async def cb_my_tests(callback: CallbackQuery) -> None:
-    """'Мои тесты' — показывает категории для текущей выбранной должности пользователя."""
-    async with async_session() as session:
-        user = await crud.get_or_create_user(
-            session,
-            telegram_id=callback.from_user.id,
-            username=callback.from_user.username,
-            full_name=callback.from_user.full_name,
-        )
-        if user.current_position_id is None:
-            positions = await crud.get_active_positions(session, user.restaurant_id)
-            await callback.message.edit_text(
-                "Сначала выберите должность:", reply_markup=positions_kb(positions)
-            )
-            await callback.answer()
-            return
-
-        position = await crud.get_position_by_id(session, user.current_position_id)
-        categories = await crud.get_categories_for_position(session, position.id)
-        text = await _categories_screen_text(session, user.id, position)
-
-    await callback.message.edit_text(text, reply_markup=categories_kb(categories, position.id))
-    await callback.answer()
