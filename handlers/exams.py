@@ -11,6 +11,7 @@ from database import crud
 from database.database import async_session
 from keyboards.keyboards import (
     exam_entry_kb,
+    exam_request_confirm_kb,
     exam_request_decision_kb,
     exam_request_managers_kb,
     exam_request_positions_kb,
@@ -314,15 +315,21 @@ async def cb_exam_request_code(callback: CallbackQuery, state: FSMContext) -> No
             )
             return
 
-        positions = await crud.get_active_positions(session, user.restaurant_id)
+        positions = await crud.get_eligible_positions_for_exam(session, user.id, user.restaurant_id)
 
     if not positions:
-        await callback.answer("Для вашего заведения пока нет должностей.", show_alert=True)
+        await callback.answer(
+            "Пока нет доступных должностей для экзамена — наберите 80% и "
+            "больше в обычном тесте заведения по нужной должности, тогда "
+            "здесь появится возможность запросить экзамен.",
+            show_alert=True,
+        )
         return
 
     await state.clear()
     await callback.message.edit_text(
-        "На какую должность вы хотите сдать экзамен?",
+        "На какую должность вы хотите сдать экзамен? "
+        "(показаны только те, где вы уже набрали 80%+ в обычном тесте)",
         reply_markup=exam_request_positions_kb(positions),
     )
     await callback.answer()
@@ -359,7 +366,30 @@ async def cb_exam_request_position(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("exam_request_manager:"))
-async def cb_exam_request_manager(callback: CallbackQuery, bot: Bot) -> None:
+async def cb_exam_request_manager(callback: CallbackQuery) -> None:
+    """Выбор администратора — пока не отправляет запрос, а просит
+    подтверждения, чтобы не отправить случайно не тому человеку."""
+    _, position_id_str, manager_telegram_id_str = callback.data.split(":")
+    position_id = int(position_id_str)
+    manager_telegram_id = int(manager_telegram_id_str)
+
+    async with async_session() as session:
+        position = await crud.get_position_by_id(session, position_id)
+        managers = await crud.get_restaurant_managers(session, position.restaurant_id)
+
+    manager = next((m for m in managers if m.telegram_id == manager_telegram_id), None)
+    manager_name = manager.name if manager and manager.name else f"ID {manager_telegram_id}"
+
+    await callback.answer()
+    await callback.message.edit_text(
+        f"Вы точно хотите отправить запрос на экзамен по должности "
+        f"{position.emoji} {position.name} администратору «{manager_name}»?",
+        reply_markup=exam_request_confirm_kb(position_id, manager_telegram_id),
+    )
+
+
+@router.callback_query(F.data.startswith("exam_request_confirm:"))
+async def cb_exam_request_confirm(callback: CallbackQuery, bot: Bot) -> None:
     _, position_id_str, manager_telegram_id_str = callback.data.split(":")
     position_id = int(position_id_str)
     manager_telegram_id = int(manager_telegram_id_str)
@@ -392,7 +422,8 @@ async def cb_exam_request_manager(callback: CallbackQuery, bot: Bot) -> None:
         await bot.send_message(
             chat_id=manager_telegram_id,
             text=(
-                f"🎓 {display_name(user)} запрашивает код на экзамен\n"
+                f"🎓 {display_name(user)} хочет пройти экзамен для повышения "
+                f"квалификации\n"
                 f"Заведение: {restaurant.name}\n"
                 f"Должность: {position.emoji} {position.name}"
             ),

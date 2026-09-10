@@ -296,6 +296,31 @@ async def get_recent_results_for_user_in_restaurant(
     return list(result.scalars().all())
 
 
+async def get_eligible_positions_for_exam(
+    session: AsyncSession, user_id: int, restaurant_id: int, threshold: float = 80.0
+) -> list[Position]:
+    """Должности, по которым сотрудник уже набрал в среднем не меньше
+    threshold% по внутренним тестам заведения — только по ним разрешено
+    запрашивать экзамен. Считается именно средний балл по тестам ЭТОЙ
+    должности (не всего заведения сразу), и только если хотя бы один
+    тест уже пройден."""
+    positions = await get_active_positions(session, restaurant_id)
+    eligible = []
+    for position in positions:
+        result = await session.execute(
+            select(TestResult)
+            .join(Category, TestResult.category_id == Category.id)
+            .where(TestResult.user_id == user_id, Category.position_id == position.id)
+        )
+        results = list(result.scalars().all())
+        if not results:
+            continue
+        avg = sum(r.percentage for r in results) / len(results)
+        if avg >= threshold:
+            eligible.append(position)
+    return eligible
+
+
 async def get_user_stats_for_restaurant(
     session: AsyncSession, user_id: int, restaurant_id: int
 ) -> dict:

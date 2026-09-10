@@ -454,26 +454,17 @@ async def cb_open_tests(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("open_examcode:"))
 async def cb_open_examcode(callback: CallbackQuery, state: FSMContext) -> None:
-    restaurant_id = int(callback.data.split(":")[1])
-
-    if config.WEBAPP_URL:
-        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=examcode"
-        await callback.message.edit_text(
-            "Нажмите кнопку ниже, чтобы открыть экзамен:",
-            reply_markup=webapp_open_kb(
-                webapp_link, "🎓 Открыть экзамен", back_callback=f"back_to_restaurant:{restaurant_id}"
-            ),
-        )
-        await callback.answer()
-        return
-
-    # Запасной вариант — старый текстовый ввод кода прямо в чате.
+    """Ввод кода на экзамен и запрос кода у администратора — это уже
+    полностью реальная логика в самом боте (проверка допуска по 80%,
+    выбор администратора, подтверждение, уведомление), поэтому кнопка
+    ведёт сюда, а не на макет сайта."""
     await state.set_state(ExamStates.entering_code)
     await callback.message.edit_text(
         "🎓 Введите одноразовый код на экзамен, который вам выдал "
-        "менеджер, или запросите код прямо сейчас.",
+        "администратор, или запросите код прямо сейчас.",
         reply_markup=exam_entry_kb(),
     )
+    await callback.answer()
     await callback.answer()
 
 

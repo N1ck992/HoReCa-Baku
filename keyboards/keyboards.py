@@ -274,6 +274,17 @@ def exam_request_managers_kb(position_id: int, managers) -> InlineKeyboardMarkup
     return builder.as_markup()
 
 
+def exam_request_confirm_kb(position_id: int, manager_telegram_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="✅ Да, отправить запрос",
+        callback_data=f"exam_request_confirm:{position_id}:{manager_telegram_id}",
+    )
+    builder.button(text="Отмена", callback_data=f"exam_request_position:{position_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def exam_request_decision_kb(request_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Выдать код", callback_data=f"exam_request_approve:{request_id}")
