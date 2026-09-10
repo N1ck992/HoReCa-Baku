@@ -780,11 +780,22 @@ function nextQuestion(){
   }
 }
 
-function showResult(){
+async function showResult(){
   const total = quizQuestions.length;
   const pct = Math.round((quizCorrect/total)*100);
   document.getElementById('scorePct').textContent = pct + '%';
   document.getElementById('scoreFrac').textContent = quizCorrect + ' / ' + total;
+
+  try {
+    await apiPost('/api/finish_test', {
+      test_result_id: currentTestResultId,
+      correct_count: quizCorrect,
+      total_count: total,
+    });
+  } catch (e) {
+    // Даже если сохранить не получилось — экран результата всё равно
+    // показываем, чтобы человек не остался в подвешенном состоянии.
+  }
 
   const circumference = 2 * Math.PI * 70;
   const ring = document.getElementById('ringFg');
