@@ -428,6 +428,7 @@
         </div>
         <div class="result-actions">
           <button class="btn-primary" onclick="restart()">Пройти другую категорию</button>
+          <button class="btn-ghost" onclick="goToMyResults()">📊 Мои результаты</button>
           <button class="btn-ghost" onclick="closeApp()">Готово</button>
         </div>
       </section>
@@ -784,6 +785,11 @@ function showResult(){
 }
 
 function restart(){ goTo('positions','right'); }
+
+function goToMyResults(){
+  goTo('myResults','left');
+  loadMyResults();
+}
 
 function closeApp(){
   if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {

@@ -239,15 +239,16 @@ async def finalize_test_result(
 async def get_recent_results_for_user_in_restaurant(
     session: AsyncSession, user_id: int, restaurant_id: int, limit: int = 10
 ) -> list[TestResult]:
-    """История тестов пользователя, отфильтрованная так же, как и
-    get_user_stats_for_restaurant — только тесты, созданные для этого
-    конкретного заведения. Используется в личном разделе "Мои результаты"
-    на сайте."""
+    """История тестов пользователя — общих и уникальных тестов этого
+    заведения (см. пояснение в get_user_stats_for_restaurant выше)."""
     result = await session.execute(
         select(TestResult)
         .join(Category, TestResult.category_id == Category.id)
         .join(Position, Category.position_id == Position.id)
-        .where(TestResult.user_id == user_id, Position.restaurant_id == restaurant_id)
+        .where(
+            TestResult.user_id == user_id,
+            (Position.restaurant_id.is_(None)) | (Position.restaurant_id == restaurant_id),
+        )
         .options(selectinload(TestResult.category).selectinload(Category.position))
         .order_by(TestResult.created_at.desc())
         .limit(limit)
@@ -258,16 +259,20 @@ async def get_recent_results_for_user_in_restaurant(
 async def get_user_stats_for_restaurant(
     session: AsyncSession, user_id: int, restaurant_id: int
 ) -> dict:
-    """Статистика сотрудника ТОЛЬКО по тестам, созданным для его заведения
-    (Position.restaurant_id == restaurant_id) — исключая общие/публичные
-    тесты, доступные всем пользователям бота. Используется в панели
-    менеджера и в общем рейтинге заведений, чтобы результаты по чужим,
-    общим тестам не влияли на оценку сотрудника его работодателем."""
+    """Статистика сотрудника по тестам его заведения — общим (видны всем,
+    Position.restaurant_id IS NULL) и уникальным тестам именно этого
+    заведения. Раньше здесь считались ТОЛЬКО уникальные тесты, но пока ни
+    у одного заведения таких нет — весь персонал проходит только общие,
+    поэтому строгий фильтр показывал пустоту везде. Как только у
+    заведения появятся свои уникальные тесты, они тоже будут учтены."""
     result = await session.execute(
         select(TestResult)
         .join(Category, TestResult.category_id == Category.id)
         .join(Position, Category.position_id == Position.id)
-        .where(TestResult.user_id == user_id, Position.restaurant_id == restaurant_id)
+        .where(
+            TestResult.user_id == user_id,
+            (Position.restaurant_id.is_(None)) | (Position.restaurant_id == restaurant_id),
+        )
     )
     results = list(result.scalars().all())
     tests_completed = len(results)
