@@ -6,7 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from database import crud
 from database.database import async_session
-from handlers.restaurants import _employees_kb, _managers_list_kb, _remove_employee_kb
+from handlers.restaurants import _managers_list_kb, _remove_employee_kb
 from keyboards.keyboards import manager_menu_kb
 from services.rating import display_name
 from utils import get_bot_username
@@ -19,7 +19,6 @@ MANAGER_HELP_TEXT = (
     "её сотрудникам (WhatsApp, лично и т.д.). Переход по ней просит вашего "
     "подтверждения — вы получите запрос с кнопками «Одобрить»/«Отклонить», "
     "прежде чем человек получит доступ к тестам.\n\n"
-    "➕ Добавить персонал — назначить должность уже одобренному сотруднику.\n\n"
     "🗑 Удалить персонал — убрать сотрудника из заведения.\n\n"
     "🧑‍💼 Администраторы заведения — добавить или убрать других "
     "администраторов (их может быть несколько).\n\n"
@@ -253,28 +252,6 @@ async def cb_manager_remove_confirm(callback: CallbackQuery) -> None:
         )
     except Exception:
         pass
-
-
-@router.callback_query(F.data.startswith("manager_assign_start:"))
-async def cb_manager_assign_start(callback: CallbackQuery) -> None:
-    restaurant_id = int(callback.data.split(":")[1])
-    async with async_session() as session:
-        if not await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id):
-            await callback.answer("⛔ Нет доступа.", show_alert=True)
-            return
-        employees = await crud.get_employees_for_restaurant(session, restaurant_id)
-
-    if not employees:
-        await callback.answer(
-            "Пока никто из сотрудников не прикрепился к заведению.", show_alert=True
-        )
-        return
-
-    await callback.message.edit_text(
-        "Выберите сотрудника, которому нужно назначить должность:",
-        reply_markup=_employees_kb(restaurant_id, employees),
-    )
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("manager_employees:"))

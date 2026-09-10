@@ -35,6 +35,11 @@ class User(Base):
     restaurant_id: Mapped[int | None] = mapped_column(
         ForeignKey("restaurants.id"), nullable=True
     )
+    # Telegram ID администратора, чьей личной ссылкой воспользовался
+    # человек, чтобы вступить в заведение (или кто одобрил его заявку,
+    # если ссылка была общей). Используется для отображения в профиле
+    # "куратор / стажёры" — кто кого привёл в команду.
+    curator_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     current_position: Mapped["Position"] = relationship(foreign_keys=[current_position_id])

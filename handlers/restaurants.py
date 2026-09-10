@@ -133,22 +133,11 @@ async def cmd_link_restaurant(message: Message, command: CommandObject) -> None:
         )
 
 
-# ---------- Назначение должностей сотрудникам (прямо в группе) ----------
-
-def _employees_kb(restaurant_id: int, employees: list[dict]):
-    builder = InlineKeyboardBuilder()
-    for item in employees:
-        user = item["user"]
-        position = item["position"]
-        position_text = f" ({position.name})" if position else ""
-        builder.button(
-            text=f"{display_name(user)}{position_text}",
-            callback_data=f"assign_pick_emp:{restaurant_id}:{user.id}",
-        )
-    builder.button(text="⬅️ Назад", callback_data=f"manager_menu:{restaurant_id}")
-    builder.adjust(1)
-    return builder.as_markup()
-
+# ---------- Назначение должностей сотрудникам ----------
+# Убрано: должность больше не назначается вручную администратором.
+# Прогресс сотрудника теперь виден по каждой должности отдельно (уровень
+# сложности вопросов, которые ему открыты) — см. "Мои результаты" и
+# профиль, где показывается прогресс по всем должностям сразу.
 
 def _remove_employee_kb(restaurant_id: int, employees: list[dict]):
     builder = InlineKeyboardBuilder()
@@ -163,112 +152,6 @@ def _remove_employee_kb(restaurant_id: int, employees: list[dict]):
     builder.button(text="⬅️ Назад", callback_data=f"manager_menu:{restaurant_id}")
     builder.adjust(1)
     return builder.as_markup()
-
-
-def _positions_kb(restaurant_id: int, user_id: int, positions):
-    builder = InlineKeyboardBuilder()
-    for position in positions:
-        builder.button(
-            text=f"{position.emoji} {position.name}",
-            callback_data=f"assign_set_position:{restaurant_id}:{user_id}:{position.id}",
-        )
-    builder.button(text="⬅️ Назад", callback_data=f"manager_assign_start:{restaurant_id}")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
-@router.message(Command("assign"))
-async def cmd_assign(message: Message) -> None:
-    """Администратор отправляет /assign ВНУТРИ группы заведения, чтобы
-    назначить сотруднику должность (бармен, официант, хостес и т.д.)."""
-    if message.chat.type not in ("group", "supergroup"):
-        await message.answer(
-            "Эту команду нужно отправить внутри Telegram-группы вашего заведения."
-        )
-        return
-
-    restaurant, error = await _require_group_manager(message, message.chat.id, message.from_user.id)
-    if error:
-        await message.answer(error)
-        return
-
-    async with async_session() as session:
-        employees = await crud.get_employees_for_restaurant(session, restaurant.id)
-
-    if not employees:
-        await message.answer(
-            "Пока никто из сотрудников не прикрепился к заведению "
-            "(они должны отправить /start в этой группе)."
-        )
-        return
-
-    await message.answer(
-        "Выберите сотрудника, которому нужно назначить должность:",
-        reply_markup=_employees_kb(restaurant.id, employees),
-    )
-
-
-@router.callback_query(F.data.startswith("assign_pick_emp:"))
-async def cb_assign_pick_employee(callback: CallbackQuery) -> None:
-    _, restaurant_id_str, user_id_str = callback.data.split(":")
-    restaurant_id = int(restaurant_id_str)
-    user_id = int(user_id_str)
-
-    async with async_session() as session:
-        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
-        if restaurant is None or not await crud.is_restaurant_manager(
-            session, restaurant_id, callback.from_user.id
-        ):
-            await callback.answer("⛔ Нет доступа.", show_alert=True)
-            return
-
-        target_user = await crud.get_user_by_id(session, user_id)
-        if target_user is None:
-            await callback.answer("Сотрудник не найден.", show_alert=True)
-            return
-
-        positions = await crud.get_active_positions(session, restaurant_id)
-
-    if not positions:
-        await callback.answer("Должности пока не настроены.", show_alert=True)
-        return
-
-    await callback.answer()
-    await callback.message.edit_text(
-        f"Выберите должность для {display_name(target_user)}:",
-        reply_markup=_positions_kb(restaurant_id, user_id, positions),
-    )
-
-
-@router.callback_query(F.data.startswith("assign_set_position:"))
-async def cb_assign_set_position(callback: CallbackQuery) -> None:
-    _, restaurant_id_str, user_id_str, position_id_str = callback.data.split(":")
-    restaurant_id = int(restaurant_id_str)
-    user_id = int(user_id_str)
-    position_id = int(position_id_str)
-
-    async with async_session() as session:
-        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
-        if restaurant is None or not await crud.is_restaurant_manager(
-            session, restaurant_id, callback.from_user.id
-        ):
-            await callback.answer("⛔ Нет доступа.", show_alert=True)
-            return
-
-        target_user = await crud.get_user_by_id(session, user_id)
-        position = await crud.get_position_by_id(session, position_id)
-        if target_user is None or position is None:
-            await callback.answer("Не найдено.", show_alert=True)
-            return
-
-        await crud.set_user_position(session, target_user, position.id)
-
-    await callback.answer("Готово!")
-    await callback.message.edit_text(
-        f"✅ {display_name(target_user)} назначен(а) на должность "
-        f"{position.emoji} {position.name}.",
-        reply_markup=manager_menu_kb(restaurant_id),
-    )
 
 
 # ---------- Несколько администраторов (/managers, прямо в группе) ----------

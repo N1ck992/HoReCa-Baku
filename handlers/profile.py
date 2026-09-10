@@ -21,11 +21,6 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
     )
     stats = await crud.get_user_stats(session, user.id)
     leaderboard_rank = await crud.get_user_rank(session, user.id)
-    position = (
-        await crud.get_position_by_id(session, user.current_position_id)
-        if user.current_position_id
-        else None
-    )
 
     # Если сотрудник привязан к заведению — покажем его заведение и
     # личное место в рейтинге внутри этого заведения (отдельно от
@@ -39,14 +34,18 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
                 session, user.id, restaurant.id
             )
 
-    # Ранг по текущей выбранной должности (показываем отдельной строкой сверху)
-    current_job_rank_line = None
-    if position is not None:
-        xp = await crud.get_total_xp_for_position(session, user.id, position.id)
-        ranks = await crud.get_ranks_for_position(session, position.id)
-        current_rank = crud.get_rank_for_xp(ranks, xp)
-        next_rank = crud.get_next_rank(ranks, current_rank)
-        current_job_rank_line = rank_progress_text(current_rank, next_rank, xp)
+    # Прогресс по каждой должности, которой человек вообще занимался —
+    # раньше тут была одна "текущая должность", назначаемая вручную
+    # администратором; теперь должность больше не назначается, поэтому
+    # показываем сразу все, по которым есть хоть один пройденный тест,
+    # с уровнем сложности вопросов, который сейчас открыт по каждой.
+    level_names = {1: "лёгкий", 2: "средний", 3: "сложный"}
+    position_progress = await crud.get_position_progress_for_user(session, user.id)
+    progress_lines = [
+        f"{p['position_emoji']} {p['position_name']}: уровень "
+        f"{level_names.get(p['level'], p['level'])} ({p['tests_completed']} тестов)"
+        for p in position_progress
+    ]
 
     # Ранги по всем должностям — раньше это была отдельная кнопка "🎖 Мои ранги"
     all_positions = await crud.get_active_positions(session, user.restaurant_id)
@@ -62,19 +61,23 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
             f"{pos.emoji} {pos.name}: {rank_progress_text(current_rank, next_rank, xp)}"
         )
 
-    position_text = f"{position.emoji} {position.name}" if position else "не выбрана"
+    # Куратор (кто пригласил) и стажёры (кого пригласил сам человек)
+    curator_name = await crud.get_curator_name(session, user.telegram_id)
+    trainee_count = await crud.get_trainee_count(session, user.telegram_id)
+
     leaderboard_rank_text = f"#{leaderboard_rank}" if leaderboard_rank else "нет данных (пройдите тест)"
 
     text = (
         "👤 Мой профиль\n\n"
         f"Telegram ID: {user.telegram_id}\n"
         f"Имя: {display_name(user)}\n"
-        f"Должность: {position_text}\n"
     )
     if restaurant is not None:
         text += f"Заведение: {restaurant.name}\n"
-    if current_job_rank_line:
-        text += f"Ранг: {current_job_rank_line}\n"
+    if curator_name:
+        text += f"Куратор: {curator_name}\n"
+    if trainee_count:
+        text += f"Стажёров: {trainee_count}\n"
 
     text += (
         f"\nПройдено тестов: {stats['tests_completed']}\n"
@@ -88,6 +91,9 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
             f"#{restaurant_rank}" if restaurant_rank else "нет данных (пройдите тест)"
         )
         text += f"\nРейтинг внутри «{restaurant.name}»: {restaurant_rank_text}"
+
+    if progress_lines:
+        text += "\n\n📊 Уровень вопросов по должностям:\n" + "\n".join(progress_lines)
 
     if all_ranks_lines:
         text += "\n\n🎖 Ранги по должностям:\n" + "\n".join(all_ranks_lines)

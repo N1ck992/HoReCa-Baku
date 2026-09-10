@@ -4,7 +4,7 @@ import secrets
 import string
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -139,6 +139,36 @@ async def remove_user_from_restaurant(session: AsyncSession, restaurant_id: int,
 async def set_user_restaurant(session: AsyncSession, user: User, restaurant_id: int) -> None:
     user.restaurant_id = restaurant_id
     await session.commit()
+
+
+async def set_user_curator(session: AsyncSession, user_id: int, curator_telegram_id: int) -> None:
+    """Устанавливает куратора — но только один раз (первый куратор так и
+    остаётся куратором, даже если человек потом перейдёт в другое
+    заведение по новой ссылке)."""
+    user = await session.get(User, user_id)
+    if user is not None and user.curator_telegram_id is None:
+        user.curator_telegram_id = curator_telegram_id
+        await session.commit()
+
+
+async def get_trainee_count(session: AsyncSession, curator_telegram_id: int) -> int:
+    """Сколько людей числятся стажёрами этого человека (он был их
+    куратором при вступлении)."""
+    result = await session.execute(
+        select(func.count()).select_from(User).where(User.curator_telegram_id == curator_telegram_id)
+    )
+    return result.scalar() or 0
+
+
+async def get_curator_name(session: AsyncSession, telegram_id: int) -> str | None:
+    """Имя куратора конкретного человека (по его telegram_id), если есть."""
+    user = await get_user_by_telegram_id(session, telegram_id)
+    if user is None or user.curator_telegram_id is None:
+        return None
+    curator = await get_user_by_telegram_id(session, user.curator_telegram_id)
+    if curator is None:
+        return f"ID {user.curator_telegram_id}"
+    return curator.full_name or curator.username or f"ID {curator.telegram_id}"
 
 
 # ---------- Должности / категории / вопросы ----------
@@ -431,6 +461,37 @@ async def cast_archive_vote(
         "approved_count": len(approved_ids),
         "total_count": len(all_manager_ids),
     }
+
+
+async def get_position_progress_for_user(session: AsyncSession, user_id: int) -> list[dict]:
+    """По каким должностям человек вообще проходил тесты, и какой уровень
+    сложности вопросов ему сейчас открыт по каждой из них (1/2/3).
+    Используется в профиле вместо старой единственной "текущей должности"
+    — теперь виден прогресс сразу по всем должностям, которыми человек
+    занимался."""
+    result = await session.execute(
+        select(Category.position_id, func.count(TestResult.id))
+        .join(TestResult, TestResult.category_id == Category.id)
+        .where(TestResult.user_id == user_id)
+        .group_by(Category.position_id)
+    )
+    rows = result.all()
+
+    progress = []
+    for position_id, tests_completed in rows:
+        position = await get_position_by_id(session, position_id)
+        if position is None:
+            continue
+        level = await get_unlocked_difficulty(session, user_id, position_id)
+        progress.append(
+            {
+                "position_name": position.name,
+                "position_emoji": position.emoji,
+                "level": level,
+                "tests_completed": tests_completed,
+            }
+        )
+    return progress
 
 
 async def get_eligible_positions_for_exam(

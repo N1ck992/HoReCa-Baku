@@ -80,9 +80,6 @@ def manager_menu_kb(restaurant_id: int) -> InlineKeyboardMarkup:
         webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
         builder.button(text="📋 Результаты персонала (сайт)", web_app=WebAppInfo(url=webapp_link))
     builder.button(
-        text="➕ Добавить персонал", callback_data=f"manager_assign_start:{restaurant_id}"
-    )
-    builder.button(
         text="🗑 Удалить персонал", callback_data=f"manager_remove_start:{restaurant_id}"
     )
     builder.button(

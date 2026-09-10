@@ -553,6 +553,11 @@ async def cb_join_request_approve(callback: CallbackQuery) -> None:
             session, telegram_id=request.telegram_id, username=None, full_name=request.telegram_name
         )
         await crud.set_user_restaurant(session, user, request.restaurant_id)
+        # Куратор — тот, чьей персональной ссылкой воспользовались, а если
+        # ссылка была общей (старый формат) — тот, кто нажал "Одобрить".
+        await crud.set_user_curator(
+            session, user.id, request.target_manager_telegram_id or callback.from_user.id
+        )
         await crud.set_join_request_status(session, request_id, "approved")
 
     await callback.message.edit_text(
