@@ -18,6 +18,8 @@ from database.models import (
     Question,
     Rank,
     Restaurant,
+    RestaurantArchiveRequest,
+    RestaurantArchiveVote,
     RestaurantJoinRequest,
     RestaurantManager,
     RestaurantRequest,
@@ -328,6 +330,107 @@ async def unlock_next_difficulty(session: AsyncSession, user_id: int, position_i
     return level.unlocked_difficulty
 
 
+async def get_pending_archive_request(
+    session: AsyncSession, restaurant_id: int
+) -> RestaurantArchiveRequest | None:
+    result = await session.execute(
+        select(RestaurantArchiveRequest).where(
+            RestaurantArchiveRequest.restaurant_id == restaurant_id,
+            RestaurantArchiveRequest.status == "pending",
+        )
+    )
+    return result.scalars().first()
+
+
+async def get_archive_request_by_id(
+    session: AsyncSession, request_id: int
+) -> RestaurantArchiveRequest | None:
+    return await session.get(RestaurantArchiveRequest, request_id)
+
+
+async def create_archive_request(
+    session: AsyncSession, restaurant_id: int, initiated_by_telegram_id: int
+) -> RestaurantArchiveRequest:
+    """Создаёт заявку на архивирование. Инициатор сразу засчитывается как
+    проголосовавший "за" — сам факт нажатия кнопки уже его согласие."""
+    request = RestaurantArchiveRequest(
+        restaurant_id=restaurant_id,
+        initiated_by_telegram_id=initiated_by_telegram_id,
+        status="pending",
+    )
+    session.add(request)
+    await session.flush()
+
+    vote = RestaurantArchiveVote(
+        request_id=request.id,
+        manager_telegram_id=initiated_by_telegram_id,
+        decision="approved",
+    )
+    session.add(vote)
+    await session.commit()
+    await session.refresh(request)
+    return request
+
+
+async def archive_restaurant(session: AsyncSession, restaurant_id: int) -> None:
+    restaurant = await session.get(Restaurant, restaurant_id)
+    if restaurant is not None:
+        restaurant.is_archived = True
+        restaurant.archived_at = datetime.utcnow()
+        await session.commit()
+
+
+async def cast_archive_vote(
+    session: AsyncSession, request_id: int, manager_telegram_id: int, decision: str
+) -> dict:
+    """Записывает голос администратора. Если это "отклонить" — заявка
+    сразу останавливается целиком. Если "одобрить" — проверяет, не
+    проголосовали ли уже ВСЕ администраторы заведения; если да — заведение
+    архивируется автоматически. Возвращает словарь с исходом для показа
+    сообщений."""
+    request = await session.get(RestaurantArchiveRequest, request_id)
+    if request is None or request.status != "pending":
+        return {"status": "not_pending"}
+
+    session.add(
+        RestaurantArchiveVote(
+            request_id=request_id, manager_telegram_id=manager_telegram_id, decision=decision
+        )
+    )
+
+    if decision == "declined":
+        request.status = "declined"
+        request.decided_at = datetime.utcnow()
+        await session.commit()
+        return {"status": "declined", "restaurant_id": request.restaurant_id}
+
+    await session.commit()
+
+    all_managers = await get_restaurant_managers(session, request.restaurant_id)
+    result = await session.execute(
+        select(RestaurantArchiveVote.manager_telegram_id).where(
+            RestaurantArchiveVote.request_id == request_id,
+            RestaurantArchiveVote.decision == "approved",
+        )
+    )
+    approved_ids = {row[0] for row in result.all()}
+    all_manager_ids = {m.telegram_id for m in all_managers}
+
+    if all_manager_ids.issubset(approved_ids):
+        request.status = "approved"
+        request.decided_at = datetime.utcnow()
+        await archive_restaurant(session, request.restaurant_id)
+        await session.commit()
+        return {"status": "approved", "restaurant_id": request.restaurant_id}
+
+    return {
+        "status": "waiting",
+        "restaurant_id": request.restaurant_id,
+        "approved_count": len(approved_ids),
+        "total_count": len(all_manager_ids),
+    }
+
+
 async def get_eligible_positions_for_exam(
     session: AsyncSession, user_id: int, restaurant_id: int, threshold: float = 80.0
 ) -> list[Position]:
@@ -603,11 +706,12 @@ async def create_restaurant(
 
 async def get_restaurants_managed_by(session: AsyncSession, telegram_id: int) -> list[Restaurant]:
     """Все заведения, где этот пользователь — администратор (их может быть
-    несколько, если он администрирует не одно заведение)."""
+    несколько, если он администрирует не одно заведение). Архивированные
+    заведения сюда не попадают — они больше не активны."""
     result = await session.execute(
         select(Restaurant)
         .join(RestaurantManager, RestaurantManager.restaurant_id == Restaurant.id)
-        .where(RestaurantManager.telegram_id == telegram_id)
+        .where(RestaurantManager.telegram_id == telegram_id, Restaurant.is_archived.is_(False))
         .order_by(Restaurant.name)
     )
     return list(result.scalars().unique().all())
@@ -623,13 +727,15 @@ async def get_user_restaurant_options(
     меню показать по /start или по кнопке «Моё заведение» — раньше эти
     две привязки проверялись по отдельности, из-за чего человек, который
     одновременно сотрудник одного заведения и менеджер другого, мог
-    случайно попадать в общее меню."""
+    случайно попадать в общее меню. Архивированные заведения сюда не
+    попадают — доступ к ним для активной работы закрыт, но история
+    персонала (профиль, "Мои результаты") их по-прежнему видит."""
     options: dict[int, tuple[Restaurant, bool]] = {}
 
     user = await get_user_by_telegram_id(session, telegram_id)
     if user is not None and user.restaurant_id is not None:
         staff_restaurant = await get_restaurant_by_id(session, user.restaurant_id)
-        if staff_restaurant is not None:
+        if staff_restaurant is not None and not staff_restaurant.is_archived:
             is_mgr = await is_restaurant_manager(session, staff_restaurant.id, telegram_id)
             options[staff_restaurant.id] = (staff_restaurant, is_mgr)
 

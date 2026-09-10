@@ -204,6 +204,11 @@ class Restaurant(Base):
     # ID Telegram-группы заведения. Заполняется, когда менеджер отправляет
     # /link_restaurant <id> внутри своей группы. Пока не заполнено — None.
     group_chat_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
+    # Архивированное заведение неактивно (не показывается в меню, тестах,
+    # рейтинге), но данные не стираются — история персонала остаётся
+    # доступна в их личном профиле, привязка не разрывается.
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     managers: Mapped[list["RestaurantManager"]] = relationship(back_populates="restaurant")
@@ -276,6 +281,38 @@ class UserPositionLevel(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     position_id: Mapped[int] = mapped_column(ForeignKey("positions.id"))
     unlocked_difficulty: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class RestaurantArchiveRequest(Base):
+    """Заявка на архивирование заведения — требует единогласного
+    одобрения ВСЕХ администраторов этого заведения (не только того, кто
+    инициировал). Пока не архивирует ничего сама — только отслеживает
+    процесс, конкретные голоса — в RestaurantArchiveVote."""
+
+    __tablename__ = "restaurant_archive_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id"))
+    initiated_by_telegram_id: Mapped[int] = mapped_column(BigInteger)
+    # status: "pending" | "approved" | "declined"
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class RestaurantArchiveVote(Base):
+    """Один голос одного администратора по конкретной заявке на
+    архивирование. Инициатор сразу получает голос "approved" автоматически
+    (сам факт нажатия кнопки — это его согласие)."""
+
+    __tablename__ = "restaurant_archive_votes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("restaurant_archive_requests.id"))
+    manager_telegram_id: Mapped[int] = mapped_column(BigInteger)
+    # decision: "approved" | "declined"
+    decision: Mapped[str] = mapped_column(String(20))
+    decided_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class ExamCode(Base):
