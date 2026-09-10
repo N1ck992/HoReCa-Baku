@@ -81,11 +81,13 @@ async def create_join_request(
     restaurant_id: int,
     telegram_id: int,
     telegram_name: str | None,
+    target_manager_telegram_id: int | None = None,
 ) -> RestaurantJoinRequest:
     request = RestaurantJoinRequest(
         restaurant_id=restaurant_id,
         telegram_id=telegram_id,
         telegram_name=telegram_name,
+        target_manager_telegram_id=target_manager_telegram_id,
         status="pending",
     )
     session.add(request)

@@ -124,7 +124,7 @@ async def cb_request_approve(callback: CallbackQuery, bot: Bot) -> None:
 
     try:
         username = await get_bot_username(bot)
-        join_link = f"https://t.me/{username}?start=join_{restaurant.id}"
+        join_link = f"https://t.me/{username}?start=joinm_{restaurant.id}_{request.requested_by_telegram_id}"
         await bot.send_message(
             chat_id=request.requested_by_telegram_id,
             text=(

@@ -262,6 +262,11 @@ class RestaurantJoinRequest(Base):
     restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id"))
     telegram_id: Mapped[int] = mapped_column(BigInteger)
     telegram_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Если ссылка была персональной (joinm_...) — здесь ID менеджера,
+    # который её выдал. Уведомление о заявке уходит ТОЛЬКО ему, а не всем
+    # администраторам заведения разом — иначе у остальных "зависают"
+    # неактуальные кнопки после того, как кто-то уже принял решение.
+    target_manager_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # status: "pending" | "approved" | "rejected"
     status: Mapped[str] = mapped_column(String(20), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

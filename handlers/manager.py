@@ -154,14 +154,19 @@ async def cb_manager_invite_link(callback: CallbackQuery) -> None:
             return
 
     username = await get_bot_username(callback.bot)
-    link = f"https://t.me/{username}?start=join_{restaurant_id}"
+    # Ссылка персональная — привязана именно к вам как администратору.
+    # Заявки по ней придут уведомлением только вам, а не всем
+    # администраторам заведения разом (чтобы у остальных не "висели"
+    # неактуальные кнопки после того, как кто-то уже принял решение).
+    link = f"https://t.me/{username}?start=joinm_{restaurant_id}_{callback.from_user.id}"
 
     await callback.message.edit_text(
-        f"🔗 Личная ссылка для сотрудников «{restaurant.name}»:\n\n"
+        f"🔗 Ваша личная ссылка для приглашения в «{restaurant.name}»:\n\n"
         f"`{link}`\n\n"
         "Отправьте её сотрудникам в WhatsApp, лично или любым удобным "
         "способом. Переход по ссылке сразу открывает личный чат с ботом "
-        "и меню с тестами — без группы и лишних шагов.\n\n"
+        "и меню с тестами — без группы и лишних шагов. Заявки по этой "
+        "ссылке придут уведомлением именно вам.\n\n"
         "Нажмите на ссылку выше, чтобы скопировать её.",
         parse_mode="Markdown",
         reply_markup=manager_menu_kb(restaurant_id),

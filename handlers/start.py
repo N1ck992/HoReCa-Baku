@@ -114,7 +114,20 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     # раздел в личке, минуя главное меню. Работает только в личных
     # сообщениях: в группе /start всегда прикрепляет к заведению группы.
     # Формат payload: "<действие>_<id_заведения>", например "tests_5".
-    action, _, rid_str = payload.rpartition("_")
+    # Отдельно — формат "joinm_<id_заведения>_<id_администратора>":
+    # персональная ссылка конкретного администратора (см. cb_manager_invite_link) —
+    # заявка уведомляет только его, а не всех администраторов разом.
+    target_manager_telegram_id = None
+    if payload.startswith("joinm_"):
+        parts = payload.split("_")
+        if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+            action, rid_str = "join", parts[1]
+            target_manager_telegram_id = int(parts[2])
+        else:
+            action, rid_str = "", ""
+    else:
+        action, _, rid_str = payload.rpartition("_")
+
     if action and rid_str.isdigit() and message.chat.type == "private":
         restaurant_id = int(rid_str)
         await state.clear()
@@ -163,15 +176,28 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 )
                 return
 
-            # Новый человек — создаём заявку и уведомляем всех менеджеров.
+            # Новый человек — создаём заявку и уведомляем администратора(ов).
             async with async_session() as session:
                 request = await crud.create_join_request(
                     session,
                     restaurant_id=restaurant_id,
                     telegram_id=message.from_user.id,
                     telegram_name=message.from_user.full_name,
+                    target_manager_telegram_id=target_manager_telegram_id,
                 )
-                managers = await crud.get_restaurant_managers(session, restaurant_id)
+                all_managers = await crud.get_restaurant_managers(session, restaurant_id)
+
+            # Если ссылка персональная — уведомляем только того администратора,
+            # который её выдал (если он всё ещё администратор заведения).
+            # Иначе (старый общий формат ссылки) — уведомляем всех, как раньше.
+            if target_manager_telegram_id is not None:
+                managers_to_notify = [
+                    m for m in all_managers if m.telegram_id == target_manager_telegram_id
+                ]
+                if not managers_to_notify:
+                    managers_to_notify = all_managers  # администратор уже не при делах — на всякий случай
+            else:
+                managers_to_notify = all_managers
 
             await message.answer(
                 f"⏳ Ваш запрос на вступление в «{restaurant.name}» отправлен "
@@ -188,7 +214,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 f"{message.from_user.full_name or 'Без имени'} "
                 f"(ID {message.from_user.id})"
             )
-            for manager in managers:
+            for manager in managers_to_notify:
                 try:
                     await message.bot.send_message(
                         chat_id=manager.telegram_id, text=notify_text, reply_markup=builder.as_markup()
