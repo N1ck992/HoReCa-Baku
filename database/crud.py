@@ -243,6 +243,40 @@ async def finalize_test_result(
 
 # ---------- Статистика / рейтинг ----------
 
+async def get_test_result_by_id(session: AsyncSession, test_result_id: int) -> TestResult | None:
+    return await session.get(TestResult, test_result_id)
+
+
+async def get_test_result_breakdown(session: AsyncSession, test_result_id: int) -> list[dict]:
+    """Детальный разбор одного пройденного теста — какой именно вопрос,
+    какой ответ выбрал сотрудник и был ли он верным (и какой был бы
+    правильный, если ошибся). Используется в панели администратора,
+    чтобы увидеть, где именно сотрудник ошибся, а не только итоговый счёт."""
+    result = await session.execute(
+        select(UserAnswer)
+        .where(UserAnswer.test_result_id == test_result_id)
+        .options(
+            selectinload(UserAnswer.question).selectinload(Question.options),
+        )
+    )
+    answers = list(result.scalars().unique().all())
+
+    breakdown = []
+    for answer in answers:
+        question = answer.question
+        chosen = next((o for o in question.options if o.id == answer.answer_option_id), None)
+        correct = next((o for o in question.options if o.is_correct), None)
+        breakdown.append(
+            {
+                "question": question.text,
+                "chosen": chosen.text if chosen else None,
+                "correct": correct.text if correct else None,
+                "is_correct": answer.is_correct,
+            }
+        )
+    return breakdown
+
+
 async def get_recent_results_for_user_in_restaurant(
     session: AsyncSession, user_id: int, restaurant_id: int, limit: int = 10
 ) -> list[TestResult]:

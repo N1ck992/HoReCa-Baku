@@ -307,6 +307,46 @@ async def my_results(request: web.Request) -> web.Response:
     )
 
 
+@routes.get("/api/test_result_detail")
+async def test_result_detail(request: web.Request) -> web.Response:
+    """Детальный разбор одного пройденного теста — какие вопросы, какие
+    ответы дал сотрудник, что было бы правильно. Доступ только
+    администратору заведения, и только по тестам СВОЕГО сотрудника —
+    иначе можно было бы подсмотреть чужой разбор, просто подставив ID."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    user_id = request.query.get("user_id")
+    test_result_id = request.query.get("test_result_id")
+    if not (
+        restaurant_id
+        and restaurant_id.isdigit()
+        and user_id
+        and user_id.isdigit()
+        and test_result_id
+        and test_result_id.isdigit()
+    ):
+        return _json({"error": "restaurant_id, user_id и test_result_id обязательны"}, status=400)
+    restaurant_id = int(restaurant_id)
+    user_id = int(user_id)
+    test_result_id = int(test_result_id)
+
+    async with async_session() as session:
+        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
+
+        test_result = await crud.get_test_result_by_id(session, test_result_id)
+        if test_result is None or test_result.user_id != user_id:
+            return _json({"error": "Тест не найден."}, status=404)
+
+        breakdown = await crud.get_test_result_breakdown(session, test_result_id)
+
+    return _json({"breakdown": breakdown})
+
+
 @routes.get("/api/employees")
 async def get_employees(request: web.Request) -> web.Response:
     """Список персонала для панели администратора — доступен только
@@ -368,6 +408,7 @@ async def get_employee_detail(request: web.Request) -> web.Response:
 
     history = [
         {
+            "id": r.id,
             "position": r.category.position.name if r.category and r.category.position else None,
             "category": r.category.name if r.category else None,
             "correct_count": r.correct_count,

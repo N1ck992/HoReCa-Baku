@@ -327,6 +327,17 @@
     display:inline-block; background:var(--accent-soft); color:var(--accent-strong);
     font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; margin-bottom:12px;
   }
+
+  /* ---------- Разбор ответов теста ---------- */
+  .breakdown-item{
+    background:var(--paper); border:1px solid var(--divider); border-radius:14px;
+    padding:14px 16px;
+  }
+  .breakdown-q{ font-size:14px; font-weight:600; margin-bottom:8px; line-height:1.4; }
+  .breakdown-row{ font-size:13px; margin-top:4px; display:flex; gap:6px; align-items:flex-start; }
+  .breakdown-row .tag{ flex-shrink:0; font-weight:600; }
+  .breakdown-row.wrong .tag, .breakdown-row.wrong .value{ color: var(--wrong); }
+  .breakdown-row.right .tag, .breakdown-row.right .value{ color: var(--accent-strong); }
 </style>
 </head>
 <body>
@@ -536,8 +547,19 @@
             <div class="stat-box"><div class="stat-num" id="detailAvg">0%</div><div class="stat-label">средний балл</div></div>
           </div>
         </div>
-        <p class="sub" style="margin-top:4px;">История экзаменов</p>
+        <p class="sub" style="margin-top:4px;">История тестов (нажмите на тест для разбора)</p>
         <div class="row-list" id="detailHistory"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 11: разбор конкретного теста по вопросам ============ -->
+      <section class="screen" data-screen="testResultBreakdown" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('adminEmployeeDetail','right')">‹</button>
+          <span class="restaurant-name">Разбор теста</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Разбор<br>ответов</h1>
+        <div class="cards" id="breakdownList" style="gap:10px;"></div>
       </section>
 
     </div>
@@ -860,7 +882,10 @@ async function openAdminEmployees(){
   }
 }
 
+let currentEmployeeUserId = null;
+
 async function openEmployeeDetail(userId){
+  currentEmployeeUserId = userId;
   goTo('adminEmployeeDetail','left');
   document.getElementById('detailName').textContent = 'Загрузка…';
   document.getElementById('detailHistory').innerHTML = '';
@@ -875,13 +900,35 @@ async function openEmployeeDetail(userId){
     const hist = document.getElementById('detailHistory');
     hist.innerHTML = detail.history.length
       ? detail.history.map(h => `
-          <div class="row-item">
+          <div class="row-item" style="cursor:pointer;" onclick='openTestResultBreakdown(${h.id})'>
             <span>${h.position || ''}${h.category ? ' · ' + h.category : ''} · ${h.date || ''}</span>
-            <span style="color:${h.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.correct_count}/${h.total_count} (${h.percentage}%)</span>
+            <span style="color:${h.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.correct_count}/${h.total_count} (${h.percentage}%) ›</span>
           </div>`).join('')
       : '<div class="row-item"><span>Тестов ещё не было</span></div>';
   } catch (e) {
     showError(document.getElementById('detailHistory'), e.message);
+  }
+}
+
+async function openTestResultBreakdown(testResultId){
+  const el = document.getElementById('breakdownList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('testResultBreakdown','left');
+  try {
+    const data = await apiGet('/api/test_result_detail', {
+      restaurant_id: restaurantId, user_id: currentEmployeeUserId, test_result_id: testResultId,
+    });
+    el.innerHTML = data.breakdown.map(b => `
+      <div class="breakdown-item">
+        <div class="breakdown-q">${b.question}</div>
+        <div class="breakdown-row ${b.is_correct ? 'right' : 'wrong'}">
+          <span class="tag">Ответ:</span><span class="value">${b.chosen || '—'}</span>
+        </div>
+        ${!b.is_correct ? `<div class="breakdown-row right"><span class="tag">Верно:</span><span class="value">${b.correct || '—'}</span></div>` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    showError(el, e.message);
   }
 }
 

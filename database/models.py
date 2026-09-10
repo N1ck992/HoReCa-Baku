@@ -169,6 +169,7 @@ class UserAnswer(Base):
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
 
     test_result: Mapped["TestResult"] = relationship(back_populates="answers")
+    question: Mapped["Question"] = relationship()
 
 
 class Vacancy(Base):
