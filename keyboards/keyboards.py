@@ -17,21 +17,21 @@ def persistent_menu_kb() -> ReplyKeyboardMarkup:
     )
 
 
-def webapp_open_kb(url: str, button_text: str = "🎓 Открыть тест") -> InlineKeyboardMarkup:
+def webapp_open_kb(
+    url: str, button_text: str = "🎓 Открыть тест", back_callback: str | None = None
+) -> InlineKeyboardMarkup:
     """Кнопка, открывающая сайт прямо внутри Telegram (Mini App).
     Работает только в личных сообщениях — таково ограничение Telegram
     для кнопок такого типа. Используется для теста, профиля, экзамена
     и панели администратора — просто с разным текстом и разной ссылкой
     (параметр ?screen=... в URL определяет, какой экран сайта открыть).
-
-    Специально БЕЗ второй кнопки "Главное меню" — раньше она тут была,
-    но вела в общее меню бота напрямую, без подтверждения, в обход
-    логики в handlers/start.py (btn_main_menu), которая как раз и должна
-    спрашивать "вы уверены?" перед выходом из меню заведения. Для
-    возврата уже есть постоянная кнопка внизу экрана — дублировать её
-    здесь не нужно."""
+    Если передан back_callback — добавляется кнопка "⬅️ Назад", ведущая
+    обратно в меню заведения (без неё человек мог застрять на этом экране
+    без пути назад, кроме постоянной кнопки внизу)."""
     builder = InlineKeyboardBuilder()
     builder.button(text=button_text, web_app=WebAppInfo(url=url))
+    if back_callback:
+        builder.button(text="⬅️ Назад", callback_data=back_callback)
     builder.adjust(1)
     return builder.as_markup()
 
@@ -68,25 +68,20 @@ def open_private_chat_kb(bot_username: str) -> InlineKeyboardMarkup:
 def join_menu_kb(bot_username: str, restaurant_id: int, is_manager: bool = False) -> InlineKeyboardMarkup:
     """Личное меню сотрудника заведения — открывается сразу в личке по
     персональной пригласительной ссылке, без всякой группы. «Мой профиль» —
-    настоящий экран с реальными данными и кнопкой выхода из заведения
-    (это работающая функция, поэтому не через макет сайта). «Пройти тест» —
-    ссылка на Mini App. «Запросить экзамен» — только для персонала:
-    администратор сам ВЫДАЁТ код, а не запрашивает его, поэтому эта кнопка
-    была бы для него бессмысленной и только путала бы. Кнопка панели
-    администратора — только если человек уже добавлен менеджером этого
-    заведения (проверяется на сервере)."""
+    настоящий экран с реальными данными и кнопкой выхода из заведения.
+    Остальные кнопки — обычные (не ссылки!), чтобы не пересылать /start
+    заново при каждом нажатии — обработчики находятся в handlers/start.py
+    и просто заменяют текущий экран на месте (edit_text). «Запросить
+    экзамен» — только для персонала: администратор сам ВЫДАЁТ код, а не
+    запрашивает его. Кнопка панели администратора — только если человек
+    уже добавлен менеджером этого заведения (проверяется на сервере)."""
     builder = InlineKeyboardBuilder()
     builder.button(text="👤 Мой профиль", callback_data="menu:profile")
-    builder.button(text="🎓 Пройти тест", url=f"https://t.me/{bot_username}?start=tests_{restaurant_id}")
+    builder.button(text="🎓 Пройти тест", callback_data=f"open_tests:{restaurant_id}")
     if not is_manager:
-        builder.button(
-            text="📩 Запросить экзамен", url=f"https://t.me/{bot_username}?start=examcode_{restaurant_id}"
-        )
+        builder.button(text="📩 Запросить экзамен", callback_data=f"open_examcode:{restaurant_id}")
     if is_manager:
-        builder.button(
-            text="🧑‍💼 Панель администратора",
-            url=f"https://t.me/{bot_username}?start=manageropen_{restaurant_id}",
-        )
+        builder.button(text="🧑‍💼 Панель администратора", callback_data=f"open_admin:{restaurant_id}")
     builder.button(text="🚪 Выйти в главное меню", callback_data="ask_leave_to_general")
     builder.adjust(1)
     return builder.as_markup()

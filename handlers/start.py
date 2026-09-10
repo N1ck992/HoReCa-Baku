@@ -419,6 +419,92 @@ async def cb_choose_restaurant(callback: CallbackQuery, state: FSMContext) -> No
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("open_tests:"))
+async def cb_open_tests(callback: CallbackQuery, state: FSMContext) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=callback.from_user.id,
+            username=callback.from_user.username,
+            full_name=callback.from_user.full_name,
+        )
+        await crud.set_user_restaurant(session, user, restaurant_id)
+
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=tests"
+        await callback.message.edit_text(
+            "Нажмите кнопку ниже, чтобы открыть тест:",
+            reply_markup=webapp_open_kb(
+                webapp_link, "🎓 Открыть тест", back_callback=f"back_to_restaurant:{restaurant_id}"
+            ),
+        )
+        await callback.answer()
+        return
+
+    # Запасной вариант, если ссылка на сайт ещё не настроена.
+    async with async_session() as session:
+        positions = await crud.get_active_positions(session, restaurant_id)
+    if not positions:
+        await callback.answer("Для вашего заведения пока не настроены должности с тестами.", show_alert=True)
+        return
+    await callback.message.edit_text("Выберите должность:", reply_markup=positions_kb(positions))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("open_examcode:"))
+async def cb_open_examcode(callback: CallbackQuery, state: FSMContext) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=examcode"
+        await callback.message.edit_text(
+            "Нажмите кнопку ниже, чтобы открыть экзамен:",
+            reply_markup=webapp_open_kb(
+                webapp_link, "🎓 Открыть экзамен", back_callback=f"back_to_restaurant:{restaurant_id}"
+            ),
+        )
+        await callback.answer()
+        return
+
+    # Запасной вариант — старый текстовый ввод кода прямо в чате.
+    await state.set_state(ExamStates.entering_code)
+    await callback.message.edit_text(
+        "🎓 Введите одноразовый код на экзамен, который вам выдал "
+        "менеджер, или запросите код прямо сейчас.",
+        reply_markup=exam_entry_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("open_admin:"))
+async def cb_open_admin(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        is_manager = restaurant is not None and await crud.is_restaurant_manager(
+            session, restaurant_id, callback.from_user.id
+        )
+    if not is_manager:
+        await callback.answer("⛔ Эта кнопка доступна только администраторам заведения.", show_alert=True)
+        return
+
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
+        await callback.message.edit_text(
+            "Нажмите кнопку ниже, чтобы открыть панель администратора:",
+            reply_markup=webapp_open_kb(
+                webapp_link, "🧑‍💼 Открыть панель", back_callback=f"back_to_restaurant:{restaurant_id}"
+            ),
+        )
+        await callback.answer()
+        return
+
+    # Запасной вариант — старая текстовая панель администратора.
+    await _show_manager_menu(restaurant, callback.message.edit_text)
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("join_request_approve:"))
 async def cb_join_request_approve(callback: CallbackQuery) -> None:
     request_id = int(callback.data.split(":")[1])
