@@ -1,8 +1,9 @@
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+import config
 from database import crud
 from database.database import async_session
 from handlers.restaurants import _employees_kb, _managers_list_kb, _remove_employee_kb
@@ -34,6 +35,9 @@ def manager_menu_kb(restaurant_id: int):
     builder.button(
         text="🔗 Ссылка для персонала", callback_data=f"manager_invite_link:{restaurant_id}"
     )
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
+        builder.button(text="📋 Результаты персонала (сайт)", web_app=WebAppInfo(url=webapp_link))
     builder.button(
         text="➕ Добавить персонал", callback_data=f"manager_assign_start:{restaurant_id}"
     )
@@ -87,6 +91,10 @@ async def cmd_manager_help(message: Message) -> None:
 
 @router.message(Command("manager"))
 async def cmd_manager(message: Message) -> None:
+    if message.chat.type != "private":
+        await message.answer("Напишите мне это в личные сообщения: /manager")
+        return
+
     async with async_session() as session:
         restaurants = await crud.get_restaurants_managed_by(session, message.from_user.id)
 

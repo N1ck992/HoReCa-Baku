@@ -498,6 +498,13 @@ async def cb_open_myresults(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("open_admin:"))
 async def cb_open_admin(callback: CallbackQuery) -> None:
+    """Показывает ту же полную панель администратора, что и команда
+    /manager — раньше эта кнопка вела сразу на сайт с урезанным набором
+    функций (только список персонала), из-за чего часть возможностей
+    (ссылка для персонала, добавить/удалить персонал, администраторы,
+    выдать код) была доступна только через отдельную команду. Теперь всё
+    собрано в одном месте — сайт для просмотра результатов открывается
+    отсюда же отдельной кнопкой."""
     restaurant_id = int(callback.data.split(":")[1])
     async with async_session() as session:
         restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
@@ -508,18 +515,6 @@ async def cb_open_admin(callback: CallbackQuery) -> None:
         await callback.answer("⛔ Эта кнопка доступна только администраторам заведения.", show_alert=True)
         return
 
-    if config.WEBAPP_URL:
-        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
-        await callback.message.edit_text(
-            "Нажмите кнопку ниже, чтобы открыть панель администратора:",
-            reply_markup=webapp_open_kb(
-                webapp_link, "🧑‍💼 Открыть панель", back_callback=f"back_to_restaurant:{restaurant_id}"
-            ),
-        )
-        await callback.answer()
-        return
-
-    # Запасной вариант — старая текстовая панель администратора.
     await _show_manager_menu(restaurant, callback.message.edit_text)
     await callback.answer()
 
