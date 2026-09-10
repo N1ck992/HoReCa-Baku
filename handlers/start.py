@@ -13,6 +13,7 @@ from keyboards.keyboards import (
     MAIN_MENU_BUTTON_TEXT,
     exam_entry_kb,
     group_menu_kb,
+    join_menu_kb,
     main_menu_kb,
     persistent_menu_kb,
     positions_kb,
@@ -98,6 +99,32 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     if action and rid_str.isdigit() and message.chat.type == "private":
         restaurant_id = int(rid_str)
         await state.clear()
+
+        # ---------- Персональная ссылка-приглашение (без группы) ----------
+        if action == "join":
+            async with async_session() as session:
+                restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+                if restaurant is None:
+                    await message.answer("Эта ссылка больше не действительна.")
+                    return
+                user = await crud.get_or_create_user(
+                    session,
+                    telegram_id=message.from_user.id,
+                    username=message.from_user.username,
+                    full_name=message.from_user.full_name,
+                )
+                await crud.set_user_restaurant(session, user, restaurant_id)
+                is_manager = await crud.is_restaurant_manager(
+                    session, restaurant_id, message.from_user.id
+                )
+
+            await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
+            username = await get_bot_username(message.bot)
+            await message.answer(
+                f"👋 Добро пожаловать в «{restaurant.name}»! Выберите, что нужно:",
+                reply_markup=join_menu_kb(username, restaurant_id, is_manager),
+            )
+            return
 
         # ---------- Кнопки персонала: прикрепляем к заведению и открываем нужный раздел ----------
         if action in ("profile", "tests", "examcode"):

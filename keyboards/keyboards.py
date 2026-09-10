@@ -57,6 +57,27 @@ def open_private_chat_kb(bot_username: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def join_menu_kb(bot_username: str, restaurant_id: int, is_manager: bool = False) -> InlineKeyboardMarkup:
+    """Личное меню сотрудника заведения — открывается сразу в личке по
+    персональной пригласительной ссылке, без всякой группы. Первые три
+    кнопки — обычные ссылки на Mini App (работают у любого сотрудника).
+    Кнопка администратора — только если человек уже добавлен менеджером
+    этого заведения (проверяется на сервере, см. cb_admin_check)."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="👤 Мой профиль", url=f"https://t.me/{bot_username}?start=profile_{restaurant_id}")
+    builder.button(text="🎓 Пройти тест", url=f"https://t.me/{bot_username}?start=tests_{restaurant_id}")
+    builder.button(
+        text="📩 Запросить экзамен", url=f"https://t.me/{bot_username}?start=examcode_{restaurant_id}"
+    )
+    if is_manager:
+        builder.button(
+            text="🧑‍💼 Панель администратора",
+            url=f"https://t.me/{bot_username}?start=manageropen_{restaurant_id}",
+        )
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def group_menu_kb(bot_username: str, restaurant_id: int) -> InlineKeyboardMarkup:
     """Единое меню группы заведения — видно всем участникам (ограничение
     Telegram — иначе никак). Три первые кнопки — обычные ссылки: по

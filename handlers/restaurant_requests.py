@@ -9,6 +9,7 @@ from database import crud
 from database.database import async_session
 from keyboards.keyboards import back_to_main_kb, main_menu_kb
 from services.rating import display_name
+from utils import get_bot_username
 
 router = Router(name="restaurant_requests")
 
@@ -108,19 +109,24 @@ async def cb_request_approve(callback: CallbackQuery, bot: Bot) -> None:
     await callback.answer()
 
     try:
+        username = await get_bot_username(bot)
+        join_link = f"https://t.me/{username}?start=join_{restaurant.id}"
         await bot.send_message(
             chat_id=request.requested_by_telegram_id,
             text=(
                 f"✅ Ваше заведение «{restaurant.name}» одобрено!\n\n"
-                f"Вы назначены его администратором. Чтобы завершить настройку:\n"
-                f"1. Добавьте бота в Telegram-группу заведения.\n"
-                f"2. Отправьте в этой группе команду:\n"
-                f"/link_restaurant {restaurant.id}\n\n"
-                f"После этого сотрудники смогут прикрепиться к заведению, "
-                f"просто отправив /start в той же группе, а вы сможете "
-                f"назначать им должности командой /assign и добавлять других "
-                f"администраторов командой /managers — всё прямо в группе."
+                f"Вы назначены его администратором. Вот ваша личная ссылка "
+                f"для сотрудников:\n\n"
+                f"`{join_link}`\n\n"
+                f"Отправьте её персоналу любым удобным способом (WhatsApp, "
+                f"лично и т.д.) — переход по ней сразу открывает личный чат "
+                f"с ботом с меню: профиль, тест, экзамен. Вам этот же переход "
+                f"дополнительно откроет панель администратора.\n\n"
+                f"Управлять заведением (смотреть результаты, добавлять других "
+                f"администраторов, выдавать коды на экзамен) можно через "
+                f"команду /manager в этом чате."
             ),
+            parse_mode="Markdown",
         )
     except Exception:
         pass
