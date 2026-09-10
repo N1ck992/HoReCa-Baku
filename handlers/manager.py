@@ -1,4 +1,4 @@
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -398,3 +398,237 @@ async def cb_manager_gen_code(callback: CallbackQuery) -> None:
         parse_mode="Markdown",
     )
     await _show_manager_menu(restaurant, callback.message.answer)
+
+
+# ---------- Архивирование заведения ----------
+
+@router.callback_query(F.data.startswith("archive_restaurant_start:"))
+async def cb_archive_restaurant_start(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        if restaurant is None or not await crud.is_restaurant_manager(
+            session, restaurant_id, callback.from_user.id
+        ):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+
+        existing = await crud.get_pending_archive_request(session, restaurant_id)
+        if existing is not None:
+            await callback.answer(
+                "По этому заведению уже есть заявка на архивирование в процессе.",
+                show_alert=True,
+            )
+            return
+
+        managers = await crud.get_restaurant_managers(session, restaurant_id)
+
+    builder = InlineKeyboardBuilder()
+    if len(managers) == 1:
+        text = (
+            f"⚠️ Вы уверены, что хотите архивировать «{restaurant.name}»? "
+            "Заведение станет неактивным (тесты, панель и рейтинг больше "
+            "не будут доступны), но данные и история персонала сохранятся."
+        )
+        builder.button(text="🗄 Да, архивировать", callback_data=f"archive_solo_confirm:{restaurant_id}")
+    else:
+        text = (
+            f"⚠️ Вы инициируете архивирование «{restaurant.name}». Так как "
+            f"администраторов несколько ({len(managers)}), потребуется "
+            "согласие каждого из них. Продолжить?"
+        )
+        builder.button(
+            text="🗄 Да, отправить остальным на одобрение",
+            callback_data=f"archive_initiate:{restaurant_id}",
+        )
+    builder.button(text="Отмена", callback_data=f"manager_menu:{restaurant_id}")
+    builder.adjust(1)
+
+    await callback.message.edit_text(text, reply_markup=builder.as_markup())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("archive_solo_confirm:"))
+async def cb_archive_solo_confirm(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        if not await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        await crud.archive_restaurant(session, restaurant_id)
+
+    await callback.answer("Заведение архивировано")
+    await callback.message.edit_text(f"🗄 «{restaurant.name}» архивировано.")
+
+
+@router.callback_query(F.data.startswith("archive_initiate:"))
+async def cb_archive_initiate(callback: CallbackQuery, bot: Bot) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        if not await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        managers = await crud.get_restaurant_managers(session, restaurant_id)
+        request = await crud.create_archive_request(session, restaurant_id, callback.from_user.id)
+        initiator_name = display_name_for_manager(managers, callback.from_user.id)
+
+    await callback.answer()
+
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="📩 Написать в поддержку", callback_data=f"archive_support:{request.id}"
+    )
+    await callback.message.edit_text(
+        f"⏳ Заявка на архивирование «{restaurant.name}» отправлена остальным "
+        f"администраторам ({len(managers) - 1}). Как только все одобрят — "
+        "заведение архивируется автоматически. Если кто-то из них "
+        "недоступен — можно написать в поддержку.",
+        reply_markup=builder.as_markup(),
+    )
+
+    vote_kb = InlineKeyboardBuilder()
+    vote_kb.button(text="✅ Одобрить", callback_data=f"archive_vote_approve:{request.id}")
+    vote_kb.button(text="❌ Отклонить", callback_data=f"archive_vote_decline:{request.id}")
+    vote_kb.adjust(2)
+
+    for manager in managers:
+        if manager.telegram_id == callback.from_user.id:
+            continue
+        try:
+            await bot.send_message(
+                chat_id=manager.telegram_id,
+                text=(
+                    f"🗄 {initiator_name} предлагает архивировать заведение "
+                    f"«{restaurant.name}». Требуется согласие всех "
+                    "администраторов. Согласны?"
+                ),
+                reply_markup=vote_kb.as_markup(),
+            )
+        except Exception:
+            pass
+
+
+def display_name_for_manager(managers, telegram_id: int) -> str:
+    for m in managers:
+        if m.telegram_id == telegram_id:
+            return m.name or f"ID {telegram_id}"
+    return f"ID {telegram_id}"
+
+
+@router.callback_query(F.data.startswith("archive_vote_approve:"))
+async def cb_archive_vote_approve(callback: CallbackQuery, bot: Bot) -> None:
+    await _handle_archive_vote(callback, bot, "approved")
+
+
+@router.callback_query(F.data.startswith("archive_vote_decline:"))
+async def cb_archive_vote_decline(callback: CallbackQuery, bot: Bot) -> None:
+    await _handle_archive_vote(callback, bot, "declined")
+
+
+async def _handle_archive_vote(callback: CallbackQuery, bot: Bot, decision: str) -> None:
+    request_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        request = await crud.get_archive_request_by_id(session, request_id)
+        if request is None:
+            await callback.answer("Заявка не найдена.", show_alert=True)
+            return
+        if not await crud.is_restaurant_manager(
+            session, request.restaurant_id, callback.from_user.id
+        ):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+
+        restaurant = await crud.get_restaurant_by_id(session, request.restaurant_id)
+        outcome = await crud.cast_archive_vote(session, request_id, callback.from_user.id, decision)
+        managers = await crud.get_restaurant_managers(session, request.restaurant_id)
+
+    if outcome["status"] == "not_pending":
+        await callback.answer("Эта заявка уже обработана.", show_alert=True)
+        return
+
+    await callback.answer("Голос учтён")
+
+    if decision == "declined":
+        await callback.message.edit_text(
+            f"❌ Вы отклонили архивирование «{restaurant.name}»."
+        )
+        notify_text = (
+            f"❌ Архивирование «{restaurant.name}» отклонено — "
+            f"{display_name_for_manager(managers, callback.from_user.id)} не согласен(на). "
+            "Заявка остановлена."
+        )
+    elif outcome["status"] == "approved":
+        await callback.message.edit_text(
+            f"✅ Вы одобрили архивирование «{restaurant.name}». Все "
+            "администраторы согласны — заведение архивировано."
+        )
+        notify_text = f"🗄 «{restaurant.name}» архивировано — все администраторы согласились."
+    else:
+        await callback.message.edit_text(
+            f"✅ Вы одобрили архивирование «{restaurant.name}». Ждём "
+            f"остальных ({outcome['approved_count']}/{outcome['total_count']} уже согласны)."
+        )
+        notify_text = None
+
+    if notify_text:
+        for manager in managers:
+            if manager.telegram_id == callback.from_user.id:
+                continue
+            try:
+                await bot.send_message(chat_id=manager.telegram_id, text=notify_text)
+            except Exception:
+                pass
+
+
+@router.callback_query(F.data.startswith("archive_support:"))
+async def cb_archive_support(callback: CallbackQuery, bot: Bot) -> None:
+    request_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        request = await crud.get_archive_request_by_id(session, request_id)
+        if request is None:
+            await callback.answer("Заявка не найдена.", show_alert=True)
+            return
+        restaurant = await crud.get_restaurant_by_id(session, request.restaurant_id)
+
+    await callback.answer("Сообщение отправлено в поддержку")
+
+    if config.ADMIN_ID:
+        builder = InlineKeyboardBuilder()
+        builder.button(
+            text="🗄 Заархивировать вручную", callback_data=f"archive_force:{request.id}"
+        )
+        try:
+            await bot.send_message(
+                chat_id=config.ADMIN_ID,
+                text=(
+                    f"📩 Запрос в поддержку: не все администраторы «{restaurant.name}» "
+                    "отвечают на заявку об архивировании. Инициатор просит помощи."
+                ),
+                reply_markup=builder.as_markup(),
+            )
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data.startswith("archive_force:"))
+async def cb_archive_force(callback: CallbackQuery) -> None:
+    if callback.from_user.id != config.ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
+
+    request_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        request = await crud.get_archive_request_by_id(session, request_id)
+        if request is None or request.status != "pending":
+            await callback.answer("Заявка уже обработана.", show_alert=True)
+            return
+        restaurant = await crud.get_restaurant_by_id(session, request.restaurant_id)
+        request.status = "approved"
+        await crud.archive_restaurant(session, request.restaurant_id)
+        await session.commit()
+
+    await callback.answer("Архивировано")
+    await callback.message.edit_text(f"🗄 «{restaurant.name}» заархивировано вручную (через поддержку).")
