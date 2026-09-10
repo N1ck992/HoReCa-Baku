@@ -310,7 +310,50 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
 
 @router.message(F.text == MAIN_MENU_BUTTON_TEXT)
 async def btn_main_menu(message: Message, state: FSMContext) -> None:
-    await run_start_logic(message, state)
+    """Нажатие постоянной кнопки. Если человек сейчас привязан к
+    заведению — сначала спрашиваем подтверждение, потому что переход в
+    общее меню бота "выводит" его из интерфейса своего заведения. Для
+    гостей без привязки подтверждение не нужно — им и так некуда
+    "выходить"."""
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+        has_restaurant_context = user.restaurant_id is not None
+        if not has_restaurant_context:
+            managed = await crud.get_restaurants_managed_by(session, message.from_user.id)
+            has_restaurant_context = len(managed) > 0
+
+    if not has_restaurant_context:
+        await run_start_logic(message, state)
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Да, выйти в общее меню", callback_data="confirm_leave_to_general")
+    builder.button(text="Остаться", callback_data="cancel_leave_to_general")
+    builder.adjust(1)
+    await message.answer(
+        "⚠️ Вы сейчас в меню своего заведения. Общее меню бота содержит "
+        "пробный тест, общий рейтинг и вакансии — не относится к вашему "
+        "заведению. Выйти туда?",
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data == "confirm_leave_to_general")
+async def cb_confirm_leave_to_general(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.message.edit_text("Главное меню:", reply_markup=main_menu_kb(False))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cancel_leave_to_general")
+async def cb_cancel_leave_to_general(callback: CallbackQuery) -> None:
+    await callback.message.delete()
+    await callback.answer("Остаётесь в меню заведения")
 
 
 @router.callback_query(F.data.startswith("join_request_approve:"))

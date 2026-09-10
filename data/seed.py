@@ -10,12 +10,10 @@
         "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],
         "correct_index": 0,  # индекс правильного варианта в списке options
         "difficulty": 1,     # необязательно: 1 лёгкий, 2 средний, 3 сложный
-        "image": "bartender/panel_01.png",  # необязательно: картинка к вопросу
     }
 
-Картинки лежат в data/images/<подпапка>/<файл>.png — путь в поле "image"
-указывается относительно data/images/. Если поле "image" не указано,
-вопрос показывается обычным текстом, без картинки.
+Картинки к вопросам больше не используются — тесты теперь проходят на сайте
+(Mini App), там своя система изображений.
 """
 
 from __future__ import annotations
@@ -43,7 +41,6 @@ POSITIONS: list[dict] = [
                         "options": ["0…+4°C", "+10…+15°C", "+20°C", "-5°C"],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_01.png",
                     },
                     {
                         "text": "Что такое бланширование?",
@@ -55,7 +52,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_02.png",
                     },
                     {
                         "text": "Для чего нужен этап 'мизанплас' перед началом смены?",
@@ -67,14 +63,12 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_03.png",
                     },
                     {
                         "text": "Какой нож правильнее использовать для нарезки овощей?",
                         "options": ["Овощной/шеф-нож", "Нож для хлеба", "Нож для стейка", "Филейный нож для рыбы"],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_04.png",
                     },
                     {
                         "text": "Что означает термин 'аль денте'?",
@@ -86,7 +80,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "cook/panel_05.png",
                     },
                 ],
             },
@@ -106,7 +99,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_06.png",
                     },
                     {
                         "text": "Заказ на кухню поступил с ошибкой (не тот гарнир). Что делать повару?",
@@ -118,7 +110,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_07.png",
                     },
                     {
                         "text": "Что делать, если блюдо готово, а официант ещё не забрал его дольше положенного времени?",
@@ -130,7 +121,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_08.png",
                     },
                     {
                         "text": "Как правильно поступить при одновременном поступлении нескольких срочных заказов?",
@@ -142,7 +132,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_09.png",
                     },
                     {
                         "text": "Что важно проверить перед отправкой блюда на раздачу?",
@@ -154,7 +143,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "cook/panel_10.png",
                     },
                 ],
             },
@@ -174,7 +162,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_11.png",
                     },
                     {
                         "text": "Что такое принцип FIFO при хранении продуктов?",
@@ -186,7 +173,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_12.png",
                     },
                     {
                         "text": "Как часто повар должен мыть руки во время смены?",
@@ -198,7 +184,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_13.png",
                     },
                     {
                         "text": "Что нужно сделать, если продукт имеет признаки порчи (запах, цвет, срок годности истёк)?",
@@ -210,7 +195,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_14.png",
                     },
                     {
                         "text": "Как маркируются открытые/подготовленные продукты на кухне?",
@@ -222,7 +206,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "cook/panel_15.png",
                     },
                 ],
             },
@@ -242,7 +225,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_16.png",
                     },
                     {
                         "text": "На кухне в час пик возник конфликт между поварами из-за очерёдности заказов. Как правильно поступить?",
@@ -254,7 +236,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "cook/panel_17.png",
                     },
                     {
                         "text": "Официант обвиняет повара в задержке заказа, хотя причина в самом официанте. Как реагировать?",
@@ -266,7 +247,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_18.png",
                     },
                     {
                         "text": "У гостя пищевая аллергия, но он забыл предупредить, и блюдо уже готовится с аллергеном. Что делать?",
@@ -278,7 +258,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "cook/panel_19.png",
                     },
                     {
                         "text": "Как правильно вести себя при получении критики от шеф-повара при коллегах?",
@@ -290,7 +269,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "cook/panel_20.png",
                     },
                 ],
             },
@@ -318,14 +296,12 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_01.png",
                     },
                     {
                         "text": "В каком бокале традиционно подают коктейль 'Маргарита'?",
                         "options": ["Маргарита (коупет)", "Хайбол", "Шот", "Пивная кружка"],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_02.png",
                     },
                     {
                         "text": "Что означает термин 'билд' (build) при приготовлении коктейля?",
@@ -337,7 +313,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_03.png",
                     },
                     {
                         "text": "Зачем используется стрейнер (strainer)?",
@@ -349,7 +324,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_04.png",
                     },
                     {
                         "text": "Что такое 'гарнир' в контексте коктейля?",
@@ -361,7 +335,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "bartender/panel_05.png",
                     },
                 ],
             },
@@ -381,7 +354,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_06.png",
                     },
                     {
                         "text": "Гость просит коктейль 'покрепче, но чтобы не был заметен вкус алкоголя'. Как поступить?",
@@ -393,7 +365,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_07.png",
                     },
                     {
                         "text": "Почему важно использовать свежий лёд для каждого коктейля?",
@@ -405,7 +376,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_08.png",
                     },
                     {
                         "text": "Что делать, если во время приготовления коктейля закончился ключевой ингредиент?",
@@ -417,7 +387,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_09.png",
                     },
                     {
                         "text": "Как правильно охладить бокал перед подачей коктейля без льда (например, для мартини)?",
@@ -429,7 +398,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "bartender/panel_10.png",
                     },
                 ],
             },
@@ -449,7 +417,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_11.png",
                     },
                     {
                         "text": "Как правильно уточнить у гостя предпочтения, если он не может определиться с напитком?",
@@ -461,7 +428,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_12.png",
                     },
                     {
                         "text": "Гость просит порекомендовать безалкогольный коктейль. Что важно учесть?",
@@ -473,7 +439,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_13.png",
                     },
                     {
                         "text": "Как бармену вести себя, если гость пытается завязать личную беседу не по делу во время наплыва заказов?",
@@ -485,7 +450,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_14.png",
                     },
                     {
                         "text": "Гость просит проверить состав коктейля из-за возможной аллергии. Действия бармена?",
@@ -497,7 +461,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "bartender/panel_15.png",
                     },
                 ],
             },
@@ -517,7 +480,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_16.png",
                     },
                     {
                         "text": "Два гостя за стойкой начинают громко спорить друг с другом. Действия бармена?",
@@ -529,7 +491,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "bartender/panel_17.png",
                     },
                     {
                         "text": "Гость отказывается платить, утверждая, что не заказывал часть напитков. Действия бармена?",
@@ -541,7 +502,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_18.png",
                     },
                     {
                         "text": "Коллега-бармен постоянно опаздывает и оставляет рабочее место в беспорядке. Как правильно поступить?",
@@ -553,7 +513,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "bartender/panel_19.png",
                     },
                     {
                         "text": "Гость жалуется, что ждёт коктейль слишком долго при большой загрузке бара. Действия бармена?",
@@ -565,7 +524,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "bartender/panel_20.png",
                     },
                 ],
             },
@@ -588,14 +546,12 @@ POSITIONS: list[dict] = [
                         "options": ["С левой стороны от гостя", "С правой стороны от гостя", "Со стороны кухни", "Не имеет значения"],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "waiter/panel_01.png",
                     },
                     {
                         "text": "С какой стороны принято убирать использованную посуду?",
                         "options": ["С правой стороны от гостя", "С левой стороны от гостя", "Через стол", "Не имеет значения"],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "waiter/panel_02.png",
                     },
                     {
                         "text": "Что должен знать официант о блюдах меню перед началом смены?",
@@ -607,7 +563,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_03.png",
                     },
                     {
                         "text": "Как правильно принять заказ у гостя?",
@@ -619,7 +574,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_04.png",
                     },
                     {
                         "text": "Когда правильно приносить счёт гостю?",
@@ -631,7 +585,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "waiter/panel_05.png",
                     },
                 ],
             },
@@ -651,7 +604,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 1,
                         "difficulty": 1,
-                        "image": "waiter/panel_06.png",
                     },
                     {
                         "text": "Как официанту лучше встретить гостей, впервые пришедших в заведение?",
@@ -663,7 +615,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "waiter/panel_07.png",
                     },
                     {
                         "text": "Гость просит порекомендовать блюдо. Что важно учесть при рекомендации?",
@@ -675,7 +626,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_08.png",
                     },
                     {
                         "text": "Как правильно обслуживать гостя с ребёнком?",
@@ -687,7 +637,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_09.png",
                     },
                     {
                         "text": "Гость long time сидит с пустым бокалом, но ничего не просит. Действия официанта?",
@@ -699,7 +648,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "waiter/panel_10.png",
                     },
                 ],
             },
@@ -719,7 +667,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "waiter/panel_11.png",
                     },
                     {
                         "text": "Официант заметил, что забыл передать часть заказа на кухню. Что делать?",
@@ -731,7 +678,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "waiter/panel_12.png",
                     },
                     {
                         "text": "Как правильно вносить заказ в систему учёта (POS)?",
@@ -743,7 +689,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_13.png",
                     },
                     {
                         "text": "Гостю принесли не то блюдо, которое он заказывал. Действия официанта?",
@@ -755,7 +700,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_14.png",
                     },
                     {
                         "text": "Как правильно разделить счёт, если компания гостей просит оплатить раздельно?",
@@ -767,7 +711,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "waiter/panel_15.png",
                     },
                 ],
             },
@@ -787,7 +730,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "waiter/panel_16.png",
                     },
                     {
                         "text": "Гость отказывается платить за блюдо, которое, по его словам, было невкусным, хотя претензий по качеству не было при подаче. Действия официанта?",
@@ -799,7 +741,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 1,
-                        "image": "waiter/panel_17.png",
                     },
                     {
                         "text": "Два гостя за соседними столами конфликтуют из-за шума. Действия официанта?",
@@ -811,7 +752,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_18.png",
                     },
                     {
                         "text": "Гость ведёт себя грубо и повышает голос на официанта необоснованно. Как правильно реагировать?",
@@ -823,7 +763,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 2,
-                        "image": "waiter/panel_19.png",
                     },
                     {
                         "text": "Официант случайно пролил напиток на гостя. Правильные действия?",
@@ -835,7 +774,6 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 3,
-                        "image": "waiter/panel_20.png",
                     },
                 ],
             },

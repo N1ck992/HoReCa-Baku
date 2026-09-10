@@ -32,12 +32,12 @@ def webapp_open_kb(url: str, button_text: str = "🎓 Открыть тест") 
 
 def main_menu_kb(show_exam_button: bool = False) -> InlineKeyboardMarkup:
     """show_exam_button=True только для сотрудников, прикреплённых к
-    заведению (т.е. отправивших /start в группе этого заведения) —
-    у остальных пользователей кнопки экзамена быть не должно."""
+    заведению — у остальных пользователей кнопки экзамена быть не должно.
+    «➕ Добавить заведение» теперь не отдельная кнопка, а находится внутри
+    экрана «Рейтинг заведений» (см. handlers/rating.py)."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="👔 Выбрать должность", callback_data="menu:positions")
+    builder.button(text="🎯 Пробный тест", callback_data="menu:positions")
     builder.button(text="🏢 Рейтинг заведений", callback_data="menu:leaderboard")
-    builder.button(text="➕ Добавить заведение", callback_data="menu:add_restaurant")
     builder.button(text="👤 Мой профиль", callback_data="menu:profile")
     builder.button(text="💼 Вакансии", callback_data="menu:vacancies")
     builder.button(text="❓ Помощь", callback_data="menu:help")
@@ -163,6 +163,18 @@ def result_kb(position_id: int) -> InlineKeyboardMarkup:
 
 def back_to_main_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    builder.button(text="⬅️ Главное меню", callback_data="menu:main")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def leaderboard_kb() -> InlineKeyboardMarkup:
+    """Клавиатура экрана «Рейтинг заведений» — сюда же перенесена кнопка
+    добавления нового заведения (раньше была отдельным пунктом в главном
+    меню, что смешивало общие функции бота с функциями конкретных
+    заведений)."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Добавить моё заведение", callback_data="menu:add_restaurant")
     builder.button(text="⬅️ Главное меню", callback_data="menu:main")
     builder.adjust(1)
     return builder.as_markup()

@@ -3,7 +3,7 @@ from aiogram.types import CallbackQuery
 
 from database import crud
 from database.database import async_session
-from keyboards.keyboards import back_to_main_kb
+from keyboards.keyboards import leaderboard_kb
 
 router = Router(name="rating")
 
@@ -32,5 +32,5 @@ async def cb_leaderboard(callback: CallbackQuery) -> None:
             )
         text = "\n".join(lines)
 
-    await callback.message.edit_text(text, reply_markup=back_to_main_kb())
+    await callback.message.edit_text(text, reply_markup=leaderboard_kb())
     await callback.answer()
