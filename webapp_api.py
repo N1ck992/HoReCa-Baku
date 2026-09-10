@@ -130,8 +130,11 @@ async def get_questions(request: web.Request) -> web.Response:
     return _json(data)
 
 
-@routes.post("/api/submit_test")
-async def submit_test(request: web.Request) -> web.Response:
+@routes.post("/api/start_test")
+async def start_test(request: web.Request) -> web.Response:
+    """Создаёт запись о начатом тесте и сразу возвращает список вопросов
+    (без указания, какой вариант правильный — это остаётся только в базе
+    данных на сервере)."""
     try:
         body = await request.json()
     except Exception:
@@ -143,9 +146,8 @@ async def submit_test(request: web.Request) -> web.Response:
         return _auth_error()
 
     category_id = body.get("category_id")
-    answers = body.get("answers")
-    if not isinstance(category_id, int) or not isinstance(answers, list) or not answers:
-        return _json({"error": "Некорректные данные теста."}, status=400)
+    if not isinstance(category_id, int):
+        return _json({"error": "category_id обязателен"}, status=400)
 
     async with async_session() as session:
         user = await crud.get_or_create_user(
@@ -155,27 +157,80 @@ async def submit_test(request: web.Request) -> web.Response:
             full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
         )
         test_result = await crud.create_test_result(session, user.id, category_id)
+        questions = await crud.get_questions_with_options(session, category_id)
+        questions_data = [
+            {
+                "id": q.id,
+                "text": q.text,
+                "options": [
+                    {"id": o.id, "text": o.text} for o in sorted(q.options, key=lambda o: o.order)
+                ],
+            }
+            for q in questions
+        ]
 
-        correct_count = 0
-        total_count = 0
-        for answer in answers:
-            question_id = answer.get("question_id")
-            answer_option_id = answer.get("answer_option_id")
-            if not isinstance(question_id, int) or not isinstance(answer_option_id, int):
-                continue
-            question = await crud.get_question_with_options(session, question_id)
-            if question is None or question.category_id != category_id:
-                continue
-            chosen = await crud.get_answer_option(session, answer_option_id)
-            # Правильность ответа определяем ТОЛЬКО по базе данных на
-            # сервере — никогда не доверяем тому, что прислал браузер.
-            is_correct = bool(chosen and chosen.is_correct and chosen.question_id == question_id)
-            await crud.save_user_answer(session, test_result.id, question_id, answer_option_id, is_correct)
-            total_count += 1
-            if is_correct:
-                correct_count += 1
+    return _json({"test_result_id": test_result.id, "questions": questions_data})
 
-        final = await crud.finalize_test_result(session, test_result.id, correct_count, total_count)
+
+@routes.post("/api/answer_question")
+async def answer_question(request: web.Request) -> web.Response:
+    """Принимает ответ на ОДИН вопрос, сразу говорит, верный ли он (и какой
+    вариант был правильным — для подсветки), и сохраняет ответ в базу."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    test_result_id = body.get("test_result_id")
+    question_id = body.get("question_id")
+    answer_option_id = body.get("answer_option_id")
+    if not all(isinstance(v, int) for v in (test_result_id, question_id, answer_option_id)):
+        return _json({"error": "Некорректные данные ответа."}, status=400)
+
+    async with async_session() as session:
+        question = await crud.get_question_with_options(session, question_id)
+        if question is None:
+            return _json({"error": "Вопрос не найден."}, status=404)
+
+        correct_option = next((o for o in question.options if o.is_correct), None)
+        chosen = await crud.get_answer_option(session, answer_option_id)
+        is_correct = bool(chosen and chosen.is_correct and chosen.question_id == question_id)
+
+        await crud.save_user_answer(session, test_result_id, question_id, answer_option_id, is_correct)
+
+    return _json(
+        {
+            "is_correct": is_correct,
+            "correct_option_id": correct_option.id if correct_option else None,
+        }
+    )
+
+
+@routes.post("/api/finish_test")
+async def finish_test(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    test_result_id = body.get("test_result_id")
+    correct_count = body.get("correct_count")
+    total_count = body.get("total_count")
+    if not all(isinstance(v, int) for v in (test_result_id, correct_count, total_count)):
+        return _json({"error": "Некорректные данные."}, status=400)
+
+    async with async_session() as session:
+        final = await crud.finalize_test_result(session, test_result_id, correct_count, total_count)
 
     return _json(
         {
