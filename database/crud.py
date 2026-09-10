@@ -141,17 +141,24 @@ async def set_user_restaurant(session: AsyncSession, user: User, restaurant_id: 
 async def get_active_positions(
     session: AsyncSession, restaurant_id: int | None = None
 ) -> list[Position]:
-    """Общие должности (restaurant_id is NULL) видны всем. Если передан
-    restaurant_id — дополнительно показываются уникальные должности именно
-    этого заведения (например, тесты по меню конкретного ресторана)."""
-    if restaurant_id is None:
-        condition = Position.restaurant_id.is_(None)
-    else:
-        condition = (Position.restaurant_id.is_(None)) | (Position.restaurant_id == restaurant_id)
+    """Если у заведения уже есть СВОИ уникальные должности — показываются
+    только они (чтобы не дублировать одинаковые на вид общие и уникальные
+    тесты в одном списке). Если своих ещё нет — заведению (или гостю без
+    заведения вовсе) показываются общие должности, видные всем."""
+    if restaurant_id is not None:
+        own_result = await session.execute(
+            select(Position).where(
+                Position.is_active.is_(True), Position.restaurant_id == restaurant_id
+            )
+        )
+        own_positions = list(own_result.scalars().all())
+        if own_positions:
+            own_positions.sort(key=lambda p: (p.order, p.id))
+            return own_positions
 
     result = await session.execute(
         select(Position)
-        .where(Position.is_active.is_(True), condition)
+        .where(Position.is_active.is_(True), Position.restaurant_id.is_(None))
         .order_by(Position.order, Position.id)
     )
     return list(result.scalars().all())
