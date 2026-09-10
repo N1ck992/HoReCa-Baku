@@ -876,10 +876,10 @@ async function openEmployeeDetail(userId){
     hist.innerHTML = detail.history.length
       ? detail.history.map(h => `
           <div class="row-item">
-            <span>${h.position || ''} · ${h.date || ''}</span>
-            <span style="color:${h.passed ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.passed ? '✓ ' : '✕ '}${h.correct_count}/${h.total_count}</span>
+            <span>${h.position || ''}${h.category ? ' · ' + h.category : ''} · ${h.date || ''}</span>
+            <span style="color:${h.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.correct_count}/${h.total_count} (${h.percentage}%)</span>
           </div>`).join('')
-      : '<div class="row-item"><span>Экзаменов ещё не было</span></div>';
+      : '<div class="row-item"><span>Тестов ещё не было</span></div>';
   } catch (e) {
     showError(document.getElementById('detailHistory'), e.message);
   }

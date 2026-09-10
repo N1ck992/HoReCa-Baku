@@ -362,17 +362,20 @@ async def get_employee_detail(request: web.Request) -> web.Response:
             return _json({"error": "Сотрудник не найден."}, status=404)
 
         stats = await crud.get_user_stats_for_restaurant(session, user_id, restaurant_id)
-        raw_history = await crud.get_exam_history_for_user(session, user_id)
+        raw_history = await crud.get_recent_results_for_user_in_restaurant(
+            session, user_id, restaurant_id
+        )
 
     history = [
         {
-            "position": item["position"].name if item["position"] else None,
-            "correct_count": item["correct_count"],
-            "total_count": item["total_count"],
-            "passed": item["passed"],
-            "date": item["created_at"].strftime("%d.%m.%Y") if item["created_at"] else None,
+            "position": r.category.position.name if r.category and r.category.position else None,
+            "category": r.category.name if r.category else None,
+            "correct_count": r.correct_count,
+            "total_count": r.total_count,
+            "percentage": r.percentage,
+            "date": r.created_at.strftime("%d.%m.%Y") if r.created_at else None,
         }
-        for item in raw_history
+        for r in raw_history
     ]
 
     return _json(
