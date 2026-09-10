@@ -475,8 +475,8 @@ async def cb_exam_request_approve(callback: CallbackQuery, bot: Bot) -> None:
                 f"🎓 Администратор выдал вам код на экзамен по должности "
                 f"{position.emoji} {position.name}:\n\n"
                 f"`{exam_code.code}`\n\n"
-                f"У вас будет {minutes} мин. Нажмите 🎓 Сдать экзамен в "
-                f"главном меню и введите этот код."
+                f"У вас будет {minutes} мин. Откройте меню заведения → "
+                f"«📩 Запросить экзамен» → введите этот код на сайте."
             ),
             parse_mode="Markdown",
         )

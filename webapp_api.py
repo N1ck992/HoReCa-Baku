@@ -20,6 +20,7 @@ from aiohttp import web
 from config import BOT_TOKEN
 from database import crud
 from database.database import async_session
+from keyboards.keyboards import exam_request_decision_kb
 from services import exam_logic
 from webapp_auth import validate_init_data
 
@@ -547,6 +548,7 @@ async def request_exam(request: web.Request) -> web.Response:
                 f"Заведение: {restaurant.name}\n"
                 f"Должность: {position.emoji} {position.name}"
             ),
+            reply_markup=exam_request_decision_kb(exam_request.id),
         )
     except Exception:
         logger.warning("Не удалось уведомить администратора о запросе экзамена")
