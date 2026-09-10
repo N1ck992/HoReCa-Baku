@@ -1,11 +1,13 @@
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import crud
 from database.database import async_session
-from keyboards.keyboards import main_menu_kb, profile_kb
+from keyboards.keyboards import join_menu_kb, main_menu_kb, profile_kb
 from services.rating import display_name, rank_progress_text
+from utils import get_bot_username
 
 router = Router(name="profile")
 
@@ -100,6 +102,24 @@ async def cb_profile(callback: CallbackQuery) -> None:
             session, callback.from_user.id, callback.from_user.username, callback.from_user.full_name
         )
     await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("back_to_restaurant:"))
+async def cb_back_to_restaurant(callback: CallbackQuery, state: FSMContext) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        if restaurant is None:
+            await callback.answer("Заведение не найдено.", show_alert=True)
+            return
+        is_manager = await crud.is_restaurant_manager(session, restaurant_id, callback.from_user.id)
+
+    await state.update_data(in_general_menu=False)
+    username = await get_bot_username(callback.bot)
+    await callback.message.edit_text(
+        f"Меню «{restaurant.name}»:", reply_markup=join_menu_kb(username, restaurant_id, is_manager)
+    )
     await callback.answer()
 
 

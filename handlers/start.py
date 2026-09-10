@@ -310,11 +310,18 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
 
 @router.message(F.text == MAIN_MENU_BUTTON_TEXT)
 async def btn_main_menu(message: Message, state: FSMContext) -> None:
-    """Нажатие постоянной кнопки. Если человек сейчас привязан к
-    заведению — сначала спрашиваем подтверждение, потому что переход в
-    общее меню бота "выводит" его из интерфейса своего заведения. Для
-    гостей без привязки подтверждение не нужно — им и так некуда
-    "выходить"."""
+    """Нажатие постоянной кнопки. Спрашиваем подтверждение, только если
+    человек привязан к заведению И сейчас смотрит именно меню заведения
+    (не общее меню — иначе получится, что кнопка переспрашивает, даже
+    когда мы и так уже в общем меню). Текущий "экран" запоминаем во
+    временных данных FSM (in_general_menu), а не только в базе, потому
+    что в базе привязка к заведению не меняется от того, куда человек
+    сейчас смотрит."""
+    data = await state.get_data()
+    if data.get("in_general_menu"):
+        await message.answer("Главное меню:", reply_markup=main_menu_kb())
+        return
+
     async with async_session() as session:
         user = await crud.get_or_create_user(
             session,
@@ -346,6 +353,7 @@ async def btn_main_menu(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "confirm_leave_to_general")
 async def cb_confirm_leave_to_general(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
+    await state.update_data(in_general_menu=True)
     await callback.message.edit_text("Главное меню:", reply_markup=main_menu_kb())
     await callback.answer()
 
