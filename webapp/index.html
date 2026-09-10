@@ -500,56 +500,6 @@
         </div>
       </section>
 
-      <!-- ============ ЭКРАН 5: профиль ============ -->
-      <section class="screen" data-screen="profile" data-state="right">
-        <div class="relief relief--corner emboss">
-          <svg viewBox="0 0 160 110" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 10 C 40 20, 55 40, 60 75"/>
-            <ellipse cx="60" cy="75" rx="9" ry="5"/>
-            <ellipse cx="44" cy="58" rx="7" ry="4" transform="rotate(35 44 58)"/>
-          </svg>
-        </div>
-        <div class="top-row">
-          <span class="restaurant-name">Мичели</span>
-          <button class="icon-btn" onclick="closeApp()">✕</button>
-        </div>
-        <h1 class="headline">Мой профиль</h1>
-        <div class="avatar-row">
-          <div class="avatar" id="profileInitials">ДЭ</div>
-          <div>
-            <div class="avatar-name" id="profileName">Джамиля Эюбова</div>
-            <div class="avatar-role" id="profileRole">Бармен · Мичели</div>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-grid">
-            <div class="stat-box">
-              <div class="stat-num" id="statTests">6</div>
-              <div class="stat-label">тестов</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-num" id="statAvg">82%</div>
-              <div class="stat-label">средний балл</div>
-            </div>
-          </div>
-          <div class="rank-bar-wrap">
-            <div class="rank-bar-labels">
-              <span id="rankFromLabel">Бармен</span>
-              <span id="rankToLabel">Миксолог</span>
-            </div>
-            <div class="rank-bar"><i id="rankBarFill" style="width:64%"></i></div>
-          </div>
-        </div>
-
-        <div class="row-list">
-          <div class="row-item"><span>Рейтинг в «Мичели»</span><span id="rowRestRank">#2</span></div>
-          <div class="row-item"><span>Общий рейтинг бота</span><span id="rowGlobalRank">#14</span></div>
-        </div>
-
-        <div class="footnote">Мичели · панель сотрудника</div>
-      </section>
-
       <!-- ============ ЭКРАН 6: ввод кода на экзамен ============ -->
       <section class="screen" data-screen="examcode" data-state="right">
         <div class="top-row">
@@ -565,42 +515,23 @@
 
           <div class="divider-row">нет кода?</div>
 
-          <button class="btn-ghost" onclick="goTo('examManagers','left')">📩 Запросить код у администратора</button>
+          <p class="sub" style="text-align:center;">Попросите код у администратора заведения лично или в чате.</p>
         </div>
 
         <div class="footnote">Мичели · панель сотрудника</div>
       </section>
 
-      <!-- ============ ЭКРАН 7: выбор администратора для запроса кода ============ -->
-      <section class="screen" data-screen="examManagers" data-state="right">
-        <div class="top-row">
-          <button class="icon-btn" onclick="goTo('examcode','right')">‹</button>
-          <span class="restaurant-name">Мичели</span>
-          <button class="icon-btn" onclick="closeApp()">✕</button>
-        </div>
-        <h1 class="headline">Кому отправить<br>запрос?</h1>
-        <p class="sub">Выбранный администратор получит уведомление и выдаст код.</p>
-        <div class="cards" id="managersList"></div>
-      </section>
-
       <!-- ============ ЭКРАН 8: панель администратора — меню ============ -->
       <section class="screen" data-screen="adminMenu" data-state="right">
         <div class="top-row">
-          <span class="restaurant-name">Мичели</span>
+          <span class="restaurant-name" id="adminRestaurantName">Заведение</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
         <span class="admin-badge">Панель администратора</span>
-        <h1 class="headline">Управление<br>заведением</h1>
+        <h1 class="headline">Результаты<br>персонала</h1>
+        <p class="sub">Добавление персонала и выдача кода на экзамен — через бота, командой /manager.</p>
         <div class="cards">
-          <div class="card" onclick="openAdminEmployees('assign')">
-            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6"/></svg></div>
-            <div class="card-text">
-              <div class="card-title">Добавить персонал</div>
-              <div class="card-meta">Назначить должность сотруднику</div>
-            </div>
-            <div class="chevron">›</div>
-          </div>
-          <div class="card" onclick="openAdminEmployees('view')">
+          <div class="card" onclick="openAdminEmployees()">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
             <div class="card-text">
               <div class="card-title">Список персонала</div>
@@ -608,154 +539,110 @@
             </div>
             <div class="chevron">›</div>
           </div>
-          <div class="card" onclick="goTo('adminIssueCode','left')">
-            <div class="icon-wrap"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 15h4"/></svg></div>
-            <div class="card-text">
-              <div class="card-title">Выдать код на экзамен</div>
-              <div class="card-meta">Сгенерировать одноразовый код</div>
-            </div>
-            <div class="chevron">›</div>
-          </div>
         </div>
       </section>
 
-      <!-- ============ ЭКРАН 9: список персонала (двойное назначение) ============ -->
+      <!-- ============ ЭКРАН 9: список персонала ============ -->
       <section class="screen" data-screen="adminEmployees" data-state="right">
         <div class="top-row">
           <button class="icon-btn" onclick="goTo('adminMenu','right')">‹</button>
-          <span class="restaurant-name">Мичели</span>
+          <span class="restaurant-name">Персонал</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
-        <h1 class="headline" id="adminEmployeesTitle">Список<br>персонала</h1>
-        <p class="sub" id="adminEmployeesSub">Нажмите на сотрудника, чтобы увидеть подробности.</p>
+        <h1 class="headline">Список<br>персонала</h1>
+        <p class="sub">Нажмите на сотрудника, чтобы увидеть подробности.</p>
         <div class="cards" id="adminEmployeesList"></div>
       </section>
 
-      <!-- ============ ЭКРАН 10: назначение должности ============ -->
-      <section class="screen" data-screen="adminAssignPosition" data-state="right">
-        <div class="top-row">
-          <button class="icon-btn" onclick="goTo('adminEmployees','right')">‹</button>
-          <span class="restaurant-name">Мичели</span>
-          <button class="icon-btn" onclick="closeApp()">✕</button>
-        </div>
-        <h1 class="headline">Выберите<br>должность</h1>
-        <p class="sub" id="assignForName">Для сотрудника</p>
-        <div class="cards" id="assignPositionsList"></div>
-      </section>
-
-      <!-- ============ ЭКРАН 11: детали сотрудника ============ -->
+      <!-- ============ ЭКРАН 10: детали сотрудника ============ -->
       <section class="screen" data-screen="adminEmployeeDetail" data-state="right">
         <div class="top-row">
           <button class="icon-btn" onclick="goTo('adminEmployees','right')">‹</button>
-          <span class="restaurant-name">Мичели</span>
+          <span class="restaurant-name">Сотрудник</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
         <div class="avatar-row">
-          <div class="avatar" id="detailInitials">РГ</div>
+          <div class="avatar" id="detailInitials">—</div>
           <div>
-            <div class="avatar-name" id="detailName">Руслан Гасанов</div>
-            <div class="avatar-role" id="detailRole">Официант</div>
+            <div class="avatar-name" id="detailName">—</div>
+            <div class="avatar-role" id="detailRole">—</div>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-grid">
-            <div class="stat-box"><div class="stat-num" id="detailTests">4</div><div class="stat-label">тестов</div></div>
-            <div class="stat-box"><div class="stat-num" id="detailAvg">68%</div><div class="stat-label">средний балл</div></div>
+            <div class="stat-box"><div class="stat-num" id="detailTests">0</div><div class="stat-label">тестов</div></div>
+            <div class="stat-box"><div class="stat-num" id="detailAvg">0%</div><div class="stat-label">средний балл</div></div>
           </div>
         </div>
         <p class="sub" style="margin-top:4px;">История экзаменов</p>
         <div class="row-list" id="detailHistory"></div>
       </section>
 
-      <!-- ============ ЭКРАН 12: выдача кода на экзамен ============ -->
-      <section class="screen" data-screen="adminIssueCode" data-state="right">
-        <div class="top-row">
-          <button class="icon-btn" onclick="goTo('adminMenu','right')">‹</button>
-          <span class="restaurant-name">Мичели</span>
-          <button class="icon-btn" onclick="closeApp()">✕</button>
-        </div>
-        <h1 class="headline">На какую<br>должность?</h1>
-        <p class="sub">Сгенерируем одноразовый код для сдачи экзамена.</p>
-        <div class="cards" id="issueCodePositions"></div>
-      </section>
-
     </div>
   </div>
 </div>
 
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
-/* ---------------- Данные (демо) ---------------- */
+/* ---------------- Подключение к Telegram и серверу ---------------- */
+const API_BASE = 'https://horeca-baku-bot.onrender.com';
+
+if (window.Telegram && window.Telegram.WebApp) {
+  window.Telegram.WebApp.ready();
+  window.Telegram.WebApp.expand();
+}
+
+function getInitData() {
+  return (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || '';
+}
+
+async function apiGet(path, params) {
+  const search = new URLSearchParams({ ...params, initData: getInitData() });
+  const res = await fetch(`${API_BASE}${path}?${search.toString()}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка запроса');
+  return data;
+}
+
+async function apiPost(path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, initData: getInitData() }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка запроса');
+  return data;
+}
+
+function showError(container, message) {
+  container.innerHTML = `
+    <div class="confirm-box">
+      <div class="confirm-icon">⚠️</div>
+      <div class="confirm-title">Не получилось загрузить</div>
+      <p class="confirm-sub">${message}</p>
+    </div>
+  `;
+}
+
+/* ---------------- Данные из ссылки ---------------- */
+const urlParams = new URLSearchParams(window.location.search);
+const restaurantId = urlParams.get('restaurant_id');
+
+/* ---------------- Иконки должностей ---------------- */
 const ICONS = {
   bartender: '<path d="M6 3h12M8 3v6a4 4 0 0 0 8 0V3M12 13v8M8 21h8"/>',
   waiter: '<path d="M5 11h14M7 11V4M17 11V4M12 11V4M12 15v6"/>',
-  cook: '<circle cx="12" cy="9" r="6"/><path d="M6 9a6 6 0 0 1 12 0M4 20h16"/>'
+  cook: '<circle cx="12" cy="9" r="6"/><path d="M6 9a6 6 0 0 1 12 0M4 20h16"/>',
+  default: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
 };
-
-const POSITIONS = [
-  { id:'bartender', name:'Бармен',
-    categories:[
-      {id:'classics', name:'Коктейли · классика', count:5},
-      {id:'guests', name:'Работа с гостями', count:5},
-      {id:'coffee', name:'Кофе и чай', count:5},
-    ]},
-  { id:'waiter', name:'Официант',
-    categories:[
-      {id:'service', name:'Стандарты сервиса', count:5},
-      {id:'menu', name:'Знание меню', count:5},
-    ]},
-  { id:'cook', name:'Повар',
-    categories:[
-      {id:'safety', name:'Безопасность кухни', count:5},
-      {id:'prep', name:'Заготовки', count:5},
-    ]},
-];
-
-const QUESTION_BANKS = {
-  bartender: [
-    { q:'Сколько мл текилы в классической Маргарите?', options:['30 мл','50 мл','70 мл','90 мл'], correct:0 },
-    { q:'Какой бокал используют для подачи мартини?', options:['Хайбол','Коктейльный (мартини)','Рокс','Флейта'], correct:1 },
-    { q:'Что делает мадлер в баре?', options:['Охлаждает лёд','Разминает ингредиенты','Процеживает напиток','Наливает сироп'], correct:1 },
-    { q:'При какой температуре подают шампанское?', options:['0–2°C','6–9°C','12–14°C','18–20°C'], correct:1 },
-    { q:'Что входит в Espresso Martini?', options:['Джин, вермут, оливка','Водка, кофейный ликёр, эспрессо','Ром, лайм, мята','Виски, сахар, биттер'], correct:1 },
-  ],
-  waiter: [
-    { q:'С какой стороны от гостя убирают тарелку?', options:['Слева','Справа','Не имеет значения','Через стол'], correct:1 },
-    { q:'Как правильно предложить воду в начале визита?', options:['Не предлагать','Спросить: с газом или без','Принести автоматически','Только по запросу менеджера'], correct:1 },
-    { q:'Что делать, если гость жалуется на блюдо?', options:['Спорить с гостем','Извиниться и предложить решение','Игнорировать','Позвать другого официанта'], correct:1 },
-    { q:'Когда убирают закусочную тарелку?', options:['Сразу после подачи', 'Когда гость закончил, спросив разрешения', 'Через 5 минут всегда', 'Только в конце визита'], correct:1 },
-    { q:'Что такое апсейл?', options:['Скидка гостю', 'Предложение более дорогой позиции', 'Возврат блюда', 'Чаевые'], correct:1 },
-  ],
-  cook: [
-    { q:'При какой температуре хранят сырое мясо?', options:['0–4°C','8–10°C','12–15°C','комнатная'], correct:0 },
-    { q:'Что такое кросс-контаминация?', options:['Способ жарки','Перенос бактерий между продуктами','Вид маринада','Метод нарезки'], correct:1 },
-    { q:'Сколько по времени варится яйцо всмятку?', options:['1 минута','4–5 минут','10 минут','15 минут'], correct:1 },
-    { q:'Что означает FIFO на кухне?', options:['Метод жарки','Первым пришёл — первым ушёл', 'Способ хранения ножей','Название соуса'], correct:1 },
-    { q:'Как быстро охладить горячий бульон перед хранением?', options:['Оставить при комнатной температуре','Ледяная баня и деление на порции','Сразу в морозилку целиком','Накрыть крышкой и убрать'], correct:1 },
-  ],
-};
-
-/* ---------------- Профиль (демо) ---------------- */
-const PROFILE = {
-  initials:'ДЭ', name:'Джамиля Эюбова', position:'Бармен', restaurant:'Мичели',
-  tests:6, avg:82, rankFrom:'Бармен', rankTo:'Миксолог', rankPct:64,
-  restRank:2, globalRank:14,
-};
-
-const MANAGERS = [
-  { id:1, name:'Юлия Аскерова' },
-  { id:2, name:'Ниджат Кязимов' },
-];
-
-const EMPLOYEES = [
-  { id:1, initials:'РГ', name:'Руслан Гасанов', position:'Официант', tests:4, avg:68,
-    history:[
-      { position:'Официант', date:'02.09.2026', passed:true, score:'9/10' },
-      { position:'Официант', date:'18.08.2026', passed:false, score:'5/10' },
-    ]},
-  { id:2, initials:'АМ', name:'Айгюн Мамедова', position:'—', tests:0, avg:0, history:[] },
-  { id:3, initials:'ТБ', name:'Тимур Байрамов', position:'Повар', tests:7, avg:91,
-    history:[ { position:'Повар', date:'30.08.2026', passed:true, score:'10/10' } ]},
-];
+function iconFor(name) {
+  const key = (name || '').toLowerCase();
+  if (key.includes('бармен')) return ICONS.bartender;
+  if (key.includes('официант')) return ICONS.waiter;
+  if (key.includes('повар')) return ICONS.cook;
+  return ICONS.default;
+}
 
 /* ---------------- Состояние ---------------- */
 let currentPosition = null;
@@ -764,35 +651,59 @@ let quizQuestions = [];
 let quizIndex = 0;
 let quizCorrect = 0;
 let answered = false;
+let currentTestResultId = null;
 
-/* ---------------- Рендер списков ---------------- */
-function renderPositions(){
+/* ---------------- Экран 1: должности ---------------- */
+async function renderPositions(){
   const el = document.getElementById('positionsList');
-  el.innerHTML = POSITIONS.map(p => `
-    <div class="card" onclick="selectPosition('${p.id}')">
-      <div class="icon-wrap"><svg viewBox="0 0 24 24">${ICONS[p.id]}</svg></div>
-      <div class="card-text">
-        <div class="card-title">${p.name}</div>
-        <div class="card-meta">${p.categories.length} категории · ${p.categories.reduce((s,c)=>s+c.count,0)} вопросов</div>
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  try {
+    const positions = await apiGet('/api/positions', { restaurant_id: restaurantId });
+    if (!positions.length) {
+      el.innerHTML = '<p class="sub">Для вашего заведения пока нет тестов.</p>';
+      return;
+    }
+    el.innerHTML = positions.map(p => `
+      <div class="card" onclick='selectPosition(${p.id}, "${p.name.replace(/"/g,"")}")'>
+        <div class="icon-wrap"><svg viewBox="0 0 24 24">${iconFor(p.name)}</svg></div>
+        <div class="card-text">
+          <div class="card-title">${p.emoji || ''} ${p.name}</div>
+          <div class="card-meta">${p.category_count} ${p.category_count === 1 ? 'категория' : 'категории'}</div>
+        </div>
+        <div class="chevron">›</div>
       </div>
-      <div class="chevron">›</div>
-    </div>
-  `).join('');
+    `).join('');
+  } catch (e) {
+    showError(el, e.message);
+  }
 }
 
-function renderCategories(){
+/* ---------------- Экран 2: категории ---------------- */
+async function selectPosition(positionId, positionName){
   const el = document.getElementById('categoriesList');
-  document.getElementById('catPositionName').textContent = currentPosition.name;
-  el.innerHTML = currentPosition.categories.map(c => `
-    <div class="card" onclick="selectCategory('${c.id}')">
-      <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
-      <div class="card-text">
-        <div class="card-title">${c.name}</div>
-        <div class="card-meta">${c.count} вопросов</div>
+  document.getElementById('catPositionName').textContent = positionName;
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('categories','left');
+  try {
+    const categories = await apiGet('/api/categories', { position_id: positionId });
+    currentPosition = { id: positionId, name: positionName, categories };
+    if (!categories.length) {
+      el.innerHTML = '<p class="sub">Для этой должности пока нет вопросов.</p>';
+      return;
+    }
+    el.innerHTML = categories.map(c => `
+      <div class="card" onclick='selectCategory(${c.id}, "${c.name.replace(/"/g,'')}")'>
+        <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+        <div class="card-text">
+          <div class="card-title">${c.emoji || ''} ${c.name}</div>
+          <div class="card-meta">${c.question_count} вопросов</div>
+        </div>
+        <div class="chevron">›</div>
       </div>
-      <div class="chevron">›</div>
-    </div>
-  `).join('');
+    `).join('');
+  } catch (e) {
+    showError(el, e.message);
+  }
 }
 
 /* ---------------- Навигация между экранами ---------------- */
@@ -803,21 +714,25 @@ function goTo(name, fromSide){
   });
 }
 
-function selectPosition(id){
-  currentPosition = POSITIONS.find(p=>p.id===id);
-  renderCategories();
-  goTo('categories','left');
-}
-
-function selectCategory(id){
-  currentCategory = currentPosition.categories.find(c=>c.id===id);
-  const bank = QUESTION_BANKS[currentPosition.id] || QUESTION_BANKS.bartender;
-  quizQuestions = bank.slice(0, currentCategory.count);
-  quizIndex = 0; quizCorrect = 0; answered = false;
-  document.getElementById('quizCategoryName').textContent = currentPosition.name + ' · ' + currentCategory.name;
-  buildProgress();
-  renderQuestion();
+async function selectCategory(categoryId, categoryName){
+  document.getElementById('quizCategoryName').textContent = categoryName;
+  document.getElementById('qText').textContent = 'Загрузка…';
+  document.getElementById('optionsList').innerHTML = '';
   goTo('question','left');
+  try {
+    const data = await apiPost('/api/start_test', { category_id: categoryId });
+    currentTestResultId = data.test_result_id;
+    quizQuestions = data.questions;
+    quizIndex = 0; quizCorrect = 0; answered = false;
+    if (!quizQuestions.length) {
+      document.getElementById('qText').textContent = 'В этой категории пока нет вопросов.';
+      return;
+    }
+    buildProgress();
+    renderQuestion();
+  } catch (e) {
+    document.getElementById('qText').textContent = 'Не получилось загрузить вопросы.';
+  }
 }
 
 function exitQuiz(){ goTo('categories','right'); }
@@ -840,15 +755,15 @@ function renderQuestion(){
   answered = false;
   const q = quizQuestions[quizIndex];
   document.getElementById('qCounter').textContent = `Вопрос ${quizIndex+1} из ${quizQuestions.length}`;
-  document.getElementById('qText').textContent = q.q;
+  document.getElementById('qText').textContent = q.text;
   updateProgress();
 
   const letters = ['A','Б','В','Г'];
   const list = document.getElementById('optionsList');
   list.innerHTML = q.options.map((opt,i)=>`
-    <div class="option" data-i="${i}" onclick="pickOption(${i})">
-      <div class="letter">${letters[i]}</div>
-      <div>${opt}</div>
+    <div class="option" data-id="${opt.id}" onclick='pickOption(${opt.id})'>
+      <div class="letter">${letters[i] || (i+1)}</div>
+      <div>${opt.text}</div>
     </div>
   `).join('');
 
@@ -856,18 +771,32 @@ function renderQuestion(){
   document.getElementById('nextBtn').textContent = (quizIndex === quizQuestions.length-1) ? 'Завершить' : 'Далее';
 }
 
-function pickOption(i){
+async function pickOption(optionId){
   if(answered) return;
   answered = true;
   const q = quizQuestions[quizIndex];
+
+  let result;
+  try {
+    result = await apiPost('/api/answer_question', {
+      test_result_id: currentTestResultId,
+      question_id: q.id,
+      answer_option_id: optionId,
+    });
+  } catch (e) {
+    answered = false;
+    return;
+  }
+
   const opts = document.querySelectorAll('#optionsList .option');
-  opts.forEach((el,idx)=>{
+  opts.forEach(el => {
+    const id = Number(el.dataset.id);
     el.classList.add('disabled');
-    if(idx === q.correct){ el.classList.add('correct'); }
-    else if(idx === i){ el.classList.add('wrong'); }
+    if (id === result.correct_option_id) { el.classList.add('correct'); }
+    else if (id === optionId) { el.classList.add('wrong'); }
     else { el.classList.add('dim'); }
   });
-  if(i === q.correct) quizCorrect++;
+  if (result.is_correct) quizCorrect++;
   document.getElementById('nextWrap').classList.add('show');
 }
 
@@ -901,7 +830,7 @@ function showResult(){
   else { title.textContent = 'Стоит повторить'; sub.textContent = 'Не расстраивайтесь — пересмотрите материал и попробуйте снова.'; }
 
   document.getElementById('rankText').textContent =
-    currentPosition.name + ' · опыт начислен за пройденный тест';
+    (currentPosition ? currentPosition.name : '') + ' · результат сохранён в вашей статистике';
 
   goTo('result','left');
 }
@@ -914,21 +843,62 @@ function closeApp(){
   document.querySelector('.sheet').style.transform = 'translateY(100%)';
 }
 
-/* ---------------- Профиль ---------------- */
-function renderProfile(){
-  document.getElementById('profileInitials').textContent = PROFILE.initials;
-  document.getElementById('profileName').textContent = PROFILE.name;
-  document.getElementById('profileRole').textContent = PROFILE.position + ' · ' + PROFILE.restaurant;
-  document.getElementById('statTests').textContent = PROFILE.tests;
-  document.getElementById('statAvg').textContent = PROFILE.avg + '%';
-  document.getElementById('rankFromLabel').textContent = PROFILE.rankFrom;
-  document.getElementById('rankToLabel').textContent = PROFILE.rankTo;
-  document.getElementById('rankBarFill').style.width = PROFILE.rankPct + '%';
-  document.getElementById('rowRestRank').textContent = '#' + PROFILE.restRank;
-  document.getElementById('rowGlobalRank').textContent = '#' + PROFILE.globalRank;
+/* ---------------- Панель администратора ---------------- */
+async function openAdminEmployees(){
+  const el = document.getElementById('adminEmployeesList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('adminEmployees','left');
+  try {
+    const employees = await apiGet('/api/employees', { restaurant_id: restaurantId });
+    if (!employees.length) {
+      el.innerHTML = '<p class="sub">Пока никто из сотрудников не прикрепился к заведению.</p>';
+      return;
+    }
+    window.__employees = employees;
+    el.innerHTML = employees.map(e => {
+      const initials = e.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+      return `
+        <div class="card" onclick='openEmployeeDetail(${e.user_id})'>
+          <div class="icon-wrap" style="background:var(--accent-soft); color:var(--accent-strong); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:500;">${initials}</div>
+          <div class="card-text">
+            <div class="card-title">${e.name}</div>
+            <div class="card-meta">${e.position || 'должность не выбрана'}${e.tests_completed ? ' · ' + e.avg_percentage + '%' : ' · нет тестов'}</div>
+          </div>
+          <div class="chevron">›</div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    showError(el, e.message);
+  }
 }
 
-/* ---------------- Экзамен ---------------- */
+async function openEmployeeDetail(userId){
+  goTo('adminEmployeeDetail','left');
+  document.getElementById('detailName').textContent = 'Загрузка…';
+  document.getElementById('detailHistory').innerHTML = '';
+  try {
+    const detail = await apiGet('/api/employee', { restaurant_id: restaurantId, user_id: userId });
+    const initials = detail.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+    document.getElementById('detailInitials').textContent = initials;
+    document.getElementById('detailName').textContent = detail.name;
+    document.getElementById('detailRole').textContent = '';
+    document.getElementById('detailTests').textContent = detail.tests_completed;
+    document.getElementById('detailAvg').textContent = detail.avg_percentage + '%';
+    const hist = document.getElementById('detailHistory');
+    hist.innerHTML = detail.history.length
+      ? detail.history.map(h => `
+          <div class="row-item">
+            <span>${h.position || ''} · ${h.date || ''}</span>
+            <span style="color:${h.passed ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.passed ? '✓ ' : '✕ '}${h.correct_count}/${h.total_count}</span>
+          </div>`).join('')
+      : '<div class="row-item"><span>Экзаменов ещё не было</span></div>';
+  } catch (e) {
+    showError(document.getElementById('detailHistory'), e.message);
+  }
+}
+
+/* ---------------- Экзамен (пока демонстрационно — запрос кода реально обрабатывается в боте) ---------------- */
 function submitExamCode(){
   const val = document.getElementById('examCodeInput').value.trim();
   const area = document.getElementById('examCodeArea');
@@ -946,156 +916,17 @@ function submitExamCode(){
   `;
 }
 
-function renderManagers(){
-  const el = document.getElementById('managersList');
-  el.innerHTML = MANAGERS.map(m => `
-    <div class="card" onclick="requestCodeFrom(${m.id})">
-      <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></div>
-      <div class="card-text"><div class="card-title">${m.name}</div><div class="card-meta">Администратор заведения</div></div>
-      <div class="chevron">›</div>
-    </div>
-  `).join('');
-}
-
-function requestCodeFrom(managerId){
-  const manager = MANAGERS.find(m=>m.id===managerId);
-  const el = document.getElementById('managersList');
-  el.innerHTML = `
-    <div class="confirm-box">
-      <div class="confirm-icon">📩</div>
-      <div class="confirm-title">Запрос отправлен</div>
-      <p class="confirm-sub">${manager.name} получит уведомление и выдаст вам код в ближайшее время.</p>
-    </div>
-    <button class="btn-ghost" onclick="goTo('examcode','right')">Назад к экзамену</button>
-  `;
-}
-
-/* ---------------- Панель администратора ---------------- */
-let adminMode = 'view';
-
-function openAdminEmployees(mode){
-  adminMode = mode;
-  document.getElementById('adminEmployeesTitle').innerHTML =
-    mode === 'assign' ? 'Кому назначить<br>должность?' : 'Список<br>персонала';
-  document.getElementById('adminEmployeesSub').textContent =
-    mode === 'assign' ? 'Выберите сотрудника из списка.' : 'Нажмите на сотрудника, чтобы увидеть подробности.';
-  renderAdminEmployees();
-  goTo('adminEmployees','left');
-}
-
-function renderAdminEmployees(){
-  const el = document.getElementById('adminEmployeesList');
-  el.innerHTML = EMPLOYEES.map(e => `
-    <div class="card" onclick="${adminMode === 'assign' ? `openAssignPosition(${e.id})` : `openEmployeeDetail(${e.id})`}">
-      <div class="icon-wrap" style="background:var(--accent-soft); color:var(--accent-strong); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:500;">${e.initials}</div>
-      <div class="card-text">
-        <div class="card-title">${e.name}</div>
-        <div class="card-meta">${e.position}${e.tests ? ' · ' + e.avg + '%' : ' · нет тестов'}</div>
-      </div>
-      <div class="chevron">›</div>
-    </div>
-  `).join('');
-}
-
-const ADMIN_POSITIONS = [
-  { id:'bartender', name:'Бармен' },
-  { id:'waiter', name:'Официант' },
-  { id:'cook', name:'Повар' },
-];
-
-let assignTargetId = null;
-
-function openAssignPosition(employeeId){
-  assignTargetId = employeeId;
-  const emp = EMPLOYEES.find(e=>e.id===employeeId);
-  document.getElementById('assignForName').textContent = 'Для сотрудника: ' + emp.name;
-  const el = document.getElementById('assignPositionsList');
-  el.innerHTML = ADMIN_POSITIONS.map(p => `
-    <div class="card" onclick="confirmAssign('${p.name}')">
-      <div class="icon-wrap"><svg viewBox="0 0 24 24">${ICONS[p.id]}</svg></div>
-      <div class="card-text"><div class="card-title">${p.name}</div></div>
-      <div class="chevron">›</div>
-    </div>
-  `).join('');
-  goTo('adminAssignPosition','left');
-}
-
-function confirmAssign(positionName){
-  const emp = EMPLOYEES.find(e=>e.id===assignTargetId);
-  const el = document.getElementById('assignPositionsList');
-  el.innerHTML = `
-    <div class="confirm-box">
-      <div class="confirm-icon">✓</div>
-      <div class="confirm-title">Готово</div>
-      <p class="confirm-sub">${emp.name} назначен(а) на должность «${positionName}».</p>
-    </div>
-    <button class="btn-ghost" onclick="goTo('adminMenu','right')">В меню администратора</button>
-  `;
-}
-
-function openEmployeeDetail(employeeId){
-  const emp = EMPLOYEES.find(e=>e.id===employeeId);
-  document.getElementById('detailInitials').textContent = emp.initials;
-  document.getElementById('detailName').textContent = emp.name;
-  document.getElementById('detailRole').textContent = emp.position;
-  document.getElementById('detailTests').textContent = emp.tests;
-  document.getElementById('detailAvg').textContent = emp.avg + '%';
-  const hist = document.getElementById('detailHistory');
-  hist.innerHTML = emp.history.length
-    ? emp.history.map(h => `
-        <div class="row-item">
-          <span>${h.position} · ${h.date}</span>
-          <span style="color:${h.passed ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.passed ? '✓ ' : '✕ '}${h.score}</span>
-        </div>`).join('')
-    : '<div class="row-item"><span>Экзаменов ещё не было</span></div>';
-  goTo('adminEmployeeDetail','left');
-}
-
-function renderIssueCodePositions(){
-  const el = document.getElementById('issueCodePositions');
-  el.innerHTML = ADMIN_POSITIONS.map(p => `
-    <div class="card" onclick="generateCode('${p.name}')">
-      <div class="icon-wrap"><svg viewBox="0 0 24 24">${ICONS[p.id]}</svg></div>
-      <div class="card-text"><div class="card-title">${p.name}</div></div>
-      <div class="chevron">›</div>
-    </div>
-  `).join('');
-}
-
-function generateCode(positionName){
-  const code = Math.random().toString(36).slice(2,8).toUpperCase();
-  const el = document.getElementById('issueCodePositions');
-  el.innerHTML = `
-    <div class="confirm-box">
-      <div class="confirm-icon">🎓</div>
-      <div class="confirm-title">Код готов</div>
-      <p class="confirm-sub">Должность: ${positionName}</p>
-      <div class="code-field" style="margin-top:14px; cursor:default;">${code}</div>
-      <p class="confirm-sub">Передайте этот код сотруднику любым удобным способом.</p>
-    </div>
-    <button class="btn-ghost" onclick="goTo('adminMenu','right')">В меню администратора</button>
-  `;
-}
-
 /* ---------------- Запуск: какой экран открыть по ссылке ---------------- */
 function initFromQuery(){
-  renderPositions();
   const params = new URLSearchParams(window.location.search);
   const screen = params.get('screen');
 
-  if(screen === 'profile'){
-    renderProfile();
-    setActive('profile');
-  } else if(screen === 'examcode'){
-    renderManagers();
-    setActive('examcode');
-  } else if(screen === 'admin'){
+  if(screen === 'admin'){
     setActive('adminMenu');
-  } else if(screen === 'issuecode'){
-    renderIssueCodePositions();
-    setActive('adminIssueCode');
+  } else {
+    // screen === 'tests' или отсутствует — экран выбора должности
+    renderPositions();
   }
-  // screen === 'tests' или отсутствует — остаёмся на экране выбора должности
 }
 
 function setActive(name){
