@@ -12,12 +12,15 @@ from __future__ import annotations
 
 import logging
 import random
+from datetime import datetime
 
+from aiogram import Bot
 from aiohttp import web
 
 from config import BOT_TOKEN
 from database import crud
 from database.database import async_session
+from services import exam_logic
 from webapp_auth import validate_init_data
 
 logger = logging.getLogger(__name__)
@@ -440,5 +443,264 @@ async def get_employee_detail(request: web.Request) -> web.Response:
             "tests_completed": stats["tests_completed"],
             "avg_percentage": stats["avg_percentage"],
             "history": history,
+        }
+    )
+
+
+# ---------- Запрос на экзамен ----------
+
+@routes.get("/api/eligible_exam_positions")
+async def eligible_exam_positions(request: web.Request) -> web.Response:
+    """Должности, по которым сотрудник уже набрал 80%+ в обычном тесте
+    этого заведения — только по ним разрешено запрашивать экзамен."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    if not restaurant_id or not restaurant_id.isdigit():
+        return _json({"error": "restaurant_id обязателен"}, status=400)
+    restaurant_id = int(restaurant_id)
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+        positions = await crud.get_eligible_positions_for_exam(session, user.id, restaurant_id)
+
+    return _json([{"id": p.id, "name": p.name, "emoji": p.emoji} for p in positions])
+
+
+@routes.get("/api/restaurant_managers_list")
+async def restaurant_managers_list(request: web.Request) -> web.Response:
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    if not restaurant_id or not restaurant_id.isdigit():
+        return _json({"error": "restaurant_id обязателен"}, status=400)
+    restaurant_id = int(restaurant_id)
+
+    async with async_session() as session:
+        managers = await crud.get_restaurant_managers(session, restaurant_id)
+
+    return _json(
+        [{"telegram_id": m.telegram_id, "name": m.name or f"ID {m.telegram_id}"} for m in managers]
+    )
+
+
+@routes.post("/api/request_exam")
+async def request_exam(request: web.Request) -> web.Response:
+    """Отправляет выбранному администратору запрос на экзамен —
+    проверяет допуск (80%+) заново на сервере, а не доверяет тому, что
+    прислал браузер."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = body.get("restaurant_id")
+    position_id = body.get("position_id")
+    manager_telegram_id = body.get("manager_telegram_id")
+    if not all(isinstance(v, int) for v in (restaurant_id, position_id, manager_telegram_id)):
+        return _json({"error": "Некорректные данные запроса."}, status=400)
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+
+        eligible = await crud.get_eligible_positions_for_exam(session, user.id, restaurant_id)
+        if not any(p.id == position_id for p in eligible):
+            return _json(
+                {"error": "Пока недостаточно 80% в обычном тесте по этой должности."}, status=403
+            )
+
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        position = await crud.get_position_by_id(session, position_id)
+        exam_request = await crud.create_exam_request(
+            session, user.id, restaurant_id, position_id, manager_telegram_id
+        )
+        user_display_name = user.full_name or user.username or "Сотрудник"
+
+    bot = Bot(token=BOT_TOKEN)
+    try:
+        await bot.send_message(
+            chat_id=manager_telegram_id,
+            text=(
+                f"🎓 {user_display_name} хочет пройти экзамен для повышения "
+                f"квалификации\n"
+                f"Заведение: {restaurant.name}\n"
+                f"Должность: {position.emoji} {position.name}"
+            ),
+        )
+    except Exception:
+        logger.warning("Не удалось уведомить администратора о запросе экзамена")
+    finally:
+        await bot.session.close()
+
+    return _json({"ok": True, "request_id": exam_request.id})
+
+
+@routes.post("/api/redeem_exam_code")
+async def redeem_exam_code(request: web.Request) -> web.Response:
+    """Начинает попытку сдачи экзамена по одноразовому коду. Код сразу
+    помечается использованным (как и в боте) — повторно начать нельзя."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    code = (body.get("code") or "").strip().upper()
+    if not code:
+        return _json({"error": "Введите код."}, status=400)
+
+    async with async_session() as session:
+        exam_code = await crud.get_exam_code_by_code(session, code)
+        if exam_code is None:
+            return _json({"error": "Код не найден."}, status=404)
+        if exam_code.used_by_user_id is not None:
+            return _json({"error": "Этот код уже использован."}, status=409)
+
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+        if user.restaurant_id != exam_code.restaurant_id:
+            return _json({"error": "Этот код предназначен для другого заведения."}, status=403)
+
+        questions = await crud.get_hard_questions_for_position(session, exam_code.position_id)
+        if not questions:
+            return _json({"error": "Для этой должности пока нет вопросов для экзамена."}, status=404)
+
+        await crud.mark_exam_code_used(session, exam_code.id, user.id)
+
+        questions_data = [
+            {
+                "id": q.id,
+                "text": q.text,
+                "options": [{"id": o.id, "text": o.text} for o in q.options],
+            }
+            for q in questions
+        ]
+
+    return _json(
+        {
+            "exam_code_id": exam_code.id,
+            "position_id": exam_code.position_id,
+            "time_limit_seconds": exam_code.time_limit_seconds,
+            "questions": questions_data,
+        }
+    )
+
+
+@routes.post("/api/exam_answer")
+async def exam_answer(request: web.Request) -> web.Response:
+    """Проверяет один ответ во время экзамена. Если время уже истекло —
+    отдельно сообщает об этом, чтобы сайт сразу завершил попытку."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    exam_code_id = body.get("exam_code_id")
+    question_id = body.get("question_id")
+    answer_option_id = body.get("answer_option_id")
+    if not all(isinstance(v, int) for v in (exam_code_id, question_id, answer_option_id)):
+        return _json({"error": "Некорректные данные ответа."}, status=400)
+
+    async with async_session() as session:
+        exam_code = await crud.get_exam_code_by_id(session, exam_code_id)
+        if exam_code is None or exam_code.started_at is None:
+            return _json({"error": "Попытка не найдена."}, status=404)
+
+        elapsed = (datetime.utcnow() - exam_code.started_at).total_seconds()
+        if elapsed > exam_code.time_limit_seconds:
+            return _json({"timed_out": True})
+
+        question = await crud.get_question_with_options(session, question_id)
+        if question is None:
+            return _json({"error": "Вопрос не найден."}, status=404)
+
+        chosen = await crud.get_answer_option(session, answer_option_id)
+        is_correct = bool(chosen and chosen.is_correct and chosen.question_id == question_id)
+
+    return _json({"timed_out": False, "is_correct": is_correct})
+
+
+@routes.post("/api/finish_exam")
+async def finish_exam(request: web.Request) -> web.Response:
+    """Завершает попытку экзамена. Итог по времени проверяется на сервере
+    заново (elapsed > лимит), а не по тому, что прислал браузер — иначе
+    можно было бы обойти таймер, просто не отправив timed_out."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    exam_code_id = body.get("exam_code_id")
+    correct_count = body.get("correct_count")
+    total_count = body.get("total_count")
+    if not all(isinstance(v, int) for v in (exam_code_id, correct_count, total_count)):
+        return _json({"error": "Некорректные данные."}, status=400)
+
+    async with async_session() as session:
+        exam_code = await crud.get_exam_code_by_id(session, exam_code_id)
+        if exam_code is None or exam_code.used_by_user_id is None:
+            return _json({"error": "Попытка не найдена."}, status=404)
+
+        elapsed = (datetime.utcnow() - exam_code.started_at).total_seconds()
+        timed_out = elapsed > exam_code.time_limit_seconds
+
+        result = await exam_logic.complete_exam(
+            session,
+            user_id=exam_code.used_by_user_id,
+            exam_code_id=exam_code.id,
+            position_id=exam_code.position_id,
+            correct_count=correct_count,
+            total_count=total_count,
+            timed_out=timed_out,
+        )
+
+    return _json(
+        {
+            "passed": result["passed"],
+            "timed_out": result["timed_out"],
+            "correct_count": result["correct_count"],
+            "total_count": result["total_count"],
+            "new_rank": result["new_rank"].title if result["new_rank"] else None,
+            "new_rank_emoji": result["new_rank"].emoji if result["new_rank"] else None,
+            "new_level": result["new_level"],
         }
     )

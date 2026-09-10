@@ -296,6 +296,11 @@ class ExamCode(Base):
     created_by_telegram_id: Mapped[int] = mapped_column(BigInteger)
     used_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Когда попытка реально началась — на сайте нет постоянно работающего
+    # процесса-таймера (в отличие от бота), поэтому окончание времени
+    # проверяется сравнением текущего момента с started_at + лимит,
+    # при каждом обращении, а не отдельным фоновым отсчётом.
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     restaurant: Mapped["Restaurant"] = relationship()

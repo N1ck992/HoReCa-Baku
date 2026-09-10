@@ -18,6 +18,7 @@ from keyboards.keyboards import (
     main_menu_kb,
     question_kb,
 )
+from services import exam_logic
 from services.rating import display_name, rank_progress_text
 
 router = Router(name="exams")
@@ -243,9 +244,9 @@ async def _complete_exam(
 ) -> str:
     """Общая логика завершения экзамена — используется и при обычном
     ответе на последний вопрос, и фоновым таймером при полном молчании
-    участника. Возвращает готовый текст сообщения с результатом."""
-    passed = (not timed_out) and total_count > 0 and (correct_count / total_count) >= PASS_THRESHOLD
-
+    участника. Возвращает готовый текст сообщения с результатом. Сам
+    подсчёт (ранг, бонусный опыт, открытие уровня) — в
+    services/exam_logic.py, общем с сайтом."""
     async with async_session() as session:
         if user_id is not None:
             user = await crud.get_user_by_id(session, user_id)
@@ -254,33 +255,15 @@ async def _complete_exam(
                 session, telegram_id=telegram_id, username=username, full_name=full_name
             )
 
-        ranks = await crud.get_ranks_for_position(session, position_id)
-        current_xp = await crud.get_total_xp_for_position(session, user.id, position_id)
-        current_rank = crud.get_rank_for_xp(ranks, current_xp)
-        next_rank = crud.get_next_rank(ranks, current_rank)
-
-        bonus_xp = 0
-        if passed and next_rank is not None:
-            bonus_xp = max(0, next_rank.min_xp - current_xp)
-
-        await crud.create_exam_result(
+        result = await exam_logic.complete_exam(
             session,
-            exam_code_id=exam_code_id,
             user_id=user.id,
+            exam_code_id=exam_code_id,
             position_id=position_id,
             correct_count=correct_count,
             total_count=total_count,
-            passed=passed,
-            bonus_xp_awarded=bonus_xp,
+            timed_out=timed_out,
         )
-
-        new_level = None
-        if passed:
-            new_level = await crud.unlock_next_difficulty(session, user.id, position_id)
-
-        new_total_xp = current_xp + bonus_xp
-        new_rank = crud.get_rank_for_xp(ranks, new_total_xp)
-        new_next_rank = crud.get_next_rank(ranks, new_rank)
 
     if timed_out:
         text = "⏰ Время вышло! Экзамен не сдан.\n\n"
@@ -289,13 +272,16 @@ async def _complete_exam(
 
     text += f"Правильных ответов: {correct_count}/{total_count}\n"
 
-    if passed:
+    if result["passed"]:
         level_names = {1: "лёгкий", 2: "средний", 3: "сложный"}
+        new_rank = result["new_rank"]
+        new_next_rank = result["new_next_rank"]
         text += (
             f"✅ Экзамен сдан!\n\n"
             f"🎊 Новый ранг: {new_rank.emoji} {new_rank.title}!\n"
-            f"{rank_progress_text(new_rank, new_next_rank, new_total_xp)}"
+            f"{rank_progress_text(new_rank, new_next_rank, result['new_total_xp'])}"
         )
+        new_level = result["new_level"]
         if new_level and new_level > 1:
             text += (
                 f"\n\n🔓 Открыт новый уровень вопросов в обычных тестах этой "

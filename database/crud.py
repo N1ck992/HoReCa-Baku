@@ -875,11 +875,16 @@ async def get_exam_code_by_code(session: AsyncSession, code: str) -> ExamCode | 
     return result.scalars().first()
 
 
+async def get_exam_code_by_id(session: AsyncSession, exam_code_id: int) -> ExamCode | None:
+    return await session.get(ExamCode, exam_code_id)
+
+
 async def mark_exam_code_used(session: AsyncSession, exam_code_id: int, user_id: int) -> None:
     exam_code = await session.get(ExamCode, exam_code_id)
     if exam_code is not None:
         exam_code.used_by_user_id = user_id
         exam_code.used_at = datetime.utcnow()
+        exam_code.started_at = datetime.utcnow()
         await session.commit()
 
 

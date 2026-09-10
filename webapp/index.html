@@ -99,6 +99,12 @@
   }
   .icon-btn:active{ background:var(--plaster-dark); }
   .restaurant-name{ font-size:12.5px; color:var(--ink-soft); font-weight:500; }
+  .exam-timer{
+    font-family:'Fraunces', Georgia, serif; font-weight:600; font-size:15px;
+    color: var(--accent-strong); background: var(--accent-soft);
+    padding:4px 10px; border-radius:999px;
+  }
+  .exam-timer.low{ color: var(--wrong); background:#f6dede; }
 
   .headline{
     position:relative; z-index:2;
@@ -468,25 +474,77 @@
         </div>
       </section>
 
-      <!-- ============ ЭКРАН 6: ввод кода на экзамен ============ -->
+      <!-- ============ ЭКРАН 6: экзамен — вход ============ -->
       <section class="screen" data-screen="examcode" data-state="right">
         <div class="top-row">
-          <span class="restaurant-name">Мичели</span>
+          <span class="restaurant-name">Экзамен</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
         <h1 class="headline">Экзамен</h1>
         <p class="sub">Введите одноразовый код, который вам выдал администратор.</p>
 
         <div id="examCodeArea">
-          <input class="code-field" id="examCodeInput" maxlength="8" placeholder="КОД">
-          <button class="btn-primary" onclick="submitExamCode()">Проверить код</button>
+          <input class="code-field" id="examCodeInput" maxlength="10" placeholder="КОД">
+          <button class="btn-primary" onclick="submitExamCode()">Начать экзамен</button>
 
           <div class="divider-row">нет кода?</div>
 
-          <p class="sub" style="text-align:center;">Попросите код у администратора заведения лично или в чате.</p>
+          <button class="btn-ghost" onclick="openExamRequestPositions()">📩 Запросить экзамен</button>
         </div>
 
-        <div class="footnote">Мичели · панель сотрудника</div>
+        <div class="footnote">Панель сотрудника</div>
+      </section>
+
+      <!-- ============ ЭКРАН 6.1: выбор должности для запроса ============ -->
+      <section class="screen" data-screen="examRequestPositions" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('examcode','right')">‹</button>
+          <span class="restaurant-name">Запрос экзамена</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">На какую<br>должность?</h1>
+        <p class="sub">Показаны только должности, где вы набрали 80%+ в обычном тесте.</p>
+        <div class="cards" id="examRequestPositionsList"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 6.2: выбор администратора ============ -->
+      <section class="screen" data-screen="examRequestManagers" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('examRequestPositions','right')">‹</button>
+          <span class="restaurant-name">Запрос экзамена</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Кому отправить<br>запрос?</h1>
+        <div class="cards" id="examRequestManagersList"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 6.3: сам экзамен на время ============ -->
+      <section class="screen" data-screen="examQuestion" data-state="right">
+        <div class="top-row">
+          <span class="restaurant-name">Экзамен</span>
+          <span class="exam-timer" id="examTimer">--:--</span>
+        </div>
+        <div class="progress-row" id="examProgressRow"></div>
+        <div class="q-counter" id="examQCounter">Вопрос 1 из 5</div>
+        <h2 class="q-text" id="examQText">…</h2>
+        <div class="options" id="examOptionsList"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 6.4: результат экзамена ============ -->
+      <section class="screen" data-screen="examResult" data-state="right">
+        <div class="top-row">
+          <span class="restaurant-name">Экзамен</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <div class="confirm-box">
+          <div class="confirm-icon" id="examResultIcon">🎓</div>
+          <div class="confirm-title" id="examResultTitle">Экзамен завершён</div>
+          <p class="confirm-sub" id="examResultSub"></p>
+        </div>
+        <div class="result-actions">
+          <button class="btn-primary" onclick="restart()">🏠 Главное меню сайта</button>
+          <button class="btn-ghost" onclick="closeApp()">Готово</button>
+        </div>
       </section>
 
       <!-- ============ ЭКРАН 7: мои результаты ============ -->
@@ -951,21 +1009,242 @@ async function openTestResultBreakdown(testResultId){
 }
 
 /* ---------------- Экзамен (пока демонстрационно — запрос кода реально обрабатывается в боте) ---------------- */
-function submitExamCode(){
-  const val = document.getElementById('examCodeInput').value.trim();
+/* ---------------- Запрос экзамена ---------------- */
+async function openExamRequestPositions(){
+  const el = document.getElementById('examRequestPositionsList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('examRequestPositions','left');
+  try {
+    const positions = await apiGet('/api/eligible_exam_positions', { restaurant_id: restaurantId });
+    if (!positions.length) {
+      el.innerHTML = '<p class="sub">Пока нет доступных должностей — наберите 80%+ в обычном тесте, чтобы появилась возможность запросить экзамен.</p>';
+      return;
+    }
+    el.innerHTML = positions.map(p => `
+      <div class="card" onclick='selectExamRequestPosition(${p.id}, "${p.name.replace(/"/g,"")}")'>
+        <div class="icon-wrap"><svg viewBox="0 0 24 24">${iconFor(p.name)}</svg></div>
+        <div class="card-text"><div class="card-title">${p.emoji || ''} ${p.name}</div></div>
+        <div class="chevron">›</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+let examRequestPositionId = null;
+
+async function selectExamRequestPosition(positionId, positionName){
+  examRequestPositionId = positionId;
+  const el = document.getElementById('examRequestManagersList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('examRequestManagers','left');
+  try {
+    const managers = await apiGet('/api/restaurant_managers_list', { restaurant_id: restaurantId });
+    if (!managers.length) {
+      el.innerHTML = '<p class="sub">В заведении пока нет администраторов.</p>';
+      return;
+    }
+    el.innerHTML = managers.map(m => `
+      <div class="card" onclick='sendExamRequest(${m.telegram_id}, "${m.name.replace(/"/g,"")}")'>
+        <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></div>
+        <div class="card-text"><div class="card-title">${m.name}</div></div>
+        <div class="chevron">›</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+async function sendExamRequest(managerTelegramId, managerName){
+  const el = document.getElementById('examRequestManagersList');
+  el.innerHTML = '<p class="sub">Отправка…</p>';
+  try {
+    await apiPost('/api/request_exam', {
+      restaurant_id: Number(restaurantId), position_id: examRequestPositionId,
+      manager_telegram_id: managerTelegramId,
+    });
+    el.innerHTML = `
+      <div class="confirm-box">
+        <div class="confirm-icon">📩</div>
+        <div class="confirm-title">Запрос отправлен</div>
+        <p class="confirm-sub">${managerName} получит уведомление и выдаст код в ближайшее время.</p>
+      </div>
+      <button class="btn-ghost" onclick="goTo('examcode','right')">Назад к экзамену</button>
+    `;
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+/* ---------------- Сдача экзамена на время ---------------- */
+let examCodeId = null;
+let examPositionId = null;
+let examQuestions = [];
+let examIndex = 0;
+let examCorrect = 0;
+let examAnswered = false;
+let examDeadlineMs = 0;
+let examTimerInterval = null;
+
+async function submitExamCode(){
+  const input = document.getElementById('examCodeInput');
+  const val = input.value.trim();
   const area = document.getElementById('examCodeArea');
   if(!val){
-    document.getElementById('examCodeInput').style.borderColor = 'var(--wrong)';
+    input.style.borderColor = 'var(--wrong)';
     return;
   }
-  area.innerHTML = `
-    <div class="confirm-box">
-      <div class="confirm-icon">✓</div>
-      <div class="confirm-title">Код принят</div>
-      <p class="confirm-sub">Начинаем экзамен — вопросы появятся здесь через мгновение.</p>
+  try {
+    const data = await apiPost('/api/redeem_exam_code', { code: val });
+    examCodeId = data.exam_code_id;
+    examPositionId = data.position_id;
+    examQuestions = data.questions;
+    examIndex = 0; examCorrect = 0; examAnswered = false;
+    examDeadlineMs = Date.now() + data.time_limit_seconds * 1000;
+
+    if (!examQuestions.length) {
+      area.innerHTML = '<p class="sub">Для этой должности пока нет вопросов.</p>';
+      return;
+    }
+
+    buildExamProgress();
+    goTo('examQuestion','left');
+    startExamTimer();
+    renderExamQuestion();
+  } catch (e) {
+    area.innerHTML = `
+      <div class="confirm-box">
+        <div class="confirm-icon">⚠️</div>
+        <div class="confirm-title">Не получилось</div>
+        <p class="confirm-sub">${e.message}</p>
+      </div>
+      <button class="btn-ghost" onclick="goTo('examcode','right')">Назад</button>
+    `;
+  }
+}
+
+function startExamTimer(){
+  clearInterval(examTimerInterval);
+  const el = document.getElementById('examTimer');
+  const tick = () => {
+    const remaining = Math.max(0, Math.round((examDeadlineMs - Date.now()) / 1000));
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    el.textContent = `${m}:${String(s).padStart(2,'0')}`;
+    el.classList.toggle('low', remaining <= 30);
+    if (remaining <= 0) {
+      clearInterval(examTimerInterval);
+      finishExam(true);
+    }
+  };
+  tick();
+  examTimerInterval = setInterval(tick, 1000);
+}
+
+function buildExamProgress(){
+  const row = document.getElementById('examProgressRow');
+  row.innerHTML = examQuestions.map((_,i)=>`<div class="seg" data-i="${i}"><i></i></div>`).join('');
+}
+
+function updateExamProgress(){
+  document.querySelectorAll('#examProgressRow .seg').forEach((seg,i)=>{
+    seg.classList.remove('done','current');
+    if(i < examIndex) seg.classList.add('done');
+    else if(i === examIndex) seg.classList.add('current');
+  });
+}
+
+function renderExamQuestion(){
+  examAnswered = false;
+  const q = examQuestions[examIndex];
+  document.getElementById('examQCounter').textContent = `Вопрос ${examIndex+1} из ${examQuestions.length}`;
+  document.getElementById('examQText').textContent = q.text;
+  updateExamProgress();
+
+  const letters = ['A','Б','В','Г'];
+  const list = document.getElementById('examOptionsList');
+  list.innerHTML = q.options.map((opt,i)=>`
+    <div class="option" data-id="${opt.id}" onclick='pickExamOption(${opt.id})'>
+      <div class="letter">${letters[i] || (i+1)}</div>
+      <div>${opt.text}</div>
     </div>
-    <button class="btn-ghost" onclick="closeApp()">Готово</button>
-  `;
+  `).join('');
+}
+
+async function pickExamOption(optionId){
+  if(examAnswered) return;
+  examAnswered = true;
+  const q = examQuestions[examIndex];
+
+  let result;
+  try {
+    result = await apiPost('/api/exam_answer', {
+      exam_code_id: examCodeId, question_id: q.id, answer_option_id: optionId,
+    });
+  } catch (e) {
+    examAnswered = false;
+    return;
+  }
+
+  if (result.timed_out) {
+    finishExam(true);
+    return;
+  }
+
+  const opts = document.querySelectorAll('#examOptionsList .option');
+  opts.forEach(el => {
+    el.classList.add('disabled');
+    if (Number(el.dataset.id) === optionId) {
+      el.classList.add(result.is_correct ? 'correct' : 'wrong');
+    }
+  });
+  if (result.is_correct) examCorrect++;
+
+  setTimeout(() => {
+    if (examIndex < examQuestions.length - 1) {
+      examIndex++;
+      renderExamQuestion();
+    } else {
+      finishExam(false);
+    }
+  }, 700);
+}
+
+async function finishExam(forcedTimeout){
+  clearInterval(examTimerInterval);
+  let result;
+  try {
+    result = await apiPost('/api/finish_exam', {
+      exam_code_id: examCodeId, correct_count: examCorrect, total_count: examQuestions.length,
+    });
+  } catch (e) {
+    result = { passed: false, timed_out: true, correct_count: examCorrect, total_count: examQuestions.length };
+  }
+
+  const icon = document.getElementById('examResultIcon');
+  const title = document.getElementById('examResultTitle');
+  const sub = document.getElementById('examResultSub');
+
+  if (result.timed_out) {
+    icon.textContent = '⏰';
+    title.textContent = 'Время вышло';
+    sub.textContent = 'Экзамен не сдан. Обратитесь к администратору за новым кодом.';
+  } else if (result.passed) {
+    icon.textContent = '🎉';
+    title.textContent = 'Экзамен сдан!';
+    sub.textContent = `Правильных ответов: ${result.correct_count}/${result.total_count}. Новый ранг: ${result.new_rank_emoji || ''} ${result.new_rank || ''}.`;
+    if (result.new_level > 1) {
+      sub.textContent += ' Открыт новый уровень вопросов в обычных тестах этой должности.';
+    }
+  } else {
+    icon.textContent = '📚';
+    title.textContent = 'Экзамен не сдан';
+    sub.textContent = `Правильных ответов: ${result.correct_count}/${result.total_count}. Обратитесь к администратору за новым кодом, когда будете готовы.`;
+  }
+
+  goTo('examResult','left');
 }
 
 /* ---------------- Мои результаты ---------------- */
