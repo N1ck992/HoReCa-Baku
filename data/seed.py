@@ -1031,7 +1031,14 @@ async def sync_new_questions(session: AsyncSession) -> None:
 #         },
 #     ],
 # }
-RESTAURANT_POSITIONS: dict[str, list[dict]] = {}
+RESTAURANT_POSITIONS: dict[str, list[dict]] = {
+    # Временная заглушка: копия общих тестов (Повар/Бармен/Официант),
+    # помеченная как уникальные тесты именно заведения "Michel" — чтобы
+    # его результаты корректно отображались в панели администратора,
+    # пока у заведения ещё нет по-настоящему своих уникальных тестов.
+    # Название заведения указано ТОЧНО как при создании через /admin.
+    "Michel": POSITIONS,
+}
 
 
 async def seed_restaurant_positions(session: AsyncSession) -> None:

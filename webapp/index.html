@@ -73,6 +73,17 @@
   .relief--bottom{ bottom:-10px; left:-34px; width:210px; opacity:0.8; transform:scaleX(-1); }
   .relief--corner{ top:-14px; left:-30px; width:150px; opacity:0.7; }
 
+  .restaurant-signature{
+    position:relative; z-index:2;
+    font-family:'Fraunces', Georgia, serif;
+    font-style:italic;
+    font-weight:500;
+    font-size:22px;
+    color: var(--accent-strong);
+    margin-top:16px;
+    line-height:1.2;
+  }
+
   /* ---------- Общие элементы шапки ---------- */
   .top-row{
     position:relative; z-index:2;
@@ -351,14 +362,15 @@
         </div>
 
         <div class="top-row">
-          <span class="restaurant-name">Мичели</span>
+          <span class="restaurant-name" id="posRestaurantLabel" style="display:none;">Заведение</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
+        <p class="restaurant-signature" id="restaurantSignature" style="display:none;"></p>
         <h1 class="headline">Выберите<br>должность</h1>
         <p class="sub">Тест займёт 5–7 минут. Результат сразу попадёт в вашу статистику.</p>
 
         <div class="cards" id="positionsList"></div>
-        <div class="footnote">Мичели · панель сотрудника</div>
+        <div class="footnote" id="positionsFootnote">Панель сотрудника</div>
       </section>
 
       <!-- ============ ЭКРАН 2: выбор категории ============ -->
@@ -607,7 +619,17 @@ async function renderPositions(){
   const el = document.getElementById('positionsList');
   el.innerHTML = '<p class="sub">Загрузка…</p>';
   try {
-    const positions = await apiGet('/api/positions', { restaurant_id: restaurantId });
+    const data = await apiGet('/api/positions', { restaurant_id: restaurantId });
+    const positions = data.positions;
+
+    if (data.restaurant_name) {
+      document.getElementById('posRestaurantLabel').textContent = data.restaurant_name;
+      document.getElementById('posRestaurantLabel').style.display = '';
+      document.getElementById('restaurantSignature').textContent = data.restaurant_name;
+      document.getElementById('restaurantSignature').style.display = '';
+      document.getElementById('positionsFootnote').textContent = data.restaurant_name + ' · панель сотрудника';
+    }
+
     if (!positions.length) {
       el.innerHTML = '<p class="sub">Для вашего заведения пока нет тестов.</p>';
       return;

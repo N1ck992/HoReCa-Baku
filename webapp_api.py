@@ -63,6 +63,11 @@ async def get_positions(request: web.Request) -> web.Response:
     restaurant_id = int(restaurant_id) if restaurant_id and restaurant_id.isdigit() else None
 
     async with async_session() as session:
+        restaurant_name = None
+        if restaurant_id is not None:
+            restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+            restaurant_name = restaurant.name if restaurant else None
+
         positions = await crud.get_active_positions(session, restaurant_id)
         data = []
         for position in positions:
@@ -75,7 +80,7 @@ async def get_positions(request: web.Request) -> web.Response:
                     "category_count": len(categories),
                 }
             )
-    return _json(data)
+    return _json({"restaurant_name": restaurant_name, "positions": data})
 
 
 @routes.get("/api/categories")
