@@ -274,6 +274,10 @@ async def _complete_exam(
             bonus_xp_awarded=bonus_xp,
         )
 
+        new_level = None
+        if passed:
+            new_level = await crud.unlock_next_difficulty(session, user.id, position_id)
+
         new_total_xp = current_xp + bonus_xp
         new_rank = crud.get_rank_for_xp(ranks, new_total_xp)
         new_next_rank = crud.get_next_rank(ranks, new_rank)
@@ -286,11 +290,17 @@ async def _complete_exam(
     text += f"Правильных ответов: {correct_count}/{total_count}\n"
 
     if passed:
+        level_names = {1: "лёгкий", 2: "средний", 3: "сложный"}
         text += (
             f"✅ Экзамен сдан!\n\n"
             f"🎊 Новый ранг: {new_rank.emoji} {new_rank.title}!\n"
             f"{rank_progress_text(new_rank, new_next_rank, new_total_xp)}"
         )
+        if new_level and new_level > 1:
+            text += (
+                f"\n\n🔓 Открыт новый уровень вопросов в обычных тестах этой "
+                f"должности: {level_names.get(new_level, new_level)}."
+            )
     else:
         text += "❌ Экзамен не сдан. Обратитесь к менеджеру за новым кодом, когда будете готовы."
 

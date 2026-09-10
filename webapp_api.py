@@ -165,6 +165,21 @@ async def start_test(request: web.Request) -> web.Response:
         test_result = await crud.create_test_result(session, user.id, category_id)
         all_questions = await crud.get_questions_with_options(session, category_id)
 
+        # Уровни сложности касаются ТОЛЬКО уникальных тестов заведения —
+        # общие/пробные тесты (Position.restaurant_id is None) всегда
+        # показывают вопросы любой сложности, без прогрессии.
+        category = await crud.get_category_by_id(session, category_id)
+        if category is not None:
+            position = await crud.get_position_by_id(session, category.position_id)
+            if position is not None and position.restaurant_id is not None:
+                unlocked = await crud.get_unlocked_difficulty(session, user.id, position.id)
+                limited = [q for q in all_questions if q.difficulty <= unlocked]
+                # Если после фильтра вопросов совсем не осталось (например,
+                # для лёгкого уровня их ещё не добавили) — лучше показать
+                # что есть, чем пустой тест.
+                if limited:
+                    all_questions = limited
+
         # Если вопросов в категории больше 5 — берём 5 случайных, а не
         # всегда одни и те же первые. Порядок вариантов ответа тоже
         # перемешиваем при каждой попытке — иначе правильный ответ мог

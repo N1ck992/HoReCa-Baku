@@ -24,6 +24,7 @@ from database.models import (
     TestResult,
     User,
     UserAnswer,
+    UserPositionLevel,
     Vacancy,
 )
 
@@ -294,6 +295,37 @@ async def get_recent_results_for_user_in_restaurant(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def get_unlocked_difficulty(session: AsyncSession, user_id: int, position_id: int) -> int:
+    """Уровень сложности, открытый сотруднику по этой должности. По
+    умолчанию 1 (только лёгкие вопросы), пока запись не создана."""
+    result = await session.execute(
+        select(UserPositionLevel).where(
+            UserPositionLevel.user_id == user_id, UserPositionLevel.position_id == position_id
+        )
+    )
+    level = result.scalars().first()
+    return level.unlocked_difficulty if level else 1
+
+
+async def unlock_next_difficulty(session: AsyncSession, user_id: int, position_id: int) -> int:
+    """Открывает следующий уровень сложности после сдачи экзамена по
+    должности (максимум 3). Возвращает новый уровень."""
+    result = await session.execute(
+        select(UserPositionLevel).where(
+            UserPositionLevel.user_id == user_id, UserPositionLevel.position_id == position_id
+        )
+    )
+    level = result.scalars().first()
+    if level is None:
+        level = UserPositionLevel(user_id=user_id, position_id=position_id, unlocked_difficulty=1)
+        session.add(level)
+        await session.flush()
+
+    level.unlocked_difficulty = min(3, level.unlocked_difficulty + 1)
+    await session.commit()
+    return level.unlocked_difficulty
 
 
 async def get_eligible_positions_for_exam(

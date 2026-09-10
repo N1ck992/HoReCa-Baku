@@ -263,6 +263,21 @@ class RestaurantJoinRequest(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class UserPositionLevel(Base):
+    """Открытый уровень сложности вопросов сотрудника по конкретной
+    должности (только для уникальных тестов заведения, не для общих
+    пробных). 1 = лёгкие, 2 = средние, 3 = сложные. По умолчанию у всех
+    уровень 1 — открывается дальше только после сдачи экзамена по этой
+    должности."""
+
+    __tablename__ = "user_position_levels"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    position_id: Mapped[int] = mapped_column(ForeignKey("positions.id"))
+    unlocked_difficulty: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class ExamCode(Base):
     """Одноразовый код на экзамен, который менеджер выдаёт сотруднику.
 
