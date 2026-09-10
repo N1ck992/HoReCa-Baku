@@ -7,7 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from database import crud
 from database.database import async_session
-from keyboards.keyboards import group_menu_kb
+from keyboards.keyboards import group_menu_kb, manager_menu_kb
 from services.rating import display_name
 from utils import get_bot_username
 
@@ -145,6 +145,7 @@ def _employees_kb(restaurant_id: int, employees: list[dict]):
             text=f"{display_name(user)}{position_text}",
             callback_data=f"assign_pick_emp:{restaurant_id}:{user.id}",
         )
+    builder.button(text="⬅️ Назад", callback_data=f"manager_menu:{restaurant_id}")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -159,6 +160,7 @@ def _remove_employee_kb(restaurant_id: int, employees: list[dict]):
             text=f"🗑 {display_name(user)}{position_text}",
             callback_data=f"manager_remove_confirm:{restaurant_id}:{user.id}",
         )
+    builder.button(text="⬅️ Назад", callback_data=f"manager_menu:{restaurant_id}")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -170,6 +172,7 @@ def _positions_kb(restaurant_id: int, user_id: int, positions):
             text=f"{position.emoji} {position.name}",
             callback_data=f"assign_set_position:{restaurant_id}:{user_id}:{position.id}",
         )
+    builder.button(text="⬅️ Назад", callback_data=f"manager_assign_start:{restaurant_id}")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -263,7 +266,8 @@ async def cb_assign_set_position(callback: CallbackQuery) -> None:
     await callback.answer("Готово!")
     await callback.message.edit_text(
         f"✅ {display_name(target_user)} назначен(а) на должность "
-        f"{position.emoji} {position.name}."
+        f"{position.emoji} {position.name}.",
+        reply_markup=manager_menu_kb(restaurant_id),
     )
 
 
@@ -277,6 +281,7 @@ def _managers_list_kb(restaurant_id: int, managers):
             callback_data=f"managers_remove:{restaurant_id}:{manager.telegram_id}",
         )
     builder.button(text="➕ Добавить администратора", callback_data=f"managers_add_start:{restaurant_id}")
+    builder.button(text="⬅️ Назад", callback_data=f"manager_menu:{restaurant_id}")
     builder.adjust(1)
     return builder.as_markup()
 

@@ -1,6 +1,8 @@
 from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+import config
+
 from database.models import AnswerOption, Category, Position, Vacancy
 
 MAIN_MENU_BUTTON_TEXT = "🏠 Главное меню"
@@ -61,6 +63,38 @@ def open_private_chat_kb(bot_username: str) -> InlineKeyboardMarkup:
     в личку одним кликом, а не искать бота вручную)."""
     builder = InlineKeyboardBuilder()
     builder.button(text="💬 Открыть бота в личке", url=f"https://t.me/{bot_username}?start=from_group")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def manager_menu_kb(restaurant_id: int) -> InlineKeyboardMarkup:
+    """Полное меню панели администратора — общее для команды /manager и
+    кнопки «Панель администратора» в меню заведения. Живёт здесь (а не в
+    handlers/manager.py), чтобы его можно было безопасно импортировать
+    из нескольких файлов сразу, не создавая циклических импортов."""
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="🔗 Ссылка для персонала", callback_data=f"manager_invite_link:{restaurant_id}"
+    )
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
+        builder.button(text="📋 Результаты персонала (сайт)", web_app=WebAppInfo(url=webapp_link))
+    builder.button(
+        text="➕ Добавить персонал", callback_data=f"manager_assign_start:{restaurant_id}"
+    )
+    builder.button(
+        text="🗑 Удалить персонал", callback_data=f"manager_remove_start:{restaurant_id}"
+    )
+    builder.button(
+        text="🧑‍💼 Администраторы заведения", callback_data=f"manager_show_admins:{restaurant_id}"
+    )
+    builder.button(
+        text="🎓 Выдать код на экзамен", callback_data=f"manager_exam_position:{restaurant_id}"
+    )
+    builder.button(text="📖 Инструкция", callback_data=f"manager_help:{restaurant_id}")
+    builder.button(
+        text="⬅️ Назад к меню заведения", callback_data=f"back_to_restaurant:{restaurant_id}"
+    )
     builder.adjust(1)
     return builder.as_markup()
 

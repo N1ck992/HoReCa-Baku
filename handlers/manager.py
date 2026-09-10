@@ -7,6 +7,7 @@ import config
 from database import crud
 from database.database import async_session
 from handlers.restaurants import _employees_kb, _managers_list_kb, _remove_employee_kb
+from keyboards.keyboards import manager_menu_kb
 from services.rating import display_name
 from utils import get_bot_username
 
@@ -28,34 +29,6 @@ MANAGER_HELP_TEXT = (
     "«🧑‍💼 Панель администратора» в личном меню вашего заведения → "
     "«Список персонала»."
 )
-
-
-def manager_menu_kb(restaurant_id: int):
-    builder = InlineKeyboardBuilder()
-    builder.button(
-        text="🔗 Ссылка для персонала", callback_data=f"manager_invite_link:{restaurant_id}"
-    )
-    if config.WEBAPP_URL:
-        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
-        builder.button(text="📋 Результаты персонала (сайт)", web_app=WebAppInfo(url=webapp_link))
-    builder.button(
-        text="➕ Добавить персонал", callback_data=f"manager_assign_start:{restaurant_id}"
-    )
-    builder.button(
-        text="🗑 Удалить персонал", callback_data=f"manager_remove_start:{restaurant_id}"
-    )
-    builder.button(
-        text="🧑‍💼 Администраторы заведения", callback_data=f"manager_show_admins:{restaurant_id}"
-    )
-    builder.button(
-        text="🎓 Выдать код на экзамен", callback_data=f"manager_exam_position:{restaurant_id}"
-    )
-    builder.button(text="📖 Инструкция", callback_data=f"manager_help:{restaurant_id}")
-    builder.button(
-        text="⬅️ Назад к меню заведения", callback_data=f"back_to_restaurant:{restaurant_id}"
-    )
-    builder.adjust(1)
-    return builder.as_markup()
 
 
 def manager_exam_positions_kb(restaurant_id: int, positions):
