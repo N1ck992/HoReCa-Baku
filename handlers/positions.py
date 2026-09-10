@@ -1,9 +1,10 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
+import config
 from database import crud
 from database.database import async_session
-from keyboards.keyboards import categories_kb, positions_kb
+from keyboards.keyboards import categories_kb, positions_kb, webapp_open_kb
 from services.rating import rank_progress_text
 
 router = Router(name="positions")
@@ -20,6 +21,22 @@ async def _categories_screen_text(session, user_id: int, position) -> str:
 
 @router.callback_query(F.data == "menu:positions")
 async def cb_choose_position(callback: CallbackQuery) -> None:
+    """«🎯 Пробный тест» в общем меню — общие тесты без привязки к
+    заведению. Ведёт на сайт (как и все остальные тесты), поэтому НЕ
+    трогает current_position_id пользователя — та старая логика
+    предназначалась для текстового бота и осталась только как запасной
+    вариант, если ссылка на сайт ещё не настроена."""
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?screen=tests"
+        await callback.message.edit_text(
+            "Нажмите кнопку ниже, чтобы открыть пробный тест:",
+            reply_markup=webapp_open_kb(
+                webapp_link, "🎯 Открыть пробный тест", back_callback="menu:main"
+            ),
+        )
+        await callback.answer()
+        return
+
     async with async_session() as session:
         user = await crud.get_or_create_user(
             session,
