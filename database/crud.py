@@ -761,6 +761,21 @@ async def get_user_rank_within_restaurant(
 
 # ---------- Заявки на добавление заведения ----------
 
+async def get_last_restaurant_request_time(
+    session: AsyncSession, telegram_id: int
+) -> datetime | None:
+    """Время последней заявки этого человека на регистрацию заведения —
+    используется, чтобы не давать отправлять заявки чаще раза в сутки
+    (защита от случайного или намеренного спама заявками)."""
+    result = await session.execute(
+        select(RestaurantRequest.created_at)
+        .where(RestaurantRequest.requested_by_telegram_id == telegram_id)
+        .order_by(RestaurantRequest.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def create_restaurant_request(
     session: AsyncSession,
     name: str,

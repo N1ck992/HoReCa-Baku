@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -48,6 +50,18 @@ async def process_restaurant_name(message: Message, state: FSMContext, bot: Bot)
     await state.clear()
 
     async with async_session() as session:
+        last_request_at = await crud.get_last_restaurant_request_time(session, message.from_user.id)
+        if last_request_at is not None:
+            hours_passed = (datetime.utcnow() - last_request_at).total_seconds() / 3600
+            if hours_passed < 24:
+                hours_left = round(24 - hours_passed, 1)
+                await message.answer(
+                    f"⏳ Вы уже отправляли заявку на регистрацию заведения недавно. "
+                    f"Следующую можно отправить через {hours_left} ч. "
+                    "Это ограничение защищает от случайных повторных заявок."
+                )
+                return
+
         user = await crud.get_or_create_user(
             session,
             telegram_id=message.from_user.id,
