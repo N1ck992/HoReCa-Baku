@@ -45,6 +45,25 @@ def _auth_error() -> web.Response:
     return _json({"error": "Откройте это через кнопку в Telegram-боте."}, status=401)
 
 
+def _archived_error() -> web.Response:
+    return _json(
+        {"error": "Это заведение больше не активно (архивировано)."}, status=410
+    )
+
+
+async def _get_active_restaurant(session, restaurant_id: int):
+    """Возвращает заведение, только если оно существует и НЕ архивировано.
+    Используется на входе в каждый эндпоинт, принимающий restaurant_id
+    напрямую от сайта — иначе сотрудник, у которого сайт уже был открыт
+    до архивации (или сохранил старую ссылку), мог бы продолжать
+    пользоваться тестами и панелью архивированного заведения, хотя в
+    самом боте оно уже нигде не показывается."""
+    restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+    if restaurant is None or restaurant.is_archived:
+        return None
+    return restaurant
+
+
 async def _get_telegram_user(init_data: str) -> dict | None:
     return validate_init_data(init_data, BOT_TOKEN)
 
@@ -69,8 +88,10 @@ async def get_positions(request: web.Request) -> web.Response:
     async with async_session() as session:
         restaurant_name = None
         if restaurant_id is not None:
-            restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
-            restaurant_name = restaurant.name if restaurant else None
+            restaurant = await _get_active_restaurant(session, restaurant_id)
+            if restaurant is None:
+                return _archived_error()
+            restaurant_name = restaurant.name
 
         positions = await crud.get_active_positions(session, restaurant_id)
         data = []
@@ -163,6 +184,13 @@ async def start_test(request: web.Request) -> web.Response:
         level = 1
 
     async with async_session() as session:
+        category = await crud.get_category_by_id(session, category_id)
+        if category is not None:
+            position = await crud.get_position_by_id(session, category.position_id)
+            if position is not None and position.restaurant_id is not None:
+                if await _get_active_restaurant(session, position.restaurant_id) is None:
+                    return _archived_error()
+
         user = await crud.get_or_create_user(
             session,
             telegram_id=tg_user["id"],
@@ -346,6 +374,8 @@ async def test_result_detail(request: web.Request) -> web.Response:
     test_result_id = int(test_result_id)
 
     async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
         if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
             return _json({"error": "Доступ только для администраторов заведения."}, status=403)
 
@@ -373,6 +403,8 @@ async def get_employees(request: web.Request) -> web.Response:
     restaurant_id = int(restaurant_id)
 
     async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
         if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
             return _json({"error": "Доступ только для администраторов заведения."}, status=403)
 
@@ -405,6 +437,8 @@ async def get_employee_detail(request: web.Request) -> web.Response:
     user_id = int(user_id)
 
     async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
         if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
             return _json({"error": "Доступ только для администраторов заведения."}, status=403)
 
@@ -457,6 +491,8 @@ async def eligible_exam_positions(request: web.Request) -> web.Response:
     restaurant_id = int(restaurant_id)
 
     async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
         user = await crud.get_or_create_user(
             session,
             telegram_id=tg_user["id"],
@@ -481,6 +517,8 @@ async def restaurant_managers_list(request: web.Request) -> web.Response:
     restaurant_id = int(restaurant_id)
 
     async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
         managers = await crud.get_restaurant_managers(session, restaurant_id)
 
     return _json(
@@ -510,6 +548,10 @@ async def request_exam(request: web.Request) -> web.Response:
         return _json({"error": "Некорректные данные запроса."}, status=400)
 
     async with async_session() as session:
+        restaurant = await _get_active_restaurant(session, restaurant_id)
+        if restaurant is None:
+            return _archived_error()
+
         user = await crud.get_or_create_user(
             session,
             telegram_id=tg_user["id"],
@@ -523,7 +565,6 @@ async def request_exam(request: web.Request) -> web.Response:
                 {"error": "Пока не пройдены все три уровня на 80%+ по этой должности."}, status=403
             )
 
-        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
         position = await crud.get_position_by_id(session, position_id)
         exam_request = await crud.create_exam_request(
             session, user.id, restaurant_id, position_id, manager_telegram_id
@@ -583,6 +624,8 @@ async def redeem_exam_code(request: web.Request) -> web.Response:
         )
         if user.restaurant_id != exam_code.restaurant_id:
             return _json({"error": "Этот код предназначен для другого заведения."}, status=403)
+        if await _get_active_restaurant(session, exam_code.restaurant_id) is None:
+            return _archived_error()
 
         questions = await crud.get_hard_questions_for_position(session, exam_code.position_id)
         if not questions:
