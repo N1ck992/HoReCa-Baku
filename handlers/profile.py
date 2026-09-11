@@ -22,17 +22,17 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
     stats = await crud.get_user_stats(session, user.id)
     leaderboard_rank = await crud.get_user_rank(session, user.id)
 
-    # Если сотрудник привязан к заведению — покажем его заведение и
-    # личное место в рейтинге внутри этого заведения (отдельно от
-    # общего рейтинга среди вообще всех пользователей бота).
+    # Если сотрудник привязан к заведению ИЛИ администрирует его — покажем
+    # это заведение и личное место в рейтинге внутри него. Раньше здесь
+    # проверялась только привязка как сотрудник, из-за чего у "чистых"
+    # менеджеров (без привязки как сотрудник) кнопка "Назад" в профиле
+    # ошибочно вела в общее меню, а не в меню их заведения.
     restaurant = None
     restaurant_rank = None
-    if user.restaurant_id is not None:
-        restaurant = await crud.get_restaurant_by_id(session, user.restaurant_id)
-        if restaurant is not None:
-            restaurant_rank = await crud.get_user_rank_within_restaurant(
-                session, user.id, restaurant.id
-            )
+    options = await crud.get_user_restaurant_options(session, telegram_id)
+    if options:
+        restaurant = options[0][0]
+        restaurant_rank = await crud.get_user_rank_within_restaurant(session, user.id, restaurant.id)
 
     # Прогресс по каждой должности, которой человек вообще занимался —
     # раньше тут была одна "текущая должность", назначаемая вручную
