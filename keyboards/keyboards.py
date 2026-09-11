@@ -93,6 +93,10 @@ def manager_menu_kb(restaurant_id: int) -> InlineKeyboardMarkup:
         text="🗄 Архивировать заведение", callback_data=f"archive_restaurant_start:{restaurant_id}"
     )
     builder.button(
+        text="🚪 Покинуть заведение (как администратор)",
+        callback_data=f"manager_leave_ask:{restaurant_id}",
+    )
+    builder.button(
         text="⬅️ Назад к меню заведения", callback_data=f"back_to_restaurant:{restaurant_id}"
     )
     builder.adjust(1)

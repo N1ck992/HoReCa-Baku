@@ -1,5 +1,6 @@
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -7,7 +8,7 @@ import config
 from database import crud
 from database.database import async_session
 from handlers.restaurants import _managers_list_kb, _remove_employee_kb
-from keyboards.keyboards import manager_menu_kb
+from keyboards.keyboards import join_menu_kb, main_menu_kb, manager_menu_kb, restaurant_switch_kb
 from services.rating import display_name
 from utils import get_bot_username
 
@@ -614,3 +615,84 @@ async def cb_archive_force(callback: CallbackQuery) -> None:
 
     await callback.answer("Архивировано")
     await callback.message.edit_text(f"🗄 «{restaurant.name}» заархивировано вручную (через поддержку).")
+
+
+# ---------- Менеджер покидает конкретное заведение ----------
+
+@router.callback_query(F.data.startswith("manager_leave_ask:"))
+async def cb_manager_leave_ask(callback: CallbackQuery) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        if restaurant is None or not await crud.is_restaurant_manager(
+            session, restaurant_id, callback.from_user.id
+        ):
+            await callback.answer("⛔ Нет доступа.", show_alert=True)
+            return
+        managers = await crud.get_restaurant_managers(session, restaurant_id)
+
+    if len(managers) <= 1:
+        await callback.answer(
+            "Вы единственный администратор — нельзя оставить заведение "
+            "совсем без администратора. Сначала добавьте другого.",
+            show_alert=True,
+        )
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="🚪 Да, покинуть как администратор", callback_data=f"manager_leave_confirm:{restaurant_id}"
+    )
+    builder.button(text="Отмена", callback_data=f"manager_menu:{restaurant_id}")
+    builder.adjust(1)
+    await callback.message.edit_text(
+        f"Вы уверены, что хотите покинуть «{restaurant.name}» как "
+        "администратор? Вы потеряете права управления этим заведением "
+        "(но не как сотрудник, если вы им тоже являетесь).",
+        reply_markup=builder.as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("manager_leave_confirm:"))
+async def cb_manager_leave_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+        removed = await crud.remove_restaurant_manager(session, restaurant_id, callback.from_user.id)
+        if not removed:
+            await callback.answer(
+                "Не получилось — вы единственный администратор заведения.", show_alert=True
+            )
+            return
+
+        # После выхода сразу показываем, что доступно дальше — другое
+        # заведение (если администрирует ещё какое-то) или общее меню.
+        options = await crud.get_user_restaurant_options(session, callback.from_user.id)
+
+    await callback.answer("Вы больше не администратор этого заведения")
+    await state.update_data(in_general_menu=False)
+
+    if len(options) > 1:
+        await callback.message.edit_text(
+            f"🚪 Вы покинули «{restaurant.name}» как администратор. "
+            "Вы связаны с несколькими заведениями — с каким работать?",
+            reply_markup=restaurant_switch_kb([r for r, _ in options]),
+        )
+        return
+
+    if len(options) == 1:
+        other_restaurant, is_manager = options[0]
+        username = await get_bot_username(callback.bot)
+        await callback.message.edit_text(
+            f"🚪 Вы покинули «{restaurant.name}» как администратор.\n\n"
+            f"Меню «{other_restaurant.name}»:",
+            reply_markup=join_menu_kb(username, other_restaurant.id, is_manager),
+        )
+        return
+
+    await state.update_data(in_general_menu=True)
+    await callback.message.edit_text(
+        f"🚪 Вы покинули «{restaurant.name}» как администратор.\n\nГлавное меню:",
+        reply_markup=main_menu_kb(),
+    )
