@@ -105,18 +105,15 @@ def manager_menu_kb(restaurant_id: int) -> InlineKeyboardMarkup:
 
 def join_menu_kb(bot_username: str, restaurant_id: int, is_manager: bool = False) -> InlineKeyboardMarkup:
     """Личное меню сотрудника заведения — открывается сразу в личке по
-    персональной пригласительной ссылке, без всякой группы. «Мой профиль» —
-    настоящий экран с реальными данными и кнопкой выхода из заведения.
-    Остальные кнопки — обычные (не ссылки!), чтобы не пересылать /start
-    заново при каждом нажатии — обработчики находятся в handlers/start.py
-    и просто заменяют текущий экран на месте (edit_text). «Запросить
+    персональной пригласительной ссылке, без всякой группы. «🏠 Открыть
+    заведение» ведёт на домашнюю страницу сайта, откуда уже доступны
+    профиль, тест и результаты — навигация между ними происходит прямо на
+    сайте, без возврата в Telegram между каждым действием. «Запросить
     экзамен» — только для персонала: администратор сам ВЫДАЁТ код, а не
     запрашивает его. Кнопка панели администратора — только если человек
     уже добавлен менеджером этого заведения (проверяется на сервере)."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="👤 Мой профиль", callback_data="menu:profile")
-    builder.button(text="🎓 Пройти тест", callback_data=f"open_tests:{restaurant_id}")
-    builder.button(text="📊 Мои результаты", callback_data=f"open_myresults:{restaurant_id}")
+    builder.button(text="🏠 Открыть заведение", callback_data=f"open_home:{restaurant_id}")
     if not is_manager:
         builder.button(text="📩 Запросить экзамен", callback_data=f"open_examcode:{restaurant_id}")
     if is_manager:

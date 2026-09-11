@@ -371,8 +371,68 @@
   <div class="sheet">
     <div class="sheet-body" id="sheetBody">
 
+      <!-- ============ ЭКРАН 0: главная страница заведения ============ -->
+      <section class="screen" data-screen="restaurantHome" data-state="active">
+        <div class="relief relief--corner emboss">
+          <svg viewBox="0 0 160 110" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 10 C 40 20, 55 40, 60 75"/>
+            <ellipse cx="60" cy="75" rx="9" ry="5"/>
+            <ellipse cx="44" cy="58" rx="7" ry="4" transform="rotate(35 44 58)"/>
+          </svg>
+        </div>
+        <div class="top-row">
+          <span class="restaurant-name" id="homeRestaurantLabel" style="display:none;">Заведение</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <p class="restaurant-signature" id="homeRestaurantSignature" style="display:none;"></p>
+        <h1 class="headline">Добро<br>пожаловать</h1>
+        <p class="sub">Выберите, что нужно.</p>
+        <div class="cards">
+          <div class="card" onclick="goToMyProfile()">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></div>
+            <div class="card-text"><div class="card-title">Мой профиль</div><div class="card-meta">Статистика, ранги, куратор</div></div>
+            <div class="chevron">›</div>
+          </div>
+          <div class="card" onclick="goTo('positions','left')">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M12 2l1.5 5H19l-4.2 3 1.6 5-4.4-3.2L7.6 15l1.6-5L5 7h5.5z"/></svg></div>
+            <div class="card-text"><div class="card-title">Пройти тест</div><div class="card-meta">Выбор должности и категории</div></div>
+            <div class="chevron">›</div>
+          </div>
+          <div class="card" onclick="goToMyResults()">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-6 3 3 5-8"/></svg></div>
+            <div class="card-text"><div class="card-title">Мои результаты</div><div class="card-meta">История пройденных тестов</div></div>
+            <div class="chevron">›</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ЭКРАН 0.1: мой профиль (на сайте) ============ -->
+      <section class="screen" data-screen="myProfile" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('restaurantHome','right')">‹</button>
+          <span class="restaurant-name">Мой профиль</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <div class="avatar-row">
+          <div class="avatar" id="profileInitials">—</div>
+          <div>
+            <div class="avatar-name" id="profileName">—</div>
+            <div class="avatar-role" id="profileRestaurant">—</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-grid">
+            <div class="stat-box"><div class="stat-num" id="profileTests">0</div><div class="stat-label">тестов</div></div>
+            <div class="stat-box"><div class="stat-num" id="profileAvg">0%</div><div class="stat-label">средний балл</div></div>
+          </div>
+        </div>
+        <div class="row-list" id="profileRows"></div>
+        <p class="sub" id="profileProgressLabel" style="margin-top:14px; display:none;">Уровень вопросов по должностям</p>
+        <div class="row-list" id="profileProgressList"></div>
+      </section>
+
       <!-- ============ ЭКРАН 1: выбор должности ============ -->
-      <section class="screen" data-screen="positions" data-state="active">
+      <section class="screen" data-screen="positions" data-state="right">
         <div class="relief relief--top emboss">
           <svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 130 C 60 100, 70 60, 130 20"/>
@@ -399,6 +459,7 @@
         </div>
 
         <div class="top-row">
+          <button class="icon-btn" id="posBackBtn" style="display:none;" onclick="goTo('restaurantHome','right')">‹</button>
           <span class="restaurant-name" id="posRestaurantLabel" style="display:none;">Заведение</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
@@ -777,11 +838,16 @@ async function renderPositions(){
     const positions = data.positions;
 
     if (data.restaurant_name) {
+      document.getElementById('posBackBtn').style.display = '';
       document.getElementById('posRestaurantLabel').textContent = data.restaurant_name;
       document.getElementById('posRestaurantLabel').style.display = '';
       document.getElementById('restaurantSignature').textContent = data.restaurant_name;
       document.getElementById('restaurantSignature').style.display = '';
       document.getElementById('positionsFootnote').textContent = data.restaurant_name + ' · панель сотрудника';
+      document.getElementById('homeRestaurantLabel').textContent = data.restaurant_name;
+      document.getElementById('homeRestaurantLabel').style.display = '';
+      document.getElementById('homeRestaurantSignature').textContent = data.restaurant_name;
+      document.getElementById('homeRestaurantSignature').style.display = '';
     }
 
     if (!positions.length) {
@@ -991,11 +1057,8 @@ async function showResult(){
   goTo('result','left');
 }
 
-function restart(){ goTo('positions','right'); }
-
-function goToMyResults(){
-  goTo('myResults','left');
-  loadMyResults();
+function restart(){
+  goTo(restaurantId ? 'restaurantHome' : 'positions', 'right');
 }
 
 function closeApp(){
@@ -1383,6 +1446,56 @@ async function finishExam(forcedTimeout){
 }
 
 /* ---------------- Мои результаты ---------------- */
+/* ---------------- Домашняя страница заведения ---------------- */
+function goToMyResults(){
+  goTo('myResults','left');
+  loadMyResults();
+}
+
+function goToMyProfile(){
+  goTo('myProfile','left');
+  loadMyProfile();
+}
+
+async function loadMyProfile(){
+  const el = document.getElementById('profileRows');
+  const progressEl = document.getElementById('profileProgressList');
+  el.innerHTML = '<div class="row-item"><span>Загрузка…</span></div>';
+  progressEl.innerHTML = '';
+  document.getElementById('profileProgressLabel').style.display = 'none';
+  try {
+    const p = await apiGet('/api/my_profile', { restaurant_id: restaurantId });
+    const initials = p.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+    document.getElementById('profileInitials').textContent = initials;
+    document.getElementById('profileName').textContent = p.name;
+    document.getElementById('profileRestaurant').textContent = p.restaurant_name || '';
+    document.getElementById('profileTests').textContent = p.tests_completed;
+    document.getElementById('profileAvg').textContent = p.avg_percentage + '%';
+
+    const rows = [];
+    if (p.curator_name) rows.push(['Куратор', p.curator_name]);
+    if (p.trainee_count) rows.push(['Стажёров', p.trainee_count]);
+    rows.push(['Личный рейтинг бота', p.leaderboard_rank ? '#' + p.leaderboard_rank : 'нет данных']);
+    if (p.restaurant_rank) rows.push(['Рейтинг в заведении', '#' + p.restaurant_rank]);
+    el.innerHTML = rows.map(([label, value]) => `
+      <div class="row-item"><span>${label}</span><span>${value}</span></div>
+    `).join('');
+
+    if (p.position_progress && p.position_progress.length) {
+      const levelNames = {1:'лёгкий', 2:'средний', 3:'сложный'};
+      document.getElementById('profileProgressLabel').style.display = '';
+      progressEl.innerHTML = p.position_progress.map(pp => `
+        <div class="row-item">
+          <span>${pp.position_emoji || ''} ${pp.position_name}</span>
+          <span>${levelNames[pp.level] || pp.level} · ${pp.tests_completed} тестов</span>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
 async function loadMyResults(){
   const hist = document.getElementById('myResultsHistory');
   hist.innerHTML = '<p class="sub">Загрузка…</p>';
@@ -1410,11 +1523,18 @@ function initFromQuery(){
   if(screen === 'admin'){
     setActive('adminMenu');
   } else if(screen === 'myresults'){
+    renderPositions(); // заодно подтянет название заведения для навигации
     setActive('myResults');
     loadMyResults();
-  } else {
-    // screen === 'tests' или отсутствует — экран выбора должности
+  } else if(!restaurantId){
+    // Общий пробный тест (без заведения) — сразу к выбору должности,
+    // без домашней страницы (профиль/результаты тут не при чём).
     renderPositions();
+    setActive('positions');
+  } else {
+    // Открытие из меню заведения — домашняя страница с тремя разделами.
+    renderPositions(); // сразу подгружаем, чтобы "Пройти тест" открылся мгновенно
+    setActive('restaurantHome');
   }
 }
 

@@ -362,6 +362,60 @@ async def my_results(request: web.Request) -> web.Response:
     )
 
 
+@routes.get("/api/my_profile")
+async def my_profile(request: web.Request) -> web.Response:
+    """Личный профиль на сайте — та же информация, что и в текстовом
+    профиле бота (куратор, стажёры, прогресс по должностям, рейтинг),
+    но в виде JSON для отображения прямо на сайте. Доступен только по
+    initData — всегда СВОИ данные, не чужие."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    restaurant_id = int(restaurant_id) if restaurant_id and restaurant_id.isdigit() else None
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+
+        restaurant_name = None
+        restaurant_rank = None
+        if restaurant_id is not None:
+            restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+            if restaurant is not None:
+                restaurant_name = restaurant.name
+                restaurant_rank = await crud.get_user_rank_within_restaurant(
+                    session, user.id, restaurant_id
+                )
+
+        stats = await crud.get_user_stats(session, user.id)
+        leaderboard_rank = await crud.get_user_rank(session, user.id)
+        position_progress = await crud.get_position_progress_for_user(session, user.id)
+        curator_name = await crud.get_curator_name(session, user.telegram_id)
+        trainee_count = await crud.get_trainee_count(session, user.telegram_id)
+
+    return _json(
+        {
+            "name": user.full_name or user.username or "Без имени",
+            "telegram_id": user.telegram_id,
+            "restaurant_name": restaurant_name,
+            "curator_name": curator_name,
+            "trainee_count": trainee_count,
+            "tests_completed": stats["tests_completed"],
+            "avg_percentage": stats["avg_percentage"],
+            "leaderboard_rank": leaderboard_rank,
+            "restaurant_rank": restaurant_rank,
+            "position_progress": position_progress,
+        }
+    )
+
+
 @routes.get("/api/test_result_detail")
 async def test_result_detail(request: web.Request) -> web.Response:
     """Детальный разбор одного пройденного теста — какие вопросы, какие

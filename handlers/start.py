@@ -445,6 +445,36 @@ async def cb_choose_restaurant(callback: CallbackQuery, state: FSMContext) -> No
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("open_home:"))
+async def cb_open_home(callback: CallbackQuery) -> None:
+    """«🏠 Открыть заведение» — открывает домашнюю страницу сайта, откуда
+    уже доступны профиль, тест и результаты одной кнопкой каждый, без
+    возврата в Telegram между действиями."""
+    restaurant_id = int(callback.data.split(":")[1])
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=callback.from_user.id,
+            username=callback.from_user.username,
+            full_name=callback.from_user.full_name,
+        )
+        await crud.set_user_restaurant(session, user, restaurant_id)
+        restaurant = await crud.get_restaurant_by_id(session, restaurant_id)
+
+    if config.WEBAPP_URL and restaurant is not None:
+        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=home"
+        await callback.message.edit_text(
+            f"Нажмите кнопку ниже, чтобы открыть «{restaurant.name}»:",
+            reply_markup=webapp_open_kb(
+                webapp_link, "🏠 Открыть заведение", back_callback=f"back_to_restaurant:{restaurant_id}"
+            ),
+        )
+        await callback.answer()
+        return
+
+    await callback.answer("Сайт пока не настроен.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("open_tests:"))
 async def cb_open_tests(callback: CallbackQuery, state: FSMContext) -> None:
     restaurant_id = int(callback.data.split(":")[1])
