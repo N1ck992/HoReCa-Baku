@@ -317,6 +317,63 @@ async def get_test_result_breakdown(session: AsyncSession, test_result_id: int) 
     return breakdown
 
 
+async def get_daily_summary_for_user_in_restaurant(
+    session: AsyncSession, user_id: int, restaurant_id: int, limit: int | None = None
+) -> list[dict]:
+    """Тесты сотрудника, сгруппированные по дню — раз в день можно пройти
+    несколько тестов (до 10), отдельная строка на каждый тест была бы
+    избыточной. Возвращает [{date, test_count, correct_total, wrong_total}],
+    от самых свежих дней к более старым. limit=None — вся история."""
+    day_expr = func.date(TestResult.created_at)
+    query = (
+        select(
+            day_expr.label("day"),
+            func.count(TestResult.id),
+            func.sum(TestResult.correct_count),
+            func.sum(TestResult.total_count - TestResult.correct_count),
+        )
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(TestResult.user_id == user_id, Position.restaurant_id == restaurant_id)
+        .group_by(day_expr)
+        .order_by(day_expr.desc())
+    )
+    if limit is not None:
+        query = query.limit(limit)
+
+    result = await session.execute(query)
+    return [
+        {
+            "date": str(row[0]),
+            "test_count": row[1],
+            "correct_total": row[2] or 0,
+            "wrong_total": row[3] or 0,
+        }
+        for row in result.all()
+    ]
+
+
+async def get_test_results_for_day(
+    session: AsyncSession, user_id: int, restaurant_id: int, date_str: str
+) -> list[TestResult]:
+    """Отдельные тесты сотрудника за конкретный день (для перехода с
+    кнопки дня к списку тестов этого дня)."""
+    day_expr = func.date(TestResult.created_at)
+    result = await session.execute(
+        select(TestResult)
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(
+            TestResult.user_id == user_id,
+            Position.restaurant_id == restaurant_id,
+            day_expr == date_str,
+        )
+        .options(selectinload(TestResult.category).selectinload(Category.position))
+        .order_by(TestResult.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
 async def get_recent_results_for_user_in_restaurant(
     session: AsyncSession, user_id: int, restaurant_id: int, limit: int = 10
 ) -> list[TestResult]:

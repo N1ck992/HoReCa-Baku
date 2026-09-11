@@ -447,31 +447,97 @@ async def get_employee_detail(request: web.Request) -> web.Response:
             return _json({"error": "Сотрудник не найден."}, status=404)
 
         stats = await crud.get_user_stats_for_restaurant(session, user_id, restaurant_id)
-        raw_history = await crud.get_recent_results_for_user_in_restaurant(
-            session, user_id, restaurant_id
+        # Показываем 5 самых свежих дней сразу — за полной историей есть
+        # отдельная кнопка (см. /api/employee_all_days).
+        daily_summary = await crud.get_daily_summary_for_user_in_restaurant(
+            session, user_id, restaurant_id, limit=5
         )
-
-    history = [
-        {
-            "id": r.id,
-            "position": r.category.position.name if r.category and r.category.position else None,
-            "category": r.category.name if r.category else None,
-            "correct_count": r.correct_count,
-            "total_count": r.total_count,
-            "percentage": r.percentage,
-            "date": r.created_at.strftime("%d.%m.%Y") if r.created_at else None,
-        }
-        for r in raw_history
-    ]
 
     return _json(
         {
             "name": target.full_name or target.username or "Без имени",
             "tests_completed": stats["tests_completed"],
             "avg_percentage": stats["avg_percentage"],
-            "history": history,
+            "daily_summary": daily_summary,
         }
     )
+
+
+@routes.get("/api/employee_all_days")
+async def get_employee_all_days(request: web.Request) -> web.Response:
+    """Полная история сотрудника по дням, без ограничения в 5 — для
+    перехода с кнопки "N тестов" в шапке карточки сотрудника."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    user_id = request.query.get("user_id")
+    if not (restaurant_id and restaurant_id.isdigit() and user_id and user_id.isdigit()):
+        return _json({"error": "restaurant_id и user_id обязательны"}, status=400)
+    restaurant_id = int(restaurant_id)
+    user_id = int(user_id)
+
+    async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
+        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
+
+        target = await crud.get_user_by_id(session, user_id)
+        if target is None or target.restaurant_id != restaurant_id:
+            return _json({"error": "Сотрудник не найден."}, status=404)
+
+        daily_summary = await crud.get_daily_summary_for_user_in_restaurant(
+            session, user_id, restaurant_id
+        )
+
+    return _json({"name": target.full_name or target.username or "Без имени", "daily_summary": daily_summary})
+
+
+@routes.get("/api/employee_day_tests")
+async def get_employee_day_tests(request: web.Request) -> web.Response:
+    """Список отдельных тестов сотрудника за конкретный день — открывается
+    по клику на кнопку дня."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    user_id = request.query.get("user_id")
+    date_str = request.query.get("date")
+    if not (restaurant_id and restaurant_id.isdigit() and user_id and user_id.isdigit() and date_str):
+        return _json({"error": "restaurant_id, user_id и date обязательны"}, status=400)
+    restaurant_id = int(restaurant_id)
+    user_id = int(user_id)
+
+    async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
+        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
+
+        target = await crud.get_user_by_id(session, user_id)
+        if target is None or target.restaurant_id != restaurant_id:
+            return _json({"error": "Сотрудник не найден."}, status=404)
+
+        results = await crud.get_test_results_for_day(session, user_id, restaurant_id, date_str)
+
+    tests = [
+        {
+            "id": r.id,
+            "position": r.category.position.name if r.category and r.category.position else None,
+            "category": r.category.name if r.category else None,
+            "level": r.level,
+            "correct_count": r.correct_count,
+            "total_count": r.total_count,
+            "percentage": r.percentage,
+        }
+        for r in results
+    ]
+    return _json({"date": date_str, "tests": tests})
 
 
 # ---------- Запрос на экзамен ----------

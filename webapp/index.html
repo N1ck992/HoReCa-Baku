@@ -641,18 +641,42 @@
         </div>
         <div class="stat-card">
           <div class="stat-grid">
-            <div class="stat-box"><div class="stat-num" id="detailTests">0</div><div class="stat-label">тестов</div></div>
+            <div class="stat-box" style="cursor:pointer;" onclick="openEmployeeAllDays()">
+              <div class="stat-num" id="detailTests">0</div><div class="stat-label">тестов ›</div>
+            </div>
             <div class="stat-box"><div class="stat-num" id="detailAvg">0%</div><div class="stat-label">средний балл</div></div>
           </div>
         </div>
-        <p class="sub" style="margin-top:4px;">История тестов (нажмите на тест для разбора)</p>
+        <p class="sub" style="margin-top:4px;">Последние дни (нажмите на день)</p>
         <div class="row-list" id="detailHistory"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 11.1: вся история сотрудника по дням ============ -->
+      <section class="screen" data-screen="employeeAllDays" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('adminEmployeeDetail','right')">‹</button>
+          <span class="restaurant-name" id="allDaysName">Сотрудник</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Вся история<br>по дням</h1>
+        <div class="row-list" id="allDaysList"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 11.2: тесты конкретного дня ============ -->
+      <section class="screen" data-screen="employeeDayTests" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goToBackFromDayTests()">‹</button>
+          <span class="restaurant-name" id="dayTestsDate">Дата</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Тесты<br>за этот день</h1>
+        <div class="row-list" id="dayTestsList"></div>
       </section>
 
       <!-- ============ ЭКРАН 11: разбор конкретного теста по вопросам ============ -->
       <section class="screen" data-screen="testResultBreakdown" data-state="right">
         <div class="top-row">
-          <button class="icon-btn" onclick="goTo('adminEmployeeDetail','right')">‹</button>
+          <button class="icon-btn" onclick="goTo('employeeDayTests','right')">‹</button>
           <span class="restaurant-name">Разбор теста</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
@@ -990,6 +1014,24 @@ async function openAdminEmployees(){
 
 let currentEmployeeUserId = null;
 
+let dayTestsCameFrom = 'adminEmployeeDetail';
+
+function renderDaySummaryRows(days, containerId){
+  const el = document.getElementById(containerId);
+  el.innerHTML = days.length
+    ? days.map(d => `
+        <div class="row-item" style="cursor:pointer;" onclick="openEmployeeDayTests('${d.date}')">
+          <span>${formatRuDate(d.date)} · ${d.test_count} ${d.test_count === 1 ? 'тест' : 'тестов'}</span>
+          <span><span style="color:var(--accent-strong)">✓${d.correct_total}</span> <span style="color:var(--wrong)">✗${d.wrong_total}</span> ›</span>
+        </div>`).join('')
+    : '<div class="row-item"><span>Тестов ещё не было</span></div>';
+}
+
+function formatRuDate(isoDate){
+  const parts = (isoDate || '').split('-');
+  return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : (isoDate || '');
+}
+
 async function openEmployeeDetail(userId){
   currentEmployeeUserId = userId;
   goTo('adminEmployeeDetail','left');
@@ -1003,17 +1045,54 @@ async function openEmployeeDetail(userId){
     document.getElementById('detailRole').textContent = '';
     document.getElementById('detailTests').textContent = detail.tests_completed;
     document.getElementById('detailAvg').textContent = detail.avg_percentage + '%';
-    const hist = document.getElementById('detailHistory');
-    hist.innerHTML = detail.history.length
-      ? detail.history.map(h => `
-          <div class="row-item" style="cursor:pointer;" onclick='openTestResultBreakdown(${h.id})'>
-            <span>${h.position || ''}${h.category ? ' · ' + h.category : ''} · ${h.date || ''}</span>
-            <span style="color:${h.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.correct_count}/${h.total_count} (${h.percentage}%) ›</span>
-          </div>`).join('')
-      : '<div class="row-item"><span>Тестов ещё не было</span></div>';
+    renderDaySummaryRows(detail.daily_summary, 'detailHistory');
   } catch (e) {
     showError(document.getElementById('detailHistory'), e.message);
   }
+}
+
+async function openEmployeeAllDays(){
+  dayTestsCameFrom = 'employeeAllDays';
+  const el = document.getElementById('allDaysList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('employeeAllDays','left');
+  try {
+    const data = await apiGet('/api/employee_all_days', { restaurant_id: restaurantId, user_id: currentEmployeeUserId });
+    document.getElementById('allDaysName').textContent = data.name;
+    renderDaySummaryRows(data.daily_summary, 'allDaysList');
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+async function openEmployeeDayTests(date){
+  if (document.querySelector('.screen[data-screen="employeeAllDays"]').dataset.state === 'active') {
+    dayTestsCameFrom = 'employeeAllDays';
+  } else {
+    dayTestsCameFrom = 'adminEmployeeDetail';
+  }
+  const el = document.getElementById('dayTestsList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  document.getElementById('dayTestsDate').textContent = formatRuDate(date);
+  goTo('employeeDayTests','left');
+  try {
+    const data = await apiGet('/api/employee_day_tests', {
+      restaurant_id: restaurantId, user_id: currentEmployeeUserId, date,
+    });
+    el.innerHTML = data.tests.length
+      ? data.tests.map(t => `
+          <div class="row-item" style="cursor:pointer;" onclick='openTestResultBreakdown(${t.id})'>
+            <span>${t.position || ''}${t.category ? ' · ' + t.category : ''} · ур.${t.level}</span>
+            <span style="color:${t.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${t.correct_count}/${t.total_count} (${t.percentage}%) ›</span>
+          </div>`).join('')
+      : '<div class="row-item"><span>Тестов не найдено</span></div>';
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+function goToBackFromDayTests(){
+  goTo(dayTestsCameFrom, 'right');
 }
 
 async function openTestResultBreakdown(testResultId){
