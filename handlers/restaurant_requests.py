@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import ADMIN_ID
+from data.seed import seed_positions_for_restaurant
 from database import crud
 from database.database import async_session
 from keyboards.keyboards import back_to_main_kb, main_menu_kb
@@ -115,6 +116,7 @@ async def cb_request_approve(callback: CallbackQuery, bot: Bot) -> None:
         restaurant = await crud.create_restaurant(
             session, request.name, request.requested_by_telegram_id, request.requested_by_name
         )
+        await seed_positions_for_restaurant(session, restaurant.id)
         await crud.set_restaurant_request_status(session, request.id, "approved")
 
     await callback.message.edit_text(

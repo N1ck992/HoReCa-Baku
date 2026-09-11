@@ -213,11 +213,16 @@ async def start_test(request: web.Request) -> web.Response:
         # Уровни 1/2/3 доступны сразу всем, без сдачи экзамена — уровень
         # просто определяет и сложность (вопросы этого уровня и легче), и
         # длину теста: уровень 1 — 5 вопросов, уровень 2 — 10, уровень 3 — 15.
-        pool = [q for q in all_questions if q.difficulty <= level]
-        if not pool:
-            pool = all_questions  # на случай, если вопросов этого уровня ещё не добавили
-
         wanted = level * 5
+        pool = [q for q in all_questions if q.difficulty <= level]
+        if len(pool) < wanted:
+            # Вопросов этого уровня (или ниже) не хватает до нужного
+            # количества — добираем из оставшихся (более сложных), чтобы
+            # тест не оказался короче, чем должен быть по уровню.
+            leftover = [q for q in all_questions if q not in pool]
+            random.shuffle(leftover)
+            pool = pool + leftover[: wanted - len(pool)]
+
         selected = random.sample(pool, min(wanted, len(pool)))
         random.shuffle(selected)
 

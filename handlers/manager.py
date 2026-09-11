@@ -52,8 +52,7 @@ def restaurant_picker_kb(restaurants):
 
 
 async def _show_manager_menu(restaurant, edit_target) -> None:
-    group_status = "✅ группа привязана" if restaurant.group_chat_id else "❌ группа ещё не привязана"
-    text = f"🧑‍💼 Панель администратора — «{restaurant.name}»\n{group_status}"
+    text = f"🧑‍💼 Панель администратора — «{restaurant.name}»"
     await edit_target(text, reply_markup=manager_menu_kb(restaurant.id))
 
 

@@ -1249,6 +1249,39 @@ RESTAURANT_POSITIONS: dict[str, list[dict]] = {
 }
 
 
+async def seed_missing_restaurant_positions(session: AsyncSession) -> None:
+    """Проходит по ВСЕМ уже существующим заведениям и досоздаёт им
+    собственные уникальные тесты, если их ещё нет — на случай, если
+    заведение было создано до того, как это стало происходить
+    автоматически при одобрении. Безопасно вызывать при каждом
+    перезапуске: у заведений, где свои должности уже есть, ничего не
+    меняется."""
+    result = await session.execute(select(Restaurant))
+    for restaurant in result.scalars().all():
+        await seed_positions_for_restaurant(session, restaurant.id)
+
+
+async def seed_positions_for_restaurant(session: AsyncSession, restaurant_id: int) -> None:
+    """Создаёт для НОВОГО заведения копию общих должностей/категорий/
+    вопросов как его собственные уникальные тесты. Раньше это делалось
+    вручную только для одного заведения (Michel) через RESTAURANT_POSITIONS
+    — из-за этого у всех остальных новых заведений результаты тестов
+    персонала не засчитывались в статистику (админ-панель считает только
+    тесты именно СВОЕЙ должности, а без этой копии сотрудники проходили
+    только общие тесты). Теперь это происходит автоматически при
+    одобрении каждого нового заведения, без ручной правки этого файла."""
+    result = await session.execute(
+        select(Position).where(Position.restaurant_id == restaurant_id)
+    )
+    if result.scalars().first() is not None:
+        return  # у этого заведения уже есть свои должности — не дублируем
+
+    for position_data in POSITIONS:
+        await _seed_position(session, position_data, restaurant_id=restaurant_id)
+
+    await session.commit()
+
+
 async def seed_restaurant_positions(session: AsyncSession) -> None:
     """Добавляет уникальные должности для заведений из RESTAURANT_POSITIONS,
     если у соответствующего заведения их ещё нет. Безопасно вызывать при
