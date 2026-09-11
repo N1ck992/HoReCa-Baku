@@ -158,20 +158,19 @@ def group_menu_kb(bot_username: str, restaurant_id: int) -> InlineKeyboardMarkup
 
 
 def profile_kb(restaurant_id: int | None = None) -> InlineKeyboardMarkup:
-    """Клавиатура экрана профиля: рейтинг, назад. Если сотрудник
-    привязан к заведению — добавляются кнопки возврата в меню заведения
-    и выхода из него. Кнопки "Мои тесты" тут больше нет — прохождение
-    тестов теперь только через сайт (Mini App), см. join_menu_kb."""
+    """Клавиатура экрана профиля: рейтинг, назад. «⬅️ Назад» ведёт туда,
+    откуда открыли профиль — в меню заведения, если сотрудник к нему
+    привязан, иначе в общее меню бота. Кнопка "Мои тесты" тут больше нет —
+    прохождение тестов теперь только через сайт (Mini App), см. join_menu_kb."""
     builder = InlineKeyboardBuilder()
     builder.button(text="🏢 Рейтинг заведений", callback_data="menu:leaderboard")
     if restaurant_id is not None:
         builder.button(
-            text="🔙 Вернуться в меню заведения", callback_data=f"back_to_restaurant:{restaurant_id}"
-        )
-        builder.button(
             text="🚪 Покинуть заведение", callback_data=f"leave_restaurant_ask:{restaurant_id}"
         )
-    builder.button(text="⬅️ Главное меню", callback_data="menu:main")
+        builder.button(text="⬅️ Назад", callback_data=f"back_to_restaurant:{restaurant_id}")
+    else:
+        builder.button(text="⬅️ Назад", callback_data="menu:main")
     builder.adjust(1)
     return builder.as_markup()
 
