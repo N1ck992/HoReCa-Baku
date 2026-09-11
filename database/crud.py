@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 import string
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -357,8 +357,15 @@ async def get_test_results_for_day(
     session: AsyncSession, user_id: int, restaurant_id: int, date_str: str
 ) -> list[TestResult]:
     """Отдельные тесты сотрудника за конкретный день (для перехода с
-    кнопки дня к списку тестов этого дня)."""
-    day_expr = func.date(TestResult.created_at)
+    кнопки дня к списку тестов этого дня). Сравнение через диапазон
+    времени (а не через func.date() == строка) — так надёжнее работает
+    одинаково и на SQLite, и на PostgreSQL."""
+    try:
+        day_start = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return []
+    day_end = day_start + timedelta(days=1)
+
     result = await session.execute(
         select(TestResult)
         .join(Category, TestResult.category_id == Category.id)
@@ -366,7 +373,8 @@ async def get_test_results_for_day(
         .where(
             TestResult.user_id == user_id,
             Position.restaurant_id == restaurant_id,
-            day_expr == date_str,
+            TestResult.created_at >= day_start,
+            TestResult.created_at < day_end,
         )
         .options(selectinload(TestResult.category).selectinload(Category.position))
         .order_by(TestResult.created_at.desc())
