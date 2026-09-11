@@ -98,7 +98,8 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
     if all_ranks_lines:
         text += "\n\n🎖 Ранги по должностям:\n" + "\n".join(all_ranks_lines)
 
-    return text, profile_kb(restaurant.id if restaurant is not None else None)
+    is_staff_here = restaurant is not None and user.restaurant_id == restaurant.id
+    return text, profile_kb(restaurant.id if restaurant is not None else None, show_leave=is_staff_here)
 
 
 @router.callback_query(F.data == "menu:profile")
