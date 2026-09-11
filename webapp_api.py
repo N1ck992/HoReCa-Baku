@@ -51,6 +51,15 @@ def _archived_error() -> web.Response:
     )
 
 
+def _image_url(image_path: str | None) -> str | None:
+    """Относительная ссылка на картинку вопроса — файлы лежат прямо в
+    папке сайта (webapp/images/questions/), поэтому достаточно
+    относительного пути, без домена: сайт и картинки на одном хостинге."""
+    if not image_path:
+        return None
+    return f"/images/questions/{image_path}"
+
+
 async def _get_active_restaurant(session, restaurant_id: int):
     """Возвращает заведение, только если оно существует и НЕ архивировано.
     Используется на входе в каждый эндпоинт, принимающий restaurant_id
@@ -155,6 +164,7 @@ async def get_questions(request: web.Request) -> web.Response:
                 {
                     "id": q.id,
                     "text": q.text,
+                    "image_url": _image_url(q.image_path),
                     "options": [{"id": o.id, "text": o.text} for o in options],
                 }
             )
@@ -219,6 +229,7 @@ async def start_test(request: web.Request) -> web.Response:
                 {
                     "id": q.id,
                     "text": q.text,
+                    "image_url": _image_url(q.image_path),
                     "options": [{"id": o.id, "text": o.text} for o in options],
                 }
             )
@@ -703,6 +714,7 @@ async def redeem_exam_code(request: web.Request) -> web.Response:
             {
                 "id": q.id,
                 "text": q.text,
+                "image_url": _image_url(q.image_path),
                 "options": [{"id": o.id, "text": o.text} for o in q.options],
             }
             for q in questions

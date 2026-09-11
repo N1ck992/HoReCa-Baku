@@ -10,10 +10,12 @@
         "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],
         "correct_index": 0,  # индекс правильного варианта в списке options
         "difficulty": 1,     # необязательно: 1 лёгкий, 2 средний, 3 сложный
+        "image": "caesar-salad.jpg",  # необязательно: имя файла картинки
     }
 
-Картинки к вопросам больше не используются — тесты теперь проходят на сайте
-(Mini App), там своя система изображений.
+Картинка (если указана) должна лежать в webapp/images/questions/ — сайт
+сам покажет её над текстом вопроса, аккуратно обрезанной под общий размер.
+Пока картинок нигде не используется — это только фундамент на будущее.
 """
 
 from __future__ import annotations
@@ -1158,6 +1160,7 @@ async def sync_new_questions(session: AsyncSession) -> None:
                         text=question_data["text"],
                         order=q_order,
                         difficulty=question_data.get("difficulty", 1),
+                        image_path=question_data.get("image"),
                     )
                     session.add(question)
                     await session.flush()
@@ -1195,6 +1198,7 @@ async def sync_new_questions(session: AsyncSession) -> None:
                     text=question_data["text"],
                     order=next_order,
                     difficulty=question_data.get("difficulty", 1),
+                    image_path=question_data.get("image"),
                 )
                 session.add(question)
                 await session.flush()

@@ -185,6 +185,14 @@
     flex-shrink:0;
   }
 
+  .q-image{
+    position:relative; z-index:2;
+    width:100%; aspect-ratio: 4 / 3; object-fit:cover;
+    border-radius:16px; margin-top:14px; flex-shrink:0;
+    background: var(--plaster);
+    border: 1px solid var(--divider);
+  }
+
   .options{
     position:relative; z-index:2;
     display:flex; flex-direction:column; gap:10px;
@@ -460,6 +468,7 @@
         </div>
         <div class="progress-row" id="progressRow"></div>
         <div class="q-counter" id="qCounter">Вопрос 1 из 5</div>
+        <img class="q-image" id="qImage" style="display:none;" alt="Изображение к вопросу">
         <h2 class="q-text" id="qText">Текст вопроса</h2>
         <div class="options" id="optionsList"></div>
         <div class="next-wrap" id="nextWrap">
@@ -554,6 +563,7 @@
         </div>
         <div class="progress-row" id="examProgressRow"></div>
         <div class="q-counter" id="examQCounter">Вопрос 1 из 5</div>
+        <img class="q-image" id="examQImage" style="display:none;" alt="Изображение к вопросу">
         <h2 class="q-text" id="examQText">…</h2>
         <div class="options" id="examOptionsList"></div>
       </section>
@@ -874,11 +884,23 @@ function updateProgress(){
   });
 }
 
+function setQuestionImage(imgId, imageUrl){
+  const img = document.getElementById(imgId);
+  if (imageUrl) {
+    img.src = imageUrl;
+    img.style.display = '';
+  } else {
+    img.style.display = 'none';
+    img.removeAttribute('src');
+  }
+}
+
 function renderQuestion(){
   answered = false;
   const q = quizQuestions[quizIndex];
   document.getElementById('qCounter').textContent = `Вопрос ${quizIndex+1} из ${quizQuestions.length}`;
   document.getElementById('qText').textContent = q.text;
+  setQuestionImage('qImage', q.image_url);
   updateProgress();
 
   const letters = ['A','Б','В','Г'];
@@ -1276,6 +1298,7 @@ function renderExamQuestion(){
   const q = examQuestions[examIndex];
   document.getElementById('examQCounter').textContent = `Вопрос ${examIndex+1} из ${examQuestions.length}`;
   document.getElementById('examQText').textContent = q.text;
+  setQuestionImage('examQImage', q.image_url);
   updateExamProgress();
 
   const letters = ['A','Б','В','Г'];
