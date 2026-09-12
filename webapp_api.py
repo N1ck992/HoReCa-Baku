@@ -240,15 +240,12 @@ async def start_test(request: web.Request) -> web.Response:
         # просто определяет и сложность (вопросы этого уровня и легче), и
         # длину теста: уровень 1 — 5 вопросов, уровень 2 — 10, уровень 3 — 15.
         wanted = level * 5
-        pool = [q for q in all_questions if q.difficulty <= level]
-        if len(pool) < wanted:
-            # Вопросов этого уровня (или ниже) не хватает до нужного
-            # количества — добираем из оставшихся (более сложных), чтобы
-            # тест не оказался короче, чем должен быть по уровню.
-            leftover = [q for q in all_questions if q not in pool]
-            random.shuffle(leftover)
-            pool = pool + leftover[: wanted - len(pool)]
-
+        # Уровень теперь строго отделяет тему, а не только сложность —
+        # лёгкий/средний/тяжёлый показывают ТОЛЬКО вопросы своего уровня,
+        # без подмешивания вопросов других уровней. Если вопросов этого
+        # уровня пока меньше, чем "положено" по длине теста — показываем
+        # столько, сколько реально есть, а не разбавляем чужой темой.
+        pool = [q for q in all_questions if q.difficulty == level]
         selected = random.sample(pool, min(wanted, len(pool)))
         random.shuffle(selected)
 
