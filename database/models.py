@@ -32,6 +32,11 @@ class User(Base):
     current_position_id: Mapped[int | None] = mapped_column(
         ForeignKey("positions.id"), nullable=True
     )
+    # Если True (по умолчанию) и current_position_id задан — сотрудник
+    # видит на сайте тесты только своей назначенной должности. Если
+    # False — видит тесты всех должностей заведения, как обычно.
+    # Управляется администратором при назначении должности.
+    restrict_tests_to_position: Mapped[bool] = mapped_column(Boolean, default=True)
     restaurant_id: Mapped[int | None] = mapped_column(
         ForeignKey("restaurants.id"), nullable=True
     )

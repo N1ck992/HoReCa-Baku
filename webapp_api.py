@@ -96,13 +96,27 @@ async def get_positions(request: web.Request) -> web.Response:
 
     async with async_session() as session:
         restaurant_name = None
+        is_manager = False
         if restaurant_id is not None:
             restaurant = await _get_active_restaurant(session, restaurant_id)
             if restaurant is None:
                 return _archived_error()
             restaurant_name = restaurant.name
+            is_manager = await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"])
 
         positions = await crud.get_active_positions(session, restaurant_id)
+
+        # Если администратор назначил сотруднику конкретную должность и
+        # оставил включённым ограничение — сотрудник видит тесты только
+        # этой одной должности, а не все сразу.
+        user = await crud.get_user_by_telegram_id(session, tg_user["id"])
+        if (
+            user is not None
+            and user.current_position_id is not None
+            and user.restrict_tests_to_position
+        ):
+            positions = [p for p in positions if p.id == user.current_position_id]
+
         data = []
         for position in positions:
             categories = await crud.get_categories_for_position(session, position.id)
@@ -114,7 +128,7 @@ async def get_positions(request: web.Request) -> web.Response:
                     "category_count": len(categories),
                 }
             )
-    return _json({"restaurant_name": restaurant_name, "positions": data})
+    return _json({"restaurant_name": restaurant_name, "is_manager": is_manager, "positions": data})
 
 
 @routes.get("/api/categories")

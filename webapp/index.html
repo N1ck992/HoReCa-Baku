@@ -403,6 +403,11 @@
             <div class="card-text"><div class="card-title">Мои результаты</div><div class="card-meta">История пройденных тестов</div></div>
             <div class="chevron">›</div>
           </div>
+          <div class="card" id="staffCard" style="display:none;" onclick="openAdminEmployees()">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div class="card-text"><div class="card-title">Персонал заведения</div><div class="card-meta">Только для администраторов</div></div>
+            <div class="chevron">›</div>
+          </div>
         </div>
       </section>
 
@@ -667,35 +672,16 @@
         <button class="btn-ghost" style="margin-top:16px;" onclick="openAdminEmployees()">👥 Результаты персонала</button>
       </section>
 
-      <!-- ============ ЭКРАН 8: панель администратора — меню ============ -->
-      <section class="screen" data-screen="adminMenu" data-state="right">
-        <div class="top-row">
-          <span class="restaurant-name" id="adminRestaurantName">Заведение</span>
-          <button class="icon-btn" onclick="closeApp()">✕</button>
-        </div>
-        <span class="admin-badge">Панель администратора</span>
-        <h1 class="headline">Результаты<br>персонала</h1>
-        <div class="cards">
-          <div class="card" onclick="openAdminEmployees()">
-            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-            <div class="card-text">
-              <div class="card-title">Список персонала</div>
-              <div class="card-meta">Результаты тестов сотрудников</div>
-            </div>
-            <div class="chevron">›</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ ЭКРАН 9: список персонала ============ -->
+      <!-- ============ ЭКРАН 9: персонал заведения ============ -->
       <section class="screen" data-screen="adminEmployees" data-state="right">
         <div class="top-row">
-          <button class="icon-btn" onclick="goTo('adminMenu','right')">‹</button>
-          <span class="restaurant-name">Персонал</span>
+          <button class="icon-btn" onclick="goTo('restaurantHome','right')">‹</button>
+          <span class="restaurant-name">Персонал заведения</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
-        <h1 class="headline">Список<br>персонала</h1>
+        <h1 class="headline">Персонал<br>заведения</h1>
         <p class="sub">Нажмите на сотрудника, чтобы увидеть подробности.</p>
+        <button class="btn-ghost" style="margin-bottom:14px;" onclick="openAssignPositionEmployees()">➕ Назначить на должность</button>
         <div class="cards" id="adminEmployeesList"></div>
       </section>
 
@@ -807,6 +793,7 @@ function showError(container, message) {
 /* ---------------- Данные из ссылки ---------------- */
 const urlParams = new URLSearchParams(window.location.search);
 const restaurantId = urlParams.get('restaurant_id');
+let isManagerHere = false;
 
 /* ---------------- Иконки должностей ---------------- */
 const ICONS = {
@@ -852,6 +839,9 @@ async function renderPositions(){
       document.getElementById('homeRestaurantSignature').textContent = data.restaurant_name;
       document.getElementById('homeRestaurantSignature').style.display = '';
     }
+
+    isManagerHere = !!data.is_manager;
+    document.getElementById('staffCard').style.display = isManagerHere ? '' : 'none';
 
     if (!positions.length) {
       el.innerHTML = '<p class="sub">Для вашего заведения пока нет тестов.</p>';
@@ -1546,7 +1536,7 @@ function initFromQuery(){
   const screen = params.get('screen');
 
   if(screen === 'admin'){
-    setActive('adminMenu');
+    openAdminEmployees();
   } else if(screen === 'myresults'){
     renderPositions(); // заодно подтянет название заведения для навигации
     setActive('myResults');
