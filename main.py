@@ -9,6 +9,7 @@ from aiohttp import web
 
 from config import BOT_TOKEN
 from data.seed import (
+    cleanup_removed_categories,
     seed_data,
     seed_missing_restaurant_positions,
     seed_restaurant_positions,
@@ -61,6 +62,7 @@ async def main() -> None:
     await init_db()
     async with async_session() as session:
         await seed_data(session)
+        await cleanup_removed_categories(session)
         await seed_restaurant_positions(session)
         await seed_missing_restaurant_positions(session)
         await sync_new_questions(session)

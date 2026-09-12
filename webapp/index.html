@@ -515,7 +515,7 @@
       <!-- ============ ЭКРАН 2.1: выбор уровня ============ -->
       <section class="screen" data-screen="levelPicker" data-state="right">
         <div class="top-row">
-          <button class="icon-btn" onclick="goTo('categories','right')">‹</button>
+          <button class="icon-btn" id="levelBackBtn" onclick="goTo('categories','right')">‹</button>
           <span class="restaurant-name" id="levelCategoryName">Категория</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
@@ -944,10 +944,22 @@ async function selectPosition(positionId, positionName){
   const el = document.getElementById('categoriesList');
   document.getElementById('catPositionName').textContent = positionName;
   el.innerHTML = '<p class="sub">Загрузка…</p>';
-  goTo('categories','left');
   try {
     const categories = await apiGet('/api/categories', { position_id: positionId });
     currentPosition = { id: positionId, name: positionName, categories };
+
+    if (categories.length === 1) {
+      // Только один общий раздел у этой должности — категория тут не
+      // нужна, сразу переходим к выбору уровня сложности.
+      selectCategory(categories[0].id, positionName);
+      categorySkipped = true;
+      document.getElementById('levelBackBtn').setAttribute('onclick', "goTo('positions','right')");
+      return;
+    }
+    categorySkipped = false;
+    document.getElementById('levelBackBtn').setAttribute('onclick', "goTo('categories','right')");
+
+    goTo('categories','left');
     if (!categories.length) {
       el.innerHTML = '<p class="sub">Для этой должности пока нет вопросов.</p>';
       return;
@@ -963,6 +975,7 @@ async function selectPosition(positionId, positionName){
       </div>
     `).join('');
   } catch (e) {
+    goTo('categories','left');
     showError(el, e.message);
   }
 }
@@ -976,6 +989,7 @@ function goTo(name, fromSide){
 }
 
 let currentCategoryId = null;
+let categorySkipped = false;
 
 function selectCategory(categoryId, categoryName){
   currentCategoryId = categoryId;
