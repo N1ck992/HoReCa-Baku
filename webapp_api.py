@@ -18,6 +18,7 @@ from aiogram import Bot
 from aiohttp import web
 
 from config import BOT_TOKEN
+from data.seed import _current_category_codes_for_position
 from database import crud
 from database.database import async_session
 from keyboards.keyboards import exam_request_decision_kb
@@ -143,7 +144,18 @@ async def get_categories(request: web.Request) -> web.Response:
         return _json({"error": "position_id обязателен"}, status=400)
 
     async with async_session() as session:
+        position = await crud.get_position_by_id(session, int(position_id))
         categories = await crud.get_categories_for_position(session, int(position_id))
+
+        # Категории, оставшиеся в базе от старой структуры контента (до
+        # реструктуризации, например объединения в одну категорию),
+        # скрываются здесь — но НЕ удаляются, чтобы не терять историю
+        # уже пройденных по ним тестов. См. _current_category_codes_for_position.
+        if position is not None:
+            current_codes = _current_category_codes_for_position(position.code)
+            if current_codes is not None:
+                categories = [c for c in categories if c.code in current_codes]
+
         questions_counts = []
         for category in categories:
             questions = await crud.get_questions_with_options(session, category.id)

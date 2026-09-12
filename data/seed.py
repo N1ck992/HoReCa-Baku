@@ -20,19 +20,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import (
-    AnswerOption,
-    Category,
-    Position,
-    Question,
-    Rank,
-    Restaurant,
-    TestResult,
-    UserAnswer,
-)
+from database.models import AnswerOption, Category, Position, Question, Rank, Restaurant
 
 POSITIONS: list[dict] = [
     {
@@ -806,44 +797,27 @@ async def seed_data(session: AsyncSession) -> None:
 
 
 async def cleanup_removed_categories(session: AsyncSession) -> None:
-    """Удаляет категории (и все связанные с ними вопросы, варианты
-    ответа и результаты тестов), которых больше нет в текущей структуре
-    этого файла для данной должности — нужно, когда несколько категорий
-    заменяются одной новой (например, объединение всех тестов повара в
-    "Профессиональные знания"). БЕЗ этой функции старые категории просто
-    остаются висеть в базе, и сайт продолжит показывать их наравне с
-    новой, вместо того чтобы полностью её заменить.
+    """НЕ используется активно — оставлено намеренно неразрушительным.
 
-    ВНИМАНИЕ: это необратимо удаляет историю пройденных тестов именно по
-    удаляемым категориям — используется только при осознанной замене
-    структуры контента, не для случайных различий."""
-    result = await session.execute(select(Position))
-    positions = list(result.scalars().unique().all())
-    removed = 0
+    Раньше эта функция физически удаляла категории (и всю историю
+    тестов по ним), которых больше нет в текущей структуре файла для
+    данной должности. Отказались от этого подхода, чтобы не терять
+    историю уже пройденных тестов при реструктуризации контента —
+    вместо этого устаревшие категории просто СКРЫВАЮТСЯ из списка на
+    сайте (см. _current_category_codes_for_position и его использование
+    в webapp_api.py), а сами данные остаются в базе нетронутыми."""
+    return
 
-    for position in positions:
-        position_data = next((p for p in POSITIONS if p["code"] == position.code), None)
-        if position_data is None:
-            continue
-        current_codes = {c["code"] for c in position_data["categories"]}
 
-        result = await session.execute(select(Category).where(Category.position_id == position.id))
-        for category in result.scalars().all():
-            if category.code in current_codes:
-                continue
-
-            result2 = await session.execute(select(Question).where(Question.category_id == category.id))
-            question_ids = [q.id for q in result2.scalars().all()]
-            if question_ids:
-                await session.execute(delete(UserAnswer).where(UserAnswer.question_id.in_(question_ids)))
-                await session.execute(delete(AnswerOption).where(AnswerOption.question_id.in_(question_ids)))
-            await session.execute(delete(TestResult).where(TestResult.category_id == category.id))
-            await session.execute(delete(Question).where(Question.category_id == category.id))
-            await session.delete(category)
-            removed += 1
-
-    if removed:
-        await session.commit()
+def _current_category_codes_for_position(position_code: str) -> set[str] | None:
+    """Коды категорий, которые сейчас актуальны для этой должности по
+    данным этого файла — используется, чтобы скрыть с сайта категории,
+    оставшиеся в базе от старой структуры контента (без их удаления, во
+    избежание потери истории уже пройденных по ним тестов)."""
+    position_data = next((p for p in POSITIONS if p["code"] == position_code), None)
+    if position_data is None:
+        return None
+    return {c["code"] for c in position_data["categories"]}
 
 
 async def sync_question_options(session: AsyncSession) -> None:
