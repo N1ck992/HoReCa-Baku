@@ -787,7 +787,7 @@
             <div class="card-text"><div class="card-title">На фоне коллег</div><div class="card-meta">Сравнение со средним по заведению</div></div>
           </div>
         </div>
-        <div id="chartContainer" style="display:flex; justify-content:center; margin-top:10px;"></div>
+        <div id="chartContainer" style="display:flex; justify-content:center; margin-top:10px; max-width:260px; max-height:260px; margin-left:auto; margin-right:auto;"></div>
         <div class="row-list" id="chartLegend" style="margin-top:14px;"></div>
       </section>
 
@@ -1340,7 +1340,7 @@ function goToChartBack(){
 
 async function setChartMode(mode){
   currentChartMode = mode;
-  document.querySelectorAll('#employeeChart .card').forEach(c => {
+  document.querySelectorAll('.screen[data-screen="employeeChart"] .card').forEach(c => {
     c.classList.toggle('selected', c.dataset.mode === mode);
   });
 
@@ -1374,6 +1374,9 @@ async function setChartMode(mode){
         }],
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1,
         plugins: { legend: { display: chartType === 'pie', position: 'bottom' } },
         scales: chartType === 'bar' ? { y: { beginAtZero: true } } : undefined,
       },
