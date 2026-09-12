@@ -416,7 +416,7 @@
             <div class="card-text"><div class="card-title">Мои результаты</div><div class="card-meta">История пройденных тестов</div></div>
             <div class="chevron">›</div>
           </div>
-          <div class="card" id="staffCard" style="display:none;" onclick="openAdminEmployees()">
+          <div class="card" id="staffCard" onclick="openAdminEmployees()">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
             <div class="card-text"><div class="card-title">Персонал заведения</div><div class="card-meta">Только для администраторов</div></div>
             <div class="chevron">›</div>
@@ -874,7 +874,6 @@ function showError(container, message) {
 /* ---------------- Данные из ссылки ---------------- */
 const urlParams = new URLSearchParams(window.location.search);
 const restaurantId = urlParams.get('restaurant_id');
-let isManagerHere = false;
 
 /* ---------------- Иконки должностей ---------------- */
 const ICONS = {
@@ -920,9 +919,6 @@ async function renderPositions(){
       document.getElementById('homeRestaurantSignature').textContent = data.restaurant_name;
       document.getElementById('homeRestaurantSignature').style.display = '';
     }
-
-    isManagerHere = !!data.is_manager;
-    document.getElementById('staffCard').style.display = isManagerHere ? '' : 'none';
 
     if (!positions.length) {
       el.innerHTML = '<p class="sub">Для вашего заведения пока нет тестов.</p>';
