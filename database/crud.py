@@ -568,7 +568,10 @@ async def get_position_progress_for_user(session: AsyncSession, user_id: int) ->
     сложности вопросов ему сейчас открыт по каждой из них (1/2/3).
     Используется в профиле вместо старой единственной "текущей должности"
     — теперь виден прогресс сразу по всем должностям, которыми человек
-    занимался."""
+    занимался. Группировка идёт по КОДУ должности (например "cook"), а не
+    по конкретной записи Position — иначе один и тот же "Повар" считался
+    бы отдельно для каждого заведения (общий тест, Michel, Gazelli и
+    т.д.), хотя для человека это одна и та же профессия."""
     result = await session.execute(
         select(Category.position_id, func.count(TestResult.id))
         .join(TestResult, TestResult.category_id == Category.id)
@@ -577,21 +580,26 @@ async def get_position_progress_for_user(session: AsyncSession, user_id: int) ->
     )
     rows = result.all()
 
-    progress = []
+    by_code: dict[str, dict] = {}
     for position_id, tests_completed in rows:
         position = await get_position_by_id(session, position_id)
         if position is None:
             continue
         level = await get_unlocked_difficulty(session, user_id, position_id)
-        progress.append(
+
+        entry = by_code.setdefault(
+            position.code,
             {
                 "position_name": position.name,
                 "position_emoji": position.emoji,
                 "level": level,
-                "tests_completed": tests_completed,
-            }
+                "tests_completed": 0,
+            },
         )
-    return progress
+        entry["tests_completed"] += tests_completed
+        entry["level"] = max(entry["level"], level)
+
+    return list(by_code.values())
 
 
 async def get_eligible_positions_for_exam(
