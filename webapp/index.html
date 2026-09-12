@@ -521,17 +521,17 @@
         <div class="cards" id="levelCardsList">
           <div class="card" data-level="1" onclick="selectLevel(1)">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg></div>
-            <div class="card-text"><div class="card-title">Уровень 1 · лёгкий</div><div class="card-meta">до 5 вопросов</div></div>
+            <div class="card-text"><div class="card-title">Уровень 1 · лёгкий</div><div class="card-meta">по 5 вопросов, можно продолжать</div></div>
             <div class="chevron">›</div>
           </div>
           <div class="card" data-level="2" onclick="selectLevel(2)">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></div>
-            <div class="card-text"><div class="card-title">Уровень 2 · средний</div><div class="card-meta">до 10 вопросов</div></div>
+            <div class="card-text"><div class="card-title">Уровень 2 · средний</div><div class="card-meta">по 5 вопросов, можно продолжать</div></div>
             <div class="chevron">›</div>
           </div>
           <div class="card" data-level="3" onclick="selectLevel(3)">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg></div>
-            <div class="card-text"><div class="card-title">Уровень 3 · сложный</div><div class="card-meta">до 15 вопросов</div></div>
+            <div class="card-text"><div class="card-title">Уровень 3 · сложный</div><div class="card-meta">по 5 вопросов, можно продолжать</div></div>
             <div class="chevron">›</div>
           </div>
           <div class="card" data-level="4" id="level4Card" onclick="handleLevel4Click()" style="position:relative;">
@@ -594,7 +594,11 @@
           <div class="rank-pill"><span class="dot"></span><span id="rankText">Бармен → Миксолог: 320 / 500 XP</span></div>
         </div>
         <div class="result-actions">
-          <button class="btn-primary" onclick="restart()">🏠 Главное меню сайта</button>
+          <div id="levelCompleteMsg" style="display:none; background:var(--accent-soft); border-radius:14px; padding:14px; margin-bottom:10px; font-size:13.5px; text-align:center; color:var(--accent-strong);">
+            🎉 Вы прошли все вопросы этого уровня! Пора повышать уровень сложности.
+          </div>
+          <button class="btn-primary" id="continueLevelBtn" style="display:none;" onclick="continueSameLevel()">➡️ Продолжить (ещё вопросы)</button>
+          <button class="btn-primary" id="mainMenuBtn" onclick="restart()">🏠 Главное меню сайта</button>
           <button class="btn-ghost" onclick="goToMyResults()">📊 Мои результаты</button>
           <button class="btn-ghost" onclick="restart()">Готово</button>
         </div>
@@ -1028,7 +1032,7 @@ async function loadLevel4Status(){
     level4Info = status;
     if (status.unlocked) {
       overlay.style.display = 'none';
-      meta.textContent = 'до 15 вопросов';
+      meta.textContent = 'по 5 вопросов, можно продолжать';
     } else {
       overlay.style.display = '';
       meta.textContent = `Закрыто · средний балл ${status.avg_percentage}%`;
@@ -1068,17 +1072,35 @@ function confirmLevelSelection(){
   startTestAtLevel(level);
 }
 
+let answeredIdsThisSession = [];
+let currentTestLevel = null;
+let lastHasMore = false;
+
 async function startTestAtLevel(level){
+  answeredIdsThisSession = [];
+  currentTestLevel = level;
+  await fetchTestBatch();
+}
+
+async function continueSameLevel(){
+  await fetchTestBatch();
+}
+
+async function fetchTestBatch(){
   document.getElementById('qText').textContent = 'Загрузка…';
   document.getElementById('optionsList').innerHTML = '';
   goTo('question','left');
   try {
-    const data = await apiPost('/api/start_test', { category_id: currentCategoryId, level });
+    const data = await apiPost('/api/start_test', {
+      category_id: currentCategoryId, level: currentTestLevel, exclude_ids: answeredIdsThisSession,
+    });
     currentTestResultId = data.test_result_id;
     quizQuestions = data.questions;
+    lastHasMore = data.has_more;
+    answeredIdsThisSession = answeredIdsThisSession.concat(quizQuestions.map(q => q.id));
     quizIndex = 0; quizCorrect = 0; answered = false;
     if (!quizQuestions.length) {
-      document.getElementById('qText').textContent = 'В этой категории пока нет вопросов.';
+      document.getElementById('qText').textContent = 'Вопросы этого уровня закончились — вы прошли их все!';
       return;
     }
     buildProgress();
@@ -1207,6 +1229,19 @@ async function showResult(){
 
   document.getElementById('rankText').textContent =
     (currentPosition ? currentPosition.name : '') + ' · результат сохранён в вашей статистике';
+
+  const continueBtn = document.getElementById('continueLevelBtn');
+  const levelCompleteMsg = document.getElementById('levelCompleteMsg');
+  const mainMenuBtn = document.getElementById('mainMenuBtn');
+  if (lastHasMore) {
+    continueBtn.style.display = '';
+    levelCompleteMsg.style.display = 'none';
+    mainMenuBtn.style.display = 'none';
+  } else {
+    continueBtn.style.display = 'none';
+    levelCompleteMsg.style.display = '';
+    mainMenuBtn.style.display = '';
+  }
 
   goTo('result','left');
 }

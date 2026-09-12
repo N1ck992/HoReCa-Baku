@@ -253,10 +253,14 @@ async def start_test(request: web.Request) -> web.Response:
 
     category_id = body.get("category_id")
     level = body.get("level", 1)
+    exclude_ids = body.get("exclude_ids", [])
     if not isinstance(category_id, int):
         return _json({"error": "category_id обязателен"}, status=400)
-    if level not in (1, 2, 3):
+    if level not in (1, 2, 3, 4):
         level = 1
+    if not isinstance(exclude_ids, list):
+        exclude_ids = []
+    exclude_ids = set(exclude_ids)
 
     async with async_session() as session:
         category = await crud.get_category_by_id(session, category_id)
@@ -275,18 +279,19 @@ async def start_test(request: web.Request) -> web.Response:
         test_result = await crud.create_test_result(session, user.id, category_id, level)
         all_questions = await crud.get_questions_with_options(session, category_id)
 
-        # Уровни 1/2/3 доступны сразу всем, без сдачи экзамена — уровень
-        # просто определяет и сложность (вопросы этого уровня и легче), и
-        # длину теста: уровень 1 — 5 вопросов, уровень 2 — 10, уровень 3 — 15.
-        wanted = level * 5
-        # Уровень теперь строго отделяет тему, а не только сложность —
-        # лёгкий/средний/тяжёлый показывают ТОЛЬКО вопросы своего уровня,
-        # без подмешивания вопросов других уровней. Если вопросов этого
-        # уровня пока меньше, чем "положено" по длине теста — показываем
-        # столько, сколько реально есть, а не разбавляем чужой темой.
-        pool = [q for q in all_questions if q.difficulty == level]
-        selected = random.sample(pool, min(wanted, len(pool)))
+        # Уровень строго отделяет тему (лёгкий/средний/тяжёлый/экспертный
+        # показывают ТОЛЬКО свои вопросы). Тест теперь идёт пачками по 5:
+        # пройдя одну пачку, можно продолжить со следующей пачкой ЕЩЁ НЕ
+        # виденных вопросов этого же уровня (exclude_ids — то, что уже
+        # показывалось в рамках текущей непрерывной попытки), пока не
+        # закончится весь пул этого уровня.
+        BATCH_SIZE = 5
+        level_pool = [q for q in all_questions if q.difficulty == level]
+        fresh_pool = [q for q in level_pool if q.id not in exclude_ids]
+
+        selected = random.sample(fresh_pool, min(BATCH_SIZE, len(fresh_pool)))
         random.shuffle(selected)
+        has_more = len(fresh_pool) > len(selected)
 
         questions_data = []
         for q in selected:
@@ -301,7 +306,7 @@ async def start_test(request: web.Request) -> web.Response:
                 }
             )
 
-    return _json({"test_result_id": test_result.id, "questions": questions_data})
+    return _json({"test_result_id": test_result.id, "questions": questions_data, "has_more": has_more})
 
 
 @routes.post("/api/answer_question")
