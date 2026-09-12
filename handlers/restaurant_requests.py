@@ -109,7 +109,12 @@ async def cb_request_approve(callback: CallbackQuery, bot: Bot) -> None:
         if request is None:
             await callback.answer("Заявка не найдена.", show_alert=True)
             return
-        if request.status != "pending":
+
+        # Атомарный захват — если это нажатие пришло дважды (двойной клик,
+        # повторная доставка от Telegram), только один из вызовов пройдёт
+        # эту проверку, и заведение не создастся в двух экземплярах.
+        claimed = await crud.claim_restaurant_request(session, request_id, "approved")
+        if not claimed:
             await callback.answer("Эта заявка уже обработана.", show_alert=True)
             return
 
@@ -117,7 +122,6 @@ async def cb_request_approve(callback: CallbackQuery, bot: Bot) -> None:
             session, request.name, request.requested_by_telegram_id, request.requested_by_name
         )
         await seed_positions_for_restaurant(session, restaurant.id)
-        await crud.set_restaurant_request_status(session, request.id, "approved")
 
     await callback.message.edit_text(
         f"✅ Заявка одобрена. Заведение «{restaurant.name}» создано (ID {restaurant.id})."
@@ -160,11 +164,11 @@ async def cb_request_reject(callback: CallbackQuery, bot: Bot) -> None:
         if request is None:
             await callback.answer("Заявка не найдена.", show_alert=True)
             return
-        if request.status != "pending":
+
+        claimed = await crud.claim_restaurant_request(session, request_id, "rejected")
+        if not claimed:
             await callback.answer("Эта заявка уже обработана.", show_alert=True)
             return
-
-        await crud.set_restaurant_request_status(session, request.id, "rejected")
 
     await callback.message.edit_text(f"❌ Заявка на «{request.name}» отклонена.")
     await callback.answer()

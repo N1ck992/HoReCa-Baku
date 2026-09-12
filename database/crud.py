@@ -4,7 +4,7 @@ import secrets
 import string
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1079,6 +1079,22 @@ async def set_restaurant_request_status(
         request.status = status
         request.decided_at = datetime.utcnow()
         await session.commit()
+
+
+async def claim_restaurant_request(session: AsyncSession, request_id: int, new_status: str) -> bool:
+    """Атомарно переводит заявку из "pending" в новый статус и возвращает
+    True, только если ИМЕННО этот вызов совершил переход. Используется
+    вместо отдельных "проверить, затем изменить" шагов — если Telegram
+    вдруг пришлёт одно и то же нажатие кнопки дважды подряд (двойной
+    клик, повторная доставка после лага), только ОДИН из двух вызовов
+    получит True, и заведение не создастся дважды."""
+    result = await session.execute(
+        update(RestaurantRequest)
+        .where(RestaurantRequest.id == request_id, RestaurantRequest.status == "pending")
+        .values(status=new_status, decided_at=datetime.utcnow())
+    )
+    await session.commit()
+    return result.rowcount == 1
 
 
 # ---------- Экзамены по одноразовым кодам ----------
