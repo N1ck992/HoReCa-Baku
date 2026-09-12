@@ -1,8 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-import config
-
 from database.models import AnswerOption, Category, Position, Vacancy
 
 MAIN_MENU_BUTTON_TEXT = "🏠 Главное меню"
@@ -76,9 +74,6 @@ def manager_menu_kb(restaurant_id: int) -> InlineKeyboardMarkup:
     builder.button(
         text="🔗 Ссылка для персонала", callback_data=f"manager_invite_link:{restaurant_id}"
     )
-    if config.WEBAPP_URL:
-        webapp_link = f"{config.WEBAPP_URL}?restaurant_id={restaurant_id}&screen=admin"
-        builder.button(text="📋 Результаты персонала (сайт)", web_app=WebAppInfo(url=webapp_link))
     builder.button(
         text="🗑 Удалить персонал", callback_data=f"manager_remove_start:{restaurant_id}"
     )
