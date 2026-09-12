@@ -1122,6 +1122,68 @@ async def seed_data(session: AsyncSession) -> None:
     await session.commit()
 
 
+async def sync_question_options(session: AsyncSession) -> None:
+    """Обновляет тексты и правильность вариантов ответа для УЖЕ
+    существующих в базе вопросов, если они изменились в этом файле.
+    Обычное досеивание (sync_new_questions ниже) сверяет только текст
+    самого ВОПРОСА — если он не поменялся, вопрос считается "уже есть" и
+    пропускается, даже если варианты ОТВЕТОВ внутри него изменились.
+    Эта функция закрывает именно этот пробел: применяется и к общим
+    тестам, и ко всем уже созданным копиям тестов для каждого заведения
+    (Michel и т.д.), а не только к общим."""
+    result = await session.execute(select(Position))
+    all_positions = list(result.scalars().unique().all())
+    updated = 0
+
+    for position in all_positions:
+        position_data = next((p for p in POSITIONS if p["code"] == position.code), None)
+        if position_data is None:
+            continue
+
+        for category_data in position_data["categories"]:
+            result = await session.execute(
+                select(Category).where(
+                    Category.position_id == position.id, Category.code == category_data["code"]
+                )
+            )
+            category = result.scalars().first()
+            if category is None:
+                continue
+
+            for question_data in category_data["questions"]:
+                result = await session.execute(
+                    select(Question).where(
+                        Question.category_id == category.id,
+                        Question.text == question_data["text"],
+                    )
+                )
+                question = result.scalars().first()
+                if question is None:
+                    continue
+
+                result = await session.execute(
+                    select(AnswerOption)
+                    .where(AnswerOption.question_id == question.id)
+                    .order_by(AnswerOption.order)
+                )
+                db_options = list(result.scalars().all())
+                file_options = question_data["options"]
+
+                if len(db_options) != len(file_options):
+                    continue  # структура разошлась — на всякий случай пропускаем
+
+                for i, db_opt in enumerate(db_options):
+                    new_text = file_options[i]
+                    new_is_correct = i == question_data["correct_index"]
+                    if db_opt.text != new_text or db_opt.is_correct != new_is_correct:
+                        db_opt.text = new_text
+                        db_opt.is_correct = new_is_correct
+                        updated += 1
+
+    if updated:
+        await session.commit()
+
+
 async def sync_new_questions(session: AsyncSession) -> None:
     """Безопасно добавляет в уже существующие общие категории вопросы,
     которых там ещё нет — сравнение идёт по точному тексту вопроса.

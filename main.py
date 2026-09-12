@@ -13,6 +13,7 @@ from data.seed import (
     seed_missing_restaurant_positions,
     seed_restaurant_positions,
     sync_new_questions,
+    sync_question_options,
 )
 from database.database import async_session, init_db
 from handlers import (
@@ -63,6 +64,7 @@ async def main() -> None:
         await seed_restaurant_positions(session)
         await seed_missing_restaurant_positions(session)
         await sync_new_questions(session)
+        await sync_question_options(session)
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
