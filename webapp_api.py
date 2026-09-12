@@ -200,6 +200,42 @@ async def get_questions(request: web.Request) -> web.Response:
     return _json(data)
 
 
+LEVEL_4_REQUIRED_AVG = 60.0
+
+
+@routes.get("/api/level4_status")
+async def level4_status(request: web.Request) -> web.Response:
+    """Проверка условия автоматического открытия уровня 4 — пока
+    экспериментальная функция (только в dev), не связана с обязательным
+    экзаменом. Условие: средний балл по ЭТОЙ категории не ниже
+    LEVEL_4_REQUIRED_AVG."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    category_id = request.query.get("category_id")
+    if not category_id or not category_id.isdigit():
+        return _json({"error": "category_id обязателен"}, status=400)
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+        avg = await crud.get_user_avg_for_category(session, user.id, int(category_id))
+
+    return _json(
+        {
+            "unlocked": avg >= LEVEL_4_REQUIRED_AVG,
+            "avg_percentage": avg,
+            "required": LEVEL_4_REQUIRED_AVG,
+        }
+    )
+
+
 @routes.post("/api/start_test")
 async def start_test(request: web.Request) -> web.Response:
     """Создаёт запись о начатом тесте и сразу возвращает список вопросов

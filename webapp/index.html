@@ -534,6 +534,14 @@
             <div class="card-text"><div class="card-title">Уровень 3 · сложный</div><div class="card-meta">до 15 вопросов</div></div>
             <div class="chevron">›</div>
           </div>
+          <div class="card" data-level="4" id="level4Card" onclick="handleLevel4Click()" style="position:relative;">
+            <div id="level4LockedOverlay" style="position:absolute; inset:0; backdrop-filter:blur(4px); background:rgba(250,248,244,0.55); border-radius:16px; display:flex; align-items:center; justify-content:center; z-index:2;">
+              <span style="font-size:20px;">🔒</span>
+            </div>
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="12" cy="12" r="4" fill="var(--paper)"/></svg></div>
+            <div class="card-text"><div class="card-title">Уровень 4 · экспертный</div><div class="card-meta" id="level4Meta">Закрыто</div></div>
+            <div class="chevron">›</div>
+          </div>
         </div>
         <div class="next-wrap" id="levelNextWrap">
           <button class="btn-primary" onclick="confirmLevelSelection()">Далее</button>
@@ -1003,6 +1011,42 @@ function selectCategory(categoryId, categoryName){
   document.getElementById('levelNextWrap').classList.remove('show');
   document.querySelectorAll('#levelCardsList .card').forEach(card => card.classList.remove('selected'));
   goTo('levelPicker','left');
+  loadLevel4Status();
+}
+
+let level4Unlocked = false;
+let level4Info = { avg_percentage: 0, required: 60 };
+
+async function loadLevel4Status(){
+  const overlay = document.getElementById('level4LockedOverlay');
+  const meta = document.getElementById('level4Meta');
+  overlay.style.display = '';
+  meta.textContent = 'Проверка…';
+  try {
+    const status = await apiGet('/api/level4_status', { category_id: currentCategoryId });
+    level4Unlocked = status.unlocked;
+    level4Info = status;
+    if (status.unlocked) {
+      overlay.style.display = 'none';
+      meta.textContent = 'до 15 вопросов';
+    } else {
+      overlay.style.display = '';
+      meta.textContent = `Закрыто · средний балл ${status.avg_percentage}%`;
+    }
+  } catch (e) {
+    level4Unlocked = false;
+    meta.textContent = 'Закрыто';
+  }
+}
+
+function handleLevel4Click(){
+  if (level4Unlocked) {
+    selectLevel(4);
+    return;
+  }
+  alert(
+    `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужен средний балл не ниже ${level4Info.required}% по этой категории.\nВаш текущий средний балл: ${level4Info.avg_percentage}%.`
+  );
 }
 
 let selectedLevel = null;

@@ -699,6 +699,19 @@ async def get_user_stats_for_restaurant(
     }
 
 
+async def get_user_avg_for_category(session: AsyncSession, user_id: int, category_id: int) -> float:
+    """Средний балл пользователя именно по этой категории — используется
+    для проверки условия автоматического открытия уровня 4 (пока в
+    разработке, не влияет на обязательный экзамен)."""
+    result = await session.execute(
+        select(TestResult).where(TestResult.user_id == user_id, TestResult.category_id == category_id)
+    )
+    results = list(result.scalars().all())
+    if not results:
+        return 0.0
+    return round(sum(r.percentage for r in results) / len(results), 1)
+
+
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
     result = await session.execute(select(TestResult).where(TestResult.user_id == user_id))
     results = list(result.scalars().all())
