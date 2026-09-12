@@ -441,7 +441,9 @@
         <div class="stat-card">
           <div class="stat-grid">
             <div class="stat-box"><div class="stat-num" id="profileTests">0</div><div class="stat-label">тестов</div></div>
-            <div class="stat-box"><div class="stat-num" id="profileAvg">0%</div><div class="stat-label">средний балл</div></div>
+            <div class="stat-box" style="cursor:pointer;" onclick="openMyOwnChart()">
+              <div class="stat-num" id="profileAvg">0%</div><div class="stat-label">средний балл ›</div>
+            </div>
           </div>
         </div>
         <div class="row-list" id="profileRows"></div>
@@ -1323,6 +1325,15 @@ function openEmployeeChart(){
   setChartMode('category');
 }
 
+function openMyOwnChart(){
+  if (!myOwnUserId) return;
+  chartCameFrom = 'myProfile';
+  currentEmployeeUserId = myOwnUserId;
+  document.getElementById('chartEmployeeName').textContent = 'Мои результаты';
+  goTo('employeeChart','left');
+  setChartMode('category');
+}
+
 function goToChartBack(){
   goTo(chartCameFrom, 'right');
 }
@@ -1699,6 +1710,8 @@ function goToMyProfile(){
   loadMyProfile();
 }
 
+let myOwnUserId = null;
+
 async function loadMyProfile(){
   const el = document.getElementById('profileRows');
   const progressEl = document.getElementById('profileProgressList');
@@ -1707,6 +1720,7 @@ async function loadMyProfile(){
   document.getElementById('profileProgressLabel').style.display = 'none';
   try {
     const p = await apiGet('/api/my_profile', { restaurant_id: restaurantId });
+    myOwnUserId = p.user_id;
     const initials = p.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
     document.getElementById('profileInitials').textContent = initials;
     document.getElementById('profileName').textContent = p.name;

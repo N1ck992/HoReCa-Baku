@@ -416,6 +416,7 @@ async def my_profile(request: web.Request) -> web.Response:
 
     return _json(
         {
+            "user_id": user.id,
             "name": user.full_name or user.username or "Без имени",
             "telegram_id": user.telegram_id,
             "restaurant_name": restaurant_name,
@@ -652,12 +653,16 @@ async def employee_chart_data(request: web.Request) -> web.Response:
     async with async_session() as session:
         if await _get_active_restaurant(session, restaurant_id) is None:
             return _archived_error()
-        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
-            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
 
         target = await crud.get_user_by_id(session, user_id)
         if target is None or target.restaurant_id != restaurant_id:
             return _json({"error": "Сотрудник не найден."}, status=404)
+
+        # Доступ разрешён либо администратору заведения, либо самому
+        # человеку, который смотрит свою же личную диаграмму.
+        is_self = target.telegram_id == tg_user["id"]
+        if not is_self and not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
 
         if mode == "daily":
             summary = await crud.get_daily_summary_for_user_in_restaurant(
