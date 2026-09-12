@@ -87,6 +87,13 @@ async def assign_position_with_restriction(
         await session.commit()
 
 
+async def set_admin_note(session: AsyncSession, user_id: int, note: str) -> None:
+    user = await session.get(User, user_id)
+    if user is not None:
+        user.admin_note = note.strip() or None
+        await session.commit()
+
+
 async def set_restrict_tests_flag(session: AsyncSession, user_id: int, restrict: bool) -> None:
     """Отдельное включение/выключение ограничения видимости тестов, без
     изменения самой назначенной должности — доступно прямо из профиля

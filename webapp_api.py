@@ -513,6 +513,7 @@ async def get_employees(request: web.Request) -> web.Response:
                 "position": item["position"].name if item["position"] else None,
                 "tests_completed": item["tests_completed"],
                 "avg_percentage": item["avg_percentage"],
+                "admin_note": item["user"].admin_note,
             }
             for item in employees
         ]
@@ -566,6 +567,7 @@ async def get_employee_detail(request: web.Request) -> web.Response:
                 else None
             ),
             "restrict_tests_to_position": target.restrict_tests_to_position,
+            "admin_note": target.admin_note,
         }
     )
 
@@ -640,6 +642,42 @@ async def set_restrict_flag(request: web.Request) -> web.Response:
             return _json({"error": "Сотрудник не найден."}, status=404)
 
         await crud.set_restrict_tests_flag(session, user_id, restrict)
+
+    return _json({"ok": True})
+
+
+@routes.post("/api/set_employee_note")
+async def set_employee_note(request: web.Request) -> web.Response:
+    """Личная заметка администратора о сотруднике — чисто справочная,
+    например чтобы запомнить кто есть кто по именам. Ни на что в логике
+    теста/прав не влияет."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = body.get("restaurant_id")
+    user_id = body.get("user_id")
+    note = body.get("note", "")
+    if not all(isinstance(v, int) for v in (restaurant_id, user_id)) or not isinstance(note, str):
+        return _json({"error": "Некорректные данные запроса."}, status=400)
+
+    async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
+        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
+
+        target = await crud.get_user_by_id(session, user_id)
+        if target is None or target.restaurant_id != restaurant_id:
+            return _json({"error": "Сотрудник не найден."}, status=404)
+
+        await crud.set_admin_note(session, user_id, note)
 
     return _json({"ok": True})
 

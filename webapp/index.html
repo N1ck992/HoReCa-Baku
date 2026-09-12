@@ -731,6 +731,10 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+        <p class="sub" style="margin-top:14px; margin-bottom:6px;">📝 Заметка (видна только администраторам)</p>
+        <textarea id="noteTextarea" rows="3" placeholder="Например: Люся — официантка, работает по вторникам"
+          style="width:100%; padding:12px; border:1px solid var(--divider); border-radius:12px; font-family:inherit; font-size:13.5px; resize:vertical; background:var(--paper); color:var(--ink);"
+          onblur="saveEmployeeNote()"></textarea>
         <p class="sub" style="margin-top:4px;">Последние дни (нажмите на день)</p>
         <div class="row-list" id="detailHistory"></div>
       </section>
@@ -1193,6 +1197,7 @@ async function openAdminEmployees(){
           <div class="card-text">
             <div class="card-title">${e.name}</div>
             <div class="card-meta">${e.position || 'должность не выбрана'}${e.tests_completed ? ' · ' + e.avg_percentage + '%' : ' · нет тестов'}</div>
+            ${e.admin_note ? `<div class="card-meta" style="color:var(--accent-strong); margin-top:2px;">📝 ${e.admin_note}</div>` : ''}
           </div>
           <div class="chevron">›</div>
         </div>
@@ -1242,6 +1247,7 @@ async function openEmployeeDetail(userId){
     document.getElementById('detailTests').textContent = detail.tests_completed;
     document.getElementById('detailAvg').textContent = detail.avg_percentage + '%';
     document.getElementById('restrictToggle').checked = !!detail.restrict_tests_to_position;
+    document.getElementById('noteTextarea').value = detail.admin_note || '';
     renderDaySummaryRows(detail.daily_summary, 'detailHistory');
   } catch (e) {
     showError(document.getElementById('detailHistory'), e.message);
@@ -1256,6 +1262,17 @@ async function toggleRestrictFlag(){
     });
   } catch (e) {
     document.getElementById('restrictToggle').checked = !checked; // откат при ошибке
+  }
+}
+
+async function saveEmployeeNote(){
+  const note = document.getElementById('noteTextarea').value;
+  try {
+    await apiPost('/api/set_employee_note', {
+      restaurant_id: Number(restaurantId), user_id: currentEmployeeUserId, note,
+    });
+  } catch (e) {
+    // Тихо игнорируем — заметка необязательна, не хотим мешать администратору всплывающей ошибкой
   }
 }
 

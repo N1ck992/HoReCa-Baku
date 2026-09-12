@@ -37,6 +37,10 @@ class User(Base):
     # False — видит тесты всех должностей заведения, как обычно.
     # Управляется администратором при назначении должности.
     restrict_tests_to_position: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Личная заметка администратора о сотруднике (например, "Люся —
+    # официантка, работает по вторникам") — видна только администраторам
+    # заведения, чисто справочная информация, ни на что не влияет.
+    admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     restaurant_id: Mapped[int | None] = mapped_column(
         ForeignKey("restaurants.id"), nullable=True
     )
