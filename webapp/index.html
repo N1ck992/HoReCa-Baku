@@ -313,6 +313,19 @@
   .row-item span:first-child{ color:var(--ink-soft); }
   .row-item span:last-child{ font-weight:600; }
 
+  .toggle{ position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
+  .toggle input{ opacity:0; width:0; height:0; }
+  .toggle-slider{
+    position:absolute; cursor:pointer; inset:0; background:var(--plaster-dark);
+    border-radius:24px; transition:.2s;
+  }
+  .toggle-slider:before{
+    content:""; position:absolute; height:18px; width:18px; left:3px; bottom:3px;
+    background:var(--paper); border-radius:50%; transition:.2s;
+  }
+  .toggle input:checked + .toggle-slider{ background:var(--accent); }
+  .toggle input:checked + .toggle-slider:before{ transform:translateX(18px); }
+
   /* ---------- Экран экзамена ---------- */
   .code-field{
     width:100%; padding:16px; border:1.5px solid var(--divider); border-radius:14px;
@@ -704,11 +717,76 @@
             <div class="stat-box" style="cursor:pointer;" onclick="openEmployeeAllDays()">
               <div class="stat-num" id="detailTests">0</div><div class="stat-label">тестов ›</div>
             </div>
-            <div class="stat-box"><div class="stat-num" id="detailAvg">0%</div><div class="stat-label">средний балл</div></div>
+            <div class="stat-box" style="cursor:pointer;" onclick="openEmployeeChart()">
+              <div class="stat-num" id="detailAvg">0%</div><div class="stat-label">средний балл ›</div>
+            </div>
           </div>
+        </div>
+        <div class="row-item" style="align-items:center;">
+          <span>Показывать только тесты своей должности</span>
+          <label class="toggle">
+            <input type="checkbox" id="restrictToggle" checked onchange="toggleRestrictFlag()">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
         <p class="sub" style="margin-top:4px;">Последние дни (нажмите на день)</p>
         <div class="row-list" id="detailHistory"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 10.1: выбор сотрудника для назначения ============ -->
+      <section class="screen" data-screen="assignEmployeesList" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('adminEmployees','right')">‹</button>
+          <span class="restaurant-name">Назначить должность</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Кого<br>назначить?</h1>
+        <div class="cards" id="assignEmployeesCards"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 10.2: выбор должности для назначения ============ -->
+      <section class="screen" data-screen="assignPositionPicker" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('assignEmployeesList','right')">‹</button>
+          <span class="restaurant-name" id="assignEmployeeName">Сотрудник</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">На какую<br>должность?</h1>
+        <div class="cards" id="assignPositionCards"></div>
+        <div class="row-item" style="align-items:center; margin-top:14px;">
+          <span>Ограничить видимость тестов только этой должностью</span>
+          <label class="toggle">
+            <input type="checkbox" id="assignRestrictCheckbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="next-wrap" id="assignNextWrap">
+          <button class="btn-primary" onclick="confirmAssignPosition()">Назначить</button>
+        </div>
+      </section>
+
+      <!-- ============ ЭКРАН 10.3: диаграмма результатов сотрудника ============ -->
+      <section class="screen" data-screen="employeeChart" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goToChartBack()">‹</button>
+          <span class="restaurant-name" id="chartEmployeeName">Результаты</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Разбор<br>результатов</h1>
+        <p class="sub">Только для личного просмотра.</p>
+        <div class="cards" style="margin-bottom:14px;">
+          <div class="card" data-mode="category" onclick="setChartMode('category')">
+            <div class="card-text"><div class="card-title">По категориям тестов</div><div class="card-meta">Где сильнее, где слабее</div></div>
+          </div>
+          <div class="card" data-mode="daily" onclick="setChartMode('daily')">
+            <div class="card-text"><div class="card-title">По датам</div><div class="card-meta">Как часто проходит тесты</div></div>
+          </div>
+          <div class="card" data-mode="compare" onclick="setChartMode('compare')">
+            <div class="card-text"><div class="card-title">На фоне коллег</div><div class="card-meta">Сравнение со средним по заведению</div></div>
+          </div>
+        </div>
+        <div id="chartContainer" style="display:flex; justify-content:center; margin-top:10px;"></div>
+        <div class="row-list" id="chartLegend" style="margin-top:14px;"></div>
       </section>
 
       <!-- ============ ЭКРАН 11.1: вся история сотрудника по дням ============ -->
@@ -748,6 +826,7 @@
   </div>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
 /* ---------------- Подключение к Telegram и серверу ---------------- */
 const API_BASE = 'https://horeca-baku-bot.onrender.com';
@@ -1132,6 +1211,8 @@ function formatRuDate(isoDate){
   return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : (isoDate || '');
 }
 
+let currentEmployeeName = '';
+
 async function openEmployeeDetail(userId){
   currentEmployeeUserId = userId;
   goTo('adminEmployeeDetail','left');
@@ -1139,15 +1220,161 @@ async function openEmployeeDetail(userId){
   document.getElementById('detailHistory').innerHTML = '';
   try {
     const detail = await apiGet('/api/employee', { restaurant_id: restaurantId, user_id: userId });
+    currentEmployeeName = detail.name;
     const initials = detail.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
     document.getElementById('detailInitials').textContent = initials;
     document.getElementById('detailName').textContent = detail.name;
-    document.getElementById('detailRole').textContent = '';
+    document.getElementById('detailRole').textContent = detail.current_position
+      ? `${detail.current_position.emoji || ''} ${detail.current_position.name}`
+      : 'Должность не назначена';
     document.getElementById('detailTests').textContent = detail.tests_completed;
     document.getElementById('detailAvg').textContent = detail.avg_percentage + '%';
+    document.getElementById('restrictToggle').checked = !!detail.restrict_tests_to_position;
     renderDaySummaryRows(detail.daily_summary, 'detailHistory');
   } catch (e) {
     showError(document.getElementById('detailHistory'), e.message);
+  }
+}
+
+async function toggleRestrictFlag(){
+  const checked = document.getElementById('restrictToggle').checked;
+  try {
+    await apiPost('/api/set_restrict_flag', {
+      restaurant_id: Number(restaurantId), user_id: currentEmployeeUserId, restrict: checked,
+    });
+  } catch (e) {
+    document.getElementById('restrictToggle').checked = !checked; // откат при ошибке
+  }
+}
+
+/* ---------------- Назначение должности ---------------- */
+async function openAssignPositionEmployees(){
+  const el = document.getElementById('assignEmployeesCards');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('assignEmployeesList','left');
+  try {
+    const employees = await apiGet('/api/employees', { restaurant_id: restaurantId });
+    el.innerHTML = employees.length
+      ? employees.map(e => `
+          <div class="card" onclick='selectAssignEmployee(${e.user_id}, "${e.name.replace(/"/g,"")}")'>
+            <div class="card-text"><div class="card-title">${e.name}</div><div class="card-meta">${e.position || 'должность не назначена'}</div></div>
+            <div class="chevron">›</div>
+          </div>`).join('')
+      : '<p class="sub">В заведении пока нет персонала.</p>';
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+let assignTargetUserId = null;
+let assignTargetPositionId = null;
+
+async function selectAssignEmployee(userId, name){
+  assignTargetUserId = userId;
+  assignTargetPositionId = null;
+  document.getElementById('assignEmployeeName').textContent = name;
+  document.getElementById('assignRestrictCheckbox').checked = true;
+  document.getElementById('assignNextWrap').classList.remove('show');
+  const el = document.getElementById('assignPositionCards');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('assignPositionPicker','left');
+  try {
+    const data = await apiGet('/api/positions', { restaurant_id: restaurantId });
+    el.innerHTML = data.positions.map(p => `
+      <div class="card" data-position-id="${p.id}" onclick="pickAssignPosition(${p.id}, this)">
+        <div class="card-text"><div class="card-title">${p.emoji || ''} ${p.name}</div></div>
+        <div class="chevron">›</div>
+      </div>`).join('');
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+function pickAssignPosition(positionId, el){
+  assignTargetPositionId = positionId;
+  document.querySelectorAll('#assignPositionCards .card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('assignNextWrap').classList.add('show');
+}
+
+async function confirmAssignPosition(){
+  if (!assignTargetPositionId) return;
+  const restrict = document.getElementById('assignRestrictCheckbox').checked;
+  try {
+    await apiPost('/api/assign_position', {
+      restaurant_id: Number(restaurantId), user_id: assignTargetUserId,
+      position_id: assignTargetPositionId, restrict,
+    });
+    openEmployeeDetail(assignTargetUserId);
+  } catch (e) {
+    alert('Не получилось назначить должность: ' + e.message);
+  }
+}
+
+/* ---------------- Личная диаграмма результатов сотрудника ---------------- */
+let currentChartInstance = null;
+let currentChartMode = 'category';
+let chartCameFrom = 'adminEmployeeDetail';
+
+function openEmployeeChart(){
+  chartCameFrom = 'adminEmployeeDetail';
+  document.getElementById('chartEmployeeName').textContent = currentEmployeeName || 'Результаты';
+  goTo('employeeChart','left');
+  setChartMode('category');
+}
+
+function goToChartBack(){
+  goTo(chartCameFrom, 'right');
+}
+
+async function setChartMode(mode){
+  currentChartMode = mode;
+  document.querySelectorAll('#employeeChart .card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.mode === mode);
+  });
+
+  const legend = document.getElementById('chartLegend');
+  const container = document.getElementById('chartContainer');
+  legend.innerHTML = '';
+  container.innerHTML = '<canvas id="employeeChartCanvas" width="260" height="260"></canvas>';
+
+  try {
+    const data = await apiGet('/api/employee_chart_data', {
+      restaurant_id: restaurantId, user_id: currentEmployeeUserId, mode,
+    });
+
+    if (!data.labels.length) {
+      container.innerHTML = '<p class="sub">Пока недостаточно данных для этого разреза.</p>';
+      return;
+    }
+
+    const palette = ['#7c8b6f','#c17a68','#b08d57','#6f8b98','#9b7cae','#a3a373'];
+    const ctx = document.getElementById('employeeChartCanvas').getContext('2d');
+    if (currentChartInstance) currentChartInstance.destroy();
+
+    const chartType = mode === 'daily' ? 'bar' : 'pie';
+    currentChartInstance = new Chart(ctx, {
+      type: chartType,
+      data: {
+        labels: data.labels,
+        datasets: [{
+          data: data.values,
+          backgroundColor: chartType === 'pie' ? palette : palette[0],
+        }],
+      },
+      options: {
+        plugins: { legend: { display: chartType === 'pie', position: 'bottom' } },
+        scales: chartType === 'bar' ? { y: { beginAtZero: true } } : undefined,
+      },
+    });
+
+    if (chartType === 'pie') {
+      legend.innerHTML = data.labels.map((l, i) => `
+        <div class="row-item"><span>${l}</span><span>${data.values[i]}%</span></div>
+      `).join('');
+    }
+  } catch (e) {
+    showError(container, e.message);
   }
 }
 

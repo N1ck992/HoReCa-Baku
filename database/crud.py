@@ -74,6 +74,29 @@ async def set_user_position(session: AsyncSession, user: User, position_id: int)
     await session.commit()
 
 
+async def assign_position_with_restriction(
+    session: AsyncSession, user_id: int, position_id: int, restrict: bool
+) -> None:
+    """Администратор назначает сотруднику должность и сразу решает, будет
+    ли для него сайт показывать тесты только этой должности (restrict) —
+    по умолчанию так и должно быть, но можно снять галочку."""
+    user = await session.get(User, user_id)
+    if user is not None:
+        user.current_position_id = position_id
+        user.restrict_tests_to_position = restrict
+        await session.commit()
+
+
+async def set_restrict_tests_flag(session: AsyncSession, user_id: int, restrict: bool) -> None:
+    """Отдельное включение/выключение ограничения видимости тестов, без
+    изменения самой назначенной должности — доступно прямо из профиля
+    сотрудника в любой момент."""
+    user = await session.get(User, user_id)
+    if user is not None:
+        user.restrict_tests_to_position = restrict
+        await session.commit()
+
+
 # ---------- Заявки на вступление персонала (личная ссылка join_{id}) ----------
 
 async def create_join_request(
@@ -587,6 +610,49 @@ async def get_eligible_positions_for_exam(
         if {1, 2, 3}.issubset(passed_levels):
             eligible.append(position)
     return eligible
+
+
+async def get_restaurant_average_percentage(session: AsyncSession, restaurant_id: int) -> float:
+    """Средний балл по всем тестам всех сотрудников заведения сразу —
+    используется для сравнения конкретного сотрудника со средним по
+    заведению (режим 'на фоне коллег' в личной диаграмме результатов)."""
+    result = await session.execute(
+        select(TestResult)
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .join(User, TestResult.user_id == User.id)
+        .where(Position.restaurant_id == restaurant_id, User.restaurant_id == restaurant_id)
+    )
+    results = list(result.scalars().all())
+    if not results:
+        return 0.0
+    return round(sum(r.percentage for r in results) / len(results), 1)
+
+
+async def get_category_performance_for_user(
+    session: AsyncSession, user_id: int, restaurant_id: int
+) -> list[dict]:
+    """Средний балл сотрудника отдельно по каждой категории тестов этого
+    заведения — показывает, какие темы даются лучше, а какие хуже
+    (используется в личной диаграмме результатов, режим 'по категориям')."""
+    result = await session.execute(
+        select(TestResult)
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(TestResult.user_id == user_id, Position.restaurant_id == restaurant_id)
+        .options(selectinload(TestResult.category))
+    )
+    results = list(result.scalars().all())
+
+    by_category: dict[str, list[float]] = {}
+    for r in results:
+        name = r.category.name if r.category else "Без категории"
+        by_category.setdefault(name, []).append(r.percentage)
+
+    return [
+        {"category": name, "avg_percentage": round(sum(scores) / len(scores), 1)}
+        for name, scores in by_category.items()
+    ]
 
 
 async def get_user_stats_for_restaurant(

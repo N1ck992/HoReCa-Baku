@@ -536,15 +536,162 @@ async def get_employee_detail(request: web.Request) -> web.Response:
         daily_summary = await crud.get_daily_summary_for_user_in_restaurant(
             session, user_id, restaurant_id, limit=5
         )
+        current_position = None
+        if target.current_position_id is not None:
+            current_position = await crud.get_position_by_id(session, target.current_position_id)
 
     return _json(
         {
+            "user_id": target.id,
             "name": target.full_name or target.username or "Без имени",
             "tests_completed": stats["tests_completed"],
             "avg_percentage": stats["avg_percentage"],
             "daily_summary": daily_summary,
+            "current_position": (
+                {"id": current_position.id, "name": current_position.name, "emoji": current_position.emoji}
+                if current_position
+                else None
+            ),
+            "restrict_tests_to_position": target.restrict_tests_to_position,
         }
     )
+
+
+@routes.post("/api/assign_position")
+async def assign_position(request: web.Request) -> web.Response:
+    """Администратор назначает сотруднику должность и решает, будет ли
+    ему видна на сайте только эта должность (restrict, по умолчанию
+    True) или все тесты заведения сразу."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = body.get("restaurant_id")
+    user_id = body.get("user_id")
+    position_id = body.get("position_id")
+    restrict = bool(body.get("restrict", True))
+    if not all(isinstance(v, int) for v in (restaurant_id, user_id, position_id)):
+        return _json({"error": "Некорректные данные запроса."}, status=400)
+
+    async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
+        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
+
+        target = await crud.get_user_by_id(session, user_id)
+        position = await crud.get_position_by_id(session, position_id)
+        if target is None or target.restaurant_id != restaurant_id or position is None:
+            return _json({"error": "Сотрудник или должность не найдены."}, status=404)
+
+        await crud.assign_position_with_restriction(session, user_id, position_id, restrict)
+
+    return _json({"ok": True})
+
+
+@routes.post("/api/set_restrict_flag")
+async def set_restrict_flag(request: web.Request) -> web.Response:
+    """Включает/выключает ограничение видимости тестов только своей
+    должностью — отдельно от самого назначения, доступно в любой момент
+    прямо из профиля сотрудника."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = body.get("restaurant_id")
+    user_id = body.get("user_id")
+    restrict = bool(body.get("restrict", True))
+    if not all(isinstance(v, int) for v in (restaurant_id, user_id)):
+        return _json({"error": "Некорректные данные запроса."}, status=400)
+
+    async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
+        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
+
+        target = await crud.get_user_by_id(session, user_id)
+        if target is None or target.restaurant_id != restaurant_id:
+            return _json({"error": "Сотрудник не найден."}, status=404)
+
+        await crud.set_restrict_tests_flag(session, user_id, restrict)
+
+    return _json({"ok": True})
+
+
+@routes.get("/api/employee_chart_data")
+async def employee_chart_data(request: web.Request) -> web.Response:
+    """Данные для личной диаграммы результатов сотрудника — три режима:
+    по категориям (где сильнее/слабее), по датам (частота прохождения),
+    на фоне остальных сотрудников заведения (сравнение среднего балла)."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    restaurant_id = request.query.get("restaurant_id")
+    user_id = request.query.get("user_id")
+    mode = request.query.get("mode", "category")
+    if not (restaurant_id and restaurant_id.isdigit() and user_id and user_id.isdigit()):
+        return _json({"error": "restaurant_id и user_id обязательны"}, status=400)
+    restaurant_id = int(restaurant_id)
+    user_id = int(user_id)
+
+    async with async_session() as session:
+        if await _get_active_restaurant(session, restaurant_id) is None:
+            return _archived_error()
+        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
+
+        target = await crud.get_user_by_id(session, user_id)
+        if target is None or target.restaurant_id != restaurant_id:
+            return _json({"error": "Сотрудник не найден."}, status=404)
+
+        if mode == "daily":
+            summary = await crud.get_daily_summary_for_user_in_restaurant(
+                session, user_id, restaurant_id, limit=14
+            )
+            summary.reverse()
+            return _json(
+                {
+                    "mode": "daily",
+                    "labels": [s["date"] for s in summary],
+                    "values": [s["test_count"] for s in summary],
+                }
+            )
+
+        if mode == "compare":
+            own_stats = await crud.get_user_stats_for_restaurant(session, user_id, restaurant_id)
+            restaurant_avg = await crud.get_restaurant_average_percentage(session, restaurant_id)
+            return _json(
+                {
+                    "mode": "compare",
+                    "labels": ["Этот сотрудник", "В среднем по заведению"],
+                    "values": [own_stats["avg_percentage"], restaurant_avg],
+                }
+            )
+
+        # mode == "category" (по умолчанию)
+        breakdown = await crud.get_category_performance_for_user(session, user_id, restaurant_id)
+        return _json(
+            {
+                "mode": "category",
+                "labels": [b["category"] for b in breakdown],
+                "values": [b["avg_percentage"] for b in breakdown],
+            }
+        )
 
 
 @routes.get("/api/employee_all_days")
