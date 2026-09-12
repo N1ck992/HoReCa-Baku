@@ -121,6 +121,9 @@ async def get_positions(request: web.Request) -> web.Response:
         data = []
         for position in positions:
             categories = await crud.get_categories_for_position(session, position.id)
+            current_codes = _current_category_codes_for_position(position.code)
+            if current_codes is not None:
+                categories = [c for c in categories if c.code in current_codes]
             data.append(
                 {
                     "id": position.id,

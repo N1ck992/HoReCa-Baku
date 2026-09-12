@@ -411,11 +411,6 @@
             <div class="card-text"><div class="card-title">Пройти тест</div><div class="card-meta">Выбор должности и категории</div></div>
             <div class="chevron">›</div>
           </div>
-          <div class="card" onclick="goToMyResults()">
-            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-6 3 3 5-8"/></svg></div>
-            <div class="card-text"><div class="card-title">Мои результаты</div><div class="card-meta">История пройденных тестов</div></div>
-            <div class="chevron">›</div>
-          </div>
           <div class="card" id="staffCard" onclick="openAdminEmployees()">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
             <div class="card-text"><div class="card-title">Персонал заведения</div><div class="card-meta">Только для администраторов</div></div>
@@ -440,7 +435,9 @@
         </div>
         <div class="stat-card">
           <div class="stat-grid">
-            <div class="stat-box"><div class="stat-num" id="profileTests">0</div><div class="stat-label">тестов</div></div>
+            <div class="stat-box" style="cursor:pointer;" onclick="goToMyResults()">
+              <div class="stat-num" id="profileTests">0</div><div class="stat-label">тестов ›</div>
+            </div>
             <div class="stat-box" style="cursor:pointer;" onclick="openMyOwnChart()">
               <div class="stat-num" id="profileAvg">0%</div><div class="stat-label">средний балл ›</div>
             </div>
@@ -672,6 +669,7 @@
       <!-- ============ ЭКРАН 7: мои результаты ============ -->
       <section class="screen" data-screen="myResults" data-state="right">
         <div class="top-row">
+          <button class="icon-btn" onclick="goTo('myProfile','right')">‹</button>
           <span class="restaurant-name">Мои результаты</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
@@ -679,7 +677,9 @@
         <div class="stat-card">
           <div class="stat-grid">
             <div class="stat-box"><div class="stat-num" id="myTestsCount">0</div><div class="stat-label">тестов</div></div>
-            <div class="stat-box"><div class="stat-num" id="myAvgPct">0%</div><div class="stat-label">средний балл</div></div>
+            <div class="stat-box" style="cursor:pointer;" onclick="openMyOwnChart()">
+              <div class="stat-num" id="myAvgPct">0%</div><div class="stat-label">средний балл ›</div>
+            </div>
           </div>
         </div>
         <p class="sub" style="margin-top:4px;">История тестов</p>
