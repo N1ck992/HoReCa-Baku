@@ -307,11 +307,11 @@
 
   .row-list{ display:flex; flex-direction:column; gap:1px; background:var(--divider); border-radius:14px; overflow:hidden; }
   .row-item{
-    background:var(--paper); padding:13px 16px; display:flex; justify-content:space-between; align-items:center;
-    font-size:14px;
+    background:var(--paper); padding:13px 16px; display:flex; justify-content:space-between; align-items:flex-start;
+    gap:14px; font-size:14px;
   }
-  .row-item span:first-child{ color:var(--ink-soft); }
-  .row-item span:last-child{ font-weight:600; }
+  .row-item span:first-child{ color:var(--ink-soft); flex-shrink:1; min-width:0; }
+  .row-item span:last-child{ font-weight:600; text-align:right; flex-shrink:0; max-width:60%; word-break:break-word; }
 
   .toggle{ position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
   .toggle input{ opacity:0; width:0; height:0; }
