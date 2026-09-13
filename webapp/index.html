@@ -506,7 +506,6 @@
         <h1 class="headline">Выберите<br>категорию</h1>
         <p class="sub">Можно проходить категории в любом порядке.</p>
         <div class="cards" id="categoriesList"></div>
-        <div class="footnote">Мичели · панель сотрудника</div>
       </section>
 
       <!-- ============ ЭКРАН 2.1: выбор уровня ============ -->
@@ -575,7 +574,7 @@
           </svg>
         </div>
         <div class="top-row">
-          <span class="restaurant-name">Мичели</span>
+          <span class="restaurant-name" id="resultRestaurantName">Профиль</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
         <div class="result-wrap">
@@ -890,6 +889,7 @@ function showError(container, message) {
 /* ---------------- Данные из ссылки ---------------- */
 const urlParams = new URLSearchParams(window.location.search);
 const restaurantId = urlParams.get('restaurant_id');
+let currentRestaurantName = '';
 
 /* ---------------- Иконки должностей ---------------- */
 const ICONS = {
@@ -924,6 +924,7 @@ async function renderPositions(){
     const positions = data.positions;
 
     if (data.restaurant_name) {
+      currentRestaurantName = data.restaurant_name;
       document.getElementById('posBackBtn').style.display = '';
       document.getElementById('posRestaurantLabel').textContent = data.restaurant_name;
       document.getElementById('posRestaurantLabel').style.display = '';
@@ -1110,7 +1111,9 @@ async function fetchTestBatch(){
   }
 }
 
-function exitQuiz(){ goTo('categories','right'); }
+function exitQuiz(){
+  goTo(categorySkipped ? 'positions' : 'categories', 'right');
+}
 
 /* ---------------- Логика теста ---------------- */
 function buildProgress(){
@@ -1201,6 +1204,7 @@ async function showResult(){
   const pct = Math.round((quizCorrect/total)*100);
   document.getElementById('scorePct').textContent = pct + '%';
   document.getElementById('scoreFrac').textContent = quizCorrect + ' / ' + total;
+  document.getElementById('resultRestaurantName').textContent = currentRestaurantName || 'Профиль';
 
   try {
     await apiPost('/api/finish_test', {
