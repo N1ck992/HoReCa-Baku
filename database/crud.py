@@ -8,6 +8,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from config import EXPERT_DIFFICULTY, MAX_QUESTION_LEVEL
 from database.models import (
     AnswerOption,
     Category,
@@ -17,6 +18,7 @@ from database.models import (
     Position,
     Question,
     Rank,
+    RequeuedQuestion,
     Restaurant,
     RestaurantArchiveRequest,
     RestaurantArchiveVote,
@@ -726,10 +728,139 @@ async def get_completed_levels_for_category(
         select(TestResult.level).where(
             TestResult.user_id == user_id,
             TestResult.category_id == category_id,
-            TestResult.level.in_((1, 2, 3)),
+            TestResult.level.between(1, MAX_QUESTION_LEVEL),
         )
     )
     return {level for (level,) in result.all()}
+
+
+async def get_question_counts_by_level(
+    session: AsyncSession, category_id: int, max_level: int = MAX_QUESTION_LEVEL
+) -> dict[int, int]:
+    """Сколько вопросов реально доступно на каждом уровне 1..max_level в
+    этой категории. Для уровней 1-3 считает по difficulty. Для уровней
+    4+ считает по Question.level (вопрос без явного level считается
+    уровнем EXPERT_DIFFICULTY, т.к. так помечены уже существующие
+    вопросы, заведённые до появления этого поля).
+
+    Используется, чтобы не показывать уровень как "открытый и играбельный",
+    если для него ещё физически нет вопросов (например, у бармена, пока
+    туда не добавили экспертные вопросы)."""
+    result = await session.execute(
+        select(Question.difficulty, Question.level).where(Question.category_id == category_id)
+    )
+    counts = {lvl: 0 for lvl in range(1, max_level + 1)}
+    for difficulty, level in result.all():
+        if difficulty < EXPERT_DIFFICULTY:
+            if difficulty in counts:
+                counts[difficulty] += 1
+        else:
+            effective_level = level or EXPERT_DIFFICULTY
+            if effective_level in counts:
+                counts[effective_level] += 1
+    return counts
+
+
+async def enqueue_wrong_question_for_next_level(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    category_id: int,
+    question_id: int,
+    source_level: int,
+    max_level: int = MAX_QUESTION_LEVEL,
+) -> None:
+    """Регистрирует неправильно отвеченный вопрос на перенос в тест
+    следующего уровня (source_level + 1). Если source_level уже
+    максимальный — переносить некуда, ничего не делает. Если вопрос уже
+    стоит в очереди на перенос (не использован) — не дублирует запись."""
+    target_level = source_level + 1
+    if target_level > max_level:
+        return
+
+    existing = await session.execute(
+        select(RequeuedQuestion.id).where(
+            RequeuedQuestion.user_id == user_id,
+            RequeuedQuestion.question_id == question_id,
+            RequeuedQuestion.consumed.is_(False),
+        )
+    )
+    if existing.scalars().first() is not None:
+        return
+
+    session.add(
+        RequeuedQuestion(
+            user_id=user_id,
+            category_id=category_id,
+            question_id=question_id,
+            source_level=source_level,
+            target_level=target_level,
+        )
+    )
+    await session.commit()
+
+
+async def get_excluded_question_ids_for_level(
+    session: AsyncSession, user_id: int, category_id: int, level: int
+) -> set[int]:
+    """Вопросы, которые нужно скрыть из пула ИМЕННО этого уровня, потому
+    что пользователь уже ответил на них здесь неправильно и они ждут
+    показа на следующем уровне (см. enqueue_wrong_question_for_next_level).
+    Так один и тот же провальный вопрос не крутится на одном уровне
+    бесконечно — вместо этого он один раз всплывёт уровнем выше."""
+    result = await session.execute(
+        select(RequeuedQuestion.question_id).where(
+            RequeuedQuestion.user_id == user_id,
+            RequeuedQuestion.category_id == category_id,
+            RequeuedQuestion.source_level == level,
+            RequeuedQuestion.consumed.is_(False),
+        )
+    )
+    return {qid for (qid,) in result.all()}
+
+
+async def pop_pending_requeued_questions(
+    session: AsyncSession, user_id: int, category_id: int, level: int, limit: int
+) -> list[int]:
+    """Отдаёт (и сразу помечает использованными) до `limit` вопросов,
+    ожидающих однократного повторного показа именно на этом уровне —
+    старые сначала. 'Использованными' они становятся сразу при выдаче в
+    пачку теста, а не при ответе, чтобы не зациклиться, если пользователь
+    бросит попытку на середине."""
+    result = await session.execute(
+        select(RequeuedQuestion)
+        .where(
+            RequeuedQuestion.user_id == user_id,
+            RequeuedQuestion.category_id == category_id,
+            RequeuedQuestion.target_level == level,
+            RequeuedQuestion.consumed.is_(False),
+        )
+        .order_by(RequeuedQuestion.created_at)
+        .limit(limit)
+    )
+    rows = list(result.scalars().all())
+    for row in rows:
+        row.consumed = True
+    if rows:
+        await session.commit()
+    return [row.question_id for row in rows]
+
+
+async def count_pending_requeued_questions(
+    session: AsyncSession, user_id: int, category_id: int, level: int
+) -> int:
+    """Сколько всего вопросов ещё ждёт повторного показа на этом уровне
+    (для расчёта has_more — чтобы кнопка 'Продолжить' не пропадала, пока
+    не показаны все ожидающие вопросы)."""
+    result = await session.execute(
+        select(func.count(RequeuedQuestion.id)).where(
+            RequeuedQuestion.user_id == user_id,
+            RequeuedQuestion.category_id == category_id,
+            RequeuedQuestion.target_level == level,
+            RequeuedQuestion.consumed.is_(False),
+        )
+    )
+    return int(result.scalar() or 0)
 
 
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:

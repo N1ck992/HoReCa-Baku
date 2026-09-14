@@ -99,7 +99,16 @@ class Category(Base):
 
 
 class Question(Base):
-    """Вопрос теста. difficulty: 1 = лёгкий, 2 = средний, 3 = сложный.
+    """Вопрос теста. difficulty: 1 = лёгкий, 2 = средний, 3 = сложный,
+    4 = экспертный. ВАЖНО: уровни 4-10 на сайте (см. config.MAX_QUESTION_LEVEL)
+    все используют одну и ту же сложность — 4. Конкретный номер уровня
+    (4, 5, 6, ... 10), к которому относится экспертный вопрос, хранится
+    отдельно в поле level — это позволяет постепенно добавлять новые
+    уровни экспертных вопросов, не трогая шкалу сложности.
+
+    level — используется ТОЛЬКО для difficulty=4 (иначе level всегда
+    совпадает с difficulty, хранить отдельно не нужно). Если не задано —
+    считается уровнем 4 (по умолчанию, для уже существующих вопросов).
 
     image_path — необязательное имя файла картинки к вопросу. Файл должен
     лежать в webapp/images/questions/ (например, "caesar-salad.jpg") —
@@ -114,6 +123,7 @@ class Question(Base):
     text: Mapped[str] = mapped_column(Text)
     order: Mapped[int] = mapped_column(Integer, default=0)
     difficulty: Mapped[int] = mapped_column(Integer, default=1)
+    level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     category: Mapped["Category"] = relationship(back_populates="questions")
@@ -188,6 +198,30 @@ class UserAnswer(Base):
 
     test_result: Mapped["TestResult"] = relationship(back_populates="answers")
     question: Mapped["Question"] = relationship()
+
+
+class RequeuedQuestion(Base):
+    """Вопрос, на который пользователь ответил неправильно на уровне
+    source_level. Пока запись не 'использована' (consumed=False):
+    — вопрос скрывается из будущих попыток пройти source_level (не
+      повторяется на том же уровне, где его уже завалили);
+    — при следующей возможности он ОДИН РАЗ подмешивается в тест уровня
+      target_level (обычно source_level + 1), после чего consumed
+      становится True и запись больше не влияет на подбор вопросов.
+
+    Если source_level — последний доступный уровень (нет уровня выше),
+    запись не создаётся: переносить некуда."""
+
+    __tablename__ = "requeued_questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id"))
+    source_level: Mapped[int] = mapped_column(Integer)
+    target_level: Mapped[int] = mapped_column(Integer)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Vacancy(Base):

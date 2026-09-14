@@ -17,7 +17,7 @@ from datetime import datetime
 from aiogram import Bot
 from aiohttp import web
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, EXPERT_DIFFICULTY, MAX_QUESTION_LEVEL
 from data.seed import _current_category_codes_for_position
 from database import crud
 from database.database import async_session
@@ -200,21 +200,23 @@ async def get_questions(request: web.Request) -> web.Response:
     return _json(data)
 
 
-REQUIRED_LEVELS_FOR_LEVEL_4 = (1, 2, 3)
+@routes.get("/api/levels_status")
+async def levels_status(request: web.Request) -> web.Response:
+    """Статус всех уровней (1..MAX_QUESTION_LEVEL) для этой категории.
 
+    Уровни 1-3 всегда открыты. Уровень N>=4 открывается только тогда,
+    когда ПОЛНОСТЬЮ пройдены (хотя бы по одному завершённому тесту) ВСЕ
+    уровни 1..N-1 — это НЕ связано с процентом правильных ответов
+    (100% на одном тесте 1-го уровня не открывает уровень 4, пока не
+    пройдены уровни 2 и 3, и так далее по цепочке).
 
-@routes.get("/api/level4_status")
-async def level4_status(request: web.Request) -> web.Response:
-    """Проверка условия открытия уровня 4 для этой категории.
+    Условие монотонно (основано на факте прохождения, а не на балле),
+    поэтому уже открытый уровень никогда не блокируется обратно.
 
-    Условие: пользователь полностью прошёл (хотя бы по одному разу) все
-    три уровня — 1 (лёгкий), 2 (средний), 3 (тяжёлый) — в этой категории.
-    Это НЕ связано с общим/средним процентом правильных ответов: например,
-    один тест на 5/5 на 1-м уровне даёт 100% в статистике, но не открывает
-    уровень 4, пока не пройдены уровни 2 и 3.
-
-    avg_percentage возвращается только для информации в интерфейсе
-    (общая статистика по категории) и не влияет на unlocked."""
+    questions_available показывает, сколько вопросов реально есть на
+    уровне — нужно, чтобы не выдавать уровень за "играбельный", если для
+    него ещё не добавили вопросы (например, у бармена уровни 4+ пока
+    пустые)."""
     init_data = request.query.get("initData", "")
     tg_user = await _get_telegram_user(init_data)
     if tg_user is None:
@@ -223,6 +225,7 @@ async def level4_status(request: web.Request) -> web.Response:
     category_id = request.query.get("category_id")
     if not category_id or not category_id.isdigit():
         return _json({"error": "category_id обязателен"}, status=400)
+    category_id = int(category_id)
 
     async with async_session() as session:
         user = await crud.get_or_create_user(
@@ -231,20 +234,27 @@ async def level4_status(request: web.Request) -> web.Response:
             username=tg_user.get("username"),
             full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
         )
-        completed_levels = await crud.get_completed_levels_for_category(
-            session, user.id, int(category_id)
-        )
-        avg = await crud.get_user_avg_for_category(session, user.id, int(category_id))
+        completed_levels = await crud.get_completed_levels_for_category(session, user.id, category_id)
+        question_counts = await crud.get_question_counts_by_level(session, category_id)
+        avg = await crud.get_user_avg_for_category(session, user.id, category_id)
 
-    unlocked = set(REQUIRED_LEVELS_FOR_LEVEL_4).issubset(completed_levels)
-    missing_levels = sorted(set(REQUIRED_LEVELS_FOR_LEVEL_4) - completed_levels)
+    levels = []
+    for lvl in range(1, MAX_QUESTION_LEVEL + 1):
+        unlocked = True if lvl <= 3 else set(range(1, lvl)).issubset(completed_levels)
+        levels.append(
+            {
+                "level": lvl,
+                "unlocked": unlocked,
+                "completed": lvl in completed_levels,
+                "questions_available": question_counts.get(lvl, 0),
+            }
+        )
 
     return _json(
         {
-            "unlocked": unlocked,
-            "completed_levels": sorted(completed_levels),
-            "required_levels": list(REQUIRED_LEVELS_FOR_LEVEL_4),
-            "missing_levels": missing_levels,
+            "levels": levels,
+            "max_level": MAX_QUESTION_LEVEL,
+            "expert_difficulty": EXPERT_DIFFICULTY,
             "avg_percentage": avg,
         }
     )
@@ -270,7 +280,7 @@ async def start_test(request: web.Request) -> web.Response:
     exclude_ids = body.get("exclude_ids", [])
     if not isinstance(category_id, int):
         return _json({"error": "category_id обязателен"}, status=400)
-    if level not in (1, 2, 3, 4):
+    if level not in range(1, MAX_QUESTION_LEVEL + 1):
         level = 1
     if not isinstance(exclude_ids, list):
         exclude_ids = []
@@ -293,19 +303,45 @@ async def start_test(request: web.Request) -> web.Response:
         test_result = await crud.create_test_result(session, user.id, category_id, level)
         all_questions = await crud.get_questions_with_options(session, category_id)
 
-        # Уровень строго отделяет тему (лёгкий/средний/тяжёлый/экспертный
-        # показывают ТОЛЬКО свои вопросы). Тест теперь идёт пачками по 5:
-        # пройдя одну пачку, можно продолжить со следующей пачкой ЕЩЁ НЕ
-        # виденных вопросов этого же уровня (exclude_ids — то, что уже
-        # показывалось в рамках текущей непрерывной попытки), пока не
-        # закончится весь пул этого уровня.
+        # Уровни 1-3 отделены по сложности (Question.difficulty). Уровни
+        # 4..MAX_QUESTION_LEVEL все имеют одну и ту же сложность
+        # (EXPERT_DIFFICULTY) — какому именно уровню принадлежит вопрос,
+        # решает Question.level (без явного level считается EXPERT_DIFFICULTY).
         BATCH_SIZE = 5
-        level_pool = [q for q in all_questions if q.difficulty == level]
+        if level < EXPERT_DIFFICULTY:
+            level_pool = [q for q in all_questions if q.difficulty == level]
+        else:
+            level_pool = [
+                q
+                for q in all_questions
+                if q.difficulty == EXPERT_DIFFICULTY and (q.level or EXPERT_DIFFICULTY) == level
+            ]
+
+        # Вопросы, на которые пользователь уже ответил неправильно на ЭТОМ
+        # уровне, убираются из пула — они ждут своего часа на следующем
+        # уровне (см. ниже) и не должны крутиться здесь по кругу.
+        excluded_wrong_ids = await crud.get_excluded_question_ids_for_level(
+            session, user.id, category_id, level
+        )
+        level_pool = [q for q in level_pool if q.id not in excluded_wrong_ids]
         fresh_pool = [q for q in level_pool if q.id not in exclude_ids]
 
-        selected = random.sample(fresh_pool, min(BATCH_SIZE, len(fresh_pool)))
+        # Вопросы, неправильно отвеченные на ПРЕДЫДУЩЕМ уровне, один раз
+        # подмешиваются сюда (могут быть другой сложности — это осознанно,
+        # это "хвост" с прошлого уровня, а не обычный вопрос текущего).
+        total_pending = await crud.count_pending_requeued_questions(session, user.id, category_id, level)
+        pending_ids = await crud.pop_pending_requeued_questions(
+            session, user.id, category_id, level, BATCH_SIZE
+        )
+        by_id = {q.id: q for q in all_questions}
+        pending_questions = [by_id[qid] for qid in pending_ids if qid in by_id]
+
+        remaining_slots = max(0, BATCH_SIZE - len(pending_questions))
+        rest = random.sample(fresh_pool, min(remaining_slots, len(fresh_pool)))
+        selected = pending_questions + rest
         random.shuffle(selected)
-        has_more = len(fresh_pool) > len(selected)
+
+        has_more = (len(fresh_pool) - len(rest)) > 0 or (total_pending - len(pending_ids)) > 0
 
         questions_data = []
         for q in selected:
@@ -353,6 +389,20 @@ async def answer_question(request: web.Request) -> web.Response:
         is_correct = bool(chosen and chosen.is_correct and chosen.question_id == question_id)
 
         await crud.save_user_answer(session, test_result_id, question_id, answer_option_id, is_correct)
+
+        if not is_correct:
+            # Неправильный ответ: вопрос больше не будет предлагаться на
+            # этом же уровне при повторных попытках — вместо этого он один
+            # раз всплывёт в тесте следующего уровня (см. /api/start_test).
+            test_result = await crud.get_test_result_by_id(session, test_result_id)
+            if test_result is not None:
+                await crud.enqueue_wrong_question_for_next_level(
+                    session,
+                    user_id=test_result.user_id,
+                    category_id=test_result.category_id,
+                    question_id=question_id,
+                    source_level=test_result.level,
+                )
 
     return _json(
         {

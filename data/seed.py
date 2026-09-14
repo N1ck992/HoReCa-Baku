@@ -9,7 +9,11 @@
         "text": "...текст вопроса...",
         "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],
         "correct_index": 0,  # индекс правильного варианта в списке options
-        "difficulty": 1,     # необязательно: 1 лёгкий, 2 средний, 3 сложный
+        "difficulty": 1,     # необязательно: 1 лёгкий, 2 средний, 3 сложный, 4 экспертный
+        "level": 5,          # ТОЛЬКО для difficulty=4: какому именно уровню
+                              # (4..MAX_QUESTION_LEVEL из config.py) принадлежит
+                              # этот экспертный вопрос. Не указано -> уровень 4.
+                              # Для difficulty 1-3 поле не нужно (level = difficulty).
         "image": "caesar-salad.jpg",  # необязательно: имя файла картинки
     }
 
@@ -1139,6 +1143,7 @@ async def _seed_position(
                 text=question_data["text"],
                 order=q_order,
                 difficulty=question_data.get("difficulty", 1),
+                level=question_data.get("level"),
                 image_path=question_data.get("image"),
             )
             session.add(question)
@@ -1310,6 +1315,7 @@ async def sync_new_questions(session: AsyncSession) -> None:
                         text=question_data["text"],
                         order=q_order,
                         difficulty=question_data.get("difficulty", 1),
+                        level=question_data.get("level"),
                         image_path=question_data.get("image"),
                     )
                     session.add(question)
@@ -1348,6 +1354,7 @@ async def sync_new_questions(session: AsyncSession) -> None:
                     text=question_data["text"],
                     order=next_order,
                     difficulty=question_data.get("difficulty", 1),
+                    level=question_data.get("level"),
                     image_path=question_data.get("image"),
                 )
                 session.add(question)

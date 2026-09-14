@@ -533,14 +533,7 @@
             <div class="card-text"><div class="card-title">Уровень 3 · сложный</div><div class="card-meta">по 5 вопросов, можно продолжать</div></div>
             <div class="chevron">›</div>
           </div>
-          <div class="card" data-level="4" id="level4Card" onclick="handleLevel4Click()" style="position:relative;">
-            <div id="level4LockedOverlay" style="position:absolute; inset:0; backdrop-filter:blur(4px); background:rgba(250,248,244,0.55); border-radius:16px; display:flex; align-items:center; justify-content:center; z-index:2;">
-              <span style="font-size:20px;">🔒</span>
-            </div>
-            <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="12" cy="12" r="4" fill="var(--paper)"/></svg></div>
-            <div class="card-text"><div class="card-title">Уровень 4 · экспертный</div><div class="card-meta" id="level4Meta">Закрыто</div></div>
-            <div class="chevron">›</div>
-          </div>
+          <div id="expertLevelsList"></div>
         </div>
         <div class="next-wrap" id="levelNextWrap">
           <button class="btn-primary" onclick="confirmLevelSelection()">Далее</button>
@@ -1017,45 +1010,76 @@ function selectCategory(categoryId, categoryName){
   document.getElementById('levelNextWrap').classList.remove('show');
   document.querySelectorAll('#levelCardsList .card').forEach(card => card.classList.remove('selected'));
   goTo('levelPicker','left');
-  loadLevel4Status();
+  loadLevelsStatus();
 }
 
-let level4Unlocked = false;
-let level4Info = { completed_levels: [], required_levels: [1,2,3], missing_levels: [1,2,3], avg_percentage: 0 };
-const LEVEL_LABELS = { 1: '1 (лёгкий)', 2: '2 (средний)', 3: '3 (тяжёлый)' };
+let expertLevels = []; // [{level, unlocked, completed, questions_available}, ...] для уровней 4..max
+let siteMaxLevel = 3; // обновляется из /api/levels_status (1..3 всегда есть, экспертные уровни — по данным API)
 
-async function loadLevel4Status(){
-  const overlay = document.getElementById('level4LockedOverlay');
-  const meta = document.getElementById('level4Meta');
-  overlay.style.display = '';
-  meta.textContent = 'Проверка…';
+function nextLevelPlayable(n){
+  if (n <= 3) return true; // базовые уровни всегда доступны и всегда с вопросами
+  const info = expertLevels.find(l => l.level === n);
+  return !!(info && info.questions_available > 0);
+}
+
+function levelLabel(n){
+  return `${n} (${n === 1 ? 'лёгкий' : n === 2 ? 'средний' : n === 3 ? 'тяжёлый' : 'экспертный'})`;
+}
+
+async function loadLevelsStatus(){
+  const el = document.getElementById('expertLevelsList');
+  el.innerHTML = '<p class="sub">Проверка уровней…</p>';
   try {
-    const status = await apiGet('/api/level4_status', { category_id: currentCategoryId });
-    level4Unlocked = status.unlocked;
-    level4Info = status;
-    if (status.unlocked) {
-      overlay.style.display = 'none';
-      meta.textContent = 'по 5 вопросов, можно продолжать';
-    } else {
-      overlay.style.display = '';
-      const missing = (status.missing_levels || []).map(l => LEVEL_LABELS[l] || l).join(', ');
-      meta.textContent = `Закрыто · пройдите уровни: ${missing}`;
-    }
+    const status = await apiGet('/api/levels_status', { category_id: currentCategoryId });
+    siteMaxLevel = status.max_level || 3;
+    expertLevels = status.levels.filter(l => l.level >= 4);
+    renderExpertLevels();
   } catch (e) {
-    level4Unlocked = false;
-    meta.textContent = 'Закрыто';
+    expertLevels = [];
+    el.innerHTML = '';
   }
 }
 
-function handleLevel4Click(){
-  if (level4Unlocked) {
-    selectLevel(4);
+function renderExpertLevels(){
+  const el = document.getElementById('expertLevelsList');
+  el.innerHTML = expertLevels.map(l => {
+    const hasQuestions = l.questions_available > 0;
+    const playable = l.unlocked && hasQuestions;
+    let meta;
+    if (!l.unlocked) meta = 'Закрыто';
+    else if (!hasQuestions) meta = 'Вопросы скоро появятся';
+    else meta = 'по 5 вопросов, можно продолжать';
+    return `
+      <div class="card" data-level="${l.level}" onclick="handleExpertLevelClick(${l.level})" style="position:relative; ${playable ? '' : 'opacity:0.85;'}">
+        ${playable ? '' : `
+          <div style="position:absolute; inset:0; backdrop-filter:blur(4px); background:rgba(250,248,244,0.55); border-radius:16px; display:flex; align-items:center; justify-content:center; z-index:2;">
+            <span style="font-size:20px;">${l.unlocked ? '⏳' : '🔒'}</span>
+          </div>
+        `}
+        <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="12" cy="12" r="4" fill="var(--paper)"/></svg></div>
+        <div class="card-text"><div class="card-title">Уровень ${l.level} · экспертный</div><div class="card-meta">${meta}</div></div>
+        <div class="chevron">›</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function handleExpertLevelClick(level){
+  const info = expertLevels.find(l => l.level === level);
+  if (!info) return;
+  if (info.unlocked && info.questions_available > 0) {
+    selectLevel(level);
     return;
   }
-  const missing = (level4Info.missing_levels || []).map(l => LEVEL_LABELS[l] || l).join(', ');
-  alert(
-    `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно полностью пройти (хотя бы по одному разу) уровни 1, 2 и 3 в этой категории — независимо от процента правильных ответов.\n\nЕщё осталось пройти: ${missing || 'нет данных'}.`
-  );
+  if (!info.unlocked) {
+    const missing = [];
+    for (let n = 1; n < level; n++) missing.push(levelLabel(n));
+    alert(
+      `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно полностью пройти (хотя бы по одному разу) все предыдущие уровни в этой категории — независимо от процента правильных ответов.\n\nНужно пройти: ${missing.join(', ')}.`
+    );
+    return;
+  }
+  alert('Этот уровень уже открыт, но вопросы для него пока не добавлены — загляните позже.');
 }
 
 let selectedLevel = null;
@@ -1252,10 +1276,12 @@ async function showResult(){
     levelCompleteMsg.style.display = '';
     mainMenuBtn.style.display = '';
     // Уровень пройден целиком — предлагаем сразу перейти к следующему,
-    // не заставляя возвращаться в список уровней вручную.
-    if (currentTestLevel && currentTestLevel < 3) {
+    // не заставляя возвращаться в список уровней вручную. Уровень
+    // "следующий" может быть любым от 2 до siteMaxLevel — не хардкодим 3.
+    const nextLevel = currentTestLevel + 1;
+    if (currentTestLevel && nextLevel <= siteMaxLevel && nextLevelPlayable(nextLevel)) {
       nextLevelBtn.style.display = '';
-      nextLevelBtn.textContent = `⬆️ Перейти к уровню ${currentTestLevel + 1}`;
+      nextLevelBtn.textContent = `⬆️ Перейти к уровню ${nextLevel}`;
     } else {
       nextLevelBtn.style.display = 'none';
     }
@@ -1265,8 +1291,9 @@ async function showResult(){
 }
 
 function goToNextLevel(){
-  if (currentTestLevel && currentTestLevel < 3) {
-    startTestAtLevel(currentTestLevel + 1);
+  const nextLevel = currentTestLevel + 1;
+  if (currentTestLevel && nextLevel <= siteMaxLevel && nextLevelPlayable(nextLevel)) {
+    startTestAtLevel(nextLevel);
   }
 }
 
