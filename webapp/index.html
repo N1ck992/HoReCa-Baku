@@ -612,7 +612,11 @@
           <div id="levelCompleteMsg" style="background:var(--accent-soft); border-radius:14px; padding:14px; font-size:13.5px; text-align:center; color:var(--accent-strong);">
             🎉 Вы прошли все вопросы этого уровня!
           </div>
+          <div id="nextLevelLockedMsg" style="display:none; background:var(--wrong-soft); border-radius:14px; padding:14px; font-size:13.5px; text-align:center; color:var(--wrong);">
+            🔒 Следующий уровень пока недоступен — <span id="nextLevelLockedReason"></span>
+          </div>
           <button class="btn-primary" id="nextLevelBtn" style="display:none;" onclick="goToNextLevel()">⬆️ Следующий уровень</button>
+          <button class="btn-primary" id="retryLevelBtn" style="display:none;" onclick="retryCurrentLevel()">🔁 Повторить тест</button>
           <button class="btn-primary" id="mainMenuBtn" onclick="restart()">🏠 Главное меню сайта</button>
           <button class="btn-primary" onclick="goToMyResults()">📊 Мои результаты</button>
         </div>
@@ -1105,6 +1109,16 @@ function renderExpertLevels(){
   }).join('');
 }
 
+function lockedLevelReason(level){
+  // Общая формулировка причины блокировки — используется и в алерте по
+  // клику на закрытую карточку, и в баннере на экране результата, чтобы
+  // текст не расходился в двух местах.
+  if (level <= 4) {
+    return 'нужно полностью пройти (хотя бы по одному разу) уровни 1, 2 и 3 — независимо от процента правильных ответов.';
+  }
+  return `нужно пройти уровень ${level - 1} ИДЕАЛЬНО — без единой ошибки (включая дополнительный вопрос, если он был показан).`;
+}
+
 function handleExpertLevelClick(level){
   const info = expertLevels.find(l => l.level === level);
   if (!info) return;
@@ -1113,15 +1127,7 @@ function handleExpertLevelClick(level){
     return;
   }
   if (!info.unlocked) {
-    if (level <= 4) {
-      alert(
-        `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно полностью пройти (хотя бы по одному разу) уровни 1, 2 и 3 — независимо от процента правильных ответов.`
-      );
-    } else {
-      alert(
-        `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно пройти уровень ${level - 1} ИДЕАЛЬНО — без единой ошибки (включая дополнительный вопрос, если он был показан).`
-      );
-    }
+    alert(`Этот уровень пока закрыт.\n\nЧтобы открыть его, ${lockedLevelReason(level)}`);
     return;
   }
   alert('Этот уровень уже открыт, но вопросы для него пока не добавлены — загляните позже.');
@@ -1309,6 +1315,9 @@ async function showResult(){
 
   const mainMenuBtn = document.getElementById('mainMenuBtn');
   const nextLevelBtn = document.getElementById('nextLevelBtn');
+  const retryLevelBtn = document.getElementById('retryLevelBtn');
+  const nextLevelLockedMsg = document.getElementById('nextLevelLockedMsg');
+  const nextLevelLockedReason = document.getElementById('nextLevelLockedReason');
   // Каждый пройденный тест сразу считается завершённым уровнем — без
   // варианта "продолжить ещё вопросами того же уровня". Дальше только
   // переход к следующему уровню (если он есть и играбелен) или в меню.
@@ -1319,14 +1328,37 @@ async function showResult(){
   // могла бы ошибочно решить, что следующий уровень ещё не открыт.
   await loadLevelsStatus();
   const nextLevel = currentTestLevel + 1;
+  const isPerfect = quizCorrect === total;
+  const nextInfo = expertLevels.find(l => l.level === nextLevel);
+  // "Локед по вине этой попытки" — только когда следующий уровень реально
+  // существует (в пределах siteMaxLevel) и закрыт именно из-за условия
+  // прохождения (unlocked === false), а не из-за отсутствия контента.
+  const nextIsGatedLocked = currentTestLevel && nextLevel <= siteMaxLevel &&
+    (nextLevel <= 3 ? false : (nextInfo && !nextInfo.unlocked));
+
   if (currentTestLevel && nextLevel <= siteMaxLevel && nextLevelPlayable(nextLevel)) {
     nextLevelBtn.style.display = '';
     nextLevelBtn.textContent = `⬆️ Перейти к уровню ${nextLevel}`;
+    retryLevelBtn.style.display = 'none';
+    nextLevelLockedMsg.style.display = 'none';
+  } else if (!isPerfect && nextIsGatedLocked) {
+    // Тест пройден не идеально, и именно поэтому следующий уровень
+    // недоступен — объясняем причину и даём сразу пересдать этот же уровень.
+    nextLevelBtn.style.display = 'none';
+    retryLevelBtn.style.display = '';
+    nextLevelLockedMsg.style.display = '';
+    nextLevelLockedReason.textContent = lockedLevelReason(nextLevel);
   } else {
     nextLevelBtn.style.display = 'none';
+    retryLevelBtn.style.display = 'none';
+    nextLevelLockedMsg.style.display = 'none';
   }
 
   goTo('result','left');
+}
+
+function retryCurrentLevel(){
+  if (currentTestLevel) startTestAtLevel(currentTestLevel);
 }
 
 function goToNextLevel(){
