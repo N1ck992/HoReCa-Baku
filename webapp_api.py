@@ -216,7 +216,13 @@ async def levels_status(request: web.Request) -> web.Response:
     questions_available показывает, сколько вопросов реально есть на
     уровне — нужно, чтобы не выдавать уровень за "играбельный", если для
     него ещё не добавили вопросы (например, у бармена уровни 4+ пока
-    пустые)."""
+    пустые).
+
+    perfect_count (0..3) — сколько раз уровень пройден ПОЛНОСТЬЮ без
+    единой ошибки (капается на 3). Используется для зелёной подсветки
+    "N/3" на кнопке уровня — чем ближе к 3/3, тем насыщеннее зелёный.
+    Не путать с completed (там неважен результат, тут важна
+    безошибочность)."""
     init_data = request.query.get("initData", "")
     tg_user = await _get_telegram_user(init_data)
     if tg_user is None:
@@ -236,6 +242,7 @@ async def levels_status(request: web.Request) -> web.Response:
         )
         completed_levels = await crud.get_completed_levels_for_category(session, user.id, category_id)
         question_counts = await crud.get_question_counts_by_level(session, category_id)
+        perfect_counts = await crud.get_perfect_pass_counts_for_category(session, user.id, category_id)
         avg = await crud.get_user_avg_for_category(session, user.id, category_id)
 
     levels = []
@@ -247,6 +254,7 @@ async def levels_status(request: web.Request) -> web.Response:
                 "unlocked": unlocked,
                 "completed": lvl in completed_levels,
                 "questions_available": question_counts.get(lvl, 0),
+                "perfect_count": perfect_counts.get(lvl, 0),
             }
         )
 
@@ -1208,7 +1216,5 @@ async def finish_exam(request: web.Request) -> web.Response:
             "timed_out": result["timed_out"],
             "correct_count": result["correct_count"],
             "total_count": result["total_count"],
-            "new_rank": result["new_rank"].title if result["new_rank"] else None,
-            "new_rank_emoji": result["new_rank"].emoji if result["new_rank"] else None,
         }
     )

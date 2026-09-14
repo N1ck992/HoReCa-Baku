@@ -641,6 +641,7 @@ async def get_restaurant_average_percentage(session: AsyncSession, restaurant_id
         .where(Position.restaurant_id == restaurant_id, User.restaurant_id == restaurant_id)
     )
     results = list(result.scalars().all())
+    results = _filter_stats_eligible_results(results)
     if not results:
         return 0.0
     return round(sum(r.percentage for r in results) / len(results), 1)
@@ -660,6 +661,7 @@ async def get_category_performance_for_user(
         .options(selectinload(TestResult.category))
     )
     results = list(result.scalars().all())
+    results = _filter_stats_eligible_results(results)
 
     by_category: dict[str, list[float]] = {}
     for r in results:
@@ -687,6 +689,7 @@ async def get_user_stats_for_restaurant(
         .where(TestResult.user_id == user_id, Position.restaurant_id == restaurant_id)
     )
     results = list(result.scalars().all())
+    results = _filter_stats_eligible_results(results)
     tests_completed = len(results)
     correct_total = sum(r.correct_count for r in results)
     wrong_total = sum((r.total_count - r.correct_count) for r in results)
@@ -709,6 +712,7 @@ async def get_user_avg_for_category(session: AsyncSession, user_id: int, categor
         select(TestResult).where(TestResult.user_id == user_id, TestResult.category_id == category_id)
     )
     results = list(result.scalars().all())
+    results = _filter_stats_eligible_results(results)
     if not results:
         return 0.0
     return round(sum(r.percentage for r in results) / len(results), 1)
@@ -732,6 +736,68 @@ async def get_completed_levels_for_category(
         )
     )
     return {level for (level,) in result.all()}
+
+
+PERFECT_PASS_CAP = 3
+
+
+def _filter_stats_eligible_results(results: list[TestResult]) -> list[TestResult]:
+    """Из списка TestResult (может быть вперемешку по разным категориям и
+    уровням) оставляет только те, что должны учитываться в статистике:
+    как только для конкретного (category_id, level) накопилось
+    PERFECT_PASS_CAP идеальных (без единой ошибки) прохождений — все
+    ПОСЛЕДУЮЩИЕ попытки по этому же уровню (даже с ошибками) больше не
+    учитываются, чтобы нельзя было накручивать средний % бесконечными
+    повторами уже освоенного уровня. Попытки ДО достижения потолка (в т.ч.
+    неидеальные, случившиеся раньше 3-го идеального прохождения) считаются
+    как обычно."""
+    by_group: dict[tuple[int, int], list[TestResult]] = {}
+    for r in results:
+        by_group.setdefault((r.category_id, r.level), []).append(r)
+
+    eligible: list[TestResult] = []
+    for group_results in by_group.values():
+        group_results.sort(key=lambda r: r.id)
+        perfect_seen = 0
+        for r in group_results:
+            if perfect_seen >= PERFECT_PASS_CAP:
+                break
+            eligible.append(r)
+            if r.total_count > 0 and r.correct_count == r.total_count:
+                perfect_seen += 1
+    return eligible
+
+
+async def get_perfect_pass_counts_for_category(
+    session: AsyncSession, user_id: int, category_id: int, max_level: int = MAX_QUESTION_LEVEL
+) -> dict[int, int]:
+    """Сколько раз пользователь прошёл каждый уровень ПОЛНОСТЬЮ без единой
+    ошибки (включая дополнительный вопрос-"хвост", если он был показан —
+    total_count уже его учитывает). Считает по всей истории, не только
+    подряд идущие попытки: два идеальных прохождения, между ними одно с
+    ошибкой, потом снова идеальное — это всё равно 3.
+
+    Используется для индикатора "N/3" и зелёной подсветки уровня на
+    сайте — НЕ путать с get_completed_levels_for_category (там неважен
+    результат, здесь важна именно безошибочность). Значение капается в
+    PERFECT_PASS_CAP: дальше 3/3 не растёт ни визуально, ни функционально
+    (см. get_user_stats_for_restaurant — попытки сверх 3 идеальных не
+    учитываются в статистике)."""
+    result = await session.execute(
+        select(TestResult.level, func.count(TestResult.id))
+        .where(
+            TestResult.user_id == user_id,
+            TestResult.category_id == category_id,
+            TestResult.level.between(1, max_level),
+            TestResult.total_count > 0,
+            TestResult.correct_count == TestResult.total_count,
+        )
+        .group_by(TestResult.level)
+    )
+    counts = {lvl: 0 for lvl in range(1, max_level + 1)}
+    for level, count in result.all():
+        counts[level] = min(count, PERFECT_PASS_CAP)
+    return counts
 
 
 async def get_question_counts_by_level(
@@ -907,6 +973,7 @@ async def pop_pending_requeued_questions(
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
     result = await session.execute(select(TestResult).where(TestResult.user_id == user_id))
     results = list(result.scalars().all())
+    results = _filter_stats_eligible_results(results)
     tests_completed = len(results)
     correct_total = sum(r.correct_count for r in results)
     wrong_total = sum((r.total_count - r.correct_count) for r in results)
@@ -987,26 +1054,12 @@ async def get_user_xp_for_position(session: AsyncSession, user_id: int, position
     return sum(difficulty * XP_PER_DIFFICULTY for is_correct, difficulty in rows if is_correct)
 
 
-async def get_exam_bonus_xp_for_position(
-    session: AsyncSession, user_id: int, position_id: int
-) -> int:
-    """Бонусный XP от успешно сданных экзаменов по одноразовым кодам."""
-    result = await session.execute(
-        select(ExamResult.bonus_xp_awarded).where(
-            ExamResult.user_id == user_id,
-            ExamResult.position_id == position_id,
-            ExamResult.passed.is_(True),
-        )
-    )
-    return sum(result.scalars().all())
-
-
 async def get_total_xp_for_position(session: AsyncSession, user_id: int, position_id: int) -> int:
-    """Обычный XP за тесты + бонусный XP за сданные экзамены — используется
-    везде, где показывается ранг пользователя."""
-    regular = await get_user_xp_for_position(session, user_id, position_id)
-    bonus = await get_exam_bonus_xp_for_position(session, user_id, position_id)
-    return regular + bonus
+    """XP пользователя по должности — используется везде, где показывается
+    ранг. Считается ИСКЛЮЧИТЕЛЬНО по обычным тестам (get_user_xp_for_position).
+    Экзамены на ранг не влияют — это сознательно отдельная, изолированная
+    система (см. services/exam_logic.py)."""
+    return await get_user_xp_for_position(session, user_id, position_id)
 
 
 def get_rank_for_xp(ranks: list[Rank], xp: int) -> Rank | None:

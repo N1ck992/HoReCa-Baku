@@ -19,7 +19,7 @@ from keyboards.keyboards import (
     question_kb,
 )
 from services import exam_logic
-from services.rating import display_name, rank_progress_text
+from services.rating import display_name
 
 router = Router(name="exams")
 
@@ -245,8 +245,8 @@ async def _complete_exam(
     """Общая логика завершения экзамена — используется и при обычном
     ответе на последний вопрос, и фоновым таймером при полном молчании
     участника. Возвращает готовый текст сообщения с результатом. Сам
-    подсчёт (ранг, бонусный опыт, открытие уровня) — в
-    services/exam_logic.py, общем с сайтом."""
+    подсчёт (сдал/не сдал) — в services/exam_logic.py, общем с сайтом.
+    Экзамен не влияет на ранг/опыт (см. docstring exam_logic.py)."""
     async with async_session() as session:
         if user_id is not None:
             user = await crud.get_user_by_id(session, user_id)
@@ -273,13 +273,7 @@ async def _complete_exam(
     text += f"Правильных ответов: {correct_count}/{total_count}\n"
 
     if result["passed"]:
-        new_rank = result["new_rank"]
-        new_next_rank = result["new_next_rank"]
-        text += (
-            f"✅ Экзамен сдан!\n\n"
-            f"🎊 Новый ранг: {new_rank.emoji} {new_rank.title}!\n"
-            f"{rank_progress_text(new_rank, new_next_rank, result['new_total_xp'])}"
-        )
+        text += "✅ Экзамен сдан!"
     else:
         text += "❌ Экзамен не сдан. Обратитесь к менеджеру за новым кодом, когда будете готовы."
 

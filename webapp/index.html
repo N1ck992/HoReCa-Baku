@@ -142,6 +142,18 @@
   }
   .card:active{ transform: scale(0.98); }
   .card.selected{ border-color: var(--accent); background: var(--accent-soft); }
+  .card.perfect-1{ background: rgba(124,139,111,0.08); border-color: rgba(124,139,111,0.25); }
+  .card.perfect-2{ background: rgba(124,139,111,0.16); border-color: rgba(124,139,111,0.35); }
+  .card.perfect-3{ background: rgba(124,139,111,0.26); border-color: rgba(124,139,111,0.45); }
+  .card.selected.perfect-1, .card.selected.perfect-2, .card.selected.perfect-3{
+    background: var(--accent-soft); border-color: var(--accent);
+  }
+  .perfect-pill{
+    flex-shrink:0; font-size:11.5px; font-weight:700;
+    color: var(--accent-strong); background:#fff;
+    border:1px solid rgba(124,139,111,0.35);
+    border-radius:999px; padding:2px 8px; margin-right:8px;
+  }
   .icon-wrap{
     width:44px; height:44px; border-radius:12px;
     background:var(--plaster);
@@ -528,17 +540,20 @@
         <div class="cards" id="levelCardsList">
           <div class="card" data-level="1" onclick="selectLevel(1)">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg></div>
-            <div class="card-text"><div class="card-title">Уровень 1 · лёгкий</div><div class="card-meta">по 5 вопросов, можно продолжать</div></div>
+            <div class="card-text"><div class="card-title">Уровень 1 · лёгкий</div><div class="card-meta">5 вопросов</div></div>
+            <span class="perfect-pill" data-perfect-pill style="display:none;"></span>
             <div class="chevron">›</div>
           </div>
           <div class="card" data-level="2" onclick="selectLevel(2)">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></div>
-            <div class="card-text"><div class="card-title">Уровень 2 · средний</div><div class="card-meta">по 5 вопросов, можно продолжать</div></div>
+            <div class="card-text"><div class="card-title">Уровень 2 · средний</div><div class="card-meta">5 вопросов</div></div>
+            <span class="perfect-pill" data-perfect-pill style="display:none;"></span>
             <div class="chevron">›</div>
           </div>
           <div class="card" data-level="3" onclick="selectLevel(3)">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg></div>
-            <div class="card-text"><div class="card-title">Уровень 3 · сложный</div><div class="card-meta">по 5 вопросов, можно продолжать</div></div>
+            <div class="card-text"><div class="card-title">Уровень 3 · сложный</div><div class="card-meta">5 вопросов</div></div>
+            <span class="perfect-pill" data-perfect-pill style="display:none;"></span>
             <div class="chevron">›</div>
           </div>
           <div id="expertLevelsList"></div>
@@ -1020,7 +1035,7 @@ function selectCategory(categoryId, categoryName){
   loadLevelsStatus();
 }
 
-let expertLevels = []; // [{level, unlocked, completed, questions_available}, ...] для уровней 4..max
+let expertLevels = []; // [{level, unlocked, completed, questions_available, perfect_count}, ...] для уровней 4..max
 let siteMaxLevel = 3; // обновляется из /api/levels_status (1..3 всегда есть, экспертные уровни — по данным API)
 
 function nextLevelPlayable(n){
@@ -1033,6 +1048,17 @@ function levelLabel(n){
   return `${n} (${n === 1 ? 'лёгкий' : n === 2 ? 'средний' : n === 3 ? 'тяжёлый' : 'экспертный'})`;
 }
 
+function applyPerfectBadge(card, perfectCount){
+  card.classList.remove('perfect-1', 'perfect-2', 'perfect-3');
+  const pill = card.querySelector('[data-perfect-pill]');
+  if (perfectCount > 0) {
+    card.classList.add(`perfect-${perfectCount}`);
+    if (pill) { pill.style.display = ''; pill.textContent = `${perfectCount}/3`; }
+  } else if (pill) {
+    pill.style.display = 'none';
+  }
+}
+
 async function loadLevelsStatus(){
   const el = document.getElementById('expertLevelsList');
   el.innerHTML = '<p class="sub">Проверка уровней…</p>';
@@ -1040,6 +1066,11 @@ async function loadLevelsStatus(){
     const status = await apiGet('/api/levels_status', { category_id: currentCategoryId });
     siteMaxLevel = status.max_level || 3;
     expertLevels = status.levels.filter(l => l.level >= 4);
+    // Базовые уровни 1-3 — статичная разметка, просто обновляем подсветку/бейдж
+    status.levels.filter(l => l.level <= 3).forEach(l => {
+      const card = document.querySelector(`#levelCardsList .card[data-level="${l.level}"]`);
+      if (card) applyPerfectBadge(card, l.perfect_count || 0);
+    });
     renderExpertLevels();
   } catch (e) {
     expertLevels = [];
@@ -1052,12 +1083,14 @@ function renderExpertLevels(){
   el.innerHTML = expertLevels.map(l => {
     const hasQuestions = l.questions_available > 0;
     const playable = l.unlocked && hasQuestions;
+    const perfectCount = l.perfect_count || 0;
     let meta;
     if (!l.unlocked) meta = 'Закрыто';
     else if (!hasQuestions) meta = 'Вопросы скоро появятся';
-    else meta = 'по 5 вопросов, можно продолжать';
+    else meta = '5 вопросов';
+    const tintClass = perfectCount > 0 ? `perfect-${perfectCount}` : '';
     return `
-      <div class="card" data-level="${l.level}" onclick="handleExpertLevelClick(${l.level})" style="position:relative; ${playable ? '' : 'opacity:0.85;'}">
+      <div class="card ${tintClass}" data-level="${l.level}" onclick="handleExpertLevelClick(${l.level})" style="position:relative; ${playable ? '' : 'opacity:0.85;'}">
         ${playable ? '' : `
           <div style="position:absolute; inset:0; backdrop-filter:blur(4px); background:rgba(250,248,244,0.55); border-radius:16px; display:flex; align-items:center; justify-content:center; z-index:2;">
             <span style="font-size:20px;">${l.unlocked ? '⏳' : '🔒'}</span>
@@ -1065,6 +1098,7 @@ function renderExpertLevels(){
         `}
         <div class="icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="12" cy="12" r="4" fill="var(--paper)"/></svg></div>
         <div class="card-text"><div class="card-title">Уровень ${l.level} · экспертный</div><div class="card-meta">${meta}</div></div>
+        ${perfectCount > 0 ? `<span class="perfect-pill">${perfectCount}/3</span>` : ''}
         <div class="chevron">›</div>
       </div>
     `;
@@ -1891,7 +1925,7 @@ async function finishExam(forcedTimeout){
   } else if (result.passed) {
     icon.textContent = '🎉';
     title.textContent = 'Экзамен сдан!';
-    sub.textContent = `Правильных ответов: ${result.correct_count}/${result.total_count}. Новый ранг: ${result.new_rank_emoji || ''} ${result.new_rank || ''}.`;
+    sub.textContent = `Правильных ответов: ${result.correct_count}/${result.total_count}.`;
   } else {
     icon.textContent = '📚';
     title.textContent = 'Экзамен не сдан';

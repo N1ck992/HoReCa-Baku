@@ -47,8 +47,14 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
         for p in position_progress
     ]
 
-    # Ранги по всем должностям — раньше это была отдельная кнопка "🎖 Мои ранги"
-    all_positions = await crud.get_active_positions(session, user.restaurant_id)
+    # Ранги по всем должностям — раньше это была отдельная кнопка "🎖 Мои ранги".
+    # Ранг НЕ связан с экзаменами и считается только по ОБЩИМ должностям
+    # (Position.restaurant_id is None) — тесты внутри конкретного заведения
+    # на общий ранг пользователя не влияют, это отдельная система оценки
+    # для самого заведения (см. панель менеджера).
+    all_positions = [p for p in await crud.get_active_positions(session, user.restaurant_id) if p.restaurant_id is None]
+    if not all_positions:
+        all_positions = await crud.get_active_positions(session, None)
     all_ranks_lines = []
     for pos in all_positions:
         xp = await crud.get_total_xp_for_position(session, user.id, pos.id)
