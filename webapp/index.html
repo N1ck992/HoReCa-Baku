@@ -267,7 +267,9 @@
   .result-actions{
     position:sticky; bottom:0; z-index:3;
     width:100%; background: var(--paper); padding-bottom:4px;
+    display:flex; flex-direction:column; gap:10px;
   }
+  .result-actions > button{ margin-top:0; }
   .btn-ghost{
     width:100%; padding:14px; border:1px solid var(--divider); border-radius:14px;
     background:transparent; color:var(--ink-soft); font-size:14px; font-weight:500;
@@ -586,13 +588,13 @@
           <div class="rank-pill"><span class="dot"></span><span id="rankText">Бармен → Миксолог: 320 / 500 XP</span></div>
         </div>
         <div class="result-actions">
-          <div id="levelCompleteMsg" style="display:none; background:var(--accent-soft); border-radius:14px; padding:14px; margin-bottom:10px; font-size:13.5px; text-align:center; color:var(--accent-strong);">
+          <div id="levelCompleteMsg" style="display:none; background:var(--accent-soft); border-radius:14px; padding:14px; font-size:13.5px; text-align:center; color:var(--accent-strong);">
             🎉 Вы прошли все вопросы этого уровня!
           </div>
           <button class="btn-primary" id="continueLevelBtn" style="display:none;" onclick="continueSameLevel()">➡️ Продолжить (ещё вопросы)</button>
           <button class="btn-primary" id="nextLevelBtn" style="display:none;" onclick="goToNextLevel()">⬆️ Следующий уровень</button>
           <button class="btn-primary" id="mainMenuBtn" onclick="restart()">🏠 Главное меню сайта</button>
-          <button class="btn-ghost" onclick="goToMyResults()">📊 Мои результаты</button>
+          <button class="btn-primary" onclick="goToMyResults()">📊 Мои результаты</button>
         </div>
       </section>
 
