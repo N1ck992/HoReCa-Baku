@@ -308,6 +308,21 @@ async def start_test(request: web.Request) -> web.Response:
             username=tg_user.get("username"),
             full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
         )
+
+        # Проверка разблокировки — ОБЯЗАТЕЛЬНО на сервере, а не только в
+        # интерфейсе сайта: иначе достаточно отправить запрос напрямую
+        # (или воспользоваться багом на клиенте) с level=10, минуя реальное
+        # прохождение 1-9. Правило то же, что и в /api/levels_status:
+        # уровень N>=4 доступен только если пройдены (хотя бы по одному
+        # завершённому тесту) ВСЕ уровни 1..N-1.
+        if level > 3:
+            completed_levels = await crud.get_completed_levels_for_category(session, user.id, category_id)
+            if not set(range(1, level)).issubset(completed_levels):
+                return _json(
+                    {"error": "Этот уровень ещё не открыт — сначала пройдите предыдущие уровни."},
+                    status=403,
+                )
+
         test_result = await crud.create_test_result(session, user.id, category_id, level)
         all_questions = await crud.get_questions_with_options(session, category_id)
 
