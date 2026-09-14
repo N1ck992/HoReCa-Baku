@@ -1048,10 +1048,6 @@ function nextLevelPlayable(n){
   return !!(info && info.unlocked && info.questions_available > 0);
 }
 
-function levelLabel(n){
-  return `${n} (${n === 1 ? 'лёгкий' : n === 2 ? 'средний' : n === 3 ? 'тяжёлый' : 'экспертный'})`;
-}
-
 function applyPerfectBadge(card, perfectCount){
   card.classList.remove('perfect-1', 'perfect-2', 'perfect-3');
   const pill = card.querySelector('[data-perfect-pill]');
@@ -1117,11 +1113,15 @@ function handleExpertLevelClick(level){
     return;
   }
   if (!info.unlocked) {
-    const missing = [];
-    for (let n = 1; n < level; n++) missing.push(levelLabel(n));
-    alert(
-      `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно полностью пройти (хотя бы по одному разу) все предыдущие уровни в этой категории — независимо от процента правильных ответов.\n\nНужно пройти: ${missing.join(', ')}.`
-    );
+    if (level <= 4) {
+      alert(
+        `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно полностью пройти (хотя бы по одному разу) уровни 1, 2 и 3 — независимо от процента правильных ответов.`
+      );
+    } else {
+      alert(
+        `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно пройти уровень ${level - 1} ИДЕАЛЬНО — без единой ошибки (включая дополнительный вопрос, если он был показан).`
+      );
+    }
     return;
   }
   alert('Этот уровень уже открыт, но вопросы для него пока не добавлены — загляните позже.');
