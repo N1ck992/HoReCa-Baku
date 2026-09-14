@@ -219,6 +219,12 @@
   .option.wrong .letter{ background: var(--wrong); color:#fff; }
   .option.disabled{ pointer-events:none; }
   .option.dim{ opacity:0.55; }
+  .repeat-badge{
+    margin-left:auto; flex-shrink:0;
+    background: var(--accent); color:#fff;
+    font-size:11.5px; font-weight:700;
+    border-radius:999px; padding:3px 8px;
+  }
 
   .next-wrap{
     position:sticky; bottom:0; z-index:3;
@@ -588,10 +594,9 @@
           <div class="rank-pill"><span class="dot"></span><span id="rankText">Бармен → Миксолог: 320 / 500 XP</span></div>
         </div>
         <div class="result-actions">
-          <div id="levelCompleteMsg" style="display:none; background:var(--accent-soft); border-radius:14px; padding:14px; font-size:13.5px; text-align:center; color:var(--accent-strong);">
+          <div id="levelCompleteMsg" style="background:var(--accent-soft); border-radius:14px; padding:14px; font-size:13.5px; text-align:center; color:var(--accent-strong);">
             🎉 Вы прошли все вопросы этого уровня!
           </div>
-          <button class="btn-primary" id="continueLevelBtn" style="display:none;" onclick="continueSameLevel()">➡️ Продолжить (ещё вопросы)</button>
           <button class="btn-primary" id="nextLevelBtn" style="display:none;" onclick="goToNextLevel()">⬆️ Следующий уровень</button>
           <button class="btn-primary" id="mainMenuBtn" onclick="restart()">🏠 Главное меню сайта</button>
           <button class="btn-primary" onclick="goToMyResults()">📊 Мои результаты</button>
@@ -1105,15 +1110,10 @@ function confirmLevelSelection(){
 
 let answeredIdsThisSession = [];
 let currentTestLevel = null;
-let lastHasMore = false;
 
 async function startTestAtLevel(level){
   answeredIdsThisSession = [];
   currentTestLevel = level;
-  await fetchTestBatch();
-}
-
-async function continueSameLevel(){
   await fetchTestBatch();
 }
 
@@ -1127,11 +1127,10 @@ async function fetchTestBatch(){
     });
     currentTestResultId = data.test_result_id;
     quizQuestions = data.questions;
-    lastHasMore = data.has_more;
     answeredIdsThisSession = answeredIdsThisSession.concat(quizQuestions.map(q => q.id));
     quizIndex = 0; quizCorrect = 0; answered = false;
     if (!quizQuestions.length) {
-      document.getElementById('qText').textContent = 'Вопросы этого уровня закончились — вы прошли их все!';
+      document.getElementById('qText').textContent = 'Для этого уровня пока нет вопросов.';
       return;
     }
     buildProgress();
@@ -1212,7 +1211,13 @@ async function pickOption(optionId){
   opts.forEach(el => {
     const id = Number(el.dataset.id);
     el.classList.add('disabled');
-    if (id === result.correct_option_id) { el.classList.add('correct'); }
+    if (id === result.correct_option_id) {
+      el.classList.add('correct');
+      if (!result.is_correct && result.repeat_count >= 2) {
+        const cap = Math.min(result.repeat_count, 5);
+        el.insertAdjacentHTML('beforeend', `<span class="repeat-badge">×${cap}</span>`);
+      }
+    }
     else if (id === optionId) { el.classList.add('wrong'); }
     else { el.classList.add('dim'); }
   });
@@ -1264,29 +1269,17 @@ async function showResult(){
   document.getElementById('rankText').textContent =
     (currentPosition ? currentPosition.name : '') + ' · результат сохранён в вашей статистике';
 
-  const continueBtn = document.getElementById('continueLevelBtn');
-  const levelCompleteMsg = document.getElementById('levelCompleteMsg');
   const mainMenuBtn = document.getElementById('mainMenuBtn');
   const nextLevelBtn = document.getElementById('nextLevelBtn');
-  if (lastHasMore) {
-    continueBtn.style.display = '';
-    levelCompleteMsg.style.display = 'none';
-    mainMenuBtn.style.display = 'none';
-    nextLevelBtn.style.display = 'none';
+  // Каждый пройденный тест сразу считается завершённым уровнем — без
+  // варианта "продолжить ещё вопросами того же уровня". Дальше только
+  // переход к следующему уровню (если он есть и играбелен) или в меню.
+  const nextLevel = currentTestLevel + 1;
+  if (currentTestLevel && nextLevel <= siteMaxLevel && nextLevelPlayable(nextLevel)) {
+    nextLevelBtn.style.display = '';
+    nextLevelBtn.textContent = `⬆️ Перейти к уровню ${nextLevel}`;
   } else {
-    continueBtn.style.display = 'none';
-    levelCompleteMsg.style.display = '';
-    mainMenuBtn.style.display = '';
-    // Уровень пройден целиком — предлагаем сразу перейти к следующему,
-    // не заставляя возвращаться в список уровней вручную. Уровень
-    // "следующий" может быть любым от 2 до siteMaxLevel — не хардкодим 3.
-    const nextLevel = currentTestLevel + 1;
-    if (currentTestLevel && nextLevel <= siteMaxLevel && nextLevelPlayable(nextLevel)) {
-      nextLevelBtn.style.display = '';
-      nextLevelBtn.textContent = `⬆️ Перейти к уровню ${nextLevel}`;
-    } else {
-      nextLevelBtn.style.display = 'none';
-    }
+    nextLevelBtn.style.display = 'none';
   }
 
   goTo('result','left');

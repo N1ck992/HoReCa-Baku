@@ -761,43 +761,101 @@ async def get_question_counts_by_level(
     return counts
 
 
-async def enqueue_wrong_question_for_next_level(
+MAX_MISTAKE_REPEATS = 5
+
+
+async def get_wrong_streak_for_question(session: AsyncSession, user_id: int, question_id: int) -> int:
+    """Сколько раз ПОДРЯД (без единого правильного ответа между ними)
+    пользователь ответил на этот вопрос неправильно, считая от самого
+    свежего ответа назад. Если последний ответ на вопрос был правильным —
+    0 (проблема считается решённой). Смотрит на всю историю ответов
+    пользователя по вопросу, а не привязано к конкретному уровню —
+    вопрос мог всплывать на разных уровнях."""
+    result = await session.execute(
+        select(UserAnswer.is_correct)
+        .join(TestResult, UserAnswer.test_result_id == TestResult.id)
+        .where(TestResult.user_id == user_id, UserAnswer.question_id == question_id)
+        .order_by(UserAnswer.id.desc())
+    )
+    streak = 0
+    for (is_correct,) in result.all():
+        if is_correct:
+            break
+        streak += 1
+    return streak
+
+
+async def schedule_requeues_for_wrong_answer(
     session: AsyncSession,
     *,
     user_id: int,
     category_id: int,
     question_id: int,
     source_level: int,
+    repeat_count: int,
     max_level: int = MAX_QUESTION_LEVEL,
 ) -> None:
-    """Регистрирует неправильно отвеченный вопрос на перенос в тест
-    следующего уровня (source_level + 1). Если source_level уже
-    максимальный — переносить некуда, ничего не делает. Если вопрос уже
-    стоит в очереди на перенос (не использован) — не дублирует запись."""
-    target_level = source_level + 1
-    if target_level > max_level:
-        return
+    """Планирует повторные показы вопроса на будущих уровнях после
+    неправильного ответа на уровне source_level.
 
-    existing = await session.execute(
-        select(RequeuedQuestion.id).where(
+    repeat_count — сколько раз подряд человек уже ошибся на этом вопросе
+    (см. get_wrong_streak_for_question, включая только что сохранённый
+    неверный ответ). Именно столько будущих уровней получат этот вопрос
+    как один дополнительный (см. pop_pending_requeued_questions с
+    limit=1 в /api/start_test) — по одному разу на level+1, level+2, ...
+    Капается MAX_MISTAKE_REPEATS, чтобы вопрос не заваливал вперёд
+    бесконечно много уровней при постоянных ошибках.
+
+    Если на какой-то из этих будущих уровней для этого же вопроса уже
+    стоит непогашенная запись — новую не создаёт (без дублей)."""
+    repeats_needed = min(repeat_count, MAX_MISTAKE_REPEATS)
+    for offset in range(1, repeats_needed + 1):
+        target_level = source_level + offset
+        if target_level > max_level:
+            break
+
+        existing = await session.execute(
+            select(RequeuedQuestion.id).where(
+                RequeuedQuestion.user_id == user_id,
+                RequeuedQuestion.question_id == question_id,
+                RequeuedQuestion.target_level == target_level,
+                RequeuedQuestion.consumed.is_(False),
+            )
+        )
+        if existing.scalars().first() is not None:
+            continue
+
+        session.add(
+            RequeuedQuestion(
+                user_id=user_id,
+                category_id=category_id,
+                question_id=question_id,
+                source_level=source_level,
+                target_level=target_level,
+            )
+        )
+    await session.commit()
+
+
+async def cancel_pending_requeues_for_question(
+    session: AsyncSession, user_id: int, question_id: int
+) -> None:
+    """Убирает все ещё не показанные запланированные повторы вопроса —
+    вызывается при правильном ответе: раз человек вспомнил, дальше
+    донимать его этим вопросом не нужно (даже если раньше была
+    запланирована серия из нескольких будущих повторов)."""
+    result = await session.execute(
+        select(RequeuedQuestion).where(
             RequeuedQuestion.user_id == user_id,
             RequeuedQuestion.question_id == question_id,
             RequeuedQuestion.consumed.is_(False),
         )
     )
-    if existing.scalars().first() is not None:
-        return
-
-    session.add(
-        RequeuedQuestion(
-            user_id=user_id,
-            category_id=category_id,
-            question_id=question_id,
-            source_level=source_level,
-            target_level=target_level,
-        )
-    )
-    await session.commit()
+    rows = list(result.scalars().all())
+    for row in rows:
+        row.consumed = True
+    if rows:
+        await session.commit()
 
 
 async def get_excluded_question_ids_for_level(
@@ -805,9 +863,9 @@ async def get_excluded_question_ids_for_level(
 ) -> set[int]:
     """Вопросы, которые нужно скрыть из пула ИМЕННО этого уровня, потому
     что пользователь уже ответил на них здесь неправильно и они ждут
-    показа на следующем уровне (см. enqueue_wrong_question_for_next_level).
+    показа на следующих уровнях (см. schedule_requeues_for_wrong_answer).
     Так один и тот же провальный вопрос не крутится на одном уровне
-    бесконечно — вместо этого он один раз всплывёт уровнем выше."""
+    бесконечно — вместо этого он всплывёт уровнем (или уровнями) выше."""
     result = await session.execute(
         select(RequeuedQuestion.question_id).where(
             RequeuedQuestion.user_id == user_id,
@@ -844,23 +902,6 @@ async def pop_pending_requeued_questions(
     if rows:
         await session.commit()
     return [row.question_id for row in rows]
-
-
-async def count_pending_requeued_questions(
-    session: AsyncSession, user_id: int, category_id: int, level: int
-) -> int:
-    """Сколько всего вопросов ещё ждёт повторного показа на этом уровне
-    (для расчёта has_more — чтобы кнопка 'Продолжить' не пропадала, пока
-    не показаны все ожидающие вопросы)."""
-    result = await session.execute(
-        select(func.count(RequeuedQuestion.id)).where(
-            RequeuedQuestion.user_id == user_id,
-            RequeuedQuestion.category_id == category_id,
-            RequeuedQuestion.target_level == level,
-            RequeuedQuestion.consumed.is_(False),
-        )
-    )
-    return int(result.scalar() or 0)
 
 
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:

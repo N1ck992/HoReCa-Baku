@@ -308,6 +308,7 @@ async def start_test(request: web.Request) -> web.Response:
         # (EXPERT_DIFFICULTY) — какому именно уровню принадлежит вопрос,
         # решает Question.level (без явного level считается EXPERT_DIFFICULTY).
         BATCH_SIZE = 5
+        MAX_EXTRA_QUESTIONS = 1  # максимум один "хвостовой" вопрос с прошлых уровней поверх 5 основных
         if level < EXPERT_DIFFICULTY:
             level_pool = [q for q in all_questions if q.difficulty == level]
         else:
@@ -318,30 +319,28 @@ async def start_test(request: web.Request) -> web.Response:
             ]
 
         # Вопросы, на которые пользователь уже ответил неправильно на ЭТОМ
-        # уровне, убираются из пула — они ждут своего часа на следующем
-        # уровне (см. ниже) и не должны крутиться здесь по кругу.
+        # уровне, убираются из пула — они ждут своего часа на следующих
+        # уровнях (см. ниже) и не должны крутиться здесь по кругу.
         excluded_wrong_ids = await crud.get_excluded_question_ids_for_level(
             session, user.id, category_id, level
         )
         level_pool = [q for q in level_pool if q.id not in excluded_wrong_ids]
         fresh_pool = [q for q in level_pool if q.id not in exclude_ids]
 
-        # Вопросы, неправильно отвеченные на ПРЕДЫДУЩЕМ уровне, один раз
-        # подмешиваются сюда (могут быть другой сложности — это осознанно,
-        # это "хвост" с прошлого уровня, а не обычный вопрос текущего).
-        total_pending = await crud.count_pending_requeued_questions(session, user.id, category_id, level)
+        # Тест — всегда 5 основных вопросов текущего уровня плюс НЕ БОЛЕЕ
+        # ОДНОГО вопроса, ранее провального на предыдущем уровне (может
+        # быть другой сложности — это осознанно, это "хвост" с прошлого
+        # уровня). Если ожидающих "хвостов" несколько сразу — берётся
+        # только один (самый старый), остальные ждут следующих уровней.
         pending_ids = await crud.pop_pending_requeued_questions(
-            session, user.id, category_id, level, BATCH_SIZE
+            session, user.id, category_id, level, MAX_EXTRA_QUESTIONS
         )
         by_id = {q.id: q for q in all_questions}
         pending_questions = [by_id[qid] for qid in pending_ids if qid in by_id]
 
-        remaining_slots = max(0, BATCH_SIZE - len(pending_questions))
-        rest = random.sample(fresh_pool, min(remaining_slots, len(fresh_pool)))
+        rest = random.sample(fresh_pool, min(BATCH_SIZE, len(fresh_pool)))
         selected = pending_questions + rest
         random.shuffle(selected)
-
-        has_more = (len(fresh_pool) - len(rest)) > 0 or (total_pending - len(pending_ids)) > 0
 
         questions_data = []
         for q in selected:
@@ -356,7 +355,7 @@ async def start_test(request: web.Request) -> web.Response:
                 }
             )
 
-    return _json({"test_result_id": test_result.id, "questions": questions_data, "has_more": has_more})
+    return _json({"test_result_id": test_result.id, "questions": questions_data})
 
 
 @routes.post("/api/answer_question")
@@ -390,24 +389,38 @@ async def answer_question(request: web.Request) -> web.Response:
 
         await crud.save_user_answer(session, test_result_id, question_id, answer_option_id, is_correct)
 
+        repeat_count = 0
         if not is_correct:
             # Неправильный ответ: вопрос больше не будет предлагаться на
-            # этом же уровне при повторных попытках — вместо этого он один
-            # раз всплывёт в тесте следующего уровня (см. /api/start_test).
+            # этом же уровне при повторных попытках. Сколько раз ПОДРЯД
+            # человек уже ошибся на нём — столько будущих уровней получат
+            # этот вопрос как один дополнительный (эскалация вплоть до
+            # MAX_MISTAKE_REPEATS): один провал — один повтор, провалил
+            # повторно — два повтора на двух разных следующих уровнях, и т.д.
             test_result = await crud.get_test_result_by_id(session, test_result_id)
             if test_result is not None:
-                await crud.enqueue_wrong_question_for_next_level(
+                repeat_count = await crud.get_wrong_streak_for_question(session, test_result.user_id, question_id)
+                await crud.schedule_requeues_for_wrong_answer(
                     session,
                     user_id=test_result.user_id,
                     category_id=test_result.category_id,
                     question_id=question_id,
                     source_level=test_result.level,
+                    repeat_count=repeat_count,
                 )
+        else:
+            # Правильный ответ — если раньше на этот вопрос уже
+            # ошибались и были запланированы будущие повторы, они больше
+            # не нужны: человек показал, что вспомнил.
+            test_result = await crud.get_test_result_by_id(session, test_result_id)
+            if test_result is not None:
+                await crud.cancel_pending_requeues_for_question(session, test_result.user_id, question_id)
 
     return _json(
         {
             "is_correct": is_correct,
             "correct_option_id": correct_option.id if correct_option else None,
+            "repeat_count": repeat_count,
         }
     )
 
