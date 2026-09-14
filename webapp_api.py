@@ -200,15 +200,21 @@ async def get_questions(request: web.Request) -> web.Response:
     return _json(data)
 
 
-LEVEL_4_REQUIRED_AVG = 60.0
+REQUIRED_LEVELS_FOR_LEVEL_4 = (1, 2, 3)
 
 
 @routes.get("/api/level4_status")
 async def level4_status(request: web.Request) -> web.Response:
-    """Проверка условия автоматического открытия уровня 4 — пока
-    экспериментальная функция (только в dev), не связана с обязательным
-    экзаменом. Условие: средний балл по ЭТОЙ категории не ниже
-    LEVEL_4_REQUIRED_AVG."""
+    """Проверка условия открытия уровня 4 для этой категории.
+
+    Условие: пользователь полностью прошёл (хотя бы по одному разу) все
+    три уровня — 1 (лёгкий), 2 (средний), 3 (тяжёлый) — в этой категории.
+    Это НЕ связано с общим/средним процентом правильных ответов: например,
+    один тест на 5/5 на 1-м уровне даёт 100% в статистике, но не открывает
+    уровень 4, пока не пройдены уровни 2 и 3.
+
+    avg_percentage возвращается только для информации в интерфейсе
+    (общая статистика по категории) и не влияет на unlocked."""
     init_data = request.query.get("initData", "")
     tg_user = await _get_telegram_user(init_data)
     if tg_user is None:
@@ -225,13 +231,21 @@ async def level4_status(request: web.Request) -> web.Response:
             username=tg_user.get("username"),
             full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
         )
+        completed_levels = await crud.get_completed_levels_for_category(
+            session, user.id, int(category_id)
+        )
         avg = await crud.get_user_avg_for_category(session, user.id, int(category_id))
+
+    unlocked = set(REQUIRED_LEVELS_FOR_LEVEL_4).issubset(completed_levels)
+    missing_levels = sorted(set(REQUIRED_LEVELS_FOR_LEVEL_4) - completed_levels)
 
     return _json(
         {
-            "unlocked": avg >= LEVEL_4_REQUIRED_AVG,
+            "unlocked": unlocked,
+            "completed_levels": sorted(completed_levels),
+            "required_levels": list(REQUIRED_LEVELS_FOR_LEVEL_4),
+            "missing_levels": missing_levels,
             "avg_percentage": avg,
-            "required": LEVEL_4_REQUIRED_AVG,
         }
     )
 
@@ -552,6 +566,7 @@ async def get_employees(request: web.Request) -> web.Response:
                 "user_id": item["user"].id,
                 "name": item["user"].full_name or item["user"].username or "Без имени",
                 "position": item["position"].name if item["position"] else None,
+                "position_id": item["position"].id if item["position"] else None,
                 "tests_completed": item["tests_completed"],
                 "avg_percentage": item["avg_percentage"],
                 "admin_note": item["user"].admin_note,

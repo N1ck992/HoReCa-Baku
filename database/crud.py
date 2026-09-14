@@ -700,9 +700,9 @@ async def get_user_stats_for_restaurant(
 
 
 async def get_user_avg_for_category(session: AsyncSession, user_id: int, category_id: int) -> float:
-    """Средний балл пользователя именно по этой категории — используется
-    для проверки условия автоматического открытия уровня 4 (пока в
-    разработке, не влияет на обязательный экзамен)."""
+    """Средний балл пользователя именно по этой категории — статистика для
+    профиля/отображения. НЕ используется для решения об открытии уровня 4 —
+    для этого см. get_completed_levels_for_category."""
     result = await session.execute(
         select(TestResult).where(TestResult.user_id == user_id, TestResult.category_id == category_id)
     )
@@ -710,6 +710,26 @@ async def get_user_avg_for_category(session: AsyncSession, user_id: int, categor
     if not results:
         return 0.0
     return round(sum(r.percentage for r in results) / len(results), 1)
+
+
+async def get_completed_levels_for_category(
+    session: AsyncSession, user_id: int, category_id: int
+) -> set[int]:
+    """Какие из уровней 1/2/3 пользователь уже проходил в этой категории
+    (хотя бы один завершённый тест на каждом уровне, результат не важен).
+
+    Используется для условия открытия уровня 4: он должен зависеть от
+    полного прохождения уровней 1-3, а НЕ от общего/среднего процента
+    правильных ответов (иначе один тест на 5/5 в лёгком уровне даёт 100% и
+    ошибочно открывает уровень 4)."""
+    result = await session.execute(
+        select(TestResult.level).where(
+            TestResult.user_id == user_id,
+            TestResult.category_id == category_id,
+            TestResult.level.in_((1, 2, 3)),
+        )
+    )
+    return {level for (level,) in result.all()}
 
 
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:

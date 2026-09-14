@@ -594,12 +594,12 @@
         </div>
         <div class="result-actions">
           <div id="levelCompleteMsg" style="display:none; background:var(--accent-soft); border-radius:14px; padding:14px; margin-bottom:10px; font-size:13.5px; text-align:center; color:var(--accent-strong);">
-            🎉 Вы прошли все вопросы этого уровня! Пора повышать уровень сложности.
+            🎉 Вы прошли все вопросы этого уровня!
           </div>
           <button class="btn-primary" id="continueLevelBtn" style="display:none;" onclick="continueSameLevel()">➡️ Продолжить (ещё вопросы)</button>
+          <button class="btn-primary" id="nextLevelBtn" style="display:none;" onclick="goToNextLevel()">⬆️ Следующий уровень</button>
           <button class="btn-primary" id="mainMenuBtn" onclick="restart()">🏠 Главное меню сайта</button>
           <button class="btn-ghost" onclick="goToMyResults()">📊 Мои результаты</button>
-          <button class="btn-ghost" onclick="restart()">Готово</button>
         </div>
       </section>
 
@@ -707,7 +707,8 @@
         </div>
         <h1 class="headline">Персонал<br>заведения</h1>
         <p class="sub">Нажмите на сотрудника, чтобы увидеть подробности.</p>
-        <button class="btn-ghost" style="margin-bottom:14px;" onclick="openAssignPositionEmployees()">➕ Назначить на должность</button>
+        <button class="btn-ghost" style="margin-bottom:10px;" onclick="openAssignPositionEmployees()">➕ Назначить на должность</button>
+        <div id="staffFilterRow" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;"></div>
         <div class="cards" id="adminEmployeesList"></div>
       </section>
 
@@ -1020,7 +1021,8 @@ function selectCategory(categoryId, categoryName){
 }
 
 let level4Unlocked = false;
-let level4Info = { avg_percentage: 0, required: 60 };
+let level4Info = { completed_levels: [], required_levels: [1,2,3], missing_levels: [1,2,3], avg_percentage: 0 };
+const LEVEL_LABELS = { 1: '1 (лёгкий)', 2: '2 (средний)', 3: '3 (тяжёлый)' };
 
 async function loadLevel4Status(){
   const overlay = document.getElementById('level4LockedOverlay');
@@ -1036,7 +1038,8 @@ async function loadLevel4Status(){
       meta.textContent = 'по 5 вопросов, можно продолжать';
     } else {
       overlay.style.display = '';
-      meta.textContent = `Закрыто · средний балл ${status.avg_percentage}%`;
+      const missing = (status.missing_levels || []).map(l => LEVEL_LABELS[l] || l).join(', ');
+      meta.textContent = `Закрыто · пройдите уровни: ${missing}`;
     }
   } catch (e) {
     level4Unlocked = false;
@@ -1049,8 +1052,9 @@ function handleLevel4Click(){
     selectLevel(4);
     return;
   }
+  const missing = (level4Info.missing_levels || []).map(l => LEVEL_LABELS[l] || l).join(', ');
   alert(
-    `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужен средний балл не ниже ${level4Info.required}% по этой категории.\nВаш текущий средний балл: ${level4Info.avg_percentage}%.`
+    `Этот уровень пока закрыт.\n\nЧтобы открыть его, нужно полностью пройти (хотя бы по одному разу) уровни 1, 2 и 3 в этой категории — независимо от процента правильных ответов.\n\nЕщё осталось пройти: ${missing || 'нет данных'}.`
   );
 }
 
@@ -1237,17 +1241,33 @@ async function showResult(){
   const continueBtn = document.getElementById('continueLevelBtn');
   const levelCompleteMsg = document.getElementById('levelCompleteMsg');
   const mainMenuBtn = document.getElementById('mainMenuBtn');
+  const nextLevelBtn = document.getElementById('nextLevelBtn');
   if (lastHasMore) {
     continueBtn.style.display = '';
     levelCompleteMsg.style.display = 'none';
     mainMenuBtn.style.display = 'none';
+    nextLevelBtn.style.display = 'none';
   } else {
     continueBtn.style.display = 'none';
     levelCompleteMsg.style.display = '';
     mainMenuBtn.style.display = '';
+    // Уровень пройден целиком — предлагаем сразу перейти к следующему,
+    // не заставляя возвращаться в список уровней вручную.
+    if (currentTestLevel && currentTestLevel < 3) {
+      nextLevelBtn.style.display = '';
+      nextLevelBtn.textContent = `⬆️ Перейти к уровню ${currentTestLevel + 1}`;
+    } else {
+      nextLevelBtn.style.display = 'none';
+    }
   }
 
   goTo('result','left');
+}
+
+function goToNextLevel(){
+  if (currentTestLevel && currentTestLevel < 3) {
+    startTestAtLevel(currentTestLevel + 1);
+  }
 }
 
 function restart(){
@@ -1261,31 +1281,79 @@ function closeApp(){
 }
 
 /* ---------------- Панель администратора ---------------- */
+let currentStaffFilter = null; // null = "Все"
+
+function renderStaffCards(employees){
+  const el = document.getElementById('adminEmployeesList');
+  if (!employees.length) {
+    el.innerHTML = '<p class="sub">Никого не найдено по этому фильтру.</p>';
+    return;
+  }
+  el.innerHTML = employees.map(e => {
+    const initials = e.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+    return `
+      <div class="card" onclick='openEmployeeDetail(${e.user_id})'>
+        <div class="icon-wrap" style="background:var(--accent-soft); color:var(--accent-strong); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:500;">${initials}</div>
+        <div class="card-text">
+          <div class="card-title">${e.name}</div>
+          <div class="card-meta">${e.position || 'должность не выбрана'}${e.tests_completed ? ' · ' + e.avg_percentage + '%' : ' · нет тестов'}</div>
+          ${e.admin_note ? `<div class="card-meta" style="color:var(--accent-strong); margin-top:2px;">📝 ${e.admin_note}</div>` : ''}
+        </div>
+        <div class="chevron">›</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderStaffFilterRow(positions, employees){
+  const row = document.getElementById('staffFilterRow');
+  const chipStyle = (active) => `
+    padding:6px 12px; border-radius:999px; font-size:12.5px; cursor:pointer;
+    border:1px solid var(--divider); white-space:nowrap;
+    background:${active ? 'var(--accent-strong)' : 'transparent'};
+    color:${active ? '#fff' : 'var(--ink)'};
+  `.replace(/\s+/g,' ');
+
+  const chips = [
+    `<div style="${chipStyle(currentStaffFilter === null)}" onclick="filterStaffByPosition(null)">Все (${employees.length})</div>`,
+  ];
+  positions.forEach(p => {
+    const count = employees.filter(e => e.position_id === p.id).length;
+    chips.push(
+      `<div style="${chipStyle(currentStaffFilter === p.id)}" onclick="filterStaffByPosition(${p.id})">${p.emoji || ''} ${p.name} (${count})</div>`
+    );
+  });
+  row.innerHTML = chips.join('');
+}
+
+function filterStaffByPosition(positionId){
+  currentStaffFilter = positionId;
+  const employees = window.__employees || [];
+  const positions = window.__staffPositions || [];
+  renderStaffFilterRow(positions, employees);
+  renderStaffCards(positionId === null ? employees : employees.filter(e => e.position_id === positionId));
+}
+
 async function openAdminEmployees(){
   const el = document.getElementById('adminEmployeesList');
+  const filterRow = document.getElementById('staffFilterRow');
   el.innerHTML = '<p class="sub">Загрузка…</p>';
+  filterRow.innerHTML = '';
+  currentStaffFilter = null;
   goTo('adminEmployees','left');
   try {
-    const employees = await apiGet('/api/employees', { restaurant_id: restaurantId });
+    const [employees, positionsData] = await Promise.all([
+      apiGet('/api/employees', { restaurant_id: restaurantId }),
+      apiGet('/api/positions', { restaurant_id: restaurantId }),
+    ]);
+    window.__employees = employees;
+    window.__staffPositions = positionsData.positions || [];
     if (!employees.length) {
       el.innerHTML = '<p class="sub">Пока никто из сотрудников не прикрепился к заведению.</p>';
       return;
     }
-    window.__employees = employees;
-    el.innerHTML = employees.map(e => {
-      const initials = e.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-      return `
-        <div class="card" onclick='openEmployeeDetail(${e.user_id})'>
-          <div class="icon-wrap" style="background:var(--accent-soft); color:var(--accent-strong); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:500;">${initials}</div>
-          <div class="card-text">
-            <div class="card-title">${e.name}</div>
-            <div class="card-meta">${e.position || 'должность не выбрана'}${e.tests_completed ? ' · ' + e.avg_percentage + '%' : ' · нет тестов'}</div>
-            ${e.admin_note ? `<div class="card-meta" style="color:var(--accent-strong); margin-top:2px;">📝 ${e.admin_note}</div>` : ''}
-          </div>
-          <div class="chevron">›</div>
-        </div>
-      `;
-    }).join('');
+    renderStaffFilterRow(window.__staffPositions, employees);
+    renderStaffCards(employees);
   } catch (e) {
     showError(el, e.message);
   }
