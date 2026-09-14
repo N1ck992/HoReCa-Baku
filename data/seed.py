@@ -487,6 +487,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 1,
                         "difficulty": 4,
+                        "level": 5,
                     },
                     {
                         "text": "Котлета из мясного фарша получается сухой при соблюдении времени приготовления. Какой фактор наиболее вероятно повлиял на результат?",
@@ -498,6 +499,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 4,
+                        "level": 5,
                     },
                     {
                         "text": "В бешамеле после приготовления появились комки. Какой приём лучше всего предотвращает их образование?",
@@ -509,6 +511,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 2,
                         "difficulty": 4,
+                        "level": 5,
                     },
                     {
                         "text": "Курица имеет хорошо подрумяненную кожу, но мясо сухое. Какой фактор наиболее вероятно отвечает за результат?",
@@ -520,6 +523,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 1,
                         "difficulty": 4,
+                        "level": 5,
                     },
                     {
                         "text": "Повар готовит овощи для гарнира и хочет сохранить выраженный вкус, цвет и плотную текстуру. Какой подход наиболее подходит?",
@@ -531,6 +535,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 1,
                         "difficulty": 4,
+                        "level": 5,
                     },
                     {
                         "text": "Мясо, приготовленное в вакууме, получилось менее сочным, чем ожидалось. Время процесса соответствует рецептуре. Что прежде всего следует проверить?",
@@ -542,6 +547,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 0,
                         "difficulty": 4,
+                        "level": 6,
                     },
                     {
                         "text": "Голландский соус периодически становится слишком жидким и начинает разрушаться. Какой параметр наиболее критичен для стабильности эмульсии?",
@@ -553,6 +559,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 2,
                         "difficulty": 4,
+                        "level": 6,
                     },
                     {
                         "text": "После длительного уваривания демиглас приобрёл выраженную горечь. Какой этап наиболее вероятно был выполнен неправильно?",
@@ -564,6 +571,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 1,
                         "difficulty": 4,
+                        "level": 6,
                     },
                     {
                         "text": "Ризотто получилось кремовым, но зёрна полностью размягчились и потеряли структуру. Что следует изменить в следующем приготовлении?",
@@ -575,6 +583,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 1,
                         "difficulty": 4,
+                        "level": 6,
                     },
                     {
                         "text": "Повар готовит соус из мясного сока после жарки. После деглазирования появляется выраженная горечь от пригоревших частиц. Что следует контролировать прежде всего?",
@@ -586,6 +595,7 @@ POSITIONS: list[dict] = [
                         ],
                         "correct_index": 2,
                         "difficulty": 4,
+                        "level": 6,
                     },
                 ],
             },
@@ -1480,6 +1490,16 @@ async def sync_question_options(session: AsyncSession) -> None:
                 )
                 db_options = list(result.scalars().all())
                 file_options = question_data["options"]
+
+                # Синхронизируем level/difficulty самого вопроса — например,
+                # если экспертный вопрос был переопределён на конкретный
+                # подуровень (4/5/6...) уже после того, как попал в базу.
+                new_difficulty = question_data.get("difficulty", 1)
+                new_level = question_data.get("level")
+                if question.difficulty != new_difficulty or question.level != new_level:
+                    question.difficulty = new_difficulty
+                    question.level = new_level
+                    updated += 1
 
                 if len(db_options) != len(file_options):
                     continue  # структура разошлась — на всякий случай пропускаем
