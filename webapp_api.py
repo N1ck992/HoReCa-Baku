@@ -589,7 +589,11 @@ async def my_profile(request: web.Request) -> web.Response:
                     session, user.id, restaurant_id
                 )
 
-        stats = await crud.get_user_stats(session, user.id)
+        stats = (
+            await crud.get_user_stats_for_restaurant(session, user.id, restaurant_id)
+            if restaurant_id is not None
+            else await crud.get_user_stats(session, user.id)
+        )
         leaderboard_rank = await crud.get_user_rank(session, user.id)
         position_progress = await crud.get_position_progress_for_user(session, user.id)
         curator_name = await crud.get_curator_name(session, user.telegram_id)
@@ -862,6 +866,30 @@ async def set_employee_note(request: web.Request) -> web.Response:
         await crud.set_admin_note(session, user_id, note)
 
     return _json({"ok": True})
+
+
+@routes.get("/api/user_leaderboard")
+async def user_leaderboard(request: web.Request) -> web.Response:
+    """Рейтинг пользователей бота — только по пробным тестам с главной
+    страницы, не заведений (см. get_user_stats). Доступен всем — это
+    открытая общая статистика, не привязанная к конкретному заведению."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    async with async_session() as session:
+        leaderboard = await crud.get_leaderboard(session)
+
+    data = [
+        {
+            "name": entry["user"].full_name or entry["user"].username or "Без имени",
+            "tests_completed": entry["tests_completed"],
+            "avg_percentage": entry["avg_percentage"],
+        }
+        for entry in leaderboard
+    ]
+    return _json(data)
 
 
 @routes.get("/api/employee_chart_data")

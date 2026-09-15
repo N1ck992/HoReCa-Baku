@@ -3,9 +3,35 @@ from aiogram.types import CallbackQuery
 
 from database import crud
 from database.database import async_session
-from keyboards.keyboards import leaderboard_kb
+from keyboards.keyboards import back_to_main_kb, leaderboard_kb
+from services.rating import display_name
 
 router = Router(name="rating")
+
+
+@router.callback_query(F.data == "menu:user_leaderboard")
+async def cb_user_leaderboard(callback: CallbackQuery) -> None:
+    """Рейтинг пользователей бота — только по пробным тестам с главной
+    страницы (тесты внутри заведений сюда не входят, см. get_user_stats)."""
+    async with async_session() as session:
+        leaderboard = await crud.get_leaderboard(session)
+
+    if not leaderboard:
+        text = "🏆 Рейтинг пользователей\n\nПока никто не проходил пробные тесты."
+    else:
+        lines = ["🏆 Рейтинг пользователей (пробные тесты)\n"]
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        for idx, entry in enumerate(leaderboard, start=1):
+            medal = medals.get(idx, f"{idx}.")
+            name = display_name(entry["user"])
+            lines.append(
+                f"{medal} {name} — {entry['avg_percentage']}% "
+                f"({entry['tests_completed']} тестов)"
+            )
+        text = "\n".join(lines)
+
+    await callback.message.edit_text(text, reply_markup=back_to_main_kb())
+    await callback.answer()
 
 
 @router.callback_query(F.data == "menu:leaderboard")

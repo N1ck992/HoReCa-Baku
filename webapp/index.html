@@ -431,6 +431,11 @@
             <div class="card-text"><div class="card-title">Пройти тест</div><div class="card-meta">Выбор должности и категории</div></div>
             <div class="chevron">›</div>
           </div>
+          <div class="card" onclick="openUserLeaderboard()">
+            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4ZM7 6H3v2a4 4 0 0 0 4 3M17 6h4v2a4 4 0 0 1-4 3"/></svg></div>
+            <div class="card-text"><div class="card-title">Рейтинг пользователей</div><div class="card-meta">По пробным тестам</div></div>
+            <div class="chevron">›</div>
+          </div>
           <div class="card" id="staffCard" onclick="openAdminEmployees()">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
             <div class="card-text"><div class="card-title">Персонал заведения</div><div class="card-meta">Только для администраторов</div></div>
@@ -440,6 +445,18 @@
       </section>
 
       <!-- ============ ЭКРАН 0.1: мой профиль (на сайте) ============ -->
+      <!-- ============ ЭКРАН 0.2: рейтинг пользователей ============ -->
+      <section class="screen" data-screen="userLeaderboard" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('restaurantHome','right')">‹</button>
+          <span class="restaurant-name">Рейтинг пользователей</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Рейтинг<br>пользователей</h1>
+        <p class="sub">По пробным тестам с главной страницы — заведений тут нет.</p>
+        <div class="row-list" id="userLeaderboardList"></div>
+      </section>
+
       <section class="screen" data-screen="myProfile" data-state="right">
         <div class="top-row">
           <button class="icon-btn" onclick="goTo('restaurantHome','right')">‹</button>
@@ -1433,6 +1450,10 @@ function filterStaffByPosition(positionId){
 }
 
 async function openAdminEmployees(){
+  if (!restaurantId) {
+    alert('Ваш профиль пока не привязан ни к одному заведению — этот раздел доступен только внутри конкретного заведения.');
+    return;
+  }
   const el = document.getElementById('adminEmployeesList');
   const filterRow = document.getElementById('staffFilterRow');
   el.innerHTML = '<p class="sub">Загрузка…</p>';
@@ -1991,6 +2012,23 @@ function goToMyProfile(){
 
 let myOwnUserId = null;
 
+async function openUserLeaderboard(){
+  const el = document.getElementById('userLeaderboardList');
+  el.innerHTML = '<div class="row-item"><span>Загрузка…</span></div>';
+  goTo('userLeaderboard','left');
+  try {
+    const data = await apiGet('/api/user_leaderboard', {});
+    el.innerHTML = data.length
+      ? data.map((u, i) => {
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+          return `<div class="row-item"><span>${medal} ${u.name}</span><span>${u.avg_percentage}% · ${u.tests_completed} тестов</span></div>`;
+        }).join('')
+      : '<div class="row-item"><span>Пока никто не проходил пробные тесты.</span></div>';
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
 async function loadMyProfile(){
   const el = document.getElementById('profileRows');
   const progressEl = document.getElementById('profileProgressList');
@@ -2068,13 +2106,11 @@ function initFromQuery(){
     renderPositions(); // заодно подтянет название заведения для навигации
     setActive('myResults');
     loadMyResults();
-  } else if(!restaurantId){
-    // Общий пробный тест (без заведения) — сразу к выбору должности,
-    // без домашней страницы (профиль/результаты тут не при чём).
-    renderPositions();
-    setActive('positions');
   } else {
-    // Открытие из меню заведения — домашняя страница с тремя разделами.
+    // И из общего меню бота (без заведения), и из меню конкретного
+    // заведения — одна и та же домашняя страница с разделами. Без
+    // заведения "Пройти тест" ведёт на пробные тесты, а "Персонал
+    // заведения" покажет уведомление вместо списка.
     renderPositions(); // сразу подгружаем, чтобы "Пройти тест" открылся мгновенно
     setActive('restaurantHome');
   }

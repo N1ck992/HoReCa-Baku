@@ -45,22 +45,13 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     заведением (сотрудник или менеджер); у остальных при нажатии просто
     появится подсказка, что заведения пока нет."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="🎯 Пробный тест", callback_data="menu:positions")
+    builder.button(text="🌐 Перейти на сайт", callback_data="open_general_site")
+    builder.button(text="🏆 Рейтинг пользователей", callback_data="menu:user_leaderboard")
     builder.button(text="🏢 Рейтинг заведений", callback_data="menu:leaderboard")
     builder.button(text="🏠 Моё заведение", callback_data="menu:my_restaurant")
     builder.button(text="👤 Мой профиль", callback_data="menu:profile")
     builder.button(text="💼 Вакансии", callback_data="menu:vacancies")
     builder.button(text="❓ Помощь", callback_data="menu:help")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
-def open_private_chat_kb(bot_username: str) -> InlineKeyboardMarkup:
-    """Кнопка-ссылка, которая открывает личный чат с ботом (используется в
-    сообщениях внутри групп заведений — чтобы сотрудник мог сразу перейти
-    в личку одним кликом, а не искать бота вручную)."""
-    builder = InlineKeyboardBuilder()
-    builder.button(text="💬 Открыть бота в личке", url=f"https://t.me/{bot_username}?start=from_group")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -153,23 +144,20 @@ def group_menu_kb(bot_username: str, restaurant_id: int) -> InlineKeyboardMarkup
     return builder.as_markup()
 
 
-def profile_kb(restaurant_id: int | None = None, show_leave: bool = False) -> InlineKeyboardMarkup:
-    """Клавиатура экрана профиля: рейтинг, назад. «⬅️ Назад» ведёт туда,
-    откуда открыли профиль — в меню заведения, если человек с ним связан
-    (как сотрудник или как менеджер), иначе в общее меню бота.
-    «🚪 Покинуть заведение» показывается только реальным сотрудникам
-    заведения — не менеджерам, у которых нет привязки как у персонала
-    (для них эта кнопка была бы бессмысленной)."""
+def profile_kb(leave_restaurant: tuple[int, str] | None = None) -> InlineKeyboardMarkup:
+    """Клавиатура экрана профиля: рейтинг, назад (всегда в общее меню —
+    этот экран открывается только оттуда, профиль внутри заведения
+    показывается на сайте). Если человек привязан как сотрудник к
+    какому-то заведению — отдельно показывается кнопка «Покинуть
+    заведение» для него, независимо от кнопки «Назад»."""
     builder = InlineKeyboardBuilder()
     builder.button(text="🏢 Рейтинг заведений", callback_data="menu:leaderboard")
-    if restaurant_id is not None:
-        if show_leave:
-            builder.button(
-                text="🚪 Покинуть заведение", callback_data=f"leave_restaurant_ask:{restaurant_id}"
-            )
-        builder.button(text="⬅️ Назад", callback_data=f"back_to_restaurant:{restaurant_id}")
-    else:
-        builder.button(text="⬅️ Назад", callback_data="menu:main")
+    if leave_restaurant is not None:
+        restaurant_id, restaurant_name = leave_restaurant
+        builder.button(
+            text=f"🚪 Покинуть «{restaurant_name}»", callback_data=f"leave_restaurant_ask:{restaurant_id}"
+        )
+    builder.button(text="⬅️ Назад", callback_data="menu:main")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -186,34 +174,12 @@ def positions_kb(positions: list[Position]) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def categories_kb(categories: list[Category], position_id: int) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    for category in categories:
-        builder.button(
-            text=f"{category.emoji} {category.name}",
-            callback_data=f"category:{category.id}",
-        )
-    builder.button(text="👔 Другая должность", callback_data="menu:positions")
-    builder.button(text="⬅️ Главное меню", callback_data="menu:main")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
 def question_kb(options: list[AnswerOption]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     labels = ["A", "B", "C", "D", "E", "F"]
     for idx, option in enumerate(options):
         label = labels[idx] if idx < len(labels) else str(idx + 1)
         builder.button(text=f"{label}) {option.text}", callback_data=f"answer:{option.id}")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
-def result_kb(position_id: int) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📚 Другая категория", callback_data=f"position:{position_id}")
-    builder.button(text="👤 Мой профиль", callback_data="menu:profile")
-    builder.button(text="⬅️ Главное меню", callback_data="menu:main")
     builder.adjust(1)
     return builder.as_markup()
 

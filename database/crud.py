@@ -959,7 +959,17 @@ async def pop_pending_requeued_questions(
 
 
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
-    result = await session.execute(select(TestResult).where(TestResult.user_id == user_id))
+    """Статистика ТОЛЬКО по пробным тестам с главной страницы бота
+    (Position.restaurant_id IS NULL) — тесты, пройденные внутри
+    конкретного заведения, сюда не попадают и не влияют на общий
+    рейтинг персонала бота. Для статистики внутри заведения используйте
+    get_user_stats_for_restaurant."""
+    result = await session.execute(
+        select(TestResult)
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(TestResult.user_id == user_id, Position.restaurant_id.is_(None))
+    )
     results = list(result.scalars().all())
     results = _filter_stats_eligible_results(results)
     tests_completed = len(results)
@@ -1085,9 +1095,14 @@ def get_next_rank(ranks: list[Rank], current_rank: Rank | None) -> Rank | None:
 async def get_recent_results_for_user(
     session: AsyncSession, user_id: int, limit: int = 10
 ) -> list[TestResult]:
+    """История ТОЛЬКО пробных тестов с главной страницы бота — см.
+    get_user_stats. Для истории внутри заведения используйте
+    get_recent_results_for_user_in_restaurant."""
     result = await session.execute(
         select(TestResult)
-        .where(TestResult.user_id == user_id)
+        .join(Category, TestResult.category_id == Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(TestResult.user_id == user_id, Position.restaurant_id.is_(None))
         .options(selectinload(TestResult.category).selectinload(Category.position))
         .order_by(TestResult.created_at.desc())
         .limit(limit)

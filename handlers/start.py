@@ -373,7 +373,7 @@ async def cb_ask_leave_to_general(callback: CallbackQuery) -> None:
     """Явная кнопка «🚪 Выйти в главное меню» прямо в меню заведения —
     делает ровно то же самое, что и постоянная кнопка внизу, просто более
     заметно и понятно, где именно её искать."""
-    await _ask_leave_to_general(callback.message.answer)
+    await _ask_leave_to_general(callback.message.edit_text)
     await callback.answer()
 
 
@@ -443,6 +443,24 @@ async def cb_choose_restaurant(callback: CallbackQuery, state: FSMContext) -> No
         f"Меню «{restaurant.name}»:", reply_markup=join_menu_kb(username, restaurant_id, is_manager)
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "open_general_site")
+async def cb_open_general_site(callback: CallbackQuery) -> None:
+    """«🌐 Перейти на сайт» из общего меню бота — открывает домашнюю
+    страницу сайта БЕЗ привязки к конкретному заведению (пробные тесты).
+    Профиль/результаты тут — это отдельная, общая статистика, не
+    относящаяся ни к одному заведению (см. get_user_stats)."""
+    if config.WEBAPP_URL:
+        webapp_link = f"{config.WEBAPP_URL}?screen=home"
+        await callback.message.edit_text(
+            "Нажмите кнопку ниже, чтобы открыть сайт:",
+            reply_markup=webapp_open_kb(webapp_link, "🌐 Перейти на сайт", back_callback="menu:main"),
+        )
+        await callback.answer()
+        return
+
+    await callback.answer("Сайт пока не настроен.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("open_home:"))
