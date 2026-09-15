@@ -595,12 +595,24 @@ async def my_profile(request: web.Request) -> web.Response:
         curator_name = await crud.get_curator_name(session, user.telegram_id)
         trainee_count = await crud.get_trainee_count(session, user.telegram_id)
 
+        assigned_position = None
+        if user.current_position_id is not None:
+            pos = await crud.get_position_by_id(session, user.current_position_id)
+            if pos is not None:
+                assigned_position = {"name": pos.name, "emoji": pos.emoji}
+
+        is_manager = False
+        if restaurant_id is not None:
+            is_manager = await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"])
+
     return _json(
         {
             "user_id": user.id,
             "name": user.full_name or user.username or "Без имени",
             "telegram_id": user.telegram_id,
             "restaurant_name": restaurant_name,
+            "assigned_position": assigned_position,
+            "is_manager": is_manager,
             "curator_name": curator_name,
             "trainee_count": trainee_count,
             "tests_completed": stats["tests_completed"],
@@ -1000,7 +1012,7 @@ async def get_employee_day_tests(request: web.Request) -> web.Response:
 
 @routes.get("/api/eligible_exam_positions")
 async def eligible_exam_positions(request: web.Request) -> web.Response:
-    """Должности, по которым сотрудник уже сдал на 80%+ все три уровня обычного теста
+    """Должности заведения, доступные для запроса экзамена
     этого заведения — только по ним разрешено запрашивать экзамен."""
     init_data = request.query.get("initData", "")
     tg_user = await _get_telegram_user(init_data)
@@ -1051,7 +1063,7 @@ async def restaurant_managers_list(request: web.Request) -> web.Response:
 @routes.post("/api/request_exam")
 async def request_exam(request: web.Request) -> web.Response:
     """Отправляет выбранному администратору запрос на экзамен —
-    проверяет допуск (все три уровня на 80%+) заново на сервере, а не доверяет тому, что
+    проверяет список актуальных должностей заново на сервере, а не доверяет тому, что
     прислал браузер."""
     try:
         body = await request.json()
@@ -1084,7 +1096,7 @@ async def request_exam(request: web.Request) -> web.Response:
         eligible = await crud.get_eligible_positions_for_exam(session, user.id, restaurant_id)
         if not any(p.id == position_id for p in eligible):
             return _json(
-                {"error": "Пока не пройдены все три уровня на 80%+ по этой должности."}, status=403
+                {"error": "Эта должность недоступна в этом заведении."}, status=403
             )
 
         position = await crud.get_position_by_id(session, position_id)

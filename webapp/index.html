@@ -651,7 +651,7 @@
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
         <h1 class="headline">На какую<br>должность?</h1>
-        <p class="sub">Показаны только должности, где вы сдали на 80%+ все три уровня обычного теста.</p>
+        <p class="sub">Выберите должность, по которой хотите запросить экзамен.</p>
         <div class="cards" id="examRequestPositionsList"></div>
       </section>
 
@@ -1749,7 +1749,7 @@ async function openExamRequestPositions(){
   try {
     const positions = await apiGet('/api/eligible_exam_positions', { restaurant_id: restaurantId });
     if (!positions.length) {
-      el.innerHTML = '<p class="sub">Пока нет доступных должностей — сдайте на 80%+ все три уровня обычного теста, чтобы появилась возможность запросить экзамен.</p>';
+      el.innerHTML = '<p class="sub">В этом заведении пока нет активных должностей.</p>';
       return;
     }
     el.innerHTML = positions.map(p => `
@@ -2003,7 +2003,14 @@ async function loadMyProfile(){
     const initials = p.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
     document.getElementById('profileInitials').textContent = initials;
     document.getElementById('profileName').textContent = p.name;
-    document.getElementById('profileRestaurant').textContent = p.restaurant_name || '';
+    const roleParts = [];
+    if (p.is_manager) {
+      roleParts.push('Администратор');
+    } else if (p.assigned_position) {
+      roleParts.push(`${p.assigned_position.emoji || ''} ${p.assigned_position.name}`.trim());
+    }
+    if (p.restaurant_name) roleParts.push(p.restaurant_name);
+    document.getElementById('profileRestaurant').textContent = roleParts.join(' · ');
     document.getElementById('profileTests').textContent = p.tests_completed;
     document.getElementById('profileAvg').textContent = p.avg_percentage + '%';
 

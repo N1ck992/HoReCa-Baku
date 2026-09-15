@@ -20,13 +20,11 @@ from handlers import (
     admin,
     exams,
     manager,
-    positions,
     profile,
     rating,
     restaurant_requests,
     restaurants,
     start,
-    tests,
     vacancies,
 )
 from handlers import help as help_handlers
@@ -74,8 +72,6 @@ async def main() -> None:
     dp.include_router(start.router)
     dp.include_router(restaurants.router)
     dp.include_router(restaurant_requests.router)
-    dp.include_router(positions.router)
-    dp.include_router(tests.router)
     dp.include_router(profile.router)
     dp.include_router(rating.router)
     dp.include_router(vacancies.router)

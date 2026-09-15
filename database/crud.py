@@ -605,28 +605,16 @@ async def get_position_progress_for_user(session: AsyncSession, user_id: int) ->
 
 
 async def get_eligible_positions_for_exam(
-    session: AsyncSession, user_id: int, restaurant_id: int, threshold: float = 80.0
+    session: AsyncSession, user_id: int, restaurant_id: int
 ) -> list[Position]:
-    """Должности, по которым сотрудник уже сдал на threshold%+ все ТРИ
-    уровня сложности (в любой из категорий этой должности) — только по
-    ним разрешено запрашивать экзамен. Раньше проверялся общий средний
-    балл, теперь — именно прогресс по уровням, раз уровни сами по себе
-    больше не привязаны к сдаче экзамена."""
-    positions = await get_active_positions(session, restaurant_id)
-    eligible = []
-    for position in positions:
-        result = await session.execute(
-            select(TestResult)
-            .join(Category, TestResult.category_id == Category.id)
-            .where(TestResult.user_id == user_id, Category.position_id == position.id)
-        )
-        results = list(result.scalars().all())
-        passed_levels = {
-            r.level for r in results if r.percentage >= threshold and r.level in (1, 2, 3)
-        }
-        if {1, 2, 3}.issubset(passed_levels):
-            eligible.append(position)
-    return eligible
+    """Должности заведения, по которым сотрудник может запросить экзамен.
+    Раньше тут проверялся автоматический порог (сдача уровней 1-3 на
+    80%+), но эта система устарела: у экзамена теперь отдельные вопросы
+    по конкретному меню заведения, которые администратор назначает
+    вручную — сам факт выдачи кода уже является решением администратора,
+    дополнительный автоматический порог не нужен. Доступны все активные
+    должности заведения."""
+    return await get_active_positions(session, restaurant_id)
 
 
 async def get_restaurant_average_percentage(session: AsyncSession, restaurant_id: int) -> float:

@@ -302,17 +302,14 @@ async def cb_exam_request_code(callback: CallbackQuery, state: FSMContext) -> No
 
     if not positions:
         await callback.answer(
-            "Пока нет доступных должностей для экзамена — сдайте на 80%+ "
-            "все три уровня обычного теста заведения по нужной должности, "
-            "тогда здесь появится возможность запросить экзамен.",
+            "В этом заведении пока нет активных должностей.",
             show_alert=True,
         )
         return
 
     await state.clear()
     await callback.message.edit_text(
-        "На какую должность вы хотите сдать экзамен? "
-        "(показаны только те, где вы уже сдали на 80%+ все три уровня обычного теста)",
+        "На какую должность вы хотите сдать экзамен?",
         reply_markup=exam_request_positions_kb(positions),
     )
     await callback.answer()
