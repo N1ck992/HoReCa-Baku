@@ -209,9 +209,14 @@ async def get_active_positions(
     session: AsyncSession, restaurant_id: int | None = None
 ) -> list[Position]:
     """Если у заведения уже есть СВОИ уникальные должности — показываются
-    только они (чтобы не дублировать одинаковые на вид общие и уникальные
-    тесты в одном списке). Если своих ещё нет — заведению (или гостю без
-    заведения вовсе) показываются общие должности, видные всем."""
+    только они. Если своих ещё нет — заведению показываются общие
+    профессиональные должности (Повар/Бармен/Официант), видные всем
+    заведениям. HoReCa Foundation сюда никогда не попадает — это не
+    выбираемая "должность", а отдельный экран общих тестов с главной
+    страницы бота (см. /api/foundation_levels). Без привязки к заведению
+    вообще (гость на главной странице бота) эта функция теперь ничего не
+    возвращает — общие тесты полностью перешли на Foundation, старый
+    выбор общих Повар/Бармен/Официант без заведения больше недоступен."""
     if restaurant_id is not None:
         own_result = await session.execute(
             select(Position).where(
@@ -223,12 +228,18 @@ async def get_active_positions(
             own_positions.sort(key=lambda p: (p.order, p.id))
             return own_positions
 
-    result = await session.execute(
-        select(Position)
-        .where(Position.is_active.is_(True), Position.restaurant_id.is_(None))
-        .order_by(Position.order, Position.id)
-    )
-    return list(result.scalars().all())
+        result = await session.execute(
+            select(Position)
+            .where(
+                Position.is_active.is_(True),
+                Position.restaurant_id.is_(None),
+                Position.code != "foundation",
+            )
+            .order_by(Position.order, Position.id)
+        )
+        return list(result.scalars().all())
+
+    return []
 
 
 async def get_position_by_id(session: AsyncSession, position_id: int) -> Position | None:
