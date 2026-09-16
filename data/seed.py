@@ -1381,6 +1381,134 @@ POSITIONS: list[dict] = [
             },
         ],
     },
+    {
+        # Заготовка контента для специализации BAR (уровни 11-50 после
+        # HoReCa Foundation) — сама "лестница специализаций" на сайте
+        # ещё не подключена (пока заглушка "скоро появится"), это только
+        # хранение контента, ожидающего подключения отдельного механизма.
+        # Никогда не копируется в заведения — как и foundation.
+        "code": "bar_specialization",
+        "name": "BAR (специализация)",
+        "emoji": "🍸",
+        "order": 0,
+        "categories": [
+            {
+                "code": "level_11",
+                "name": "Основы бара",
+                "emoji": "🍸",
+                "order": 11,
+                "questions": [
+                    {"text": "Какова основная задача бармена перед началом обслуживания?",
+                     "options": ["Составить карту", "Подготовить место", "Рассчитать зарплату", "Закрыть кассу"],
+                     "correct_index": 1, "difficulty": 1, "level": 11},
+                    {"text": "Что прежде всего определяет качество работы бара?",
+                     "options": ["Быстрая работа", "Стабильность приготовления", "Количество бутылок", "Размер стойки"],
+                     "correct_index": 1, "difficulty": 1, "level": 11},
+                    {"text": "Почему бармен должен знать состав напитков меню?",
+                     "options": ["Инвентаризация", "Консультация гостя", "Уборка бара", "Расчёт льда"],
+                     "correct_index": 1, "difficulty": 1, "level": 11},
+                    {"text": "Гость спрашивает о составе коктейля, которого бармен не знает. Что правильно?",
+                     "options": ["Предположить", "Уточнить рецепт", "Изменить состав", "Отказать заказ"],
+                     "correct_index": 1, "difficulty": 1, "level": 11},
+                    {"text": "Что является частью профессиональной работы бармена?",
+                     "options": ["Только приготовление", "Только продажи", "Готовка и сервис", "Только уборка"],
+                     "correct_index": 2, "difficulty": 1, "level": 11},
+                ],
+            },
+            {
+                "code": "level_12",
+                "name": "Барный инвентарь",
+                "emoji": "🍸",
+                "order": 12,
+                "questions": [
+                    {"text": "Для чего используется jigger?",
+                     "options": ["Открывать бутылки", "Измерять ингредиенты", "Фильтровать лёд", "Мешать коктейль"],
+                     "correct_index": 1, "difficulty": 1, "level": 12},
+                    {"text": "Какой инструмент используется для процеживания коктейля?",
+                     "options": ["Стрейнер", "Маддлер", "Джиггер", "Пилер"],
+                     "correct_index": 0, "difficulty": 1, "level": 12},
+                    {"text": "Для чего используется muddler?",
+                     "options": ["Измерять спиртное", "Извлекать пробку", "Извлекать вкус", "Охлаждать бокал"],
+                     "correct_index": 2, "difficulty": 1, "level": 12},
+                    {"text": "Почему важно использовать подходящий инвентарь для конкретной техники?",
+                     "options": ["Внешний вид", "Стабильный результат", "Больше порция", "Экономия посуды"],
+                     "correct_index": 1, "difficulty": 1, "level": 12},
+                    {"text": "Что необходимо сделать с барным инструментом после использования?",
+                     "options": ["Оставить станции", "Передать гостю", "Очистить подготовить", "Убрать холодильник"],
+                     "correct_index": 2, "difficulty": 1, "level": 12},
+                ],
+            },
+            {
+                "code": "level_13",
+                "name": "Организация бара",
+                "emoji": "🍸",
+                "order": 13,
+                "questions": [
+                    {"text": "Что является главным принципом хорошо организованной барной станции?",
+                     "options": ["Максимум предметов", "Удобный доступ", "Минимум оборудования", "Всё внизу"],
+                     "correct_index": 1, "difficulty": 1, "level": 13},
+                    {"text": "Почему основные инструменты размещают в зоне быстрого доступа?",
+                     "options": ["Ради декора", "Ускоряет работу", "Экономит лёд", "Контроль гостей"],
+                     "correct_index": 1, "difficulty": 1, "level": 13},
+                    {"text": "Бармен обнаружил, что необходимый сироп закончился во время сервиса. Что лучше сделать?",
+                     "options": ["Игнорировать", "Сообщить пополнить", "Заменить водой", "Изменить рецепт"],
+                     "correct_index": 1, "difficulty": 1, "level": 13},
+                    {"text": "Что помогает поддерживать стабильность работы бара во время загруженного сервиса?",
+                     "options": ["Случайное размещение", "Готовая станция", "Минимум инвентаря", "Без рецептов"],
+                     "correct_index": 1, "difficulty": 1, "level": 13},
+                    {"text": "Что следует регулярно контролировать на барной станции?",
+                     "options": ["Только бутылки", "Запасы оборудование", "Только музыку", "Только посуду"],
+                     "correct_index": 1, "difficulty": 1, "level": 13},
+                ],
+            },
+            {
+                "code": "level_14",
+                "name": "Mise en place",
+                "emoji": "🍸",
+                "order": 14,
+                "questions": [
+                    {"text": "Что является основной целью mise en place?",
+                     "options": ["Закончить смену", "Всё подготовить", "Увеличить меню", "Меньше гостей"],
+                     "correct_index": 1, "difficulty": 1, "level": 14},
+                    {"text": "Бармен подготовил гарниши, лёд, инструменты и ингредиенты до начала сервиса. Что это демонстрирует?",
+                     "options": ["Mise en place", "Закрытие", "Инвентаризация", "Допродажа"],
+                     "correct_index": 0, "difficulty": 1, "level": 14},
+                    {"text": "Почему mise en place особенно важно при интенсивном сервисе?",
+                     "options": ["Меньше заказов", "Меньше действий", "Больше бара", "Замена рецептов"],
+                     "correct_index": 1, "difficulty": 1, "level": 14},
+                    {"text": "Во время подготовки бармен обнаружил недостаток одного из ключевых ингредиентов. Когда лучше решить проблему?",
+                     "options": ["После заказа", "Во время пика", "До сервиса", "После закрытия"],
+                     "correct_index": 2, "difficulty": 1, "level": 14},
+                    {"text": "Какой вариант лучше всего описывает качественное mise en place?",
+                     "options": ["Всё готово", "Всё по заказу", "Далеко убрано", "Проверка случайна"],
+                     "correct_index": 0, "difficulty": 1, "level": 14},
+                ],
+            },
+            {
+                "code": "level_15",
+                "name": "Лёд",
+                "emoji": "🍸",
+                "order": 15,
+                "questions": [
+                    {"text": "Почему слишком большое количество льда может изменить вкус коктейля?",
+                     "options": ["Больше сладости", "Влияет разбавление", "Меньше кислотности", "Больше крепости"],
+                     "correct_index": 1, "difficulty": 1, "level": 15},
+                    {"text": "Что произойдёт при недостаточном количестве льда при интенсивном встряхивании коктейля?",
+                     "options": ["Всегда крепче", "Меняется охлаждение", "Станет слаще", "Больше спирта"],
+                     "correct_index": 1, "difficulty": 1, "level": 15},
+                    {"text": "Почему для разных напитков могут использоваться разные виды льда?",
+                     "options": ["Только декор", "Разная скорость", "Только цвет", "Меняет крепость"],
+                     "correct_index": 1, "difficulty": 1, "level": 15},
+                    {"text": "Что важно при работе с льдом, который непосредственно контактирует с напитком?",
+                     "options": ["Только размер", "Гигиена чистота", "Только прозрачность", "Только форма"],
+                     "correct_index": 1, "difficulty": 1, "level": 15},
+                    {"text": "Какой фактор особенно влияет на степень разбавления коктейля при работе со льдом?",
+                     "options": ["Время контакта", "Цвет бокала", "Высота стойки", "Название коктейля"],
+                     "correct_index": 0, "difficulty": 1, "level": 15},
+                ],
+            },
+        ],
+    },
 ]
 
 
@@ -1476,22 +1604,24 @@ async def _seed_position(
 
 
 async def seed_foundation_position(session: AsyncSession) -> None:
-    """Отдельно досоздаёт глобальную должность 'foundation' (HoReCa
-    Foundation), если её ещё нет — нужно, потому что seed_data()
-    полностью пропускает себя, если общие должности УЖЕ существуют
-    (а cook/bartender/waiter уже были в базе на момент добавления
-    foundation). Категории/вопросы внутри неё досоздаст sync_new_questions,
-    как обычно."""
-    result = await session.execute(
-        select(Position).where(Position.code == "foundation", Position.restaurant_id.is_(None))
-    )
-    if result.scalars().first() is not None:
-        return
+    """Отдельно досоздаёт новые глобальные должности-заготовки (HoReCa
+    Foundation, специализации вроде bar_specialization и т.п.), если их
+    ещё нет — нужно, потому что seed_data() полностью пропускает себя,
+    если общие должности УЖЕ существуют (а cook/bartender/waiter уже
+    были в базе на момент добавления этих новых разделов). Категории/
+    вопросы внутри них досоздаст sync_new_questions, как обычно."""
+    for code in ("foundation", "bar_specialization"):
+        result = await session.execute(
+            select(Position).where(Position.code == code, Position.restaurant_id.is_(None))
+        )
+        if result.scalars().first() is not None:
+            continue
 
-    foundation_data = next((p for p in POSITIONS if p["code"] == "foundation"), None)
-    if foundation_data is None:
-        return
-    await _seed_position(session, foundation_data, restaurant_id=None)
+        position_data = next((p for p in POSITIONS if p["code"] == code), None)
+        if position_data is None:
+            continue
+        await _seed_position(session, position_data, restaurant_id=None)
+
     await session.commit()
 
 
@@ -1768,8 +1898,8 @@ async def seed_positions_for_restaurant(session: AsyncSession, restaurant_id: in
         return  # у этого заведения уже есть свои должности — не дублируем
 
     for position_data in POSITIONS:
-        if position_data["code"] == "foundation":
-            continue  # общий раздел HoReCa Foundation не копируется в заведения
+        if position_data["code"] in ("foundation", "bar_specialization"):
+            continue  # общий раздел и заготовки специализаций не копируются в заведения
         await _seed_position(session, position_data, restaurant_id=restaurant_id)
 
     await session.commit()
