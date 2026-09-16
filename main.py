@@ -44,8 +44,17 @@ async def start_web_server() -> None:
     async def health(request: web.Request) -> web.Response:
         return web.Response(text="Бот работает")
 
+    async def serve_webapp(request: web.Request) -> web.Response:
+        """Отдаёт саму HTML-страницу Mini App напрямую с Render — раньше
+        для этого использовался отдельный хостинг (Netlify), теперь всё
+        (и страница, и API) на одном домене, без лишней зависимости."""
+        return web.FileResponse(
+            path=os.path.join(os.path.dirname(__file__), "webapp", "index.html")
+        )
+
     app = web.Application()
     app.router.add_get("/", health)
+    app.router.add_get("/webapp", serve_webapp)
     app.add_routes(webapp_routes)
 
     runner = web.AppRunner(app)
