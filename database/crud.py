@@ -4,7 +4,7 @@ import secrets
 import string
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -956,6 +956,23 @@ async def pop_pending_requeued_questions(
     if rows:
         await session.commit()
     return [row.question_id for row in rows]
+
+
+async def reset_user_statistics(session: AsyncSession, user_id: int) -> int:
+    """Полностью удаляет ВСЮ историю тестов пользователя (общих и во всех
+    заведениях сразу) — и он начинает с чистого листа. Используется
+    только из отдельной панели /admin (разработчиком), для рядовых
+    администраторов заведений недоступно. Возвращает количество
+    удалённых результатов тестов."""
+    result = await session.execute(select(TestResult.id).where(TestResult.user_id == user_id))
+    test_result_ids = [row[0] for row in result.all()]
+    if not test_result_ids:
+        return 0
+
+    await session.execute(delete(UserAnswer).where(UserAnswer.test_result_id.in_(test_result_ids)))
+    await session.execute(delete(TestResult).where(TestResult.id.in_(test_result_ids)))
+    await session.commit()
+    return len(test_result_ids)
 
 
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:

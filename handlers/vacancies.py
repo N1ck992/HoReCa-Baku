@@ -2,13 +2,14 @@ from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from config import VACANCIES_CHANNEL, vacancies_channel_url
 from database import crud
 from database.database import async_session
 from keyboards.keyboards import cancel_publish_kb, main_menu_kb, vacancies_menu_kb
 from services.rating import display_name
+from utils import get_bot_username
 
 router = Router(name="vacancies")
 
@@ -137,7 +138,13 @@ async def publish_location(message: Message, state: FSMContext, bot: Bot) -> Non
     channel_text = "\n".join(lines)
 
     try:
-        await bot.send_message(chat_id=VACANCIES_CHANNEL, text=channel_text)
+        bot_username = await get_bot_username(bot)
+        vacancy_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🤖 Перейти на страницу бота", url=f"https://t.me/{bot_username}")]
+            ]
+        )
+        await bot.send_message(chat_id=VACANCIES_CHANNEL, text=channel_text, reply_markup=vacancy_kb)
     except TelegramAPIError as error:
         await message.answer(
             "❌ Не удалось опубликовать вакансию в канале.\n"

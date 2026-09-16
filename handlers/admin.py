@@ -21,6 +21,10 @@ class AdminRestaurantStates(StatesGroup):
     waiting_manager_id = State()
 
 
+class AdminResetStatsStates(StatesGroup):
+    waiting_telegram_id = State()
+
+
 def _is_admin(telegram_id: int) -> bool:
     return ADMIN_ID != 0 and telegram_id == ADMIN_ID
 
@@ -28,6 +32,7 @@ def _is_admin(telegram_id: int) -> bool:
 def admin_menu_kb():
     builder = InlineKeyboardBuilder()
     builder.button(text="👥 Пользователи и результаты", callback_data="admin:users")
+    builder.button(text="🔄 Сбросить статистику пользователя", callback_data="admin:reset_stats")
     builder.button(text="📋 Опубликованные вакансии", callback_data="admin:vacancies")
     builder.button(text="🏢 Рестораны", callback_data="admin:restaurants")
     builder.button(text="⬅️ Главное меню", callback_data="menu:main")
@@ -104,6 +109,78 @@ async def cb_admin_users(callback: CallbackQuery) -> None:
         text = text[:3900] + "\n\n… (список обрезан)"
 
     await callback.message.edit_text(text, reply_markup=admin_menu_kb())
+    await callback.answer()
+
+
+# ---------- Сброс статистики пользователя (только разработчик) ----------
+
+@router.callback_query(F.data == "admin:reset_stats")
+async def cb_admin_reset_stats_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
+    await state.set_state(AdminResetStatsStates.waiting_telegram_id)
+    await callback.message.edit_text(
+        "Пришлите Telegram ID человека, которому нужно полностью обнулить "
+        "историю тестов (и общих, и во всех заведениях сразу).\n\n"
+        "Узнать ID можно в списке «👥 Пользователи и результаты».",
+        reply_markup=admin_menu_kb(),
+    )
+    await callback.answer()
+
+
+@router.message(AdminResetStatsStates.waiting_telegram_id)
+async def cb_admin_reset_stats_id(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    if not message.text or not message.text.strip().isdigit():
+        await message.answer("Нужно прислать числовой Telegram ID.")
+        return
+
+    telegram_id = int(message.text.strip())
+    async with async_session() as session:
+        user = await crud.get_user_by_telegram_id(session, telegram_id)
+        if user is None:
+            await message.answer("Пользователь с таким Telegram ID не найден.")
+            return
+        stats = await crud.get_user_stats(session, user.id)
+
+    await state.update_data(reset_user_id=user.id, reset_telegram_id=telegram_id)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="⚠️ Да, обнулить всю статистику", callback_data="admin_reset_confirm")
+    builder.button(text="Отмена", callback_data="admin:menu")
+    builder.adjust(1)
+    await message.answer(
+        f"Сбросить статистику для {display_name(user)} (ID {telegram_id})?\n\n"
+        f"Сейчас у него {stats['tests_completed']} общих тестов в статистике "
+        "(плюс всё, что есть по заведениям). Это действие необратимо — "
+        "вся история тестов будет удалена без возможности восстановить.",
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data == "admin_reset_confirm")
+async def cb_admin_reset_stats_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
+
+    data = await state.get_data()
+    user_id = data.get("reset_user_id")
+    telegram_id = data.get("reset_telegram_id")
+    if user_id is None:
+        await callback.answer("Сессия истекла, начните заново.", show_alert=True)
+        return
+
+    async with async_session() as session:
+        deleted_count = await crud.reset_user_statistics(session, user_id)
+
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ Готово. У пользователя с ID {telegram_id} удалено результатов тестов: {deleted_count}. "
+        "Статистика полностью обнулена.",
+        reply_markup=admin_menu_kb(),
+    )
     await callback.answer()
 
 
