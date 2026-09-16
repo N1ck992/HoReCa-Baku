@@ -228,6 +228,29 @@
   .option.correct{ border-color: var(--accent); background: var(--accent-soft); }
   .option.correct .letter{ background: var(--accent); color:#fff; }
   .option.wrong{ border-color: var(--wrong); background: var(--wrong-soft); }
+
+  .branches-row{ display:flex; justify-content:space-between; gap:8px; margin-bottom:12px; }
+  .branch-card{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:12px 4px;
+    border-radius:14px; border:1.5px solid var(--divider); background:var(--paper); cursor:pointer;
+  }
+  .branch-card.locked{ opacity:.45; filter:blur(0.3px); }
+  .branch-icon{ font-size:20px; }
+  .branch-title{ font-size:10.5px; font-weight:600; letter-spacing:.02em; }
+  .foundation-row{
+    display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:14px;
+    border:1.5px solid var(--divider); background:var(--paper);
+  }
+  .foundation-row.current{ border-color:var(--accent); background:var(--accent-soft); cursor:pointer; }
+  .foundation-row.done{ opacity:.9; }
+  .foundation-row .f-num{
+    width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-weight:600; font-size:13px; flex-shrink:0; background:var(--plaster); color:var(--ink-soft);
+  }
+  .foundation-row.done .f-num{ background:var(--accent); color:#fff; }
+  .foundation-row.current .f-num{ background:var(--accent-strong); color:#fff; }
+  .foundation-row .f-title{ font-size:13px; font-weight:600; }
+  .foundation-row .f-meta{ font-size:11px; color:var(--ink-soft); }
   .option.wrong .letter{ background: var(--wrong); color:#fff; }
   .option.disabled{ pointer-events:none; }
   .option.dim{ opacity:0.55; }
@@ -426,7 +449,7 @@
             <div class="card-text"><div class="card-title">Мой профиль</div><div class="card-meta">Статистика, ранги, куратор</div></div>
             <div class="chevron">›</div>
           </div>
-          <div class="card" onclick="goTo('positions','left')">
+          <div class="card" onclick="startTestEntry()">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M12 2l1.5 5H19l-4.2 3 1.6 5-4.4-3.2L7.6 15l1.6-5L5 7h5.5z"/></svg></div>
             <div class="card-text"><div class="card-title">Пройти тест</div><div class="card-meta">Выбор должности и категории</div></div>
             <div class="chevron">›</div>
@@ -518,6 +541,44 @@
 
         <div class="cards" id="positionsList"></div>
         <div class="footnote" id="positionsFootnote">Панель сотрудника</div>
+      </section>
+
+      <!-- ============ ЭКРАН 1.5: HoReCa Foundation (общие тесты) ============ -->
+      <section class="screen" data-screen="foundation" data-state="right">
+        <div class="relief relief--top emboss">
+          <svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 130 C 60 100, 70 60, 130 20"/>
+            <path d="M60 92 C 75 85, 85 88, 95 75"/>
+            <path d="M85 60 C 98 55, 105 58, 112 48"/>
+            <ellipse cx="118" cy="45" rx="9" ry="5" transform="rotate(-30 118 45)"/>
+            <ellipse cx="70" cy="88" rx="7" ry="4" transform="rotate(-15 70 88)"/>
+          </svg>
+        </div>
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('restaurantHome','right')">‹</button>
+          <span class="restaurant-name">HoReCa Foundation</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Общие<br>уровни</h1>
+        <p class="sub">На основе WorldSkills Occupational Standards (WSOS). Открыты все сразу — можно в любом порядке, до 3 попыток на уровень.</p>
+        <div id="branchesRow" class="branches-row" style="display:none;">
+          <div class="branch-card" onclick="onFoundationBranchClick('bar')"><div class="branch-icon">🍸</div><div class="branch-title">BAR</div></div>
+          <div class="branch-card" onclick="onFoundationBranchClick('cooking')"><div class="branch-icon">👨‍🍳</div><div class="branch-title">COOKING</div></div>
+          <div class="branch-card" onclick="onFoundationBranchClick('pastry')"><div class="branch-icon">🥐</div><div class="branch-title">PASTRY</div></div>
+        </div>
+        <div id="foundationList" class="cards" style="display:flex; flex-direction:column-reverse; gap:8px;"></div>
+      </section>
+
+      <!-- ============ ЭКРАН 1.6: вопрос Foundation ============ -->
+      <section class="screen" data-screen="foundationQuestion" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="goTo('foundation','right')">‹</button>
+          <span class="restaurant-name" id="fqLevelLabel">Уровень 1</span>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h2 class="q-text" id="fqText">Текст вопроса</h2>
+        <div class="options" id="fqOptions"></div>
+        <p class="sub" id="fqAttemptsNote" style="text-align:center;"></p>
       </section>
 
       <!-- ============ ЭКРАН 2: выбор категории ============ -->
@@ -948,6 +1009,141 @@ let answered = false;
 let currentTestResultId = null;
 
 /* ---------------- Экран 1: должности ---------------- */
+function startTestEntry(){
+  if (restaurantId) {
+    goTo('positions','left');
+  } else {
+    goTo('foundation','left');
+    loadFoundationLevels();
+  }
+}
+
+/* ---------------- HoReCa Foundation (общие тесты) ---------------- */
+let foundationLevelsData = [];
+let foundationPage = 0; // 0 = уровни 1-5, 1 = уровни 6-10 (страницы не накапливаются)
+
+async function loadFoundationLevels(){
+  const el = document.getElementById('foundationList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  try {
+    const data = await apiGet('/api/foundation_levels', {});
+    foundationLevelsData = data.levels;
+    renderFoundationList();
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+function renderFoundationList(){
+  const el = document.getElementById('foundationList');
+  el.innerHTML = '';
+
+  const pageLevels = foundationPage === 0
+    ? foundationLevelsData.slice(0, 5)
+    : foundationLevelsData.slice(5, 10);
+
+  pageLevels.forEach(level => el.appendChild(foundationLevelRow(level)));
+
+  const btn = document.createElement('button');
+  btn.className = 'load-more-btn';
+  if (foundationPage === 0) {
+    btn.textContent = '⬆ Загрузить следующие (5)';
+    btn.onclick = () => { foundationPage = 1; renderFoundationList(); };
+  } else {
+    btn.textContent = '⬇ Показать предыдущие (1-5)';
+    btn.onclick = () => { foundationPage = 0; renderFoundationList(); };
+  }
+  el.appendChild(btn);
+
+  renderFoundationBranches();
+}
+
+function foundationLevelRow(level){
+  const row = document.createElement('div');
+  row.className = `foundation-row ${level.completed ? 'done' : 'current'}`;
+  const numContent = level.completed ? '✓' : level.level;
+  const attemptsText = level.attempts_used > 0 ? ` · попыток: ${level.attempts_used}/${level.attempts_max}` : '';
+  row.innerHTML = `
+    <div class="f-num">${numContent}</div>
+    <div><div class="f-title">${level.title}</div><div class="f-meta">Уровень ${level.level}${attemptsText}</div></div>
+  `;
+  if (level.can_attempt) {
+    row.onclick = () => openFoundationQuestion(level);
+  } else {
+    row.style.opacity = '0.6';
+  }
+  return row;
+}
+
+function renderFoundationBranches(){
+  const row = document.getElementById('branchesRow');
+  const completedCount = foundationLevelsData.filter(l => l.completed).length;
+  row.style.display = foundationPage === 1 ? 'flex' : 'none';
+  const unlocked = completedCount >= 3;
+  row.querySelectorAll('.branch-card').forEach(card => card.classList.toggle('locked', !unlocked));
+  row.dataset.completedCount = completedCount;
+}
+
+function onFoundationBranchClick(key){
+  const completedCount = Number(document.getElementById('branchesRow').dataset.completedCount || 0);
+  if (completedCount < 3) {
+    alert(`Пройдите любые хотя бы 3 теста с любым результатом для разблокировки специализаций. Пройдено: ${completedCount}/3.`);
+    return;
+  }
+  alert('Эта специализация скоро появится — вопросы для неё ещё готовятся.');
+}
+
+let currentFoundationQuestion = null;
+
+async function openFoundationQuestion(level){
+  currentFoundationQuestion = level;
+  document.getElementById('fqLevelLabel').textContent = `Уровень ${level.level}`;
+  document.getElementById('fqText').textContent = 'Загрузка…';
+  document.getElementById('fqOptions').innerHTML = '';
+  document.getElementById('fqAttemptsNote').textContent = '';
+  goTo('foundationQuestion','left');
+  try {
+    const q = await apiGet('/api/foundation_question', { question_id: level.question_id });
+    document.getElementById('fqText').textContent = q.text;
+    document.getElementById('fqAttemptsNote').textContent = `Попытка ${level.attempts_used + 1} из ${level.attempts_max}`;
+    const optsEl = document.getElementById('fqOptions');
+    q.options.forEach((opt, i) => {
+      const div = document.createElement('div');
+      div.className = 'option';
+      div.dataset.id = opt.id;
+      div.innerHTML = `<span class="letter">${['A','B','C','D'][i] || i+1}</span><span>${opt.text}</span>`;
+      div.onclick = () => pickFoundationAnswer(opt.id);
+      optsEl.appendChild(div);
+    });
+  } catch (e) {
+    document.getElementById('fqText').textContent = 'Не получилось загрузить вопрос.';
+  }
+}
+
+let foundationAnswered = false;
+
+async function pickFoundationAnswer(optionId){
+  if (foundationAnswered) return;
+  foundationAnswered = true;
+  try {
+    const res = await apiPost('/api/foundation_answer', {
+      question_id: currentFoundationQuestion.question_id, answer_option_id: optionId,
+    });
+    document.querySelectorAll('#fqOptions .option').forEach(div => {
+      const id = Number(div.dataset.id);
+      if (id === res.correct_option_id) div.classList.add('correct');
+      else if (id === optionId && !res.correct) div.classList.add('wrong');
+    });
+    setTimeout(() => {
+      foundationAnswered = false;
+      loadFoundationLevels().then(() => goTo('foundation','right'));
+    }, 1400);
+  } catch (e) {
+    alert(e.message);
+    foundationAnswered = false;
+  }
+}
+
 async function renderPositions(){
   const el = document.getElementById('positionsList');
   el.innerHTML = '<p class="sub">Загрузка…</p>';

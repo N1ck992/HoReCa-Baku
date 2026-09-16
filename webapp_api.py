@@ -85,6 +85,89 @@ async def options_handler(request: web.Request) -> web.Response:
     return web.Response(headers=_cors_headers())
 
 
+@routes.get("/api/foundation_levels")
+async def foundation_levels(request: web.Request) -> web.Response:
+    """Статус всех 10 уровней HoReCa Foundation для текущего пользователя
+    — все открыты сразу, независимо друг от друга."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+        levels = await crud.get_foundation_levels_status(session, user.id)
+
+    return _json({"levels": levels, "unlock_threshold": crud.SPECIALIZATION_UNLOCK_COUNT})
+
+
+@routes.get("/api/foundation_question")
+async def foundation_question(request: web.Request) -> web.Response:
+    """Сам вопрос и варианты ответа для конкретного уровня Foundation."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    question_id = request.query.get("question_id")
+    if not question_id or not question_id.isdigit():
+        return _json({"error": "question_id обязателен"}, status=400)
+
+    async with async_session() as session:
+        question = await crud.get_question_with_options(session, int(question_id))
+        if question is None:
+            return _json({"error": "Вопрос не найден."}, status=404)
+        options = list(question.options)
+
+    return _json(
+        {
+            "id": question.id,
+            "level": question.level,
+            "text": question.text,
+            "image_url": _image_url(question.image_path),
+            "options": [{"id": o.id, "text": o.text} for o in options],
+        }
+    )
+
+
+@routes.post("/api/foundation_answer")
+async def foundation_answer(request: web.Request) -> web.Response:
+    """Отправка ответа на один уровень Foundation — до 3 попыток на
+    уровень, каждый верный ответ даёт очки в общий рейтинг."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "Некорректный запрос."}, status=400)
+
+    init_data = body.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    question_id = body.get("question_id")
+    answer_option_id = body.get("answer_option_id")
+    if not isinstance(question_id, int) or not isinstance(answer_option_id, int):
+        return _json({"error": "Некорректные данные запроса."}, status=400)
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+        result = await crud.submit_foundation_answer(session, user.id, question_id, answer_option_id)
+
+    if "error" in result:
+        return _json(result, status=400)
+    return _json(result)
+
+
 @routes.get("/api/positions")
 async def get_positions(request: web.Request) -> web.Response:
     init_data = request.query.get("initData", "")

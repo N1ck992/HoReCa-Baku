@@ -1311,6 +1311,76 @@ POSITIONS: list[dict] = [
             },
         ],
     },
+    {
+        # Общий фундамент HoReCa — не должность, а базовый набор из 10 тем,
+        # доступный всем сразу с главной страницы бота (общие тесты).
+        # Никогда не копируется в конкретные заведения — см. проверку кода
+        # "foundation" в seed_restaurant_positions/seed_missing_restaurant_positions.
+        "code": "foundation",
+        "name": "HoReCa Foundation",
+        "emoji": "🌱",
+        "order": 0,
+        "categories": [
+            {
+                "code": "general",
+                "name": "Общие темы",
+                "emoji": "🌱",
+                "order": 1,
+                "questions": [
+                    {
+                        "text": "Что необходимо сделать перед началом работы с продуктами?",
+                        "options": ["Проверить меню", "Вымыть руки", "Подготовить заказ", "Проверить кассу"],
+                        "correct_index": 1, "difficulty": 1, "level": 1,
+                    },
+                    {
+                        "text": "Что лучше всего предотвращает перекрёстное загрязнение продуктов?",
+                        "options": ["Быстрая работа", "Раздельный инвентарь", "Большая температура", "Плотная упаковка"],
+                        "correct_index": 1, "difficulty": 1, "level": 2,
+                    },
+                    {
+                        "text": "На упаковке продукта отсутствует дата маркировки. Что следует сделать?",
+                        "options": ["Использовать первым", "Передать гостю", "Проверить статус", "Смешать с новым"],
+                        "correct_index": 2, "difficulty": 1, "level": 3,
+                    },
+                    {
+                        "text": "Что означает принцип FIFO?",
+                        "options": ["Новый первым", "Старый первым", "Замороженный первым", "Дорогой первым"],
+                        "correct_index": 1, "difficulty": 1, "level": 4,
+                    },
+                    {
+                        "text": "Гость сообщает об аллергии, но состав блюда неизвестен. Что должен сделать сотрудник?",
+                        "options": ["Предположить состав", "Проверить ингредиенты", "Убрать гарнир", "Предложить блюдо"],
+                        "correct_index": 1, "difficulty": 1, "level": 5,
+                    },
+                    {
+                        "text": "Почему рабочее место должно поддерживаться в чистоте во время работы?",
+                        "options": ["Ради фото", "Скорость безопасность", "Экономия посуды", "Вид меню"],
+                        "correct_index": 1, "difficulty": 1, "level": 6,
+                    },
+                    {
+                        "text": "Что следует сделать при обнаружении неисправного оборудования?",
+                        "options": ["Продолжить работу", "Использовать осторожнее", "Сообщить ответственному", "Разобрать самостоятельно"],
+                        "correct_index": 2, "difficulty": 1, "level": 7,
+                    },
+                    {
+                        "text": "Как правильно реагировать на жалобу гостя?",
+                        "options": ["Спорить", "Игнорировать", "Выслушать", "Обвинять"],
+                        "correct_index": 2, "difficulty": 1, "level": 8,
+                    },
+                    {
+                        "text": "Что является частью mise en place?",
+                        "options": ["Подготовка места", "Закрытие ресторана", "Расчёт зарплаты", "Уборка смены"],
+                        "correct_index": 0, "difficulty": 1, "level": 9,
+                    },
+                    {
+                        "text": "Что является важным принципом командной работы в HoReCa?",
+                        "options": ["Работать отдельно", "Скрывать ошибки", "Обмениваться информацией", "Избегать ответственности"],
+                        "correct_index": 2, "difficulty": 1, "level": 10,
+                    },
+                ],
+            },
+        ],
+    },
 ]
 
 
@@ -1403,6 +1473,26 @@ async def _seed_position(
                 min_xp=rank_data["min_xp"],
             )
         )
+
+
+async def seed_foundation_position(session: AsyncSession) -> None:
+    """Отдельно досоздаёт глобальную должность 'foundation' (HoReCa
+    Foundation), если её ещё нет — нужно, потому что seed_data()
+    полностью пропускает себя, если общие должности УЖЕ существуют
+    (а cook/bartender/waiter уже были в базе на момент добавления
+    foundation). Категории/вопросы внутри неё досоздаст sync_new_questions,
+    как обычно."""
+    result = await session.execute(
+        select(Position).where(Position.code == "foundation", Position.restaurant_id.is_(None))
+    )
+    if result.scalars().first() is not None:
+        return
+
+    foundation_data = next((p for p in POSITIONS if p["code"] == "foundation"), None)
+    if foundation_data is None:
+        return
+    await _seed_position(session, foundation_data, restaurant_id=None)
+    await session.commit()
 
 
 async def seed_data(session: AsyncSession) -> None:
@@ -1678,6 +1768,8 @@ async def seed_positions_for_restaurant(session: AsyncSession, restaurant_id: in
         return  # у этого заведения уже есть свои должности — не дублируем
 
     for position_data in POSITIONS:
+        if position_data["code"] == "foundation":
+            continue  # общий раздел HoReCa Foundation не копируется в заведения
         await _seed_position(session, position_data, restaurant_id=restaurant_id)
 
     await session.commit()

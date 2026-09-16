@@ -727,6 +727,9 @@ async def get_completed_levels_for_category(
 
 
 PERFECT_PASS_CAP = 3
+# Очки за каждый правильный ответ в общих тестах — по ним теперь строится
+# общий рейтинг пользователей бота (вместо среднего процента).
+POINTS_PER_CORRECT_ANSWER = 5
 
 
 def _filter_stats_eligible_results(results: list[TestResult]) -> list[TestResult]:
@@ -975,6 +978,104 @@ async def reset_user_statistics(session: AsyncSession, user_id: int) -> int:
     return len(test_result_ids)
 
 
+MAX_FOUNDATION_ATTEMPTS = 3  # столько же, сколько PERFECT_PASS_CAP — та же логика "до 3 раз"
+# Сколько РАЗНЫХ уровней Foundation нужно пройти хотя бы по разу (с любым
+# результатом), чтобы стали доступны специализации (BAR/COOKING/PASTRY).
+SPECIALIZATION_UNLOCK_COUNT = 3
+
+
+async def get_foundation_category_id(session: AsyncSession) -> int | None:
+    """ID категории 'Общие темы' внутри глобальной должности foundation —
+    используется как точка входа для всей механики HoReCa Foundation."""
+    result = await session.execute(
+        select(Category)
+        .join(Position, Category.position_id == Position.id)
+        .where(Position.code == "foundation", Position.restaurant_id.is_(None))
+    )
+    category = result.scalars().first()
+    return category.id if category else None
+
+
+async def get_foundation_levels_status(session: AsyncSession, user_id: int) -> list[dict]:
+    """Для каждого из 10 уровней Foundation — сколько раз он уже пройден
+    (до MAX_FOUNDATION_ATTEMPTS) и пройден ли хотя бы раз. Уровни не
+    заблокированы друг относительно друга — открыты все сразу."""
+    category_id = await get_foundation_category_id(session)
+    if category_id is None:
+        return []
+
+    questions = await get_questions_with_options(session, category_id)
+    result = await session.execute(
+        select(TestResult).where(TestResult.user_id == user_id, TestResult.category_id == category_id)
+    )
+    results = list(result.scalars().all())
+    attempts_by_level: dict[int, int] = {}
+    for r in results:
+        attempts_by_level[r.level] = attempts_by_level.get(r.level, 0) + 1
+
+    levels = []
+    for q in sorted(questions, key=lambda x: x.level or 0):
+        attempts = attempts_by_level.get(q.level, 0)
+        levels.append(
+            {
+                "level": q.level,
+                "question_id": q.id,
+                "title": q.text,
+                "completed": attempts > 0,
+                "attempts_used": min(attempts, MAX_FOUNDATION_ATTEMPTS),
+                "attempts_max": MAX_FOUNDATION_ATTEMPTS,
+                "can_attempt": attempts < MAX_FOUNDATION_ATTEMPTS,
+            }
+        )
+    return levels
+
+
+async def get_foundation_completed_count(session: AsyncSession, user_id: int) -> int:
+    """Сколько РАЗНЫХ уровней Foundation пройдено хотя бы по разу — именно
+    это число сравнивается с порогом открытия специализаций."""
+    levels = await get_foundation_levels_status(session, user_id)
+    return sum(1 for l in levels if l["completed"])
+
+
+async def submit_foundation_answer(
+    session: AsyncSession, user_id: int, question_id: int, answer_option_id: int
+) -> dict:
+    """Засчитывает попытку прохождения одного уровня Foundation (один
+    уровень = один вопрос). Не более MAX_FOUNDATION_ATTEMPTS попыток на
+    уровень — как и в остальной системе. Каждый правильный ответ даёт
+    POINTS_PER_CORRECT_ANSWER очков в общий рейтинг."""
+    question = await get_question_with_options(session, question_id)
+    if question is None:
+        return {"error": "Вопрос не найден."}
+
+    category_id = question.category_id
+    result = await session.execute(
+        select(TestResult).where(
+            TestResult.user_id == user_id,
+            TestResult.category_id == category_id,
+            TestResult.level == question.level,
+        )
+    )
+    attempts = len(list(result.scalars().all()))
+    if attempts >= MAX_FOUNDATION_ATTEMPTS:
+        return {"error": "Попытки по этому уровню закончились (максимум 3)."}
+
+    chosen = next((o for o in question.options if o.id == answer_option_id), None)
+    if chosen is None:
+        return {"error": "Вариант ответа не найден."}
+
+    is_correct = bool(chosen.is_correct)
+    test_result = await create_test_result(session, user_id, category_id, level=question.level)
+    await finalize_test_result(session, test_result.id, 1 if is_correct else 0, 1)
+    correct_option = next((o for o in question.options if o.is_correct), None)
+
+    return {
+        "correct": is_correct,
+        "correct_option_id": correct_option.id if correct_option else None,
+        "points_earned": POINTS_PER_CORRECT_ANSWER if is_correct else 0,
+    }
+
+
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
     """Статистика ТОЛЬКО по общим тестам с главной страницы бота
     (Position.restaurant_id IS NULL) — тесты, пройденные внутри
@@ -1000,6 +1101,7 @@ async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
         "correct_total": correct_total,
         "wrong_total": wrong_total,
         "avg_percentage": avg_percentage,
+        "points": correct_total * POINTS_PER_CORRECT_ANSWER,
     }
 
 
@@ -1011,7 +1113,7 @@ async def _all_users_scored(session: AsyncSession) -> list[tuple[User, dict]]:
         stats = await get_user_stats(session, user.id)
         if stats["tests_completed"] > 0:
             scored.append((user, stats))
-    scored.sort(key=lambda item: (-item[1]["avg_percentage"], -item[1]["tests_completed"]))
+    scored.sort(key=lambda item: (-item[1]["points"], -item[1]["tests_completed"]))
     return scored
 
 
