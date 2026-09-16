@@ -168,6 +168,32 @@ async def foundation_answer(request: web.Request) -> web.Response:
     return _json(result)
 
 
+@routes.get("/api/specialization_status")
+async def specialization_status(request: web.Request) -> web.Response:
+    """Статус уровней специализации (BAR/COOKING/PASTRY) — каждый
+    следующий уровень открывается только после идеального (5/5)
+    прохождения предыдущего."""
+    init_data = request.query.get("initData", "")
+    tg_user = await _get_telegram_user(init_data)
+    if tg_user is None:
+        return _auth_error()
+
+    position_code = request.query.get("position_code")
+    if not position_code:
+        return _json({"error": "position_code обязателен"}, status=400)
+
+    async with async_session() as session:
+        user = await crud.get_or_create_user(
+            session,
+            telegram_id=tg_user["id"],
+            username=tg_user.get("username"),
+            full_name=(tg_user.get("first_name", "") + " " + tg_user.get("last_name", "")).strip(),
+        )
+        levels = await crud.get_specialization_status(session, user.id, position_code)
+
+    return _json({"levels": levels})
+
+
 @routes.get("/api/positions")
 async def get_positions(request: web.Request) -> web.Response:
     init_data = request.query.get("initData", "")

@@ -585,6 +585,17 @@
         <p class="sub" id="fqAttemptsNote" style="text-align:center;"></p>
       </section>
 
+      <!-- ============ ЭКРАН 1.7: лестница специализации (BAR/COOKING/PASTRY) ============ -->
+      <section class="screen" data-screen="specializationLadder" data-state="right">
+        <div class="top-row">
+          <button class="icon-btn" onclick="specializationReturnTo=null; goTo('foundation','right')">‹</button>
+          <button class="icon-btn" onclick="closeApp()">✕</button>
+        </div>
+        <h1 class="headline">Специализация</h1>
+        <p class="sub">Каждый уровень — 5 вопросов. Чтобы открыть следующий, нужно пройти текущий на 5 из 5.</p>
+        <div id="specList" class="cards" style="display:flex; flex-direction:column-reverse; gap:8px;"></div>
+      </section>
+
       <!-- ============ ЭКРАН 2: выбор категории ============ -->
       <section class="screen" data-screen="categories" data-state="right">
         <div class="relief relief--corner emboss">
@@ -1014,6 +1025,7 @@ let currentTestResultId = null;
 
 /* ---------------- Экран 1: должности ---------------- */
 function startTestEntry(){
+  specializationReturnTo = null;
   if (restaurantId) {
     goTo('positions','left');
   } else {
@@ -1088,14 +1100,90 @@ function renderFoundationBranches(){
   row.dataset.completedCount = completedCount;
 }
 
+const SPECIALIZATION_NAMES = { bar: 'BAR', cooking: 'COOKING', pastry: 'PASTRY' };
+const SPECIALIZATION_READY = { bar: true, cooking: false, pastry: false };
+
 function onFoundationBranchClick(key){
   const completedCount = Number(document.getElementById('branchesRow').dataset.completedCount || 0);
   if (completedCount < 3) {
     alert(`Пройдите любые хотя бы 3 теста с любым результатом для разблокировки специализаций. Пройдено: ${completedCount}/3.`);
     return;
   }
-  alert('Эта специализация скоро появится — вопросы для неё ещё готовятся.');
+  if (!SPECIALIZATION_READY[key]) {
+    alert('Эта специализация скоро появится — вопросы для неё ещё готовятся.');
+    return;
+  }
+  openSpecializationLadder(key);
 }
+
+let currentSpecializationKey = null;
+
+async function openSpecializationLadder(key){
+  currentSpecializationKey = key;
+  document.getElementById('specTitle').textContent = SPECIALIZATION_NAMES[key] || key;
+  const el = document.getElementById('specList');
+  el.innerHTML = '<p class="sub">Загрузка…</p>';
+  goTo('specializationLadder','left');
+  try {
+    const data = await apiGet('/api/specialization_status', { position_code: `${key}_specialization` });
+    renderSpecializationLadder(data.levels);
+  } catch (e) {
+    showError(el, e.message);
+  }
+}
+
+function renderSpecializationLadder(levels){
+  const el = document.getElementById('specList');
+  el.innerHTML = '';
+
+  // Показываем: последний пройденный (если есть) + первый ещё не
+  // пройденный (текущий) + до 4 следующих заблокированных — без
+  // накопления, чтобы не перегружать экран.
+  const lastDoneIndex = levels.reduce((acc, l, i) => l.completed ? i : acc, -1);
+  const currentIndex = levels.findIndex(l => !l.completed);
+
+  if (lastDoneIndex >= 0) {
+    el.appendChild(specLevelRow(levels[lastDoneIndex], 'done'));
+  }
+  if (currentIndex >= 0) {
+    el.appendChild(specLevelRow(levels[currentIndex], levels[currentIndex].unlocked ? 'current' : 'locked'));
+    for (let i = currentIndex + 1; i < Math.min(currentIndex + 5, levels.length); i++) {
+      el.appendChild(specLevelRow(levels[i], 'locked'));
+    }
+  } else {
+    const finished = document.createElement('div');
+    finished.className = 'foundation-row done';
+    finished.innerHTML = '<div class="f-num">✓</div><div><div class="f-title">Все уровни пройдены!</div></div>';
+    el.appendChild(finished);
+  }
+
+  const btn = document.createElement('button');
+  btn.className = 'load-more-btn';
+  btn.textContent = '🔀 Сменить направление';
+  btn.onclick = () => { specializationReturnTo = null; goTo('foundation','right'); };
+  el.appendChild(btn);
+}
+
+function specLevelRow(level, state){
+  const row = document.createElement('div');
+  row.className = `foundation-row ${state}`;
+  const numContent = level.completed ? '✓' : level.level;
+  row.innerHTML = `
+    <div class="f-num">${numContent}</div>
+    <div><div class="f-title">${level.title}</div><div class="f-meta">Уровень ${level.level} · 5 вопросов</div></div>
+  `;
+  if (state === 'current') {
+    row.onclick = () => {
+      specializationReturnTo = currentSpecializationKey;
+      currentCategoryId = level.category_id;
+      currentTestLevel = 1;
+      fetchTestBatch();
+    };
+  }
+  return row;
+}
+
+let specializationReturnTo = null;
 
 let currentFoundationQuestion = null;
 
@@ -1537,6 +1625,21 @@ async function showResult(){
 
   document.getElementById('rankText').textContent =
     (currentPosition ? currentPosition.name : '') + ' · результат сохранён в вашей статистике';
+  document.getElementById('mainMenuBtn').textContent = '🏠 Главное меню сайта';
+
+  // Специализация (BAR/COOKING/PASTRY) использует свою простую логику —
+  // следующий уровень открывается только на 5/5, без экспертной системы
+  // уровней 4-10, которая тут ни при чём.
+  if (specializationReturnTo) {
+    const mainBtn = document.getElementById('mainMenuBtn');
+    mainBtn.style.display = '';
+    mainBtn.textContent = '⬆️ Вернуться на лестницу';
+    document.getElementById('nextLevelBtn').style.display = 'none';
+    document.getElementById('retryLevelBtn').style.display = quizCorrect === total ? 'none' : '';
+    document.getElementById('nextLevelLockedMsg').style.display = 'none';
+    goTo('result','left');
+    return;
+  }
 
   const mainMenuBtn = document.getElementById('mainMenuBtn');
   const nextLevelBtn = document.getElementById('nextLevelBtn');
@@ -1594,6 +1697,12 @@ function goToNextLevel(){
 }
 
 function restart(){
+  if (specializationReturnTo) {
+    const key = specializationReturnTo;
+    specializationReturnTo = null;
+    openSpecializationLadder(key);
+    return;
+  }
   goTo(restaurantId ? 'restaurantHome' : 'positions', 'right');
 }
 

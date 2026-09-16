@@ -246,6 +246,47 @@ async def get_position_by_id(session: AsyncSession, position_id: int) -> Positio
     return await session.get(Position, position_id)
 
 
+async def get_specialization_status(session: AsyncSession, user_id: int, position_code: str) -> list[dict]:
+    """Статус уровней специализации (BAR/COOKING/PASTRY после HoReCa
+    Foundation) — каждый уровень открывается, только если предыдущий
+    пройден на 100% (5/5). Первый уровень открыт всегда. Уровень
+    считается пройденным, если хотя бы одна попытка дала 100%."""
+    result = await session.execute(
+        select(Position).where(Position.code == position_code, Position.restaurant_id.is_(None))
+    )
+    position = result.scalars().first()
+    if position is None:
+        return []
+
+    categories = await get_categories_for_position(session, position.id)
+    levels = []
+    previous_completed = True  # первый уровень всегда открыт
+
+    for category in categories:
+        result = await session.execute(
+            select(TestResult).where(
+                TestResult.user_id == user_id, TestResult.category_id == category.id
+            )
+        )
+        results = list(result.scalars().all())
+        completed = any(r.percentage == 100 for r in results)
+        attempted = len(results) > 0
+
+        levels.append(
+            {
+                "category_id": category.id,
+                "level": category.order,
+                "title": category.name,
+                "completed": completed,
+                "unlocked": previous_completed,
+                "attempted": attempted,
+            }
+        )
+        previous_completed = completed
+
+    return levels
+
+
 async def get_categories_for_position(session: AsyncSession, position_id: int) -> list[Category]:
     result = await session.execute(
         select(Category).where(Category.position_id == position_id).order_by(Category.order)
