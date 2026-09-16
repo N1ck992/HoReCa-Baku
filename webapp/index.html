@@ -2232,7 +2232,7 @@ async function openUserLeaderboard(){
     el.innerHTML = data.length
       ? data.map((u, i) => {
           const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-          return `<div class="row-item"><span>${medal} ${u.name}</span><span>${u.avg_percentage}% · ${u.tests_completed} тестов</span></div>`;
+          return `<div class="row-item"><span>${medal} ${u.name}</span><span>${u.points} очков · ${u.tests_completed} тестов</span></div>`;
         }).join('')
       : '<div class="row-item"><span>Пока никто не проходил общие тесты.</span></div>';
   } catch (e) {

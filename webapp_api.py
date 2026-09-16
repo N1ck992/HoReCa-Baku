@@ -968,6 +968,7 @@ async def user_leaderboard(request: web.Request) -> web.Response:
             "name": entry["user"].full_name or entry["user"].username or "Без имени",
             "tests_completed": entry["tests_completed"],
             "avg_percentage": entry["avg_percentage"],
+            "points": entry["points"],
         }
         for entry in leaderboard
     ]

@@ -25,7 +25,7 @@ async def cb_user_leaderboard(callback: CallbackQuery) -> None:
             medal = medals.get(idx, f"{idx}.")
             name = display_name(entry["user"])
             lines.append(
-                f"{medal} {name} — {entry['avg_percentage']}% "
+                f"{medal} {name} — {entry['points']} очков "
                 f"({entry['tests_completed']} тестов)"
             )
         text = "\n".join(lines)
