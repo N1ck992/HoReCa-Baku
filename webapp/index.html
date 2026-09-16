@@ -431,14 +431,9 @@
             <div class="card-text"><div class="card-title">Пройти тест</div><div class="card-meta">Выбор должности и категории</div></div>
             <div class="chevron">›</div>
           </div>
-          <div class="card" onclick="openUserLeaderboard()">
+          <div class="card" id="leaderboardOrStaffCard" onclick="openUserLeaderboard()">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4ZM7 6H3v2a4 4 0 0 0 4 3M17 6h4v2a4 4 0 0 1-4 3"/></svg></div>
-            <div class="card-text"><div class="card-title">Рейтинг пользователей</div><div class="card-meta">По общим тестам</div></div>
-            <div class="chevron">›</div>
-          </div>
-          <div class="card" id="staffCard" onclick="openAdminEmployees()">
-            <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-            <div class="card-text"><div class="card-title">Персонал заведения</div><div class="card-meta">Только для администраторов</div></div>
+            <div class="card-text"><div class="card-title" id="leaderboardOrStaffTitle">Рейтинг пользователей</div><div class="card-meta" id="leaderboardOrStaffMeta">По общим тестам</div></div>
             <div class="chevron">›</div>
           </div>
         </div>
@@ -972,6 +967,19 @@ async function renderPositions(){
       document.getElementById('homeRestaurantLabel').style.display = '';
       document.getElementById('homeRestaurantSignature').textContent = data.restaurant_name;
       document.getElementById('homeRestaurantSignature').style.display = '';
+    }
+
+    const combinedCard = document.getElementById('leaderboardOrStaffCard');
+    const combinedTitle = document.getElementById('leaderboardOrStaffTitle');
+    const combinedMeta = document.getElementById('leaderboardOrStaffMeta');
+    if (data.is_manager) {
+      combinedCard.setAttribute('onclick', 'openAdminEmployees()');
+      combinedTitle.textContent = 'Результаты персонала';
+      combinedMeta.textContent = 'Тесты именно этого заведения';
+    } else {
+      combinedCard.setAttribute('onclick', 'openUserLeaderboard()');
+      combinedTitle.textContent = 'Рейтинг пользователей';
+      combinedMeta.textContent = 'По общим тестам';
     }
 
     if (!positions.length) {
