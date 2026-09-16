@@ -433,7 +433,7 @@
           </div>
           <div class="card" onclick="openUserLeaderboard()">
             <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4ZM7 6H3v2a4 4 0 0 0 4 3M17 6h4v2a4 4 0 0 1-4 3"/></svg></div>
-            <div class="card-text"><div class="card-title">Рейтинг пользователей</div><div class="card-meta">По пробным тестам</div></div>
+            <div class="card-text"><div class="card-title">Рейтинг пользователей</div><div class="card-meta">По общим тестам</div></div>
             <div class="chevron">›</div>
           </div>
           <div class="card" id="staffCard" onclick="openAdminEmployees()">
@@ -453,7 +453,7 @@
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
         <h1 class="headline">Рейтинг<br>пользователей</h1>
-        <p class="sub">По пробным тестам с главной страницы — заведений тут нет.</p>
+        <p class="sub">По общим тестам с главной страницы — заведений тут нет.</p>
         <div class="row-list" id="userLeaderboardList"></div>
       </section>
 
@@ -868,7 +868,7 @@
       <!-- ============ ЭКРАН 11: разбор конкретного теста по вопросам ============ -->
       <section class="screen" data-screen="testResultBreakdown" data-state="right">
         <div class="top-row">
-          <button class="icon-btn" onclick="goTo('employeeDayTests','right')">‹</button>
+          <button class="icon-btn" id="breakdownBackBtn" onclick="goTo('employeeDayTests','right')">‹</button>
           <span class="restaurant-name">Разбор теста</span>
           <button class="icon-btn" onclick="closeApp()">✕</button>
         </div>
@@ -1719,7 +1719,7 @@ async function openEmployeeDayTests(date){
     });
     el.innerHTML = data.tests.length
       ? data.tests.map(t => `
-          <div class="row-item" style="cursor:pointer;" onclick='openTestResultBreakdown(${t.id})'>
+          <div class="row-item" style="cursor:pointer;" onclick="openTestResultBreakdown(${t.id}, 'employeeDayTests')">
             <span>${t.position || ''}${t.category ? ' · ' + t.category : ''} · ур.${t.level}</span>
             <span style="color:${t.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${t.correct_count}/${t.total_count} (${t.percentage}%) ›</span>
           </div>`).join('')
@@ -1733,7 +1733,10 @@ function goToBackFromDayTests(){
   goTo(dayTestsCameFrom, 'right');
 }
 
-async function openTestResultBreakdown(testResultId){
+async function openTestResultBreakdown(testResultId, backScreen){
+  document.getElementById('breakdownBackBtn').setAttribute(
+    'onclick', `goTo('${backScreen || 'employeeDayTests'}','right')`
+  );
   const el = document.getElementById('breakdownList');
   el.innerHTML = '<p class="sub">Загрузка…</p>';
   goTo('testResultBreakdown','left');
@@ -2023,7 +2026,7 @@ async function openUserLeaderboard(){
           const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
           return `<div class="row-item"><span>${medal} ${u.name}</span><span>${u.avg_percentage}% · ${u.tests_completed} тестов</span></div>`;
         }).join('')
-      : '<div class="row-item"><span>Пока никто не проходил пробные тесты.</span></div>';
+      : '<div class="row-item"><span>Пока никто не проходил общие тесты.</span></div>';
   } catch (e) {
     showError(el, e.message);
   }
@@ -2085,9 +2088,9 @@ async function loadMyResults(){
     document.getElementById('myAvgPct').textContent = data.avg_percentage + '%';
     hist.innerHTML = data.history.length
       ? data.history.map(h => `
-          <div class="row-item">
-            <span>${h.position || ''}${h.category ? ' · ' + h.category : ''}</span>
-            <span style="color:${h.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.correct_count}/${h.total_count} (${h.percentage}%)</span>
+          <div class="row-item" style="cursor:pointer;" onclick="openTestResultBreakdown(${h.id}, 'myResults')">
+            <span>${h.position || ''}${h.category ? ' · ' + h.category : ''} · ${h.date || ''}</span>
+            <span style="color:${h.percentage >= 60 ? 'var(--accent-strong)' : 'var(--wrong)'}">${h.correct_count}/${h.total_count} (${h.percentage}%) ›</span>
           </div>`).join('')
       : '<div class="row-item"><span>Тестов пока не было</span></div>';
   } catch (e) {
@@ -2109,7 +2112,7 @@ function initFromQuery(){
   } else {
     // И из общего меню бота (без заведения), и из меню конкретного
     // заведения — одна и та же домашняя страница с разделами. Без
-    // заведения "Пройти тест" ведёт на пробные тесты, а "Персонал
+    // заведения "Пройти тест" ведёт на общие тесты, а "Персонал
     // заведения" покажет уведомление вместо списка.
     renderPositions(); // сразу подгружаем, чтобы "Пройти тест" открылся мгновенно
     setActive('restaurantHome');

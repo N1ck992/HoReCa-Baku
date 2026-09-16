@@ -959,7 +959,7 @@ async def pop_pending_requeued_questions(
 
 
 async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
-    """Статистика ТОЛЬКО по пробным тестам с главной страницы бота
+    """Статистика ТОЛЬКО по общим тестам с главной страницы бота
     (Position.restaurant_id IS NULL) — тесты, пройденные внутри
     конкретного заведения, сюда не попадают и не влияют на общий
     рейтинг персонала бота. Для статистики внутри заведения используйте
@@ -1095,7 +1095,7 @@ def get_next_rank(ranks: list[Rank], current_rank: Rank | None) -> Rank | None:
 async def get_recent_results_for_user(
     session: AsyncSession, user_id: int, limit: int = 10
 ) -> list[TestResult]:
-    """История ТОЛЬКО пробных тестов с главной страницы бота — см.
+    """История ТОЛЬКО общих тестов с главной страницы бота — см.
     get_user_stats. Для истории внутри заведения используйте
     get_recent_results_for_user_in_restaurant."""
     result = await session.execute(

@@ -329,7 +329,7 @@ async def _ask_leave_to_general(send_func) -> None:
     builder.adjust(1)
     await send_func(
         "⚠️ Вы сейчас в меню своего заведения. Общее меню бота содержит "
-        "пробный тест, общий рейтинг и вакансии — не относится к вашему "
+        "общий тест, общий рейтинг и вакансии — не относится к вашему "
         "заведению. Выйти туда?",
         reply_markup=builder.as_markup(),
     )
@@ -448,7 +448,7 @@ async def cb_choose_restaurant(callback: CallbackQuery, state: FSMContext) -> No
 @router.callback_query(F.data == "open_general_site")
 async def cb_open_general_site(callback: CallbackQuery) -> None:
     """«🌐 Перейти на сайт» из общего меню бота — открывает домашнюю
-    страницу сайта БЕЗ привязки к конкретному заведению (пробные тесты).
+    страницу сайта БЕЗ привязки к конкретному заведению (общие тесты).
     Профиль/результаты тут — это отдельная, общая статистика, не
     относящаяся ни к одному заведению (см. get_user_stats)."""
     if config.WEBAPP_URL:

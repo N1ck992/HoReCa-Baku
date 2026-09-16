@@ -530,14 +530,15 @@ async def my_results(request: web.Request) -> web.Response:
         if restaurant_id is not None:
             stats = await crud.get_user_stats_for_restaurant(session, user.id, restaurant_id)
             raw_history = await crud.get_recent_results_for_user_in_restaurant(
-                session, user.id, restaurant_id
+                session, user.id, restaurant_id, limit=1000
             )
         else:
             stats = await crud.get_user_stats(session, user.id)
-            raw_history = await crud.get_recent_results_for_user(session, user.id)
+            raw_history = await crud.get_recent_results_for_user(session, user.id, limit=1000)
 
     history = [
         {
+            "id": r.id,
             "category": r.category.name if r.category else None,
             "position": r.category.position.name if r.category and r.category.position else None,
             "correct_count": r.correct_count,
@@ -631,39 +632,37 @@ async def my_profile(request: web.Request) -> web.Response:
 @routes.get("/api/test_result_detail")
 async def test_result_detail(request: web.Request) -> web.Response:
     """Детальный разбор одного пройденного теста — какие вопросы, какие
-    ответы дал сотрудник, что было бы правильно. Доступ только
-    администратору заведения, и только по тестам СВОЕГО сотрудника —
-    иначе можно было бы подсмотреть чужой разбор, просто подставив ID."""
+    ответы дал сотрудник, что было бы правильно. Доступ разрешён либо
+    администратору заведения (по тестам СВОЕГО сотрудника, restaurant_id
+    обязателен), либо самому человеку — по своим же тестам, в том числе
+    общим (без привязки к заведению), без всяких дополнительных условий."""
     init_data = request.query.get("initData", "")
     tg_user = await _get_telegram_user(init_data)
     if tg_user is None:
         return _auth_error()
 
     restaurant_id = request.query.get("restaurant_id")
-    user_id = request.query.get("user_id")
     test_result_id = request.query.get("test_result_id")
-    if not (
-        restaurant_id
-        and restaurant_id.isdigit()
-        and user_id
-        and user_id.isdigit()
-        and test_result_id
-        and test_result_id.isdigit()
-    ):
-        return _json({"error": "restaurant_id, user_id и test_result_id обязательны"}, status=400)
-    restaurant_id = int(restaurant_id)
-    user_id = int(user_id)
+    if not (test_result_id and test_result_id.isdigit()):
+        return _json({"error": "test_result_id обязателен"}, status=400)
     test_result_id = int(test_result_id)
+    restaurant_id = int(restaurant_id) if restaurant_id and restaurant_id.isdigit() else None
 
     async with async_session() as session:
-        if await _get_active_restaurant(session, restaurant_id) is None:
-            return _archived_error()
-        if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
-            return _json({"error": "Доступ только для администраторов заведения."}, status=403)
-
         test_result = await crud.get_test_result_by_id(session, test_result_id)
-        if test_result is None or test_result.user_id != user_id:
+        if test_result is None:
             return _json({"error": "Тест не найден."}, status=404)
+
+        target = await crud.get_user_by_id(session, test_result.user_id)
+        is_self = target is not None and target.telegram_id == tg_user["id"]
+
+        if not is_self:
+            if restaurant_id is None:
+                return _json({"error": "Доступ запрещён."}, status=403)
+            if await _get_active_restaurant(session, restaurant_id) is None:
+                return _archived_error()
+            if not await crud.is_restaurant_manager(session, restaurant_id, tg_user["id"]):
+                return _json({"error": "Доступ только для администраторов заведения."}, status=403)
 
         breakdown = await crud.get_test_result_breakdown(session, test_result_id)
 
@@ -870,7 +869,7 @@ async def set_employee_note(request: web.Request) -> web.Response:
 
 @routes.get("/api/user_leaderboard")
 async def user_leaderboard(request: web.Request) -> web.Response:
-    """Рейтинг пользователей бота — только по пробным тестам с главной
+    """Рейтинг пользователей бота — только по общим тестам с главной
     страницы, не заведений (см. get_user_stats). Доступен всем — это
     открытая общая статистика, не привязанная к конкретному заведению."""
     init_data = request.query.get("initData", "")

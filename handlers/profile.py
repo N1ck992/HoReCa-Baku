@@ -27,7 +27,7 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
     curator_name = await crud.get_curator_name(session, user.telegram_id)
     trainee_count = await crud.get_trainee_count(session, user.telegram_id)
 
-    leaderboard_rank_text = f"#{leaderboard_rank}" if leaderboard_rank else "нет данных (пройдите пробный тест)"
+    leaderboard_rank_text = f"#{leaderboard_rank}" if leaderboard_rank else "нет данных (пройдите общий тест)"
 
     text = (
         "👤 Мой профиль\n\n"
@@ -40,7 +40,7 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
         text += f"Стажёров: {trainee_count}\n"
 
     text += (
-        "\nПробные тесты (с главной страницы бота, отдельно от заведений):\n"
+        "\nОбщие тесты (с главной страницы бота, отдельно от заведений):\n"
         f"Пройдено тестов: {stats['tests_completed']}\n"
         f"Средний результат: {stats['avg_percentage']}%\n"
         f"Общий рейтинг бота: {leaderboard_rank_text}"
@@ -48,7 +48,7 @@ async def build_profile_view(session, telegram_id: int, username: str | None, fu
 
     # Список заведений, к которым человек привязан — с должностью (или
     # статусом администратора) и прогрессом по тестам именно в этом
-    # заведении. Тесты внутри заведений считаются отдельно от пробных.
+    # заведении. Тесты внутри заведений считаются отдельно от общих.
     options = await crud.get_user_restaurant_options(session, telegram_id)
     if options:
         text += "\n\n🏢 Ваши заведения:"
