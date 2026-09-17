@@ -243,6 +243,7 @@
   }
   .foundation-row.current{ border-color:var(--accent); background:var(--accent-soft); cursor:pointer; }
   .foundation-row.done{ opacity:.9; }
+  .foundation-row.locked{ opacity:.55; filter: blur(1.5px); cursor:pointer; }
   .foundation-row .f-num{
     width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     font-weight:600; font-size:13px; flex-shrink:0; background:var(--plaster); color:var(--ink-soft);
@@ -255,6 +256,12 @@
     align-self:center; margin:6px auto; display:block; background:none; border:none;
     color:var(--accent-strong); font-size:12.5px; font-weight:600; cursor:pointer; padding:8px;
   }
+  .list-top-action{
+    position:sticky; top:0; z-index:3;
+    background: var(--paper);
+  }
+  .list-top-action:empty{ margin:0; }
+  .list-top-action .load-more-btn{ margin:0 auto 6px; }
   .option.wrong .letter{ background: var(--wrong); color:#fff; }
   .option.disabled{ pointer-events:none; }
   .option.dim{ opacity:0.55; }
@@ -570,7 +577,9 @@
           <div class="branch-card" onclick="onFoundationBranchClick('cooking')"><div class="branch-icon">👨‍🍳</div><div class="branch-title">COOKING</div></div>
           <div class="branch-card" onclick="onFoundationBranchClick('pastry')"><div class="branch-icon">🥐</div><div class="branch-title">PASTRY</div></div>
         </div>
+        <div id="foundationTopAction" class="list-top-action"></div>
         <div id="foundationList" class="cards" style="display:flex; flex-direction:column-reverse; gap:8px;"></div>
+        <div id="foundationBottomAction"></div>
       </section>
 
       <!-- ============ ЭКРАН 1.6: вопрос Foundation ============ -->
@@ -587,6 +596,14 @@
 
       <!-- ============ ЭКРАН 1.7: лестница специализации (BAR/COOKING/PASTRY) ============ -->
       <section class="screen" data-screen="specializationLadder" data-state="right">
+        <div class="relief relief--corner emboss">
+          <svg viewBox="0 0 160 110" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 100 C 35 90, 45 65, 42 35 C 41 22, 50 12, 65 6"/>
+            <ellipse cx="42" cy="35" rx="8" ry="4.5" transform="rotate(-70 42 35)"/>
+            <ellipse cx="55" cy="70" rx="7" ry="4" transform="rotate(35 55 70)"/>
+            <ellipse cx="65" cy="6" rx="7" ry="4" transform="rotate(-20 65 6)"/>
+          </svg>
+        </div>
         <div class="top-row">
           <button class="icon-btn" onclick="specializationReturnTo=null; goTo('foundation','right')">‹</button>
           <button class="icon-btn" onclick="closeApp()">✕</button>
@@ -1053,6 +1070,10 @@ async function loadFoundationLevels(){
 function renderFoundationList(){
   const el = document.getElementById('foundationList');
   el.innerHTML = '';
+  const topAction = document.getElementById('foundationTopAction');
+  const bottomAction = document.getElementById('foundationBottomAction');
+  topAction.innerHTML = '';
+  bottomAction.innerHTML = '';
 
   const pageLevels = foundationPage === 0
     ? foundationLevelsData.slice(0, 5)
@@ -1063,13 +1084,18 @@ function renderFoundationList(){
   const btn = document.createElement('button');
   btn.className = 'load-more-btn';
   if (foundationPage === 0) {
+    // Кнопка ведёт дальше по прогрессу — закреплена сверху, чтобы не
+    // требовать оттягивания страницы вниз до самого верха (в Telegram
+    // это иногда сворачивает мини-приложение целиком).
     btn.textContent = '⬆ Загрузить следующие (5)';
     btn.onclick = () => { foundationPage = 1; renderFoundationList(); };
+    topAction.appendChild(btn);
   } else {
+    // Кнопка возврата к предыдущим уровням — снизу.
     btn.textContent = '⬇ Показать предыдущие (1-5)';
     btn.onclick = () => { foundationPage = 0; renderFoundationList(); };
+    bottomAction.appendChild(btn);
   }
-  el.appendChild(btn);
 
   renderFoundationBranches();
 }
@@ -1145,6 +1171,16 @@ function renderSpecializationLadder(levels){
   if (lastDoneIndex >= 0) {
     el.appendChild(specLevelRow(levels[lastDoneIndex], 'done'));
   }
+
+  // Кнопка идёт здесь в DOM-порядке (а не в конце) — колонка отрисована
+  // в обратном порядке (column-reverse), поэтому это визуально ставит
+  // кнопку сразу под текущим уровнем, а не в самом верху списка.
+  const btn = document.createElement('button');
+  btn.className = 'load-more-btn';
+  btn.textContent = '🔀 Сменить направление';
+  btn.onclick = () => { specializationReturnTo = null; goTo('foundation','right'); };
+  el.appendChild(btn);
+
   if (currentIndex >= 0) {
     el.appendChild(specLevelRow(levels[currentIndex], levels[currentIndex].unlocked ? 'current' : 'locked'));
     for (let i = currentIndex + 1; i < Math.min(currentIndex + 5, levels.length); i++) {
@@ -1156,12 +1192,6 @@ function renderSpecializationLadder(levels){
     finished.innerHTML = '<div class="f-num">✓</div><div><div class="f-title">Все уровни пройдены!</div></div>';
     el.appendChild(finished);
   }
-
-  const btn = document.createElement('button');
-  btn.className = 'load-more-btn';
-  btn.textContent = '🔀 Сменить направление';
-  btn.onclick = () => { specializationReturnTo = null; goTo('foundation','right'); };
-  el.appendChild(btn);
 }
 
 function specLevelRow(level, state){
@@ -1178,6 +1208,10 @@ function specLevelRow(level, state){
       currentCategoryId = level.category_id;
       currentTestLevel = 1;
       fetchTestBatch();
+    };
+  } else if (state === 'locked') {
+    row.onclick = () => {
+      alert('Сначала пройдите текущий уровень на 5 из 5, чтобы открыть следующий.');
     };
   }
   return row;
