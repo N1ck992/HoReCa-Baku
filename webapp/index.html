@@ -1135,6 +1135,9 @@ const SPECIALIZATION_NAMES = {
   cooking_cold_kitchen: 'Холодный цех',
   cooking_hot_kitchen: 'Горячий цех',
   cooking_prep_sauces: 'Заготовки и соусы',
+  bar_mixology: 'Mixology / Коктейли',
+  bar_wine_spirits: 'Wine & Spirits / Вино и крепкий алкоголь',
+  bar_barista: 'Barista / Кофе и безалкогольный бар',
 };
 const SPECIALIZATION_READY = {
   bar: true, cooking: true, pastry: true,
@@ -1145,6 +1148,9 @@ const SPECIALIZATION_READY = {
   cooking_cold_kitchen: false,
   cooking_hot_kitchen: false,
   cooking_prep_sauces: false,
+  bar_mixology: false,
+  bar_wine_spirits: false,
+  bar_barista: false,
 };
 // Какие дальнейшие ветки открываются после прохождения ВСЕХ уровней
 // специализации (ключ — родительская специализация). Пусто для тех, у
@@ -1159,6 +1165,11 @@ const SPECIALIZATION_NEXT_BRANCHES = {
     { key: 'cooking_cold_kitchen', emoji: '🥗' },
     { key: 'cooking_hot_kitchen', emoji: '🔥' },
     { key: 'cooking_prep_sauces', emoji: '🥘' },
+  ],
+  bar: [
+    { key: 'bar_mixology', emoji: '🍹' },
+    { key: 'bar_wine_spirits', emoji: '🍷' },
+    { key: 'bar_barista', emoji: '☕' },
   ],
 };
 
