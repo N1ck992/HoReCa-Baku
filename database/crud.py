@@ -1030,6 +1030,50 @@ async def reset_user_statistics(session: AsyncSession, user_id: int) -> int:
     return len(test_result_ids)
 
 
+async def get_foundation_category_ids(session: AsyncSession) -> list[int]:
+    """ID всех категорий (уровней) внутри глобальной должности foundation."""
+    result = await session.execute(
+        select(Category.id)
+        .join(Position, Category.position_id == Position.id)
+        .where(Position.code == "foundation", Position.restaurant_id.is_(None))
+    )
+    return [row[0] for row in result.all()]
+
+
+async def count_foundation_results(session: AsyncSession) -> int:
+    """Сколько результатов общих тестов (HoReCa Foundation) сейчас есть у
+    ВСЕХ пользователей — используется для превью перед необратимым сбросом."""
+    category_ids = await get_foundation_category_ids(session)
+    if not category_ids:
+        return 0
+    result = await session.execute(
+        select(func.count()).select_from(TestResult).where(TestResult.category_id.in_(category_ids))
+    )
+    return result.scalar_one()
+
+
+async def reset_all_foundation_ratings(session: AsyncSession) -> int:
+    """Полностью обнуляет результаты ОБЩИХ тестов (HoReCa Foundation) у
+    ВСЕХ пользователей сразу — общий рейтинг начинает считаться заново с
+    нуля. Тесты внутри конкретных заведений не затрагиваются. Возвращает
+    количество удалённых результатов тестов."""
+    category_ids = await get_foundation_category_ids(session)
+    if not category_ids:
+        return 0
+
+    result = await session.execute(
+        select(TestResult.id).where(TestResult.category_id.in_(category_ids))
+    )
+    test_result_ids = [row[0] for row in result.all()]
+    if not test_result_ids:
+        return 0
+
+    await session.execute(delete(UserAnswer).where(UserAnswer.test_result_id.in_(test_result_ids)))
+    await session.execute(delete(TestResult).where(TestResult.id.in_(test_result_ids)))
+    await session.commit()
+    return len(test_result_ids)
+
+
 MAX_FOUNDATION_ATTEMPTS = 3  # столько же, сколько PERFECT_PASS_CAP — та же логика "до 3 раз"
 # Сколько РАЗНЫХ уровней Foundation нужно пройти хотя бы по разу (с любым
 # результатом), чтобы стали доступны специализации (BAR/COOKING/PASTRY).

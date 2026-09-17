@@ -33,6 +33,7 @@ def admin_menu_kb():
     builder = InlineKeyboardBuilder()
     builder.button(text="👥 Пользователи и результаты", callback_data="admin:users")
     builder.button(text="🔄 Сбросить статистику пользователя", callback_data="admin:reset_stats")
+    builder.button(text="🗑 Обнулить общий рейтинг всем", callback_data="admin:reset_foundation_rating")
     builder.button(text="📋 Опубликованные вакансии", callback_data="admin:vacancies")
     builder.button(text="🏢 Рестораны", callback_data="admin:restaurants")
     builder.button(text="⬅️ Главное меню", callback_data="menu:main")
@@ -179,6 +180,50 @@ async def cb_admin_reset_stats_confirm(callback: CallbackQuery, state: FSMContex
     await callback.message.edit_text(
         f"✅ Готово. У пользователя с ID {telegram_id} удалено результатов тестов: {deleted_count}. "
         "Статистика полностью обнулена.",
+        reply_markup=admin_menu_kb(),
+    )
+    await callback.answer()
+
+
+# ---------- Обнуление общего рейтинга всем (только разработчик) ----------
+
+@router.callback_query(F.data == "admin:reset_foundation_rating")
+async def cb_admin_reset_foundation_start(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
+
+    async with async_session() as session:
+        count = await crud.count_foundation_results(session)
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="⚠️ Да, обнулить рейтинг ВСЕМ", callback_data="admin_reset_foundation_confirm")
+    builder.button(text="Отмена", callback_data="admin:menu")
+    builder.adjust(1)
+    await callback.message.edit_text(
+        f"Обнулить общий рейтинг у ВСЕХ пользователей бота?\n\n"
+        f"Сейчас в базе {count} результатов общих тестов (HoReCa Foundation) "
+        "у всех пользователей вместе — все они будут удалены безвозвратно, "
+        "и общий рейтинг начнёт считаться заново с нуля.\n\n"
+        "Тесты внутри конкретных заведений (Бар/Повар/Официант у сотрудников) "
+        "это не затронет.",
+        reply_markup=builder.as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_reset_foundation_confirm")
+async def cb_admin_reset_foundation_confirm(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
+
+    async with async_session() as session:
+        deleted_count = await crud.reset_all_foundation_ratings(session)
+
+    await callback.message.edit_text(
+        f"✅ Готово. Удалено результатов общих тестов: {deleted_count}. "
+        "Общий рейтинг обнулён у всех пользователей и начал считаться заново.",
         reply_markup=admin_menu_kb(),
     )
     await callback.answer()
