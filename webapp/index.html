@@ -610,6 +610,7 @@
         </div>
         <h1 class="headline" id="specTitle">Специализация</h1>
         <p class="sub">Каждый уровень — 5 вопросов. Чтобы открыть следующий, нужно пройти текущий на 5 из 5.</p>
+        <div id="specBranchesRow" class="branches-row" style="display:none;"></div>
         <div id="specList" class="cards" style="display:flex; flex-direction:column-reverse; gap:8px;"></div>
       </section>
 
@@ -1126,8 +1127,37 @@ function renderFoundationBranches(){
   row.dataset.completedCount = completedCount;
 }
 
-const SPECIALIZATION_NAMES = { bar: 'BAR', cooking: 'COOKING', pastry: 'PASTRY' };
-const SPECIALIZATION_READY = { bar: true, cooking: true, pastry: true };
+const SPECIALIZATION_NAMES = {
+  bar: 'BAR', cooking: 'COOKING', pastry: 'PASTRY',
+  pastry_cakes_desserts: 'CAKES & DESSERTS',
+  pastry_chocolate_confectionery: 'CHOCOLATE & CONFECTIONERY',
+  pastry_bakery_dough: 'BAKERY & DOUGH',
+};
+const SPECIALIZATION_READY = {
+  bar: true, cooking: true, pastry: true,
+  // Вопросы для этих веток ещё не добавлены — появятся отдельно позже.
+  pastry_cakes_desserts: false,
+  pastry_chocolate_confectionery: false,
+  pastry_bakery_dough: false,
+};
+// Какие дальнейшие ветки открываются после прохождения ВСЕХ уровней
+// специализации (ключ — родительская специализация). Пусто для тех, у
+// кого продолжения пока нет — экран просто покажет "Все уровни пройдены".
+const SPECIALIZATION_NEXT_BRANCHES = {
+  pastry: [
+    { key: 'pastry_cakes_desserts', emoji: '🍰' },
+    { key: 'pastry_chocolate_confectionery', emoji: '🍫' },
+    { key: 'pastry_bakery_dough', emoji: '🥐' },
+  ],
+};
+
+function onSpecializationBranchClick(key){
+  if (!SPECIALIZATION_READY[key]) {
+    alert('Эта специализация скоро появится — вопросы для неё ещё готовятся.');
+    return;
+  }
+  openSpecializationLadder(key);
+}
 
 function onFoundationBranchClick(key){
   const completedCount = Number(document.getElementById('branchesRow').dataset.completedCount || 0);
@@ -1181,17 +1211,37 @@ function renderSpecializationLadder(levels){
   btn.onclick = () => { specializationReturnTo = null; goTo('foundation','right'); };
   el.appendChild(btn);
 
+  const branchesRow = document.getElementById('specBranchesRow');
   if (currentIndex >= 0) {
     el.appendChild(specLevelRow(levels[currentIndex], levels[currentIndex].unlocked ? 'current' : 'locked'));
     for (let i = currentIndex + 1; i < Math.min(currentIndex + 5, levels.length); i++) {
       el.appendChild(specLevelRow(levels[i], 'locked'));
     }
+    branchesRow.style.display = 'none';
+    branchesRow.innerHTML = '';
   } else {
     const finished = document.createElement('div');
     finished.className = 'foundation-row done';
     finished.innerHTML = '<div class="f-num">✓</div><div><div class="f-title">Все уровни пройдены!</div></div>';
     el.appendChild(finished);
+    renderSpecializationNextBranches(branchesRow);
   }
+}
+
+function renderSpecializationNextBranches(branchesRow){
+  const nextBranches = SPECIALIZATION_NEXT_BRANCHES[currentSpecializationKey] || [];
+  if (!nextBranches.length) {
+    branchesRow.style.display = 'none';
+    branchesRow.innerHTML = '';
+    return;
+  }
+  branchesRow.innerHTML = nextBranches.map(b => `
+    <div class="branch-card" onclick="onSpecializationBranchClick('${b.key}')">
+      <div class="branch-icon">${b.emoji}</div>
+      <div class="branch-title">${SPECIALIZATION_NAMES[b.key] || b.key}</div>
+    </div>
+  `).join('');
+  branchesRow.style.display = 'flex';
 }
 
 function specLevelRow(level, state){
