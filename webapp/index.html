@@ -1110,7 +1110,7 @@ function onFoundationBranchClick(key){
     return;
   }
   if (!SPECIALIZATION_READY[key]) {
-    alert(`ДИАГНОСТИКА: key=${JSON.stringify(key)} (тип: ${typeof key}), SPECIALIZATION_READY=${JSON.stringify(SPECIALIZATION_READY)}, значение=${SPECIALIZATION_READY[key]}`);
+    alert('Эта специализация скоро появится — вопросы для неё ещё готовятся.');
     return;
   }
   openSpecializationLadder(key);
