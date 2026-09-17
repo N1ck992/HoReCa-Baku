@@ -1030,20 +1030,26 @@ async def reset_user_statistics(session: AsyncSession, user_id: int) -> int:
     return len(test_result_ids)
 
 
-async def get_foundation_category_ids(session: AsyncSession) -> list[int]:
-    """ID всех категорий (уровней) внутри глобальной должности foundation."""
+async def get_global_rating_category_ids(session: AsyncSession) -> list[int]:
+    """ID всех категорий (уровней) внутри ЛЮБОЙ глобальной должности —
+    foundation И всех специализаций (bar/cooking/pastry_specialization).
+    Именно по этому набору get_user_stats() считает общий рейтинг
+    (фильтр там — Position.restaurant_id IS NULL, а не конкретный code),
+    поэтому сброс рейтинга обязан использовать тот же набор категорий —
+    иначе очки за пройденные уровни специализаций останутся висеть."""
     result = await session.execute(
         select(Category.id)
         .join(Position, Category.position_id == Position.id)
-        .where(Position.code == "foundation", Position.restaurant_id.is_(None))
+        .where(Position.restaurant_id.is_(None))
     )
     return [row[0] for row in result.all()]
 
 
 async def count_foundation_results(session: AsyncSession) -> int:
-    """Сколько результатов общих тестов (HoReCa Foundation) сейчас есть у
-    ВСЕХ пользователей — используется для превью перед необратимым сбросом."""
-    category_ids = await get_foundation_category_ids(session)
+    """Сколько результатов общих тестов (Foundation + специализации) сейчас
+    есть у ВСЕХ пользователей — используется для превью перед необратимым
+    сбросом общего рейтинга."""
+    category_ids = await get_global_rating_category_ids(session)
     if not category_ids:
         return 0
     result = await session.execute(
@@ -1053,11 +1059,13 @@ async def count_foundation_results(session: AsyncSession) -> int:
 
 
 async def reset_all_foundation_ratings(session: AsyncSession) -> int:
-    """Полностью обнуляет результаты ОБЩИХ тестов (HoReCa Foundation) у
-    ВСЕХ пользователей сразу — общий рейтинг начинает считаться заново с
-    нуля. Тесты внутри конкретных заведений не затрагиваются. Возвращает
-    количество удалённых результатов тестов."""
-    category_ids = await get_foundation_category_ids(session)
+    """Полностью обнуляет результаты ОБЩИХ тестов (HoReCa Foundation и
+    специализаций BAR/COOKING/PASTRY — всё, что реально учитывается в
+    общем рейтинге через get_user_stats) у ВСЕХ пользователей сразу —
+    общий рейтинг начинает считаться заново с нуля. Тесты внутри
+    конкретных заведений (Position.restaurant_id задан) не затрагиваются.
+    Возвращает количество удалённых результатов тестов."""
+    category_ids = await get_global_rating_category_ids(session)
     if not category_ids:
         return 0
 
