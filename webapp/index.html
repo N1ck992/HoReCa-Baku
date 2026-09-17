@@ -1132,6 +1132,9 @@ const SPECIALIZATION_NAMES = {
   pastry_cakes_desserts: 'CAKES & DESSERTS',
   pastry_chocolate_confectionery: 'CHOCOLATE & CONFECTIONERY',
   pastry_bakery_dough: 'BAKERY & DOUGH',
+  cooking_cold_kitchen: 'Холодный цех',
+  cooking_hot_kitchen: 'Горячий цех',
+  cooking_prep_sauces: 'Заготовки и соусы',
 };
 const SPECIALIZATION_READY = {
   bar: true, cooking: true, pastry: true,
@@ -1139,6 +1142,9 @@ const SPECIALIZATION_READY = {
   pastry_cakes_desserts: false,
   pastry_chocolate_confectionery: false,
   pastry_bakery_dough: false,
+  cooking_cold_kitchen: false,
+  cooking_hot_kitchen: false,
+  cooking_prep_sauces: false,
 };
 // Какие дальнейшие ветки открываются после прохождения ВСЕХ уровней
 // специализации (ключ — родительская специализация). Пусто для тех, у
@@ -1148,6 +1154,11 @@ const SPECIALIZATION_NEXT_BRANCHES = {
     { key: 'pastry_cakes_desserts', emoji: '🍰' },
     { key: 'pastry_chocolate_confectionery', emoji: '🍫' },
     { key: 'pastry_bakery_dough', emoji: '🥐' },
+  ],
+  cooking: [
+    { key: 'cooking_cold_kitchen', emoji: '🥗' },
+    { key: 'cooking_hot_kitchen', emoji: '🔥' },
+    { key: 'cooking_prep_sauces', emoji: '🥘' },
   ],
 };
 
