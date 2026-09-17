@@ -1737,12 +1737,37 @@ async function showResult(){
   // следующий уровень открывается только на 5/5, без экспертной системы
   // уровней 4-10, которая тут ни при чём.
   if (specializationReturnTo) {
+    const key = specializationReturnTo;
     const mainBtn = document.getElementById('mainMenuBtn');
+    const nextBtn = document.getElementById('nextLevelBtn');
     mainBtn.style.display = '';
     mainBtn.textContent = '⬆️ Вернуться на лестницу';
-    document.getElementById('nextLevelBtn').style.display = 'none';
+    nextBtn.style.display = 'none';
     document.getElementById('retryLevelBtn').style.display = quizCorrect === total ? 'none' : '';
     document.getElementById('nextLevelLockedMsg').style.display = 'none';
+
+    if (quizCorrect === total) {
+      // 5/5 — проверяем на сервере, открылся ли следующий уровень, и если
+      // да, даём перейти к нему сразу одной кнопкой, без возврата на лестницу.
+      try {
+        const data = await apiGet('/api/specialization_status', { position_code: `${key}_specialization` });
+        const idx = data.levels.findIndex(l => l.category_id === currentCategoryId);
+        const next = idx >= 0 ? data.levels[idx + 1] : null;
+        if (next && next.unlocked) {
+          nextBtn.style.display = '';
+          nextBtn.textContent = '⬆️ Следующий уровень';
+          nextBtn.onclick = () => {
+            currentCategoryId = next.category_id;
+            currentTestLevel = 1;
+            fetchTestBatch();
+          };
+        }
+      } catch (e) {
+        // Не получилось проверить — просто не показываем кнопку "Далее",
+        // человек всё равно сможет продолжить вручную с лестницы.
+      }
+    }
+
     goTo('result','left');
     return;
   }
