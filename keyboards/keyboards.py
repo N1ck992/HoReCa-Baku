@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -51,7 +53,24 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     builder.button(text="🏠 Моё заведение", callback_data="menu:my_restaurant")
     builder.button(text="👤 Мой профиль", callback_data="menu:profile")
     builder.button(text="💼 Вакансии", callback_data="menu:vacancies")
+    builder.button(text="👥 Пригласить друга", callback_data="menu:invite_friend")
     builder.button(text="❓ Помощь", callback_data="menu:help")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def invite_friend_kb(bot_username: str) -> InlineKeyboardMarkup:
+    """Кнопка "Поделиться" открывает нативный выбор чата в Telegram с уже
+    готовым текстом и ссылкой на бота — не нужно ничего копировать вручную."""
+    invite_link = f"https://t.me/{bot_username}"
+    share_text = "Присоединяйся — здесь можно проходить тесты HoReCa и расти в профессии!"
+    share_url = (
+        "https://t.me/share/url?"
+        f"url={quote(invite_link, safe='')}&text={quote(share_text, safe='')}"
+    )
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📤 Поделиться приглашением", url=share_url)
+    builder.button(text="⬅️ Главное меню", callback_data="menu:main")
     builder.adjust(1)
     return builder.as_markup()
 

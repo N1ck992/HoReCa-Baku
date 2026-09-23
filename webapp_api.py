@@ -17,7 +17,7 @@ from datetime import datetime
 from aiogram import Bot
 from aiohttp import web
 
-from config import BOT_TOKEN, EXPERT_DIFFICULTY, MAX_QUESTION_LEVEL
+from config import ADMIN_ID, BOT_TOKEN, EXPERT_DIFFICULTY, MAX_QUESTION_LEVEL
 from data.seed import _current_category_codes_for_position
 from database import crud
 from database.database import async_session
@@ -603,8 +603,40 @@ async def finish_test(request: web.Request) -> web.Response:
     if not all(isinstance(v, int) for v in (test_result_id, correct_count, total_count)):
         return _json({"error": "Некорректные данные."}, status=400)
 
+    notify_admin_text = None
     async with async_session() as session:
         final = await crud.finalize_test_result(session, test_result_id, correct_count, total_count)
+
+        if final.percentage == 100 and ADMIN_ID:
+            category = await crud.get_category_by_id(session, final.category_id)
+            position = await crud.get_position_by_id(session, category.position_id) if category else None
+            # "Специализация завершена" имеет смысл только для лестниц
+            # BAR/COOKING/PASTRY (и их будущих веток) — это единственное
+            # место, где "конец теста" значит "пора добавлять контент".
+            if position is not None and position.code.endswith("_specialization"):
+                categories = await crud.get_categories_for_position(session, position.id)
+                is_last_level = bool(categories) and categories[-1].id == category.id
+                if is_last_level:
+                    perfect_count = await crud.count_perfect_results_for_category(
+                        session, final.user_id, category.id
+                    )
+                    if perfect_count == 1:  # именно ЭТА попытка — первая идеальная
+                        user = await crud.get_user_by_id(session, final.user_id)
+                        user_display = (user.full_name or user.username or "Сотрудник") if user else "Сотрудник"
+                        notify_admin_text = (
+                            f"🎉 {user_display} прошёл(-ла) ВСЕ уровни специализации "
+                            f"{position.emoji} {position.name}!\n"
+                            "Похоже, пора добавить новый контент."
+                        )
+
+    if notify_admin_text:
+        bot = Bot(token=BOT_TOKEN)
+        try:
+            await bot.send_message(chat_id=ADMIN_ID, text=notify_admin_text)
+        except Exception:
+            logger.warning("Не удалось уведомить администратора о завершении специализации")
+        finally:
+            await bot.session.close()
 
     return _json(
         {
