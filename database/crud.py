@@ -365,6 +365,23 @@ async def finalize_test_result(
     return test_result
 
 
+async def count_perfect_results_for_category(
+    session: AsyncSession, user_id: int, category_id: int
+) -> int:
+    """Сколько раз пользователь получил 100% по этой категории — используется,
+    чтобы отличить ПЕРВОЕ идеальное прохождение уровня от повторных попыток
+    (например, чтобы не уведомлять администратора о завершении специализации
+    повторно при каждой пересдаче уже пройденного последнего уровня)."""
+    result = await session.execute(
+        select(func.count()).select_from(TestResult).where(
+            TestResult.user_id == user_id,
+            TestResult.category_id == category_id,
+            TestResult.percentage == 100,
+        )
+    )
+    return result.scalar_one()
+
+
 # ---------- Статистика / рейтинг ----------
 
 async def get_test_result_by_id(session: AsyncSession, test_result_id: int) -> TestResult | None:

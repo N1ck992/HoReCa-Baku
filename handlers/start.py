@@ -14,6 +14,7 @@ from keyboards.keyboards import (
     MAIN_MENU_BUTTON_TEXT,
     exam_entry_kb,
     group_menu_kb,
+    invite_friend_kb,
     join_menu_kb,
     main_menu_kb,
     persistent_menu_kb,
@@ -78,6 +79,7 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
 
     # Обычная логика в личных сообщениях
     async with async_session() as session:
+        is_new_user = await crud.get_user_by_telegram_id(session, message.from_user.id) is None
         await crud.get_or_create_user(
             session,
             telegram_id=message.from_user.id,
@@ -87,6 +89,19 @@ async def run_start_logic(message: Message, state: FSMContext) -> None:
         # Все заведения, к которым человек имеет отношение — и как
         # сотрудник, и как менеджер, разом (см. подробности в crud.py).
         options_list = await crud.get_user_restaurant_options(session, message.from_user.id)
+
+    if is_new_user and config.ADMIN_ID:
+        try:
+            await message.bot.send_message(
+                chat_id=config.ADMIN_ID,
+                text=(
+                    f"🆕 Новый пользователь подключился к боту: "
+                    f"{message.from_user.full_name or message.from_user.username or 'без имени'}"
+                    + (f" (@{message.from_user.username})" if message.from_user.username else "")
+                ),
+            )
+        except Exception:
+            pass  # уведомление не должно ломать обычный запуск бота для человека
 
     await message.answer(WELCOME_TEXT, reply_markup=persistent_menu_kb())
 
@@ -409,6 +424,17 @@ async def cb_my_restaurant(callback: CallbackQuery, state: FSMContext) -> None:
     username = await get_bot_username(callback.bot)
     await callback.message.edit_text(
         f"Меню «{restaurant.name}»:", reply_markup=join_menu_kb(username, restaurant.id, is_manager)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:invite_friend")
+async def cb_invite_friend(callback: CallbackQuery) -> None:
+    username = await get_bot_username(callback.bot)
+    await callback.message.edit_text(
+        "👥 Пригласите друга или коллегу — нажмите «Поделиться» и выберите, "
+        "кому отправить приглашение в Telegram.",
+        reply_markup=invite_friend_kb(username),
     )
     await callback.answer()
 
