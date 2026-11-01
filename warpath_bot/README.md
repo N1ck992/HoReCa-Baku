@@ -122,3 +122,10 @@ SQL изолирован в `repositories/`, `services/import_service.py` и `da
 миграции (`INTEGER PRIMARY KEY` → `BIGINT GENERATED ... AS IDENTITY`). Бизнес-логика
 и обработчики не меняются. `ON CONFLICT` уже используется в совместимой с PostgreSQL форме;
 места с `cursor.lastrowid` нужно будет заменить на `RETURNING id`.
+
+## Как выглядит бот
+
+Экраны, полученные запуском настоящего кода бота на тестовых данных:
+[поиск](docs/preview/1.png), [карточка билда](docs/preview/2.png),
+[избранное и профиль](docs/preview/3.png), [группа и админ](docs/preview/4.png),
+все вместе — [docs/preview/warpath_preview.html](docs/preview/warpath_preview.html).
