@@ -1,0 +1,2 @@
+game,code,title,game_version,unit_class,purpose,description,commanders,units,other_components,upgrade_priority,tactics,strengths,weaknesses,verification_status,status_reason,last_verified_at,is_test,source_codes,source_claim
+warpath,<код-билда>,<Название>,<версия>,<код-типа-войск>,<код-задачи>,<описание>,<код-командира-1>;<код-командира-2>,,<элемент>,<шаг 1>|<шаг 2>,<тактика>,<плюс 1>|<плюс 2>,<минус 1>,needs_review,<обоснование>,,false,<код-источника>,<что подтверждает источник>

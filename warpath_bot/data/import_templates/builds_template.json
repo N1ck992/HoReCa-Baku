@@ -1,0 +1,40 @@
+{
+  "comment": "ШАБЛОН. Замените значения <...> реальными данными с источниками. Описание полей: docs/IMPORT_FORMAT.md",
+  "game": "warpath",
+  "game_versions": [
+    {"version": "<версия игры, напр. из списка обновлений>", "released_at": "2026-01-01", "notes": "<необязательно>"}
+  ],
+  "entities": [
+    {"type": "unit_class", "code": "<код-типа-войск>", "name": "<Название типа войск>"},
+    {"type": "purpose", "code": "<код-задачи>", "name": "<Название задачи>"},
+    {"type": "commander", "code": "<код-командира>", "name": "<Имя командира>", "attributes": {}}
+  ],
+  "sources": [
+    {"code": "<код-источника>", "title": "<Название источника>", "url": "https://<адрес>", "publisher": "<автор/издатель>", "retrieved_at": "2026-01-01", "description": "<что именно взято из источника>"}
+  ],
+  "builds": [
+    {
+      "code": "<код-билда>",
+      "title": "<Название билда>",
+      "game_version": "<версия игры из game_versions>",
+      "unit_class": "<код-типа-войск>",
+      "purpose": "<код-задачи>",
+      "description": "<краткое описание своими словами>",
+      "components": [
+        {"role": "commander", "entity": "<код-командира>", "notes": "<необязательно>"},
+        {"role": "other", "label": "<элемент, которого нет в справочнике>"}
+      ],
+      "upgrade_priority": ["<шаг 1>", "<шаг 2>"],
+      "tactics": "<рекомендуемая тактика>",
+      "strengths": ["<сильная сторона>"],
+      "weaknesses": ["<ограничение>"],
+      "verification_status": "needs_review",
+      "status_reason": "<почему такой статус>",
+      "last_verified_at": null,
+      "is_test": false,
+      "sources": [
+        {"source": "<код-источника>", "claim": "<какое утверждение подтверждает источник>", "confirms": true, "checked_at": "2026-01-01"}
+      ]
+    }
+  ]
+}
