@@ -1,0 +1,21 @@
+# systemd-сервис для VPS. Скопируйте в /etc/systemd/system/ и выполните:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now warpath-bot
+[Unit]
+Description=Warpath Assistant Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=warpath
+WorkingDirectory=/opt/warpath/HoReCa-Baku/warpath_bot
+EnvironmentFile=/opt/warpath/warpath.env
+ExecStart=/opt/warpath/venv/bin/python bot.py
+Restart=on-failure
+RestartSec=10
+# SIGTERM -> корректная остановка polling
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

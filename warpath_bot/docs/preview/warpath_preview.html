@@ -1,0 +1,223 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warpath Assistant — как выглядит бот</title>
+<style>
+body{margin:0;background:#0b1118;color:#e9eef3;font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+h1{font-size:20px;margin:4px 0 6px} .lead{color:#9fb0c0;margin:0 0 18px;max-width:900px}
+h2{font-size:17px;color:#8cc4ff;margin:26px 0 10px}
+.grid{display:flex;flex-wrap:wrap;gap:18px}
+.screen{width:340px} .cap{color:#9fb0c0;font-size:13px;margin:0 0 6px}
+.phone{background:#0e1621;border:1px solid #22303f;border-radius:18px;overflow:hidden}
+.top{background:#17212b;padding:10px 14px;font-weight:600;display:flex;justify-content:space-between}
+.top span{color:#6c7f91;font-weight:400;font-size:13px}
+.chat{padding:12px;position:relative;min-height:120px}
+.me{background:#2b5278;margin-left:auto;width:fit-content;max-width:80%;padding:6px 10px;border-radius:12px 12px 3px 12px;margin-bottom:10px;font-size:14px}
+.bot{background:#182533;padding:9px 11px;border-radius:12px 12px 12px 3px;font-size:14px;word-wrap:break-word}
+.bot code{background:#0e1621;padding:0 3px;border-radius:3px} .bot a{color:#6ab3f3}
+.kb{margin-top:4px} .row{display:flex;gap:4px;margin-top:4px}
+.btn{flex:1;background:rgba(43,82,120,.55);text-align:center;padding:8px 4px;border-radius:8px;font-size:13px}
+.toast{background:rgba(0,0,0,.82);border:1px solid #3a4a5a;border-radius:10px;padding:7px 10px;margin-bottom:10px;text-align:center;font-size:13px}
+.toast.alert{border-color:#c98a2b}
+</style></head><body>
+<h1>Warpath Assistant — предпросмотр</h1>
+<p class="lead">Экраны получены запуском настоящего кода бота на тестовых данных (🧪): тексты и кнопки — ровно те, что бот отправляет в Telegram. Оформление Telegram нарисовано приблизительно. После добавления реальных данных вместо «Тестовый класс A» будут настоящие типы войск, задачи и командиры.</p>
+<section id="g0"><h2>Поиск билда</h2><div class="grid"><div class="screen">
+  <div class="cap">1. Главное меню</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">/start</div>
+      <div class="bot">👋 <b>Warpath Assistant</b><br><br>Помогаю подобрать билд по типу войск и задаче.<br>Каждый билд помечен статусом проверки и источником.</div>
+      <div class="kb"><div class="row"><div class="btn">🎮 Выбрать игру</div><div class="btn">🔍 Найти билд</div></div><div class="row"><div class="btn">📚 База знаний</div><div class="btn">⭐ Избранное</div></div><div class="row"><div class="btn">👤 Мой профиль</div><div class="btn">❓ Помощь</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">2. Шаг 1: тип войск</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">🔍 Найти билд</div>
+      <div class="bot">🔍 <b>Warpath</b><br>Шаг 1/3. Выберите тип войск или техники:</div>
+      <div class="kb"><div class="row"><div class="btn">🧪 Тестовый класс войск A</div></div><div class="row"><div class="btn">🧪 Тестовый класс войск B</div></div><div class="row"><div class="btn">⬅️ Назад</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">3. Шаг 2: задача</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">Тестовый класс войск A</div>
+      <div class="bot">🔍 <b>Warpath</b> · Тестовый класс войск A<br>Шаг 2/3. Выберите задачу:</div>
+      <div class="kb"><div class="row"><div class="btn">🧪 Тестовая задача 1</div></div><div class="row"><div class="btn">🧪 Тестовая задача 2</div></div><div class="row"><div class="btn">⬅️ Назад</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">4. Шаг 3: командир</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">Тестовая задача 1</div>
+      <div class="bot">🔍 Тестовый класс войск A · Тестовая задача 1<br>Шаг 3/3. Есть ли у вас нужный командир?</div>
+      <div class="kb"><div class="row"><div class="btn">🧪 Тестовый командир X</div></div><div class="row"><div class="btn">🧪 Тестовый командир Y</div></div><div class="row"><div class="btn">Любые командиры</div></div><div class="row"><div class="btn">⬅️ Назад</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">5. Результаты поиска</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">Любые командиры</div>
+      <div class="bot">📋 <b>Найдено билдов: 2</b><br>Тестовый класс войск A · Тестовая задача 1</div>
+      <div class="kb"><div class="row"><div class="btn">🧪 Тестовый билд A1</div></div><div class="row"><div class="btn">🧪 Тестовый билд A2</div></div><div class="row"><div class="btn">🔁 Изменить критерии</div></div><div class="row"><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div></div></section><section id="g1"><h2>Карточка билда</h2><div class="grid"><div class="screen">
+  <div class="cap">6. Карточка: состав</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">🧪 Тестовый билд A1</div>
+      <div class="bot"><b>Тестовый билд A1</b><br>🧪 ТЕСТОВЫЕ ДАННЫЕ — не игровая рекомендация<br><br>🎮 Warpath · версия не указана<br>🪖 Тестовый класс войск A · 🎯 Тестовая задача 1<br><b>Описание:</b> Тестовая запись для проверки интерфейса. Не является игровой рекомендацией.<br><b>Состав:</b><br>• Командир: Тестовый командир X — тестовое примечание<br>• Прочее: Тестовый элемент состава</div>
+      <div class="kb"><div class="row"><div class="btn">• 📋 Состав</div><div class="btn">🎯 Тактика</div></div><div class="row"><div class="btn">⚖️ Плюсы/минусы</div><div class="btn">🔎 Источники</div></div><div class="row"><div class="btn">☆ В избранное</div></div><div class="row"><div class="btn">⬅️ К результатам</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">7. Карточка: тактика</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">🎯 Тактика</div>
+      <div class="bot"><b>Тестовый билд A1</b><br>🧪 ТЕСТОВЫЕ ДАННЫЕ — не игровая рекомендация<br><br><b>Тактика:</b><br>Тестовый текст раздела «Тактика».<br><b>Приоритет прокачки:</b><br>1. Тестовый шаг 1<br>2. Тестовый шаг 2</div>
+      <div class="kb"><div class="row"><div class="btn">📋 Состав</div><div class="btn">• 🎯 Тактика</div></div><div class="row"><div class="btn">⚖️ Плюсы/минусы</div><div class="btn">🔎 Источники</div></div><div class="row"><div class="btn">☆ В избранное</div></div><div class="row"><div class="btn">⬅️ К результатам</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">8. Карточка: плюсы и минусы</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">⚖️ Плюсы/минусы</div>
+      <div class="bot"><b>Тестовый билд A1</b><br>🧪 ТЕСТОВЫЕ ДАННЫЕ — не игровая рекомендация<br><br><b>Сильные стороны:</b><br>• Тестовая сильная сторона<br><b>Слабые стороны и ограничения:</b><br>• Тестовое ограничение</div>
+      <div class="kb"><div class="row"><div class="btn">📋 Состав</div><div class="btn">🎯 Тактика</div></div><div class="row"><div class="btn">• ⚖️ Плюсы/минусы</div><div class="btn">🔎 Источники</div></div><div class="row"><div class="btn">☆ В избранное</div></div><div class="row"><div class="btn">⬅️ К результатам</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">9. Карточка: источники</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">🔎 Источники</div>
+      <div class="bot"><b>Тестовый билд A1</b><br>🧪 ТЕСТОВЫЕ ДАННЫЕ — не игровая рекомендация<br><br><b>Источники:</b><br>• Тестовый источник (не существует) (2026-11-01) (не подтверждает)<br>  └ Тестовое утверждение<br><b>Обоснование статуса:</b> Тестовая запись: проверка не проводилась.<br><b>Последняя проверка:</b> не проводилась</div>
+      <div class="kb"><div class="row"><div class="btn">📋 Состав</div><div class="btn">🎯 Тактика</div></div><div class="row"><div class="btn">⚖️ Плюсы/минусы</div><div class="btn">• 🔎 Источники</div></div><div class="row"><div class="btn">☆ В избранное</div></div><div class="row"><div class="btn">⬅️ К результатам</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">10. Добавлено в избранное</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      <div class="toast">⭐ Добавлено в избранное</div>
+      <div class="me">☆ В избранное</div>
+      <div class="bot"><b>Тестовый билд A1</b><br>🧪 ТЕСТОВЫЕ ДАННЫЕ — не игровая рекомендация<br><br><b>Источники:</b><br>• Тестовый источник (не существует) (2026-11-01) (не подтверждает)<br>  └ Тестовое утверждение<br><b>Обоснование статуса:</b> Тестовая запись: проверка не проводилась.<br><b>Последняя проверка:</b> не проводилась</div>
+      <div class="kb"><div class="row"><div class="btn">📋 Состав</div><div class="btn">🎯 Тактика</div></div><div class="row"><div class="btn">⚖️ Плюсы/минусы</div><div class="btn">• 🔎 Источники</div></div><div class="row"><div class="btn">★ Убрать из избранного</div></div><div class="row"><div class="btn">⬅️ К результатам</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div></div></section><section id="g2"><h2>Избранное, профиль, база знаний</h2><div class="grid"><div class="screen">
+  <div class="cap">11. Избранное</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">⭐ Избранное</div>
+      <div class="bot">⭐ <b>Избранное</b> (1)</div>
+      <div class="kb"><div class="row"><div class="btn">🧪 Тестовый билд A1</div></div><div class="row"><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">12. Профиль</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">👤 Мой профиль</div>
+      <div class="bot">👤 <b>Профиль</b><br><br>ID: <code>555</code><br>Имя: U555 (@u555)<br>Тариф: Бесплатный<br>Поисков сегодня осталось: 49<br>В избранном: 1<br>Язык: Русский</div>
+      <div class="kb"><div class="row"><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">13. База знаний</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">📚 База знаний</div>
+      <div class="bot">📚 <b>База знаний: Warpath</b><br><br>Билдов в поиске: 4<br>• проверено: 0<br>• требует проверки: 3<br>• возможно устарело: 1<br><br>Мы не публикуем непроверенные данные как факт.</div>
+      <div class="kb"><div class="row"><div class="btn">ℹ️ Что значат статусы</div></div><div class="row"><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">14. Нет подходящих билдов</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">поиск без результатов</div>
+      <div class="bot">😕 Подходящих билдов нет.<br>Попробуйте изменить критерии поиска.</div>
+      <div class="kb"><div class="row"><div class="btn">🔁 Изменить критерии</div></div><div class="row"><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div></div></section><section id="g3"><h2>Пустой поиск, группы, админ</h2><div class="grid"><div class="screen">
+  <div class="cap">15. В группе: /build</div>
+  <div class="phone">
+    <div class="top">👥 Альянс (группа)<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">/build</div>
+      <div class="bot">🔍 <b>Warpath</b><br>Шаг 1/3. Выберите тип войск или техники:</div>
+      <div class="kb"><div class="row"><div class="btn">🧪 Тестовый класс войск A</div></div><div class="row"><div class="btn">🧪 Тестовый класс войск B</div></div><div class="row"><div class="btn">⬅️ Назад</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">16. В группе: профиль</div>
+  <div class="phone">
+    <div class="top">👥 Альянс (группа)<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">/profile</div>
+      <div class="bot">👤 Профиль доступен в личном чате с ботом.</div>
+      <div class="kb"><div class="row"><div class="btn">Открыть в личном чате ↗</div></div><div class="row"><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">17. Админ-меню</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">/admin</div>
+      <div class="bot">🛠 <b>Администрирование</b></div>
+      <div class="kb"><div class="row"><div class="btn">📊 Состояние БД</div><div class="btn">📥 Импорт</div></div><div class="row"><div class="btn">🧾 Ошибки импорта</div><div class="btn">📜 Журнал</div></div><div class="row"><div class="btn">⌨️ Команды</div><div class="btn">🏠 В меню</div></div></div>
+    </div>
+  </div>
+</div><div class="screen">
+  <div class="cap">18. Обычный пользователь и /admin</div>
+  <div class="phone">
+    <div class="top">Warpath Assistant<span>бот</span></div>
+    <div class="chat">
+      
+      <div class="me">/admin</div>
+      <div class="bot">⛔ Команда доступна только администраторам.</div>
+      <div class="kb"></div>
+    </div>
+  </div>
+</div></div></section>
+</body></html>

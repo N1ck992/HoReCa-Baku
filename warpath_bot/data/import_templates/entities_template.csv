@@ -1,0 +1,4 @@
+game,type,code,name,is_test
+warpath,unit_class,<код-типа-войск>,<Название>,false
+warpath,purpose,<код-задачи>,<Название>,false
+warpath,commander,<код-командира>,<Имя>,false

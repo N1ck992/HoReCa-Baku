@@ -1,0 +1,73 @@
+{
+  "comment": "ТЕСТОВЫЕ ДАННЫЕ для проверки интерфейса бота. Не содержат игровых утверждений и не являются рекомендациями. Все записи is_test=true и видны пользователям только при SHOW_TEST_DATA=true.",
+  "game": "warpath",
+  "entities": [
+    {"type": "unit_class", "code": "test-class-a", "name": "Тестовый класс войск A", "is_test": true},
+    {"type": "unit_class", "code": "test-class-b", "name": "Тестовый класс войск B", "is_test": true},
+    {"type": "purpose", "code": "test-purpose-1", "name": "Тестовая задача 1", "is_test": true},
+    {"type": "purpose", "code": "test-purpose-2", "name": "Тестовая задача 2", "is_test": true},
+    {"type": "commander", "code": "test-commander-x", "name": "Тестовый командир X", "is_test": true},
+    {"type": "commander", "code": "test-commander-y", "name": "Тестовый командир Y", "is_test": true}
+  ],
+  "sources": [
+    {"code": "test-source", "title": "Тестовый источник (не существует)", "description": "Служебная запись для проверки отображения источников.", "retrieved_at": "2026-11-01"}
+  ],
+  "builds": [
+    {
+      "code": "test-build-a1",
+      "title": "Тестовый билд A1",
+      "unit_class": "test-class-a",
+      "purpose": "test-purpose-1",
+      "description": "Тестовая запись для проверки интерфейса. Не является игровой рекомендацией.",
+      "components": [
+        {"role": "commander", "entity": "test-commander-x", "notes": "тестовое примечание"},
+        {"role": "other", "label": "Тестовый элемент состава"}
+      ],
+      "upgrade_priority": ["Тестовый шаг 1", "Тестовый шаг 2"],
+      "tactics": "Тестовый текст раздела «Тактика».",
+      "strengths": ["Тестовая сильная сторона"],
+      "weaknesses": ["Тестовое ограничение"],
+      "verification_status": "needs_review",
+      "status_reason": "Тестовая запись: проверка не проводилась.",
+      "is_test": true,
+      "sources": [{"source": "test-source", "claim": "Тестовое утверждение", "confirms": false}]
+    },
+    {
+      "code": "test-build-a2",
+      "title": "Тестовый билд A2",
+      "unit_class": "test-class-a",
+      "purpose": "test-purpose-1",
+      "components": [{"role": "commander", "entity": "test-commander-y"}],
+      "verification_status": "possibly_outdated",
+      "status_reason": "Тестовая запись со статусом «возможно устарело».",
+      "is_test": true
+    },
+    {
+      "code": "test-build-a3",
+      "title": "Тестовый билд A3 (без командиров)",
+      "unit_class": "test-class-a",
+      "purpose": "test-purpose-2",
+      "description": "Тестовая запись без командиров: шаг выбора командира пропускается.",
+      "verification_status": "needs_review",
+      "is_test": true
+    },
+    {
+      "code": "test-build-b1",
+      "title": "Тестовый билд B1",
+      "unit_class": "test-class-b",
+      "purpose": "test-purpose-2",
+      "components": [{"role": "commander", "entity": "test-commander-x"}],
+      "verification_status": "needs_review",
+      "is_test": true
+    },
+    {
+      "code": "test-build-b-outdated",
+      "title": "Тестовый билд B (устарел, скрыт)",
+      "unit_class": "test-class-b",
+      "purpose": "test-purpose-1",
+      "verification_status": "outdated",
+      "status_reason": "Тестовая запись: устаревшие билды не показываются в поиске.",
+      "is_test": true
+    }
+  ]
+}
