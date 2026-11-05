@@ -56,4 +56,29 @@ AB.QUESTS.push({
   next: [],
 });
 
+// QUEST-003: путь к шлюзу — финал первого акта (дополнение №20)
+AB.QUESTS.push({
+  id: 'QUEST-003',
+  name: 'Путь к шлюзу',
+  desc: 'Добраться до шлюза с экзокостюмами: найти оружие, пройти лабораторию и победить Колосса.',
+  start: { event: 'EVENT-007' },
+  requires: ['QUEST-002'],
+  items: ['ITEM-011'],
+  skills: [],
+  rooms: ['ROOM-007', 'ROOM-006', 'ROOM-009', 'ROOM-010'],
+  stages: [
+    { id: 'gun', objectives: [
+      { id: 'gun', text: 'Найти оружие в оружейной', done: { weapon: 'ITEM-011' }, target: { room: 'ROOM-006', x: 640 } },
+    ] },
+    { id: 'boss', objectives: [
+      { id: 'boss', text: 'Победить Колосса', done: { enemyDead: 'ENEMY-003' }, target: { room: 'ROOM-009', x: 1250 } },
+    ] },
+    { id: 'suit', objectives: [
+      { id: 'suit', text: 'Осмотреть экзокостюм в шлюзе', done: { equip: 'EQUIP-005', state: 'inspected' }, target: { equip: 'EQUIP-005' } },
+    ] },
+  ],
+  reward: {},
+  next: [],
+});
+
 AB.QUESTS.forEach((q) => AB.ID.register(q.id, q));

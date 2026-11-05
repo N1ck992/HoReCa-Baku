@@ -245,3 +245,21 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
   #title.play { animation-duration: 3s; }
   #hud-room.flash b { animation: none; }
 }
+
+/* ---------- Патроны, босс, конец акта ---------- */
+#hud-ammo { margin-top: 4px; font: 11px var(--mono); color: #9fe7ff; letter-spacing: 1px; }
+#hud-ammo.low { color: var(--red); }
+#bossbar { position: fixed; z-index: 6; left: 50%; transform: translateX(-50%); top: calc(118px + env(safe-area-inset-top, 0px)); width: min(520px, calc(100vw - 32px)); text-align: center; pointer-events: none; }
+#bossbar[hidden] { display: none; }
+#bossbar b { display: block; font: 700 13px var(--display); letter-spacing: 5px; text-transform: uppercase; color: #ffb38a; text-shadow: 0 0 6px #000; margin-bottom: 4px; }
+#bossbar span { display: block; height: 8px; background: rgba(0,0,0,.6); border: 1px solid rgba(255, 120, 60, .5); border-radius: 4px; overflow: hidden; }
+#bossbar i { display: block; height: 100%; background: linear-gradient(90deg, #8a2a0e, #ff7a3a); transition: width .3s; }
+#act-end { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: radial-gradient(ellipse at center, rgba(4,16,24,.88), #000 75%); }
+#act-end[hidden] { display: none; }
+.act-card { max-width: 460px; width: 100%; display: grid; gap: 12px; text-align: center; animation: rise-in 1.6s ease-out; }
+.act-card .act-no { font: 12px var(--mono); letter-spacing: 6px; text-transform: uppercase; color: var(--muted); }
+.act-card h2 { margin: 0; font: 700 34px var(--display); letter-spacing: 6px; text-transform: uppercase; color: #bfefff; }
+.act-card p { margin: 0; color: var(--fg); line-height: 1.5; }
+.act-card .act-next { color: #9fe7ff; font: 12px var(--mono); letter-spacing: 1px; }
+.act-card button { font: 14px var(--mono); padding: 10px; border-radius: 6px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid var(--line); }
+.act-card button.danger { color: var(--red); border-color: rgba(255, 59, 47, .4); }

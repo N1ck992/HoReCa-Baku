@@ -23,6 +23,9 @@
     mini: $('#minimap'),
     death: $('#death'),
     quest: $('#hud-quest'),
+    ammo: $('#hud-ammo'),
+    boss: $('#bossbar'),
+    actEnd: $('#act-end'),
   };
   let toastTimer = null;
 
@@ -39,6 +42,25 @@
     const max = AB.ID.get(HERO).stats.maxHp;
     ui.hp.innerHTML = `<i style="width:${(h.hp / max) * 100}%"></i><span>${Math.round(h.hp)} / ${max}</span>`;
     ui.hp.classList.toggle('low', h.hp / max < 0.35);
+  }
+
+  // ---------- Патроны дальнобойного оружия и полоса босса ----------
+  function updateCombatHud() {
+    const a = AB.Inventory.ammo(HERO);
+    ui.ammo.hidden = a == null;
+    if (a != null) {
+      const txt = `Гарпуны: ${a}`;
+      if (ui.ammo.textContent !== txt) ui.ammo.textContent = txt;
+      ui.ammo.classList.toggle('low', a === 0);
+    }
+    const boss = AB.Enemies.inRoom(AB.Rooms.current())
+      .find((s) => AB.ID.get(s.id).type === 'boss' && s.state !== 'DORMANT' && s.state !== 'DEAD');
+    ui.boss.hidden = !boss;
+    if (boss) {
+      const def = AB.ID.get(boss.id);
+      ui.boss.querySelector('b').textContent = def.name;
+      ui.boss.querySelector('i').style.width = `${Math.max(0, boss.hp / def.hp) * 100}%`;
+    }
   }
 
   // ---------- Инвентарь: два слота — оружие и рюкзак ----------
@@ -286,6 +308,20 @@
     if (charId !== HERO) { const h = AB.Chars.get(HERO); if (h) h.controllable = false; }
     setTimeout(() => { ui.death.hidden = false; }, 1600);
   });
+  AB.Bus.on('combat:noammo', () => toast('Гарпунов нет — бьёте прикладом. Ищите гарпуны', 'info'));
+  AB.Bus.on('npc:talk', ({ healed }) => { if (healed) toast('Доктор Хейл перевязал раны', 'good'); });
+  // ---------- Конец акта ----------
+  AB.Bus.on('act:end', ({ act }) => {
+    const h = AB.Chars.get(HERO); if (h) h.controllable = false;
+    AB.Save.save();
+    ui.actEnd.querySelector('.act-no').textContent = `Конец ${act === 1 ? 'первого' : act} акта`;
+    ui.actEnd.hidden = false;
+  });
+  $('#btn-act-continue').addEventListener('click', () => {
+    ui.actEnd.hidden = true;
+    const h = AB.Chars.get(HERO); if (h) h.controllable = true;
+  });
+  $('#btn-act-new').addEventListener('click', () => { AB.Save.clear(); location.reload(); });
   AB.Bus.on('enemy:retreat', ({ id }) => { if (AB.ID.get(id).type === 'pursuer') toast('Он отступил в темноту', 'info'); });
   AB.Bus.on('quest:done', ({ id }) => {
     if (id === 'QUEST-002') setTimeout(() => toast('Безопасная зона: переборки заблокированы изнутри', 'good'), 1400);
@@ -296,7 +332,7 @@
   });
   // рюкзак на одну вещь: подобрали новую — старая осталась на полу
   AB.Bus.on('inventory:swapped', ({ dropped, taken }) => {
-    setTimeout(() => toast(`${itemName(taken)} в ${AB.ID.get(taken).weapon ? 'руках' : 'рюкзаке'} · ${itemName(dropped)} оставлен на полу`, 'info'), 50);
+    setTimeout(() => toast(`${itemName(taken)} в ${AB.ID.get(taken).weapon ? 'руках' : 'рюкзаке'} · на полу: ${itemName(dropped)}`, 'info'), 50);
   });
   AB.Bus.on('transition:end', () => { const h = AB.Chars.get(HERO); if (h) h.controllable = true; });
   // после выхода из капсулы герой остаётся там, где закончилась анимация
@@ -316,6 +352,12 @@
       ui.hint.innerHTML = `Защитите её: бейте нападающего (${isTouch ? '⚔' : '<kbd>F</kbd>'}) или уведите её в командный центр`;
       ui.hint.classList.add('show');
       setTimeout(() => ui.hint.classList.remove('show'), 6000);
+      return;
+    }
+    if (kind === 'boss') {
+      ui.hint.innerHTML = `Колосс: броня держит удары трубы — стреляйте гарпунами (${isTouch ? '⚔' : '<kbd>F</kbd>'}) и держите дистанцию`;
+      ui.hint.classList.add('show');
+      setTimeout(() => ui.hint.classList.remove('show'), 7000);
       return;
     }
     if (kind !== 'move') return;
@@ -506,6 +548,7 @@
       drawMinimap();
       updateNav();
       updateQuest();
+      updateCombatHud();
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

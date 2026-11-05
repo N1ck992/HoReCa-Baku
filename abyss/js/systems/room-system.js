@@ -92,6 +92,7 @@ AB.Rooms = (() => {
     if (door.access.type === 'locked') return { ok: false, reason: door.access.reason || 'Заблокировано' };
     if (door.access.type === 'power' && !AB.World.hasPower()) return { ok: false, reason: door.access.reason || 'Нет питания' };
     if (door.access.type === 'event' && !AB.Story.isDone(door.access.event)) return { ok: false, reason: door.access.reason || 'Заблокировано' };
+    if (door.access.type === 'enemy' && !AB.Enemies.isDead(door.access.enemy)) return { ok: false, reason: door.access.reason || 'Проход перекрыт' };
     if (door.access.type === 'key') {
       const t = AB.ID.get(door.to);
       if (t && t.stub) return { ok: false, reason: `Ключ-карта подошла. ${t.name} появится на этапе 6`, unlocked: true };

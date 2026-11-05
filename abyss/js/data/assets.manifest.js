@@ -21,6 +21,16 @@ AB.ASSET_MANIFEST = [
   // ---- ENEMY-002: преследователь — графика ждёт утверждения ----
   { id: 'ASSET-ENEMY002-01', owner: 'ENEMY-002', type: 'sprite', src: null, desc: 'Преследователь: силуэт' },
 
+  // ---- Первый акт, развязка: графика — заглушки, ждут генерации ----
+  { id: 'ASSET-CHAR003-01', owner: 'CHAR-003', type: 'sprite', src: null, desc: 'Доктор Хейл' },
+  { id: 'ASSET-ENEMY003-01', owner: 'ENEMY-003', type: 'sprite', src: null, desc: 'Колосс' },
+  { id: 'ASSET-ITEM011-01', owner: 'ITEM-011', type: 'icon', src: null, desc: 'Гарпунное ружьё' },
+  { id: 'ASSET-ROOM006-01', owner: 'ROOM-006', type: 'background', src: null, desc: 'Фон: оружейная' },
+  { id: 'ASSET-ROOM007-01', owner: 'ROOM-007', type: 'background', src: null, desc: 'Фон: лаборатория' },
+  { id: 'ASSET-ROOM009-01', owner: 'ROOM-009', type: 'background', src: null, desc: 'Фон: система жизнеобеспечения' },
+  { id: 'ASSET-ROOM010-01', owner: 'ROOM-010', type: 'background', src: null, desc: 'Фон: шлюз' },
+  { id: 'ASSET-ROOM010-02', owner: 'EQUIP-005', type: 'prop', src: null, desc: 'Экзокостюм' },
+
   // ---- ROOM-001: медицинский отсек ----
   { id: 'ASSET-ROOM001-01', owner: 'ROOM-001', type: 'background', src: null, desc: 'Фон: стены и пол медотсека' },
   { id: 'ASSET-ROOM001-02', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Аварийная криокапсула' },

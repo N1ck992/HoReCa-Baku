@@ -23,7 +23,10 @@ AB.Combat = (() => {
     if (!canAttack(charId)) return false;
     const w = weaponOf(charId);
     if (!w) { AB.Bus.emit('combat:noweapon', { charId }); return false; }
-    swings.set(charId, { t: 0, weapon: w, hit: false });
+    // оружие дальнего боя без гарпунов — удар прикладом
+    const shot = w.weapon.ranged && AB.Inventory.spendAmmo(charId);
+    if (w.weapon.ranged && !shot) AB.Bus.emit('combat:noammo', { charId });
+    swings.set(charId, { t: 0, weapon: w, hit: false, shot });
     AB.Chars.playAction(charId, 'attack');
     return true;
   }
@@ -36,10 +39,21 @@ AB.Combat = (() => {
       if (!sw.hit && sw.t >= w.hitAt) {
         sw.hit = true;
         let landed = false;
-        for (const e of AB.Enemies.inRoom(c.room)) {
-          if (e.state === 'DEAD') continue;
-          const dx = (e.x - c.x) * c.facing;
-          if (dx > -10 && dx < w.range + 20) landed = AB.Enemies.damage(e.id, w.damage, c.x) || landed;
+        if (sw.shot) {
+          // гарпун: летит по прямой и попадает в первого противника на линии
+          const targets = AB.Enemies.inRoom(c.room)
+            .filter((e) => e.state !== 'DEAD' && e.state !== 'FADE' && (e.x - c.x) * c.facing > 0 && Math.abs(e.x - c.x) < w.range)
+            .sort((a, b) => Math.abs(a.x - c.x) - Math.abs(b.x - c.x));
+          const hit = targets[0];
+          if (hit) landed = AB.Enemies.damage(hit.id, w.damage, c.x, 'ranged');
+          AB.Bus.emit('combat:shot', { charId, fromX: c.x + c.facing * 40, toX: hit ? hit.x : c.x + c.facing * w.range, landed });
+        } else {
+          const dmg = w.ranged ? w.bash : w.damage, reach = w.ranged ? 60 : w.range;
+          for (const e of AB.Enemies.inRoom(c.room)) {
+            if (e.state === 'DEAD') continue;
+            const dx = (e.x - c.x) * c.facing;
+            if (dx > -10 && dx < reach + 20) landed = AB.Enemies.damage(e.id, dmg, c.x, 'melee') || landed;
+          }
         }
         AB.Bus.emit('combat:swing', { charId, landed });
       }

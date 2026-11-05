@@ -6,7 +6,8 @@
 AB.Story = (() => {
   const done = new Set();
   let running = null; // { def, t, next, wait, skip }
-  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false, ghost: 0, flicker: 0 };
+  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false, ghost: 0, flicker: 0,
+    window: 0, leviathan: -1, shake: 0, shakePower: 0 };
 
   const ACTIONS = {
     lock_input: () => AB.Input.lock(),
@@ -62,6 +63,13 @@ AB.Story = (() => {
     },
     // лампы сбоят
     flicker: (s) => { fx.flicker = s.duration; },
+    // заслонки обзорного иллюминатора мостика
+    window: (s) => { fx.window = s.open ? 0.001 : 0; },
+    // за стеклом проплывает что-то огромное
+    leviathan: () => { fx.leviathan = 0; },
+    shake: (s) => { fx.shake = s.duration; fx.shakePower = s.power; },
+    enemy_state: (s) => AB.Enemies.setState(s.enemy, s.state),
+    act_end: (s) => AB.Bus.emit('act:end', { act: s.act }),
     // противник по сценарию; x: 'behind' — позади Марка, откуда он пришёл
     spawn_enemy: (s) => {
       const hero = AB.Chars.get('CHAR-001');
@@ -97,6 +105,9 @@ AB.Story = (() => {
   function update(dt) {
     fx.ghost = Math.max(0, fx.ghost - dt);
     fx.flicker = Math.max(0, fx.flicker - dt);
+    fx.shake = Math.max(0, fx.shake - dt);
+    if (fx.window > 0 && fx.window < 1) fx.window = Math.min(1, fx.window + dt / 1.6);
+    if (fx.leviathan >= 0) { fx.leviathan += dt; if (fx.leviathan > 9) fx.leviathan = -1; }
     if (fx.fadeDur > 0 && fx.fadeT < fx.fadeDur) {
       fx.fadeT += dt;
       fx.fade = AB.util.lerp(fx.fadeFrom, fx.fadeTo, AB.util.ease(AB.util.clamp(fx.fadeT / fx.fadeDur, 0, 1)));
@@ -139,6 +150,8 @@ AB.Story = (() => {
   // Триггеры от других систем
   AB.Bus.on('world:power', ({ on }) => { if (on) trigger('power_on'); });
   AB.Bus.on('room:enter', ({ roomId }) => trigger(`enter:${roomId}`));
+  AB.Bus.on('event:end', (id) => trigger(`after:${id}`));
+  AB.Bus.on('equip:changed', ({ id }) => trigger(`equip:${id}`));
 
   // события «Марк дошёл до места»: trigger 'zone:ROOM-ID:X' — когда x героя больше X
   function zone(roomId, x) {

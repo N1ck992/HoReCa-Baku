@@ -73,4 +73,33 @@ AB.ENEMIES.push({
   spawn: null,                    // появляется только по сюжетным событиям
 });
 
+// Мутанты лаборатории — тот же вид, что ENEMY-001, свои экземпляры.
+const MUTANT = AB.ENEMIES.find((e) => e.id === 'ENEMY-001');
+AB.ENEMIES.push(
+  { ...MUTANT, id: 'ENEMY-004', carry: null, spawn: { room: 'ROOM-007', x: 900, patrol: [700, 1150], requires: [] } },
+  { ...MUTANT, id: 'ENEMY-005', carry: 'ITEM-008', spawn: { room: 'ROOM-007', x: 1500, patrol: [1350, 1750], requires: [] } },
+);
+
+// ENEMY-003 — Колосс: огромный мутант в системе жизнеобеспечения (босс первого акта).
+// Броня: удары трубой почти не берут (×0.25), гарпуны — в полную силу.
+AB.ENEMIES.push({
+  ...MUTANT,
+  id: 'ENEMY-003',
+  name: 'Колосс',
+  type: 'boss',
+  asset: 'ASSET-ENEMY003-01',
+  scale: 2.15,
+  tint: { flesh: '#6f5856', dark: '#2d2324', plate: '#2b3036' },
+  hp: 420,
+  damage: 28,
+  speed: { patrol: 40, investigate: 60, chase: 120, retreat: 0 },
+  attack: { range: 120, windup: 0.75, cooldown: 1.4 },
+  detection: { sight: 900, behind: 1 },
+  armor: { melee: 0.25, ranged: 1 },
+  wakeEvent: 'EVENT-009', // после сцены пробуждения при загрузке не засыпает снова
+  behavior: { start: 'DORMANT', retreatBelow: 0, retreatTime: 0, loseAfter: 99, investigateTime: 3 },
+  carry: null,
+  spawn: { room: 'ROOM-009', x: 1250, patrol: [900, 1500], requires: [] },
+});
+
 AB.ENEMIES.forEach((e) => AB.ID.register(e.id, e));

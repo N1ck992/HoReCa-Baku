@@ -91,4 +91,63 @@ AB.EVENTS.push(
   },
 );
 
+// Развязка первого акта (дополнение №20): мостик и врач, иллюминатор, лаборатория,
+// Колосс, шлюз и экзокостюм.
+AB.EVENTS.push(
+  {
+    id: 'EVENT-006', name: 'Судовой врач', chapter: 1, room: 'ROOM-008',
+    trigger: 'enter:ROOM-008', once: true,
+    steps: [
+      { at: 0.0, action: 'lock_input' },
+      { at: 0.0, action: 'spawn', char: 'CHAR-003', room: 'ROOM-008', x: 1150, facing: -1 },
+      { at: 0.9, action: 'walk_to', char: 'CHAR-003', near: 'CHAR-001', gap: 190, speed: 70 },
+      { at: 0.9, action: 'wait_arrive', char: 'CHAR-003' },
+      { at: 0.9, action: 'face', char: 'CHAR-001', target: 'CHAR-003' },
+      { at: 1.2, action: 'dialog', id: 'DIALOG-002' },
+      { at: 1.2, action: 'unlock_input' },
+    ],
+  },
+  {
+    id: 'EVENT-007', name: 'Иллюминатор', chapter: 1, room: 'ROOM-008',
+    trigger: 'after:EVENT-006', once: true,
+    steps: [
+      { at: 0.0, action: 'lock_input' },
+      { at: 0.3, action: 'window', open: true },
+      { at: 2.0, action: 'leviathan' },
+      { at: 4.8, action: 'dialog', id: 'DIALOG-003' },
+      { at: 4.8, action: 'unlock_input' },
+    ],
+  },
+  {
+    id: 'EVENT-008', name: 'Тень за стеклом', chapter: 1, room: 'ROOM-007',
+    trigger: 'zone:ROOM-007:700', once: true,
+    steps: [
+      { at: 0.0, action: 'flicker', duration: 1.6 },
+      { at: 0.2, action: 'spawn_enemy', enemy: 'ENEMY-002', room: 'ROOM-007', x: 1250, state: 'WATCH', facing: -1 },
+      { at: 1.8, action: 'despawn_enemy', enemy: 'ENEMY-002' },
+    ],
+  },
+  {
+    id: 'EVENT-009', name: 'Колосс', chapter: 1, room: 'ROOM-009',
+    trigger: 'zone:ROOM-009:600', once: true,
+    steps: [
+      { at: 0.0, action: 'flicker', duration: 2.0 },
+      { at: 0.0, action: 'shake', power: 6, duration: 1.6 },
+      { at: 0.4, action: 'flee', char: 'CHAR-002', on: true },
+      { at: 0.6, action: 'enemy_state', enemy: 'ENEMY-003', state: 'ALERT' },
+      { at: 0.8, action: 'hint', text: 'boss' },
+    ],
+  },
+  {
+    id: 'EVENT-010', name: 'Экзокостюм', chapter: 1, room: 'ROOM-010',
+    trigger: 'equip:EQUIP-005', once: true,
+    steps: [
+      { at: 0.0, action: 'lock_input' },
+      { at: 0.6, action: 'dialog', id: 'DIALOG-004' },
+      { at: 0.8, action: 'fade', from: 0, to: 1, duration: 2.5 },
+      { at: 3.6, action: 'act_end', act: 1 },
+    ],
+  },
+);
+
 AB.EVENTS.forEach((e) => AB.ID.register(e.id, e));

@@ -212,17 +212,20 @@ AB.ROOMS.push({
   theme: 'bridge',
   safe: true,                     // безопасная зона: преследователь сюда не проходит
   map: { x: 980, y: -6, w: 170, h: 58 },
-  connections: [{ door: 'west', to: 'ROOM-005', toDoor: 'east' }],
+  connections: [{ door: 'west', to: 'ROOM-005', toDoor: 'east' }, { door: 'east', to: 'ROOM-007', toDoor: 'west' }],
   access: { type: 'open' },
   items: [], containers: [], enemies: [], equipment: [],
-  events: [],
+  events: ['EVENT-006', 'EVENT-007'],
   state: 'safe',
   spawn: { x: 140 },
   doors: [
     { key: 'west', x: 70, to: 'ROOM-005', access: { type: 'open' } },
+    // дальше — лаборатория; открывается после разговора с доктором
+    { key: 'east', x: 1430, to: 'ROOM-007', access: { type: 'event', event: 'EVENT-007', reason: 'Заблокировано изнутри' } },
   ],
   props: [
-    { kind: 'console', x: 520 }, { kind: 'console', x: 760 }, { kind: 'console', x: 1000 },
+    { kind: 'window', x: 760, w: 760 },
+    { kind: 'console', x: 470 }, { kind: 'console', x: 760 }, { kind: 'console', x: 1050 },
   ],
   lights: [
     { x: 300, y: -380, color: [255, 40, 30], radius: 420, flicker: 0.05 },
@@ -232,13 +235,108 @@ AB.ROOMS.push({
   fx: { steam: [], sparks: [], drips: [] },
 });
 
+// ---- Путь к шлюзу (QUEST-003): лаборатория → оружейная → жизнеобеспечение → шлюз ----
+AB.ROOMS.push(
+  {
+    id: 'ROOM-007', name: 'Лаборатория',
+    desc: 'Исследовательская лаборатория: разбитые резервуары, следы гнезда.',
+    width: 2000, height: 380, background: 'ASSET-ROOM007-01', theme: 'lab',
+    map: { x: 1160, y: 4, w: 200, h: 38 },
+    connections: [{ door: 'west', to: 'ROOM-008', toDoor: 'east' }, { door: 'east', to: 'ROOM-006', toDoor: 'west' }],
+    access: { type: 'open' },
+    items: [{ key: 'ammo-lab', item: 'ITEM-008', qty: 4, x: 1880 }],
+    containers: [], enemies: ['ENEMY-004', 'ENEMY-005'], equipment: [],
+    events: ['EVENT-008'], state: 'infested', spawn: { x: 140 },
+    doors: [
+      { key: 'west', x: 70, to: 'ROOM-008', access: { type: 'open' } },
+      { key: 'east', x: 1930, to: 'ROOM-006', access: { type: 'open' } },
+    ],
+    props: [
+      { kind: 'tank', x: 420, broken: true }, { kind: 'table', x: 640 }, { kind: 'tank', x: 860 },
+      { kind: 'glass', x: 1250, w: 200 }, { kind: 'tank', x: 1600, broken: true }, { kind: 'table', x: 1780 },
+    ],
+    lights: [
+      { x: 300, y: -350, color: [255, 40, 30], radius: 360, flicker: 0.2 },
+      { x: 1000, y: -350, color: [255, 40, 30], radius: 360, flicker: 0.55, broken: true },
+      { x: 1700, y: -350, color: [255, 40, 30], radius: 360, flicker: 0.2 },
+      { x: 860, y: -150, color: [110, 255, 160], radius: 170, flicker: 0.1, source: 'tank' },
+    ],
+    fx: { steam: [600, 1400], sparks: [1000], drips: [450, 1200, 1650] },
+  },
+  {
+    id: 'ROOM-006', name: 'Оружейная',
+    desc: 'Склад снаряжения охраны и исследовательского оборудования.',
+    width: 1200, height: 360, background: 'ASSET-ROOM006-01', theme: 'armory',
+    map: { x: 1360, y: 10, w: 120, h: 26 },
+    connections: [{ door: 'west', to: 'ROOM-007', toDoor: 'east' }, { door: 'east', to: 'ROOM-009', toDoor: 'west' }],
+    access: { type: 'open' },
+    items: [],
+    containers: [
+      { key: 'gun-locker', x: 640, prop: 'cabinet', label: 'Шкаф с оружием', loot: [['ITEM-011', 1], ['ITEM-008', 6]] },
+    ],
+    enemies: [], equipment: [], events: [], state: 'sealed', spawn: { x: 140 },
+    doors: [
+      { key: 'west', x: 70, to: 'ROOM-007', access: { type: 'open' } },
+      { key: 'east', x: 1130, to: 'ROOM-009', access: { type: 'open' } },
+    ],
+    props: [
+      { kind: 'rack', x: 380 }, { kind: 'cabinet', x: 640, asset: 'ASSET-ROOM006-01', container: 'gun-locker' }, { kind: 'rack', x: 880 },
+    ],
+    lights: [{ x: 600, y: -330, color: [255, 40, 30], radius: 420, flicker: 0.05 }],
+    fx: { steam: [], sparks: [], drips: [300] },
+  },
+  {
+    id: 'ROOM-009', name: 'Система жизнеобеспечения',
+    desc: 'Затопленный зал с резервуарами. Здесь логово Колосса.',
+    width: 2000, height: 440, background: 'ASSET-ROOM009-01', theme: 'lifesupport',
+    map: { x: 1480, y: -6, w: 200, h: 58 },
+    connections: [{ door: 'west', to: 'ROOM-006', toDoor: 'east' }, { door: 'east', to: 'ROOM-010', toDoor: 'west' }],
+    access: { type: 'open' },
+    items: [{ key: 'ammo-ls', item: 'ITEM-008', qty: 6, x: 420 }],
+    containers: [], enemies: ['ENEMY-003'], equipment: [],
+    events: ['EVENT-009'], state: 'flooded', spawn: { x: 140 },
+    doors: [
+      { key: 'west', x: 70, to: 'ROOM-006', access: { type: 'open' } },
+      // проход в шлюз перекрыт, пока жив Колосс
+      { key: 'east', x: 1930, to: 'ROOM-010', access: { type: 'enemy', enemy: 'ENEMY-003', reason: 'Проход перекрыт: дорогу держит Колосс' } },
+    ],
+    props: [
+      { kind: 'bigtank', x: 640 }, { kind: 'bigtank', x: 1250, broken: true }, { kind: 'bigtank', x: 1700 },
+    ],
+    lights: [
+      { x: 350, y: -400, color: [255, 40, 30], radius: 420, flicker: 0.15 },
+      { x: 1000, y: -400, color: [255, 40, 30], radius: 460, flicker: 0.3 },
+      { x: 1650, y: -400, color: [255, 40, 30], radius: 420, flicker: 0.15 },
+    ],
+    fx: { steam: [500, 1000, 1500], sparks: [], drips: [300, 800, 1300, 1800] },
+  },
+  {
+    id: 'ROOM-010', name: 'Шлюз',
+    desc: 'Шлюзовая камера с глубоководными экзокостюмами. Отсюда можно выйти на дно.',
+    width: 1500, height: 420, background: 'ASSET-ROOM010-01', theme: 'airlock',
+    map: { x: 1690, y: 0, w: 150, h: 46 },
+    connections: [{ door: 'west', to: 'ROOM-009', toDoor: 'east' }],
+    access: { type: 'open' },
+    items: [], containers: [], enemies: [], equipment: ['EQUIP-005'],
+    events: ['EVENT-010'], state: 'ready', spawn: { x: 140 },
+    doors: [
+      { key: 'west', x: 70, to: 'ROOM-009', access: { type: 'open' } },
+      { key: 'east', x: 1430, to: null, access: { type: 'locked', reason: 'Внешний люк: только в экзокостюме' } },
+    ],
+    props: [
+      { kind: 'exorack', x: 560, broken: true }, { kind: 'exorack', x: 980 }, { kind: 'exorack', x: 1220, broken: true },
+    ],
+    lights: [
+      { x: 400, y: -380, color: [255, 40, 30], radius: 420, flicker: 0.05 },
+      { x: 1000, y: -380, color: [255, 40, 30], radius: 460, flicker: 0.05 },
+    ],
+    fx: { steam: [1300], sparks: [], drips: [] },
+  },
+);
+
 // Остальные помещения из GDD §6: зарегистрированы, но ещё не построены.
 const ROOM_STUBS = [
   ['ROOM-004', 'Инженерная мастерская'],
-  ['ROOM-006', 'Оружейная'],
-  ['ROOM-007', 'Лаборатория'],
-  ['ROOM-009', 'Система жизнеобеспечения'],
-  ['ROOM-010', 'Шлюз'],
 ];
 
 AB.ROOMS.forEach((r) => AB.ID.register(r.id, r));

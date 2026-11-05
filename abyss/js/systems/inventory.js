@@ -27,14 +27,25 @@ AB.Inventory = (() => {
   // Положить вещь. swap: true — если слот занят другой вещью, старая падает на пол
   // (подбор с пола); swap: false — не помещается, значит не берём (обыск).
   // Возвращает, сколько штук взято.
+  // сколько гарпунов можно носить в ружье
+  const AMMO_CAP = 18;
+
   function add(charId, itemId, qty, { swap = true } = {}) {
     const def = AB.ID.get(itemId);
     if (!def) return 0;
+    // боеприпасы заряжаются прямо в оружие дальнего боя, если оно в руках
+    const w = bag(charId)[WEAPON];
+    if (def.category === 'ammo' && w && AB.ID.get(w.item).weapon.ranged) {
+      const taken = Math.min(qty, AMMO_CAP - (w.ammo || 0));
+      if (taken > 0) { w.ammo = (w.ammo || 0) + taken; AB.Bus.emit('inventory:changed', { charId, itemId, delta: taken }); }
+      return taken;
+    }
     const b = bag(charId), i = slotFor(itemId), cur = b[i];
     let taken = 0;
     if (!cur) {
       taken = Math.min(qty, def.stack);
       b[i] = { item: itemId, qty: taken };
+      if (def.weapon && def.weapon.ranged) b[i].ammo = 0;
     } else if (cur.item === itemId) {
       taken = Math.min(qty, def.stack - cur.qty);
       cur.qty += taken;
@@ -44,9 +55,19 @@ AB.Inventory = (() => {
       AB.Bus.emit('inventory:swapped', { charId, dropped: cur.item, qty: cur.qty, taken: itemId });
       taken = Math.min(qty, def.stack);
       b[i] = { item: itemId, qty: taken };
+      if (def.weapon && def.weapon.ranged) b[i].ammo = 0;
     }
     if (taken) {
       if (i === WEAPON) syncHands(charId);
+      // взяли ружьё — гарпуны из рюкзака сразу уходят в магазин
+      const pk = b[PACK];
+      if (i === WEAPON && def.weapon.ranged && pk && AB.ID.get(pk.item).category === 'ammo') {
+        const load = Math.min(pk.qty, AMMO_CAP - (b[WEAPON].ammo || 0));
+        b[WEAPON].ammo = (b[WEAPON].ammo || 0) + load;
+        pk.qty -= load;
+        if (!pk.qty) b[PACK] = null;
+        AB.Bus.emit('inventory:changed', { charId, itemId: pk.item, delta: -load });
+      }
       AB.Bus.emit('inventory:changed', { charId, itemId, delta: taken });
     }
     return taken;
@@ -110,7 +131,9 @@ AB.Inventory = (() => {
   }
 
   return {
-    SLOTS, WEAPON, PACK, add, remove, count, slot, use, useBlock, drop,
+    SLOTS, WEAPON, PACK, AMMO_CAP, add, remove, count, slot, use, useBlock, drop,
+    ammo: (charId) => { const w = bag(charId)[WEAPON]; return w && w.ammo != null ? w.ammo : null; },
+    spendAmmo: (charId) => { const w = bag(charId)[WEAPON]; if (!w || !w.ammo) return false; w.ammo--; return true; },
     weapon: (charId) => bag(charId)[WEAPON],
     pack: (charId) => bag(charId)[PACK],
     slots: (charId) => bag(charId).slice(),

@@ -44,6 +44,10 @@ AB.Render = (() => {
       hurtFlash = 1; shake = Math.max(shake, 10);
     });
     AB.Bus.on('combat:swing', ({ landed }) => { if (!landed) shake = Math.max(shake, 1.5); });
+    AB.Bus.on('combat:shot', ({ fromX, toX }) => {
+      particles.push({ k: 'tracer', x: fromX, x2: toX, y: -78, vx: 0, vy: 0, life: 0.14, age: 0, s: 1 });
+      shake = Math.max(shake, 2.5);
+    });
   }
 
   function resize() {
@@ -286,6 +290,8 @@ AB.Render = (() => {
       g.fillStyle = 'rgba(160,30,30,.18)';
       g.fillRect(1040, top + 90, 14, 44);
       g.fillRect(1025, top + 105, 44, 14);
+    } else if (['lab', 'armory', 'lifesupport', 'airlock'].includes(r.theme)) {
+      g.fillText({ lab: 'LAB-3', armory: 'ARMORY', lifesupport: 'LIFE SUPPORT', airlock: 'AIRLOCK A' }[r.theme], 140, top + 92);
     } else if (r.theme === 'storage') {
       for (let x = 300; x < r.width - 200; x += 600) g.fillText(`CARGO ${String(1 + Math.round(x / 600)).padStart(2, '0')}`, x, top + 92);
     } else if (r.theme === 'bridge') {
@@ -520,6 +526,99 @@ AB.Render = (() => {
       ctx.fillStyle = 'rgba(60,55,50,.8)';
       ctx.beginPath(); ctx.moveTo(x + 30, b - 130); ctx.quadraticCurveTo(x + 60, b - 100, x + 50, b - 70); ctx.lineTo(x + 70, b - 120); ctx.fill();
     },
+    // мостик: панорамный иллюминатор (рама и заслонки; вода за стеклом — в drawWindowView)
+    window(p) {
+      const x = sx(p.x), w = p.w, top = sy(-340), h = 200;
+      ctx.fillStyle = '#020405';
+      ctx.fillRect(x - w / 2, top, w, h);
+      p._win = { x: x - w / 2, y: top, w, h };
+      ctx.strokeStyle = '#2a2f35'; ctx.lineWidth = 14;
+      ctx.strokeRect(x - w / 2, top, w, h);
+      ctx.lineWidth = 6;
+      for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x - w / 2 + (w * i) / 4, top); ctx.lineTo(x - w / 2 + (w * i) / 4, top + h); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      for (let i = 0; i < 18; i++) { ctx.beginPath(); ctx.arc(x - w / 2 + 10 + i * (w - 20) / 17, top - 3, 2, 0, 7); ctx.fill(); }
+    },
+    // лаборатория: стеклянный резервуар с жидкостью (или разбитый)
+    tank(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#1a1d21'; ctx.fillRect(x - 40, b - 22, 80, 22); ctx.fillRect(x - 40, b - 210, 80, 16);
+      if (!p.broken) {
+        const g = ctx.createLinearGradient(0, b - 194, 0, b - 22);
+        g.addColorStop(0, 'rgba(60,160,110,.25)'); g.addColorStop(1, 'rgba(30,90,60,.5)');
+        ctx.fillStyle = g; ctx.fillRect(x - 34, b - 194, 68, 172);
+        ctx.fillStyle = 'rgba(20,30,25,.8)';
+        ctx.beginPath(); ctx.ellipse(x, b - 110 + Math.sin(time * 0.6) * 3, 12, 30, 0, 0, 7); ctx.fill();   // что-то внутри
+      } else {
+        ctx.strokeStyle = 'rgba(180,220,210,.25)'; ctx.lineWidth = 1.2;
+        for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.moveTo(x - 34 + i * 13, b - 22); ctx.lineTo(x - 30 + i * 12, b - 70 - (i % 3) * 25); ctx.stroke(); }
+        ctx.fillStyle = 'rgba(40,90,70,.4)'; ctx.beginPath(); ctx.ellipse(x + 20, b, 70, 5, 0, 0, 7); ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(200,230,220,.15)'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 34, b - 194, 68, 172);
+    },
+    table(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#23272c'; ctx.fillRect(x - 70, b - 68, 140, 8);
+      ctx.fillStyle = '#1a1d21'; ctx.fillRect(x - 64, b - 60, 6, 60); ctx.fillRect(x + 58, b - 60, 6, 60);
+      ctx.fillStyle = '#2e3338'; ctx.fillRect(x - 40, b - 92, 30, 24); ctx.fillRect(x + 10, b - 80, 14, 12);
+      ctx.fillStyle = 'rgba(90,255,190,.25)'; ctx.fillRect(x - 36, b - 88, 22, 14);
+    },
+    // стеклянная перегородка (блики — в drawGlassShine, поверх персонажей за ней)
+    glass(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = 'rgba(120,160,170,.06)'; ctx.fillRect(x - p.w / 2, b - 300, p.w, 300);
+      ctx.strokeStyle = '#2b3036'; ctx.lineWidth = 6; ctx.strokeRect(x - p.w / 2, b - 300, p.w, 300);
+    },
+    // оружейная: стойка с оружием
+    rack(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#1c2024'; ctx.fillRect(x - 80, b - 200, 160, 200);
+      ctx.fillStyle = '#0d0f11'; ctx.fillRect(x - 72, b - 190, 144, 182);
+      ctx.fillStyle = '#30353b';
+      for (let i = 0; i < 4; i++) { ctx.save(); ctx.translate(x - 54 + i * 36, b - 30); ctx.rotate(-0.12); ctx.fillRect(-4, -140, 8, 140); ctx.restore(); }
+    },
+    // жизнеобеспечение: большой резервуар (один разбит — оттуда выходит Колосс)
+    bigtank(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#1b1f23';
+      ctx.fillRect(x - 110, b - 330, 220, 330);
+      ctx.fillStyle = p.broken ? '#050607' : '#0f1a1c';
+      ctx.fillRect(x - 96, b - 300, 192, 280);
+      if (p.broken) {
+        ctx.fillStyle = '#1b1f23';
+        ctx.beginPath(); ctx.moveTo(x - 96, b - 120); ctx.lineTo(x - 40, b - 190); ctx.lineTo(x + 10, b - 150); ctx.lineTo(x + 60, b - 230); ctx.lineTo(x + 96, b - 160); ctx.lineTo(x + 96, b - 300); ctx.lineTo(x - 96, b - 300); ctx.fill();
+        ctx.fillStyle = 'rgba(40,70,80,.35)'; ctx.beginPath(); ctx.ellipse(x, b + 2, 240, 8, 0, 0, 7); ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(40,90,100,.25)'; ctx.fillRect(x - 96, b - 200 + Math.sin(time) * 3, 192, 180);
+      }
+      ctx.strokeStyle = '#2c3238'; ctx.lineWidth = 8;
+      for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x - 110, b - 70 - i * 80); ctx.lineTo(x + 110, b - 70 - i * 80); ctx.stroke(); }
+    },
+    // шлюз: глубоководный экзокостюм на стойке (массивный механизированный скафандр)
+    exorack(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#16191c'; ctx.fillRect(x - 100, b - 300, 12, 300); ctx.fillRect(x + 88, b - 300, 12, 300); ctx.fillRect(x - 100, b - 300, 200, 12);
+      const body = p.broken ? '#2a2c2e' : '#454c52', shade = p.broken ? '#1c1e20' : '#30363b', accent = p.broken ? '#3a2a20' : '#8a6a2a';
+      // ноги
+      ctx.fillStyle = shade; ctx.fillRect(x - 46, b - 110, 34, 110); ctx.fillRect(x + 12, b - 110, 34, 110);
+      ctx.fillStyle = body; ctx.fillRect(x - 52, b - 22, 44, 22); ctx.fillRect(x + 8, b - 22, 44, 22);
+      // корпус
+      ctx.fillStyle = body;
+      ctx.beginPath(); ctx.moveTo(x - 62, b - 110); ctx.lineTo(x - 70, b - 210); ctx.quadraticCurveTo(x, b - 250, x + 70, b - 210); ctx.lineTo(x + 62, b - 110); ctx.fill();
+      ctx.fillStyle = accent; ctx.fillRect(x - 50, b - 160, 100, 8);
+      // наплечники
+      ctx.fillStyle = shade;
+      ctx.beginPath(); ctx.ellipse(x - 78, b - 205, 32, 26, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x + 78, b - 205, 32, 26, 0, 0, 7); ctx.fill();
+      // руки
+      if (!p.broken) { ctx.fillRect(x - 100, b - 200, 26, 110); ctx.fillRect(x + 74, b - 200, 26, 110); }
+      else { ctx.fillRect(x - 100, b - 200, 26, 50); }
+      // шлем
+      ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(x, b - 250, 30, 26, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = p.broken ? '#0b0c0d' : '#0a1418'; ctx.fillRect(x - 20, b - 258, 40, 12);
+      p._visor = p.broken ? null : { x, y: b - 252 };
+    },
+
     // склад: штабель контейнеров
     crates(p) {
       const x = sx(p.x), b = sy(0);
@@ -676,6 +775,17 @@ AB.Render = (() => {
       P.hipR = -0.2 * slump - stepPh * 0.3;
       P.shL = 0.5 * slump; P.elL = -0.9 * slump - 0.2;
       P.shR = 0.3 * slump; P.elR = -0.4;
+    } else if (action === 'attack' && hero.equipped && (AB.ID.get(hero.equipped).weapon || {}).ranged) {
+      // выстрел из ружья: рука вскинута вперёд, отдача
+      const p = AB.Anim.progress(hero.id);
+      const up = U.ease(U.clamp(p / 0.15, 0, 1)), down = U.ease(U.clamp((p - 0.6) / 0.4, 0, 1));
+      const recoil = p > 0.15 && p < 0.45 ? Math.sin(((p - 0.15) / 0.3) * Math.PI) : 0;
+      const aim = up * (1 - down);
+      P.shL = U.lerp(0.2, 1.5 - recoil * 0.18, aim); P.elL = U.lerp(-0.25, -0.05, aim);
+      P.shR = U.lerp(-0.06, 1.25, aim); P.elR = U.lerp(-0.25, -0.5, aim);
+      P.pipe = U.lerp(0.35, 0, aim);
+      P.lean = -0.06 * recoil + 0.04 * aim;
+      P.head = 0.05 * aim;
     } else if (action === 'attack') {
       // ANIM-CHAR001-07: замах за голову → удар сверху вниз → возврат
       const p = AB.Anim.progress(hero.id);
@@ -821,7 +931,7 @@ AB.Render = (() => {
       ctx.restore();
       // ближняя рука (и оружие в ней)
       const hand = limb(3, shY + 3, P.shL, 21, -P.elL, 20, 8.5, mid);
-      if (hero.equipped) drawWeapon(hand, P.shL - P.elL + (P.pipe || 0.35));
+      if (hero.equipped) drawWeapon(hand, P.shL - P.elL + (P.pipe ?? 0.35), hero.equipped);
       ctx.restore();
       // ближняя нога
       limb(2, hipY, P.hipL, 27, -P.kneeL, 27, 10, mid);
@@ -953,14 +1063,36 @@ AB.Render = (() => {
       const w = rigBone(fo.img, fo.spec, e.x, e.y, foreAng, fo.len);
       if (hero.equipped) {
         const hand = { fx: w.x + Math.sin(foreAng) * 4, fy: w.y + Math.cos(foreAng) * 4 };
-        drawWeapon(hand, foreAng + (P.pipe || 0.35));
+        drawWeapon(hand, foreAng + (P.pipe ?? 0.35), hero.equipped);
       }
     }
     ctx.restore();
   }
 
-  // ---------- Оружие в руке: заглушка ASSET-ITEM009-01 ----------
-  function drawWeapon(hand, ang) {
+  // ---------- Оружие в руке: труба (ASSET-ITEM009-01) или гарпунное ружьё (ASSET-ITEM011-01) ----------
+  function drawWeapon(hand, ang, itemId) {
+    const wdef = itemId && AB.ID.get(itemId);
+    if (wdef && wdef.weapon && wdef.weapon.ranged) {
+      // ружьё: приклад у руки, ствол вдоль руки, гарпун торчит из дула
+      ctx.save();
+      ctx.translate(hand.fx, hand.fy);
+      ctx.rotate(-ang + Math.PI / 2);     // ось +x — вдоль ствола
+      ctx.fillStyle = '#26292d';
+      ctx.fillRect(-14, -4, 18, 8);        // приклад
+      ctx.fillStyle = '#3a3f45';
+      ctx.fillRect(0, -3.5, 40, 7);        // корпус
+      ctx.fillStyle = '#1c1f22';
+      ctx.fillRect(10, 3.5, 6, 7);         // рукоять
+      ctx.fillStyle = '#4b5158';
+      ctx.fillRect(38, -2, 12, 4);         // ствол
+      ctx.fillStyle = '#7a6a50';
+      ctx.fillRect(48, -1, 10, 2);         // гарпун
+      ctx.beginPath(); ctx.moveTo(58, -3); ctx.lineTo(64, 0); ctx.lineTo(58, 3); ctx.fill();
+      ctx.fillStyle = 'rgba(94,230,255,.7)';
+      ctx.fillRect(14, -5, 4, 2);          // индикатор давления
+      ctx.restore();
+      return;
+    }
     const len = 46;
     const ex = hand.fx + Math.sin(ang) * len, ey = hand.fy + Math.cos(ang) * len;
     const sx0 = hand.fx - Math.sin(ang) * 6, sy0 = hand.fy - Math.cos(ang) * 6;
@@ -1048,12 +1180,21 @@ AB.Render = (() => {
   function drawEnemy(e, pass) {
     const def = AB.ID.get(e.id);
     if (def.humanoid) { drawPursuer(e, def, pass); return; }
+    if (e.state === 'DORMANT') return;           // спит в резервуаре — не видно
     const asset = AB.Assets.get(def.asset);
     const { Q, action } = enemyPose(e);
-    const x = sx(e.x + Q.dx * e.facing), b = sy(0);
+    const k = def.scale || 1;
+    const x = sx(e.x + Q.dx * e.facing * k), b = sy(0);
+    // босс поднимается из резервуара
+    // только один раз — при пробуждении; повторная тревога после удара не «топит» его снова
+    let rise = 1;
+    if (def.type === 'boss' && !e.risen) {
+      rise = e.state === 'ALERT' ? U.ease(U.clamp(e.t / 0.7, 0, 1)) : 1;
+      if (rise >= 1) e.risen = true;
+    }
     if (pass === 'body') {
       ctx.fillStyle = 'rgba(0,0,0,.5)';
-      ctx.beginPath(); ctx.ellipse(x, b + 1, 40 + Q.splay * 20, 6, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, b + 1, (40 + Q.splay * 20) * k, 6 * k, 0, 0, 7); ctx.fill();
     }
     if (asset.status === 'ready') {
       if (pass === 'body') {
@@ -1065,10 +1206,16 @@ AB.Render = (() => {
       return;
     }
     ctx.save();
-    ctx.translate(x, b);
-    ctx.scale(e.facing, 1);
+    if (k > 1) {
+      // у увеличенного существа поза лап «проваливается» под пол — срезаем по полу
+      ctx.beginPath(); ctx.rect(x - 400, b - 600, 800, 606); ctx.clip();
+    }
+    ctx.translate(x, b + (1 - rise) * 120 - (k - 1) * 10);
+    ctx.scale(e.facing * k, k);
+    ctx.globalAlpha *= rise;
     const bodyY = -Q.h;
-    const flesh = '#7d6663', dark = '#3e3132', plate = '#323840';
+    const tint = def.tint || {};
+    const flesh = tint.flesh || '#7d6663', dark = tint.dark || '#3e3132', plate = tint.plate || '#323840';
 
     if (pass === 'body') {
       // дальние конечности
@@ -1160,7 +1307,7 @@ AB.Render = (() => {
     if (pass === 'emissive') {
       const tr = AB.Anim.current(e.id);
       idTag(ctx, `${def.asset} · ${tr ? tr.animId : ''} · ${e.state}`, x, b - 110);
-      if (e.state !== 'DEAD') nameTag(e.id, x, b - 96);
+      if (e.state !== 'DEAD') nameTag(e.id, x, b - 96 * k);
     }
   }
 
@@ -1331,6 +1478,7 @@ AB.Render = (() => {
     }
     drawItemGlints(r);
     drawEquipFx(r);
+    drawWindowView(r);
     drawTargetHighlight();
     AB.Enemies.inRoom(r.id).forEach((e) => drawEnemy(e, 'emissive'));
     drawNavMarker();
@@ -1395,6 +1543,75 @@ AB.Render = (() => {
         ctx.stroke();
       }
     });
+  }
+
+  // ---------- Обзорный иллюминатор: вода за стеклом (поверх темноты) ----------
+  function drawWindowView(r) {
+    for (const p of r.props) {
+      if (p._visor) {
+        // визор целого экзокостюма слабо светится
+        ctx.fillStyle = `rgba(94,230,255,${0.35 + Math.sin(time * 2) * 0.15})`;
+        ctx.fillRect(p._visor.x - 18, p._visor.y - 4, 36, 4);
+      }
+      if (p.kind === 'glass') {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(150,200,210,.08)'; ctx.lineWidth = 10;
+        const x = sx(p.x);
+        ctx.beginPath(); ctx.moveTo(x - p.w / 2 + 20, sy(-280)); ctx.lineTo(x - p.w / 2 + 70, sy(-20)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + 10, sy(-290)); ctx.lineTo(x + 40, sy(-120)); ctx.stroke();
+        ctx.restore();
+      }
+      if (p.kind !== 'window' || !p._win) continue;
+      const open = AB.Story.isDone('EVENT-007') ? 1 : AB.Story.fx.window;
+      const { x, y, w, h } = p._win;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath(); ctx.rect(x + 7, y + 7, w - 14, h - 14); ctx.clip();
+      if (open > 0) {
+        // толща воды
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, '#000507'); g.addColorStop(0.5, '#03161c'); g.addColorStop(1, '#061e22');
+        ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+        // лучи наружных прожекторов
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 2; i++) {
+          const bx = x + w * (0.3 + i * 0.4) + Math.sin(time * 0.3 + i) * 20;
+          const bg = ctx.createLinearGradient(bx, y, bx, y + h);
+          bg.addColorStop(0, 'rgba(120,200,210,.16)'); bg.addColorStop(1, 'rgba(120,200,210,0)');
+          ctx.fillStyle = bg;
+          ctx.beginPath(); ctx.moveTo(bx - 10, y); ctx.lineTo(bx + 10, y); ctx.lineTo(bx + 90, y + h); ctx.lineTo(bx - 90, y + h); ctx.fill();
+        }
+        // морской снег
+        ctx.fillStyle = 'rgba(190,220,220,.5)';
+        for (let i = 0; i < 70; i++) {
+          const px = x + ((i * 97.3 + time * (6 + (i % 5))) % w);
+          const py = y + ((i * 53.7 + time * (4 + (i % 3) * 2)) % h);
+          ctx.fillRect(px, py, 1.3, 1.3);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+        // что-то огромное проплывает мимо (EVENT-007)
+        const L = AB.Story.fx.leviathan;
+        if (L >= 0) {
+          const k = L / 9, lx = x + w * (1.3 - k * 1.7), ly = y + h * 0.62 + Math.sin(L * 0.8) * 8;
+          const a = Math.min(1, L, 9 - L) * 0.85;
+          ctx.fillStyle = `rgba(1,4,5,${a})`;
+          ctx.beginPath(); ctx.ellipse(lx, ly, 260, 46, -0.03, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(lx + 240, ly); ctx.lineTo(lx + 380, ly - 50 + Math.sin(L * 3) * 14); ctx.lineTo(lx + 380, ly + 40 + Math.sin(L * 3) * 14); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(lx - 60, ly - 30); ctx.lineTo(lx - 10, ly - 90); ctx.lineTo(lx + 40, ly - 32); ctx.fill();
+          ctx.fillStyle = `rgba(140,255,230,${a * 0.6})`;
+          for (let i = 0; i < 6; i++) ctx.fillRect(lx - 200 + i * 60, ly + 12, 3, 3);   // светящиеся точки вдоль бока
+        }
+        ctx.fillStyle = `rgba(0,0,0,${1 - open})`; ctx.fillRect(x, y, w, h);
+      }
+      // заслонки поднимаются вверх
+      const shut = h * (1 - Math.max(0, open));
+      ctx.fillStyle = '#1d2125';
+      for (let yy = 0; yy < shut; yy += 18) {
+        ctx.fillRect(x, y + yy, w, Math.min(16, shut - yy));
+        ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(x, y + yy + 14, w, 2); ctx.fillStyle = '#1d2125';
+      }
+      ctx.restore();
+    }
   }
 
   // ---------- Оборудование энергоотсека: эффекты поверх фона ----------
@@ -1569,6 +1786,15 @@ AB.Render = (() => {
         ctx.fillStyle = `rgba(90,10,10,${0.9 * a})`;
         ctx.fillRect(x, y, p.s, p.s);
       }
+      if (layer === 'glow' && p.k === 'tracer') {
+        const g = ctx.createLinearGradient(sx(p.x), 0, sx(p.x2), 0);
+        g.addColorStop(0, `rgba(200,240,255,${0.1 * a})`);
+        g.addColorStop(1, `rgba(220,250,255,${0.9 * a})`);
+        ctx.strokeStyle = g;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(sx(p.x), y); ctx.lineTo(sx(p.x2), y); ctx.stroke();
+        continue;
+      }
       if (layer === 'glow') {
         if (p.k === 'spark') {
           ctx.fillStyle = `rgba(255,${170 + Math.random() * 60},80,${a})`;
@@ -1677,6 +1903,7 @@ AB.Render = (() => {
     const swayY = Math.sin(time * 0.7) * 0.8 + (Math.random() - 0.5) * shake;
     const swayX = (Math.random() - 0.5) * shake;
     shake = Math.max(0, shake - dt * 30);
+    if (AB.Story.fx.shake > 0) shake = Math.max(shake, AB.Story.fx.shakePower);
     hurtFlash = Math.max(0, hurtFlash - dt * 2.2);
 
     spawnFx(r, dt);

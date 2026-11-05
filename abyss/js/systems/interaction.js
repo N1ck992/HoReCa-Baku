@@ -4,7 +4,7 @@
 // =====================================================================
 
 AB.Interact = (() => {
-  const RANGE = { door: 80, item: 55, container: 75, equip: 0 };  // у оборудования — по ширине
+  const RANGE = { door: 80, item: 55, container: 75, equip: 0, npc: 70 };  // у оборудования — по ширине
   const SEARCH_TIME = 1.3;
   let search = null; // { charId, roomId, container, t } — обыск
   let work = null;   // { charId, equip, t, time } — работа с оборудованием
@@ -19,6 +19,10 @@ AB.Interact = (() => {
     for (const it of AB.Rooms.worldItems(r.id)) list.push({ kind: 'item', x: it.x, ref: it });
     for (const ct of r.containers || []) list.push({ kind: 'container', x: ct.x, ref: ct });
     for (const eq of AB.Equip.inRoom(r.id)) list.push({ kind: 'equip', x: eq.x, ref: eq, range: eq.w / 2 + 30 });
+    for (const n of AB.Chars.all()) {
+      const d = AB.ID.get(n.id);
+      if (n.id !== charId && n.room === r.id && d.npc && !n.follow && !n.dead) list.push({ kind: 'npc', x: n.x, ref: n });
+    }
     let best = null, bestScore = Infinity;
     for (const o of list) {
       const dx = o.x - c.x;
@@ -47,6 +51,7 @@ AB.Interact = (() => {
       const def = AB.ID.get(t.ref.item);
       return { label: `Подобрать: ${def.name}${t.ref.qty > 1 ? ` ×${t.ref.qty}` : ''}`, ok: true };
     }
+    if (t.kind === 'npc') return { label: AB.ID.get(t.ref.id).npc.action, ok: true };
     if (t.kind === 'equip') {
       const a = AB.Equip.action(t.ref.id, charId);
       return { label: a.kind === 'info' || a.kind === 'done' || a.kind === 'blocked' ? `${t.ref.name}: ${a.label.charAt(0).toLowerCase()}${a.label.slice(1)}` : a.label, ok: a.ok };
@@ -77,6 +82,16 @@ AB.Interact = (() => {
       return true;
     }
 
+    if (t.kind === 'npc') {
+      // доктор лечит Марка и всех, кто рядом
+      const d = AB.ID.get(t.ref.id);
+      AB.Chars.playAction(t.ref.id, 'interact');
+      t.ref.facing = Math.sign(c.x - t.ref.x) || t.ref.facing;
+      let healed = 0;
+      if (d.npc.heal) for (const p of AB.Chars.all()) if (p.room === t.ref.room && !p.dead && p.id !== t.ref.id) healed += AB.Chars.heal(p.id, 999);
+      AB.Bus.emit('npc:talk', { id: t.ref.id, healed });
+      return true;
+    }
     if (t.kind === 'equip') {
       const a = AB.Equip.action(t.ref.id, charId);
       c.reachLow = false;
@@ -133,7 +148,8 @@ AB.Interact = (() => {
     let full = false;
     const c = AB.Chars.get(charId);
     for (const [itemId, qty] of container.loot) {
-      const added = AB.Inventory.add(charId, itemId, qty, { swap: false });
+      // оружие из шкафа берётся в руки (старое остаётся рядом), остальное — если есть место
+      const added = AB.Inventory.add(charId, itemId, qty, { swap: !!AB.ID.get(itemId).weapon });
       if (added) found.push([itemId, added]);
       // что не поместилось — остаётся лежать рядом с контейнером
       if (qty - added > 0) { full = true; AB.Rooms.dropItem(roomId, itemId, qty - added, container.x - 40); }

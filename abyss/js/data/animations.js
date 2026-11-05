@@ -36,6 +36,15 @@ AB.ANIMATIONS.push(
   { id: 'ANIM-CHAR002-06', owner: 'CHAR-002', action: 'death',    loop: false, sheet: null, desc: 'Гибель', duration: 1.4 },
 );
 
+// CHAR-003: медик (процедурные заглушки)
+AB.ANIMATIONS.push(
+  { id: 'ANIM-CHAR003-01', owner: 'CHAR-003', action: 'walk',     loop: true,  sheet: null, desc: 'Ходьба' },
+  { id: 'ANIM-CHAR003-02', owner: 'CHAR-003', action: 'run',      loop: true,  sheet: null, desc: 'Бег' },
+  { id: 'ANIM-CHAR003-03', owner: 'CHAR-003', action: 'interact', loop: false, sheet: null, desc: 'Помощь, перевязка', duration: 0.9 },
+  { id: 'ANIM-CHAR003-04', owner: 'CHAR-003', action: 'hurt',     loop: false, sheet: null, desc: 'Получение урона', duration: 0.5 },
+  { id: 'ANIM-CHAR003-05', owner: 'CHAR-003', action: 'idle',     loop: true,  sheet: null, desc: 'Ожидание' },
+);
+
 // ENEMY-002: преследователь (процедурные заглушки, движения как у человека)
 AB.ANIMATIONS.push(
   { id: 'ANIM-ENEMY002-01', owner: 'ENEMY-002', action: 'idle',   loop: true,  sheet: null, desc: 'Стоит неподвижно' },

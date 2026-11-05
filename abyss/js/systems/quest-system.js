@@ -14,6 +14,8 @@ AB.Quests = (() => {
       return AB.Rooms.current() === o.done.room && c && c.room === o.done.room && !c.dead;
     }
     if (o.done.room) return AB.Rooms.visited().includes(o.done.room);
+    if (o.done.weapon) { const w = AB.Inventory.weapon('CHAR-001'); return !!w && w.item === o.done.weapon; }
+    if (o.done.enemyDead) return AB.Enemies.isDead(o.done.enemyDead);
     if (o.done.equip) {
       const s = AB.Equip.state(o.done.equip);
       return o.done.state === 'inspected' ? s === 'inspected' || s === 'done' : s === o.done.state;
@@ -76,6 +78,8 @@ AB.Quests = (() => {
       check();
     });
     AB.Bus.on('equip:changed', check);
+    AB.Bus.on('inventory:changed', check);
+    AB.Bus.on('enemy:dead', check);
     AB.Bus.on('event:end', (eventId) => {
       for (const q of AB.QUESTS) if (q.start && q.start.event === eventId) start(q.id);
     });

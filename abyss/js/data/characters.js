@@ -51,4 +51,26 @@ AB.CHARACTERS.push({
   },
 });
 
+// CHAR-003 — медик (дополнение №6). Имя и внешность — предложение, ждут правки.
+AB.CHARACTERS.push({
+  id: 'CHAR-003',
+  name: 'Доктор Хейл',          // Саймон Хейл, судовой врач
+  role: 'Медик',
+  specialization: 'medic',
+  crew: true,
+  stats: { maxHp: 90, speed: 110, runSpeed: 210 },
+  skills: { heal: true },
+  appearances: ['ASSET-CHAR003-01'],
+  look: { dark: '#2b2d2f', mid: '#6e7372', light: '#8f9493', build: 1.02 },
+  // разговор лечит Марка и спутницу (пока он в безопасной зоне)
+  npc: { action: 'Поговорить с доктором', heal: true },
+  anims: {
+    idle: 'ANIM-CHAR003-05',
+    walk: 'ANIM-CHAR003-01',
+    run: 'ANIM-CHAR003-02',
+    interact: 'ANIM-CHAR003-03',
+    hurt: 'ANIM-CHAR003-04',
+  },
+});
+
 AB.CHARACTERS.forEach((c) => AB.ID.register(c.id, c));

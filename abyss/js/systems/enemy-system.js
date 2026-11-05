@@ -16,12 +16,14 @@ AB.Enemies = (() => {
       const def = AB.ID.get(id);
       const s = {
         id, room: roomId, x: def.spawn.x, facing: -1, vx: 0,
-        hp: def.hp, state: dead.has(id) ? 'DEAD' : def.behavior.start, t: 0,
+        hp: def.hp, state: dead.has(id) ? 'DEAD'
+          : (def.wakeEvent && AB.Story && AB.Story.isDone && AB.Story.isDone(def.wakeEvent) ? 'PATROL' : def.behavior.start), t: 0,
         patrolDir: 1, goalX: def.spawn.x, lastSeenX: null, loseT: 0,
         cooldown: 0, hitDone: false, retreated: false, stagger: 0, flash: 0, stride: 0,
         seenHero: false,
       };
       if (dead.has(id)) { s.hp = 0; s.x = s.deadX || def.spawn.x; }
+      if (def.wakeEvent && s.state === 'PATROL') s.risen = true; // уже проснулся до загрузки
       live.set(id, s);
       AB.Anim.play(id, s.state === 'DEAD' ? 'death' : 'walk');
       if (s.state === 'DEAD') { const tr = AB.Anim.current(id); tr.t = 99; tr.done = true; }
@@ -34,7 +36,7 @@ AB.Enemies = (() => {
     s.t = 0;
     s.hitDone = false;
     const def = AB.ID.get(s.id);
-    const anim = { IDLE: 'idle', PATROL: 'walk', INVESTIGATE: 'walk', ALERT: 'alert', CHASE: 'run', ATTACK: 'attack', RETREAT: 'run', DEAD: 'death' }[state];
+    const anim = { DORMANT: 'idle', IDLE: 'idle', PATROL: 'walk', INVESTIGATE: 'walk', ALERT: 'alert', CHASE: 'run', ATTACK: 'attack', RETREAT: 'run', DEAD: 'death' }[state];
     AB.Anim.play(s.id, anim, { restart: true });
     AB.Bus.emit('enemy:state', { id: s.id, state, name: def.name });
   }
@@ -174,6 +176,10 @@ AB.Enemies = (() => {
       s.vx = 0;
 
       switch (s.state) {
+        case 'DORMANT':
+          // спит в резервуаре, пока его не разбудит сюжет
+          break;
+
         case 'IDLE':
           if (s.t > 2) setState(s, 'PATROL');
           if (p.sees) setState(s, 'ALERT');
@@ -230,8 +236,9 @@ AB.Enemies = (() => {
     }
   }
 
-  // Урон противнику. Возвращает true, если попали.
-  function damage(id, amount, fromX) {
+  // Урон противнику. kind: 'melee' | 'ranged' (броня считается по виду удара).
+  // Возвращает true, если попали.
+  function damage(id, amount, fromX, kind = 'melee') {
     const s = live.get(id);
     if (!s || s.state === 'DEAD') return false;
     const def = AB.ID.get(id);
@@ -247,6 +254,8 @@ AB.Enemies = (() => {
       else if (s.state === 'ATTACK') setP(s, 'CHASE');
       return true;
     }
+    if (s.state === 'DORMANT') return false;
+    if (def.armor && def.armor[kind] != null) amount = Math.round(amount * def.armor[kind]);
     s.hp = Math.max(0, s.hp - amount);
     s.flash = 1;
     s.lastSeenX = fromX;
@@ -256,12 +265,13 @@ AB.Enemies = (() => {
       setState(s, 'DEAD');
       dead.add(id);
       s.deadX = s.x;
-      if (def.carry) AB.Rooms.dropItem(s.room, def.carry, 1, s.x);
+      if (def.carry) AB.Rooms.dropItem(s.room, def.carry, AB.ID.get(def.carry).category === 'ammo' ? 3 : 1, s.x);
       AB.Bus.emit('enemy:dead', { id, name: def.name });
       return true;
     }
-    s.stagger = 0.35;
-    s.knock = Math.sign(s.x - fromX) * 180;
+    // босс почти не сбивается с ног
+    s.stagger = def.type === 'boss' ? 0.12 : 0.35;
+    s.knock = Math.sign(s.x - fromX) * (def.type === 'boss' ? 30 : 180);
     AB.Anim.play(id, 'hurt', { restart: true });
     if (!s.retreated && s.hp / def.hp < def.behavior.retreatBelow) {
       s.retreated = true;
@@ -285,6 +295,7 @@ AB.Enemies = (() => {
 
   return {
     update, damage, inCombat, spawnAt, despawn, threatFor,
+    setState(id, state) { const s = live.get(id); if (s && s.state !== 'DEAD') setState(s, state); },
     inRoom: (roomId) => [...live.values()].filter((s) => s.room === roomId),
     get: (id) => live.get(id) || null,
     isDead: (id) => dead.has(id),

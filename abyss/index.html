@@ -16,6 +16,7 @@
       <div id="hud-room"></div>
       <div id="hud-hp" aria-label="Здоровье"></div>
       <div id="hud-quest" aria-live="polite"></div>
+      <div id="hud-ammo" hidden></div>
     </div>
     <div class="hud-buttons">
       <button id="btn-map" class="hud-btn" title="Карта (M)">Карта</button>
@@ -93,6 +94,19 @@
     </div>
   </div>
 
+  <div id="bossbar" hidden aria-label="Здоровье босса"><b></b><span><i></i></span></div>
+
+  <div id="act-end" hidden>
+    <div class="act-card">
+      <div class="act-no">Конец первого акта</div>
+      <h2>Тишина на дне</h2>
+      <p>Марк закрывает забрало. Впереди — три тысячи метров чёрной воды и ответ на вопрос, кто отправил сигнал.</p>
+      <p class="act-next">Акт II · «Петля» — выход за борт в экзокостюме</p>
+      <button id="btn-act-continue">Остаться на «Абиссе»</button>
+      <button id="btn-act-new" class="danger">Начать заново</button>
+    </div>
+  </div>
+
   <div id="death" hidden>
     <div class="death-card">
       <h2>Вы погибли</h2>
@@ -105,7 +119,7 @@
   <div id="menu" hidden>
     <div class="menu-card">
       <h2>ABYSS: LOST SIGNAL</h2>
-      <p class="muted">Прототип v0.4 · этапы 1–6 из GDD.<br>Графика — временные заглушки с ID ресурсов.</p>
+      <p class="muted">Прототип v0.5 · акт I целиком.<br>Графика — временные заглушки с ID ресурсов.</p>
       <button id="btn-close-menu">Продолжить</button>
       <button id="btn-hero-art" class="ghost-btn"></button>
       <button id="btn-hero-suit" class="ghost-btn"></button>
