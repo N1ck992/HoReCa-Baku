@@ -8,9 +8,9 @@
 AB.CHARACTERS = [
   {
     id: 'CHAR-001',
-    name: 'Главный герой',        // имя в GDD v0.1 не задано
-    role: 'Участник экипажа',
-    specialization: null,         // не задана в GDD v0.1
+    name: 'Марк',                 // утверждено (дополнение к GDD, docs/GDD-CHANGES.md)
+    role: 'Инженер, участник экипажа',
+    specialization: 'engineer',   // инженер: ремонт оборудования (GDD §7)
     crew: true,                   // обычный участник экипажа (GDD §7)
     stats: { maxHp: 100, speed: 140, runSpeed: 260 },
     skills: {},
