@@ -18,8 +18,18 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ROOM001-04', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Настенный монитор' },
   { id: 'ASSET-ROOM001-05', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Медицинский шкаф' },
 
-  // ---- ROOM-TMP-001: первый коридор (временный ID, ждёт утверждения) ----
-  { id: 'ASSET-ROOMTMP001-01', owner: 'ROOM-TMP-001', type: 'background', src: null, desc: 'Фон: первый коридор' },
+  // ---- ROOM-011: первый коридор ----
+  { id: 'ASSET-ROOM011-01', owner: 'ROOM-011', type: 'background', src: null, desc: 'Фон: первый коридор' },
+
+  // ---- Предметы (GDD §9). Иконка в инвентаре и вид на полу ----
+  { id: 'ASSET-ITEM001-01', owner: 'ITEM-001', type: 'icon', src: null, desc: 'Металлолом' },
+  { id: 'ASSET-ITEM002-01', owner: 'ITEM-002', type: 'icon', src: null, desc: 'Электронные компоненты' },
+  { id: 'ASSET-ITEM003-01', owner: 'ITEM-003', type: 'icon', src: null, desc: 'Провода' },
+  { id: 'ASSET-ITEM004-01', owner: 'ITEM-004', type: 'icon', src: null, desc: 'Предохранитель' },
+  { id: 'ASSET-ITEM005-01', owner: 'ITEM-005', type: 'icon', src: null, desc: 'Медикаменты' },
+  { id: 'ASSET-ITEM006-01', owner: 'ITEM-006', type: 'icon', src: null, desc: 'Топливо' },
+  { id: 'ASSET-ITEM007-01', owner: 'ITEM-007', type: 'icon', src: null, desc: 'Биоматериалы' },
+  { id: 'ASSET-ITEM008-01', owner: 'ITEM-008', type: 'icon', src: null, desc: 'Боеприпасы' },
 
   // ---- Общие элементы ----
   { id: 'ASSET-SHARED-01', owner: null, type: 'prop', src: null, desc: 'Гермодверь' },

@@ -85,6 +85,15 @@ AB.Chars = (() => {
     AB.Anim.play(charId, action, { restart: true });
   }
 
+  function heal(charId, amount) {
+    const s = live.get(charId), def = AB.ID.get(charId);
+    if (!s) return 0;
+    const before = s.hp;
+    s.hp = Math.min(def.stats.maxHp, s.hp + amount);
+    AB.Bus.emit('char:hp', { charId, hp: s.hp, delta: s.hp - before });
+    return s.hp - before;
+  }
+
   function serialize() {
     return [...live.values()].map(({ id, room, x, facing, hp, appearance }) => ({ id, room, x, facing, hp, appearance }));
   }
@@ -96,5 +105,5 @@ AB.Chars = (() => {
     }
   }
 
-  return { spawn, get, update, playAction, setAppearance, serialize, restore, all: () => [...live.values()] };
+  return { spawn, get, update, playAction, setAppearance, heal, serialize, restore, all: () => [...live.values()] };
 })();

@@ -5,7 +5,13 @@
 
 AB.Save = (() => {
   const KEY = 'abyss_lost_signal_save';
-  const VERSION = 1;
+  const VERSION = 2;
+
+  // Перенос старых сохранений на новую версию. ID не меняются,
+  // кроме временного ID коридора, утверждённого как ROOM-011.
+  const MIGRATIONS = {
+    1: (raw) => raw.replace(/ROOM-TMP-001/g, 'ROOM-011'),
+  };
 
   function save() {
     const data = {
@@ -14,16 +20,20 @@ AB.Save = (() => {
       chars: AB.Chars.serialize(),
       rooms: AB.Rooms.serialize(),
       story: AB.Story.serialize(),
+      inventory: AB.Inventory.serialize(),
     };
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }
 
   function load() {
     try {
-      const raw = localStorage.getItem(KEY);
+      let raw = localStorage.getItem(KEY);
       if (!raw) return null;
+      let v = JSON.parse(raw).version;
+      while (v < VERSION && MIGRATIONS[v]) raw = MIGRATIONS[v++](raw);
       const d = JSON.parse(raw);
-      return d.version === VERSION ? d : null;
+      d.version = v;
+      return v === VERSION ? d : null;
     } catch (e) {
       return null;
     }

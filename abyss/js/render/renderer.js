@@ -415,8 +415,9 @@ AB.Render = (() => {
       ctx.fillRect(x - 40, b - 190, 80, 190);
       ctx.fillStyle = '#0a0b0d';
       ctx.fillRect(x - 34, b - 182, 68, 174);
-      // приоткрытая дверца
-      const swing = 0.35 + Math.sin(time * 0.7) * 0.02;
+      // приоткрытая дверца; после обыска распахнута
+      const opened = p.container && AB.Rooms.isSearched(AB.Rooms.current(), p.container);
+      const swing = opened ? 0.95 : 0.35 + Math.sin(time * 0.7) * 0.02;
       ctx.fillStyle = '#23282d';
       ctx.beginPath();
       ctx.moveTo(x + 34, b - 182);
@@ -522,6 +523,14 @@ AB.Render = (() => {
       P.hipR = -0.2 * slump - stepPh * 0.3;
       P.shL = 0.5 * slump; P.elL = -0.9 * slump - 0.2;
       P.shR = 0.3 * slump; P.elR = -0.4;
+    } else if (action === 'interact' && hero.reachLow) {
+      // ANIM-CHAR001-03, вариант «подобрать с пола»: присесть и дотянуться
+      const p = AB.Anim.progress(hero.id);
+      const k = Math.sin(p * Math.PI);
+      P.crouch = 22 * k; P.lean = 0.55 * k; P.head = 0.25 * k;
+      P.hipL = -0.5 * k; P.kneeL = 1.3 * k + 0.05;
+      P.hipR = 0.45 * k; P.kneeR = 0.9 * k + 0.05;
+      P.shL = 0.35 * k + 0.1; P.elL = -0.1;
     } else if (action === 'interact') {
       const p = AB.Anim.progress(hero.id);
       const reach = Math.sin(p * Math.PI);
@@ -752,8 +761,85 @@ AB.Render = (() => {
         ctx.fillRect(x - 30, y - 30, 60, 60);
       }
     }
+    drawItemGlints(r);
+    drawTargetHighlight();
     ctx.globalCompositeOperation = 'source-over';
     drawHero(AB.Chars.get('CHAR-001'), 'emissive');
+  }
+
+  // ---------- Предметы на полу (заглушки ASSET-ITEM*) ----------
+  const CAT_COLOR = { resource: [150, 160, 170], medical: [220, 225, 220], ammo: [190, 160, 90] };
+
+  function drawItems(r) {
+    for (const it of AB.Rooms.worldItems(r.id)) {
+      const def = AB.ID.get(it.item);
+      const x = sx(it.x), b = sy(0);
+      const icon = AB.Assets.get(def.icon);
+      if (icon.status === 'ready') {
+        ctx.drawImage(icon.img, x - 14, b - 24, 28, 24);
+      } else {
+        const [cr, cg, cb] = CAT_COLOR[def.category] || CAT_COLOR.resource;
+        ctx.fillStyle = 'rgba(0,0,0,.45)';
+        ctx.beginPath(); ctx.ellipse(x, b, 16, 3, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = `rgb(${cr * 0.35},${cg * 0.35},${cb * 0.35})`;
+        ctx.fillRect(x - 13, b - 14, 26, 14);
+        ctx.fillStyle = `rgb(${cr * 0.5},${cg * 0.5},${cb * 0.5})`;
+        ctx.fillRect(x - 13, b - 16, 26, 4);
+        if (def.category === 'medical') {
+          ctx.fillStyle = 'rgba(150,20,20,.8)';
+          ctx.fillRect(x - 1.5, b - 12, 3, 9); ctx.fillRect(x - 4.5, b - 9, 9, 3);
+        } else {
+          ctx.fillStyle = 'rgba(200,160,40,.35)';
+          ctx.fillRect(x - 11, b - 8, 22, 2);
+        }
+        if (it.qty > 1) {
+          ctx.fillStyle = 'rgba(0,0,0,.4)';
+          ctx.fillRect(x + 6, b - 22, 12, 8);
+          ctx.fillStyle = `rgb(${cr * 0.3},${cg * 0.3},${cb * 0.3})`;
+          ctx.fillRect(x + 7, b - 21, 10, 6);
+        }
+      }
+      idTag(ctx, def.icon, x, b - 34);
+    }
+  }
+
+  // слабый блик, чтобы предмет было видно в темноте
+  function drawItemGlints(r) {
+    AB.Rooms.worldItems(r.id).forEach((it, i) => {
+      const x = sx(it.x), y = sy(-10);
+      const pulse = 0.5 + Math.sin(time * 2.4 + i * 1.7) * 0.5;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 26);
+      g.addColorStop(0, `rgba(120,230,255,${0.10 + pulse * 0.10})`);
+      g.addColorStop(1, 'rgba(120,230,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - 26, y - 26, 52, 52);
+      const tw = Math.max(0, Math.sin(time * 1.3 + i * 2.9) - 0.85) * 6;
+      if (tw > 0) {
+        ctx.strokeStyle = `rgba(200,250,255,${tw * 0.8})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 6 - 5 * tw, y - 4); ctx.lineTo(x + 6 + 5 * tw, y - 4);
+        ctx.moveTo(x + 6, y - 4 - 5 * tw); ctx.lineTo(x + 6, y - 4 + 5 * tw);
+        ctx.stroke();
+      }
+    });
+  }
+
+  // подсветка объекта, с которым сейчас можно взаимодействовать
+  function drawTargetHighlight() {
+    const t = AB.Interact.target('CHAR-001');
+    const hero = AB.Chars.get('CHAR-001');
+    if (!t || !hero || !hero.controllable || t.kind === 'door') return;
+    const x = sx(t.x), b = sy(0);
+    const h = t.kind === 'container' ? 200 : 26;
+    const w = t.kind === 'container' ? 96 : 40;
+    const a = 0.35 + Math.sin(time * 4) * 0.15;
+    ctx.strokeStyle = `rgba(94,230,255,${a})`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -time * 12;
+    ctx.strokeRect(x - w / 2, b - h, w, h);
+    ctx.setLineDash([]);
   }
 
   // ---------- Частицы ----------
@@ -919,6 +1005,7 @@ AB.Render = (() => {
     if (hero && hero.inPod) drawHero(hero, 'body');   // за стеклом капсулы
     drawProps(r);
     drawDoors(r);
+    drawItems(r);
     if (hero && !hero.inPod) drawHero(hero, 'body');
     drawLighting(r);
     drawEmissive(r);

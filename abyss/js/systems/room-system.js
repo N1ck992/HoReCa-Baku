@@ -9,6 +9,39 @@ AB.Rooms = (() => {
   const propState = new Map(); // 'ROOM-001:cryopod-main' -> 'closed' | 'opening' | 'open'
   const doorAnim = new Map();  // 'ROOM-001:east' -> 0..1 (открытость створки)
   let transition = null;       // { to, toDoor, t, phase }
+  const taken = new Map();     // 'ROOM-001:scrap-pod' -> сколько уже подобрано
+  const searched = new Set();  // 'ROOM-001:cabinet'
+  let dropped = [];            // выброшенные предметы: { room, key, item, qty, x }
+  let dropSeq = 0;
+
+  // Предметы, которые сейчас лежат в помещении (с учётом подобранных)
+  function worldItems(roomId) {
+    const r = AB.ID.get(roomId);
+    const out = [];
+    for (const it of (r && r.items) || []) {
+      const left = it.qty - (taken.get(`${roomId}:${it.key}`) || 0);
+      if (left > 0) out.push({ ...it, qty: left });
+    }
+    for (const d of dropped) if (d.room === roomId && d.qty > 0) out.push({ ...d });
+    return out;
+  }
+
+  function takeItem(roomId, key, n) {
+    const d = dropped.find((x) => x.room === roomId && x.key === key);
+    if (d) {
+      d.qty -= n;
+      dropped = dropped.filter((x) => x.qty > 0);
+    } else {
+      const k = `${roomId}:${key}`;
+      taken.set(k, (taken.get(k) || 0) + n);
+    }
+  }
+
+  function dropItem(roomId, item, qty, x) {
+    const r = AB.ID.get(roomId);
+    const cx = AB.util.clamp(x, 60, (r ? r.width : 1000) - 60);
+    dropped.push({ room: roomId, key: `drop-${++dropSeq}`, item, qty, x: cx });
+  }
 
   function room() {
     return current ? AB.ID.get(current) : null;
@@ -99,6 +132,9 @@ AB.Rooms = (() => {
 
   return {
     room, enter, bounds, nearDoor, canPass, useDoor, update, fade,
+    worldItems, takeItem, dropItem,
+    markSearched: (roomId, key) => searched.add(`${roomId}:${key}`),
+    isSearched: (roomId, key) => searched.has(`${roomId}:${key}`),
     inTransition: () => !!transition,
     current: () => current,
     visited: () => [...visited],
@@ -106,11 +142,18 @@ AB.Rooms = (() => {
     propState: (key) => propState.get(key) || null,
     tickProps(dt) { for (const v of propState.values()) v.t += dt; },
     doorOpen: (key) => doorAnim.get(key) || 0,
-    serialize: () => ({ current, visited: [...visited], props: [...propState].map(([k, v]) => [k, v.state]) }),
+    serialize: () => ({
+      current, visited: [...visited], props: [...propState].map(([k, v]) => [k, v.state]),
+      taken: [...taken], searched: [...searched], dropped, dropSeq,
+    }),
     restore(d) {
       if (!d) return;
       (d.visited || []).forEach((v) => visited.add(v));
       (d.props || []).forEach(([k, st]) => propState.set(k, { state: st, t: 99 }));
+      (d.taken || []).forEach(([k, n]) => taken.set(k, n));
+      (d.searched || []).forEach((k) => searched.add(k));
+      dropped = d.dropped || [];
+      dropSeq = d.dropSeq || 0;
     },
   };
 })();

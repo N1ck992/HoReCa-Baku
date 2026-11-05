@@ -4,6 +4,10 @@
 //
 // Геометрия и реквизит — только для отрисовки; логика их не читает.
 // Координаты: x — по длине помещения, пол на y = 0, вверх — отрицательный y.
+//
+// items      — предметы на полу: { key, item, qty, x }
+// containers — что можно обыскать: { key, x, prop, label, loot: [[ITEM, qty]] }
+// key — постоянный ключ внутри помещения (для сохранений, не менять).
 // =====================================================================
 
 AB.ROOMS = [
@@ -15,16 +19,21 @@ AB.ROOMS = [
     height: 420,
     background: 'ASSET-ROOM001-01',
     theme: 'medbay',
-    connections: [{ door: 'east', to: 'ROOM-TMP-001', toDoor: 'west' }],
+    connections: [{ door: 'east', to: 'ROOM-011', toDoor: 'west' }],
     access: { type: 'open' },
-    items: [],        // этап 4
+    items: [
+      { key: 'scrap-pod', item: 'ITEM-001', qty: 2, x: 470 },
+    ],
+    containers: [
+      { key: 'cabinet', x: 1200, prop: 'cabinet', label: 'Медицинский шкаф', loot: [['ITEM-005', 2], ['ITEM-003', 1]] },
+    ],
     enemies: [],      // этап 5
     equipment: [],    // этап 6+
     events: ['EVENT-001'],
     state: 'emergency_power',
     spawn: { x: 230 },
     doors: [
-      { key: 'east', x: 1430, to: 'ROOM-TMP-001', access: { type: 'open' } },
+      { key: 'east', x: 1430, to: 'ROOM-011', access: { type: 'open' } },
     ],
     props: [
       { kind: 'cryopod', x: 230, asset: 'ASSET-ROOM001-02', main: true },
@@ -32,7 +41,7 @@ AB.ROOMS = [
       { kind: 'cryopod', x: 600, asset: 'ASSET-ROOM001-02', empty: true },
       { kind: 'monitor', x: 790, y: -250, asset: 'ASSET-ROOM001-04' },
       { kind: 'medbed', x: 960, asset: 'ASSET-ROOM001-03' },
-      { kind: 'cabinet', x: 1200, asset: 'ASSET-ROOM001-05' },
+      { kind: 'cabinet', x: 1200, asset: 'ASSET-ROOM001-05', container: 'cabinet' },
     ],
     lights: [
       { x: 330, y: -380, color: [255, 40, 30], radius: 420, flicker: 0.15 },
@@ -43,17 +52,21 @@ AB.ROOMS = [
     fx: { steam: [520, 1310], sparks: [], drips: [700, 1120] },
   },
   {
-    id: 'ROOM-TMP-001',
-    temp: true,       // временный ID: в GDD v0.1 коридора нет в списке помещений
+    id: 'ROOM-011',
     name: 'Коридор',
     desc: 'Первый коридор за медицинским отсеком. Аварийное освещение.',
     width: 2600,
     height: 340,
-    background: 'ASSET-ROOMTMP001-01',
+    background: 'ASSET-ROOM011-01',
     theme: 'corridor',
     connections: [{ door: 'west', to: 'ROOM-001', toDoor: 'east' }],
     access: { type: 'open' },
-    items: [],
+    items: [
+      { key: 'fuse-lamp', item: 'ITEM-004', qty: 1, x: 960 },
+      { key: 'scrap-mid', item: 'ITEM-001', qty: 1, x: 1620 },
+      { key: 'parts-end', item: 'ITEM-002', qty: 1, x: 2280 },
+    ],
+    containers: [],
     enemies: [],
     equipment: [],
     events: [],

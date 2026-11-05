@@ -16,39 +16,137 @@
     skip: $('#btn-skip'),
     ids: $('#btn-ids'),
     title: $('#title'),
+    hp: $('#hud-hp'),
+    inv: $('#inventory'),
   };
   let toastTimer = null;
 
-  function toast(text) {
+  function toast(text, kind = 'bad') {
     ui.toast.textContent = text;
-    ui.toast.classList.add('show');
+    ui.toast.className = `show ${kind}`;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 2200);
+    toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 2400);
   }
+
+  function updateHp() {
+    const h = AB.Chars.get(HERO);
+    if (!h) return;
+    const max = AB.ID.get(HERO).stats.maxHp;
+    ui.hp.innerHTML = `<i style="width:${(h.hp / max) * 100}%"></i><span>${Math.round(h.hp)} / ${max}</span>`;
+    ui.hp.classList.toggle('low', h.hp / max < 0.35);
+  }
+
+  // ---------- Инвентарь ----------
+  let selected = 0;
+  const itemName = (id) => AB.ID.get(id).name;
+
+  function renderInventory() {
+    const slots = AB.Inventory.slots(HERO);
+    const grid = slots.map((s, i) => {
+      if (!s) return `<button class="slot empty ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="Пустая ячейка"></button>`;
+      const def = AB.ID.get(s.item);
+      const icon = AB.Assets.get(def.icon);
+      const face = icon.status === 'ready'
+        ? `<img src="${AB.ID.get(def.icon).src}" alt="">`
+        : `<b>${def.short}</b><small>${def.icon}</small>`;
+      return `<button class="slot cat-${def.category} ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${def.name}, ${s.qty} шт.">
+        ${face}<em>${s.qty}</em></button>`;
+    }).join('');
+    const s = slots[selected];
+    let detail = '<p class="muted">Ячейка пуста.</p>';
+    if (s) {
+      const def = AB.ID.get(s.item);
+      const block = AB.Inventory.useBlock(HERO, selected);
+      detail = `
+        <h3>${def.name}</h3>
+        <div class="muted ids">${def.id} · ${def.icon}</div>
+        <p>${def.desc}</p>
+        <div class="muted">В ячейке: ${s.qty} из ${def.stack} · всего: ${AB.Inventory.count(HERO, s.item)}</div>
+        <div class="inv-actions">
+          <button data-inv="use" ${block ? 'disabled' : ''}>Использовать</button>
+          <button data-inv="drop" class="ghost">Выбросить</button>
+        </div>
+        ${block && def.use ? `<div class="muted">${block}</div>` : ''}`;
+    }
+    $('#inv-grid').innerHTML = grid;
+    $('#inv-detail').innerHTML = detail;
+    $('#inv-owner').textContent = `${AB.ID.get(HERO).name} · ${HERO}`;
+    updateHp();
+  }
+
+  function openInventory() {
+    const h = AB.Chars.get(HERO);
+    if (!h || !h.controllable || AB.Rooms.inTransition() || AB.Interact.isSearching()) return;
+    ui.inv.hidden = false;
+    AB.Input.lock();
+    renderInventory();
+  }
+
+  function closeInventory() {
+    if (ui.inv.hidden) return;
+    ui.inv.hidden = true;
+    AB.Input.unlock();
+  }
+
+  ui.inv.addEventListener('click', (e) => {
+    const slot = e.target.closest('[data-slot]');
+    if (slot) { selected = Number(slot.dataset.slot); renderInventory(); return; }
+    const act = e.target.closest('[data-inv]');
+    if (act && !act.disabled) {
+      if (act.dataset.inv === 'use' && AB.Inventory.use(HERO, selected)) toast('Медикаменты использованы', 'good');
+      if (act.dataset.inv === 'drop') {
+        const s = AB.Inventory.slot(HERO, selected);
+        if (s && AB.Inventory.drop(HERO, selected)) toast(`Выброшено: ${itemName(s.item)} ×${s.qty}`, 'info');
+      }
+      renderInventory();
+      AB.Save.save();
+      return;
+    }
+    if (e.target === ui.inv || e.target.closest('[data-inv-close]')) closeInventory();
+  });
+  $('#btn-inv').addEventListener('click', () => (ui.inv.hidden ? openInventory() : closeInventory()));
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); ui.inv.hidden ? openInventory() : closeInventory(); }
+    if (e.code === 'Escape') closeInventory();
+  });
 
   function showRoom(roomId) {
     const r = AB.ID.get(roomId);
-    ui.room.innerHTML = `<b>${r.name}</b><span>${r.id}${r.temp ? ' · временный ID' : ''}</span>`;
+    ui.room.innerHTML = `<b>${r.name}</b><span>${r.id}</span>`;
     ui.room.classList.remove('flash');
     void ui.room.offsetWidth;
     ui.room.classList.add('flash');
   }
 
+  let lastPrompt = '';
   function updatePrompt() {
     const hero = AB.Chars.get(HERO);
-    if (!hero || !hero.controllable || AB.Rooms.inTransition()) { ui.prompt.classList.remove('show'); return; }
-    const d = AB.Rooms.nearDoor(hero.x);
-    if (!d) { ui.prompt.classList.remove('show'); return; }
-    const pass = AB.Rooms.canPass(d);
-    ui.prompt.innerHTML = pass.ok
-      ? `<kbd>${isTouch ? '◉' : 'E'}</kbd> Открыть дверь`
-      : `<kbd class="no">${isTouch ? '◉' : 'E'}</kbd> ${pass.reason}`;
+    const p = hero && !AB.Rooms.inTransition() && ui.inv.hidden && (hero.controllable || AB.Interact.isSearching())
+      ? AB.Interact.prompt(HERO) : null;
+    if (!p) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
+    const key = isTouch ? '◉' : 'E';
+    const html = p.progress !== undefined
+      ? `${p.label}<span class="bar"><i style="width:${Math.round(p.progress * 100)}%"></i></span>`
+      : `<kbd class="${p.ok ? '' : 'no'}">${key}</kbd> ${p.label}`;
+    if (html !== lastPrompt) { ui.prompt.innerHTML = html; lastPrompt = html; }
     ui.prompt.classList.add('show');
   }
 
   // ---------- События модулей ----------
   AB.Bus.on('room:enter', ({ roomId }) => { showRoom(roomId); AB.Save.save(); });
   AB.Bus.on('door:denied', ({ reason }) => toast(reason));
+  AB.Bus.on('item:pickup', ({ itemId, added, left }) => {
+    if (added) toast(`+${added} ${itemName(itemId)}${left ? ' · инвентарь заполнен' : ''}`, left ? 'info' : 'good');
+    else toast('Инвентарь заполнен');
+    AB.Save.save();
+  });
+  AB.Bus.on('container:looted', ({ label, found, full }) => {
+    const list = found.map(([id, n]) => `${itemName(id)} ×${n}`).join(', ');
+    toast(found.length ? `${label}: ${list}${full ? ' · не всё поместилось' : ''}` : `${label}: инвентарь заполнен`, found.length ? 'good' : 'bad');
+    AB.Save.save();
+  });
+  AB.Bus.on('container:empty', ({ label }) => toast(`${label}: пусто`, 'info'));
+  AB.Bus.on('char:hp', updateHp);
   AB.Bus.on('transition:end', () => { const h = AB.Chars.get(HERO); if (h) h.controllable = true; });
   // после выхода из капсулы герой остаётся там, где закончилась анимация
   function finishWake(charId) {
@@ -97,6 +195,7 @@
       AB.Chars.restore(save.chars);
       AB.Rooms.restore(save.rooms);
       AB.Story.restore(save.story);
+      AB.Inventory.restore(save.inventory);
       const hero = AB.Chars.get(HERO);
       AB.Rooms.enter(save.rooms.current || 'ROOM-001', { x: hero ? hero.x : null });
       if (hero) hero.controllable = true;
@@ -112,6 +211,7 @@
     }
     AB.Render.snapCamera();
     ui.ids.classList.toggle('on', AB.Render.idsShown());
+    updateHp();
 
     let last = performance.now();
     function loop(now) {
@@ -122,13 +222,9 @@
 
       const hero = AB.Chars.get(HERO);
       if (hero && hero.controllable && !AB.Rooms.inTransition() && AB.Input.consumeAction()) {
-        const d = AB.Rooms.nearDoor(hero.x);
-        if (d) {
-          hero.facing = d.x >= hero.x ? 1 : -1;
-          AB.Chars.playAction(HERO, 'interact');
-          if (AB.Rooms.useDoor(d)) hero.controllable = false;
-        }
+        AB.Interact.act(HERO);
       }
+      AB.Interact.update(dt);
 
       AB.Chars.update(dt, AB.Rooms.bounds());
       AB.Anim.update(dt);
