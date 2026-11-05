@@ -45,6 +45,59 @@ body { font: 14px/1.4 var(--mono); user-select: none; -webkit-user-select: none;
 .hud-btn.on { color: var(--cyan); border-color: rgba(94, 230, 255, .4); }
 .hud-btn:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
+/* ---------- Мини-карта и навигация ---------- */
+#navbox {
+  position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px));
+  display: grid; gap: 4px; justify-items: center; pointer-events: none; width: min(300px, 46vw);
+}
+#minimap { width: 100%; height: 26px; background: rgba(0, 0, 0, .45); border: 1px solid var(--line); border-radius: 4px; }
+#nav { font-size: 11px; color: var(--muted); opacity: 0; transition: opacity .3s; white-space: nowrap; text-shadow: 0 0 6px #000; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#nav.show { opacity: 1; }
+#nav b { color: var(--cyan); }
+#nav b.locked { color: var(--red); }
+#hint { top: calc(84px + env(safe-area-inset-top, 0px)); }
+
+/* ---------- Карта корабля ---------- */
+#map, #death { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; background: rgba(0, 0, 0, .75); padding: 16px; }
+#map[hidden], #death[hidden] { display: none; }
+.map-card {
+  width: 100%; max-width: 760px; display: grid; gap: 12px; padding: 18px;
+  background: #0b0c0e; border: 1px solid var(--line); border-radius: 10px;
+}
+#map-svg { width: 100%; height: auto; max-height: 55vh; font-family: var(--mono); }
+#map-svg .room rect { fill: #15181c; stroke: #3a4048; stroke-width: 1; }
+#map-svg .room.cur rect { stroke: var(--cyan); fill: #12232a; }
+#map-svg .room.unknown rect { fill: none; stroke-dasharray: 4 3; stroke: #4a5059; }
+#map-svg .room text { fill: var(--fg); font-size: 8px; text-anchor: middle; dominant-baseline: middle; }
+#map-svg .room.unknown text { fill: var(--muted); }
+#map-svg .room text.id { fill: var(--muted); font-size: 6px; }
+#map-svg .room text.cnt { fill: #8fd8e6; font-size: 5px; text-anchor: start; }
+#map-svg .door.known { fill: #4bd88a; }
+#map-svg .door.unexplored { fill: var(--cyan); }
+#map-svg .door.locked { fill: var(--red); }
+#map-svg .link { stroke: #4a5059; stroke-dasharray: 2 2; }
+#map-svg .hero { fill: #fff; }
+#map-svg .goal { fill: none; stroke: var(--cyan); stroke-width: 1.5; animation: goal 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes goal { 50% { transform: scale(1.35); opacity: .4; } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+.lg-hero { background: #fff; border-radius: 50% !important; }
+.lg-open { background: #4bd88a; }
+.lg-unexplored { background: var(--cyan); }
+.lg-locked { background: var(--red); }
+.lg-goal { border: 1.5px solid var(--cyan); border-radius: 50% !important; }
+
+/* ---------- Гибель ---------- */
+.death-card { width: 100%; max-width: 380px; display: grid; gap: 12px; padding: 24px; text-align: center; background: #0b0606; border: 1px solid rgba(255, 59, 47, .35); border-radius: 10px; }
+.death-card h2 { margin: 0; font: 700 32px var(--display); letter-spacing: 6px; text-transform: uppercase; color: var(--red); }
+.death-card button { font: 14px var(--mono); padding: 10px; border-radius: 6px; cursor: pointer; background: #16181b; color: var(--fg); border: 1px solid var(--line); }
+.death-card button.danger { color: var(--red); border-color: rgba(255, 59, 47, .4); }
+#death:not([hidden]) .death-card { animation: rise-in .6s ease-out; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(12px); } }
+
+.slot.held { border-color: rgba(255, 193, 69, .6); }
+.slot u { position: absolute; left: 3px; top: 2px; text-decoration: none; font-size: 7px; color: #ffc145; }
+
 /* ---------- Заставка ---------- */
 #title {
   position: fixed; inset: 0; z-index: 8; display: grid; place-content: center; text-align: center;

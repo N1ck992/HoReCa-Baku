@@ -20,6 +20,9 @@ AB.ITEMS = [
     desc: 'Канистра с топливом для генераторов.' },
   { id: 'ITEM-007', name: 'Биоматериалы', short: 'БИО', category: 'resource', stack: 10, icon: 'ASSET-ITEM007-01', use: null,
     desc: 'Образцы органики. Нужны для исследований.' },
+  { id: 'ITEM-009', name: 'Металлическая труба', short: 'ТРБ', category: 'weapon', stack: 1, icon: 'ASSET-ITEM009-01', use: null,
+    weapon: { damage: 26, range: 64, cooldown: 0.65, hitAt: 0.21 },
+    desc: 'Обрезок трубы. Тяжёлый и надёжный. Можно взять в руки как оружие.' },
   { id: 'ITEM-008', name: 'Боеприпасы', short: 'БП', category: 'ammo', stack: 60, icon: 'ASSET-ITEM008-01', use: null,
     desc: 'Патроны. Понадобятся, когда появится оружие.' },
 ];

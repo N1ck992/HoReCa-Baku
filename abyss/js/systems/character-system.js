@@ -23,6 +23,8 @@ AB.Chars = (() => {
       stride: 0,        // пройденный путь — для фазы шага, чтобы ноги не скользили
       controllable: false,
       hidden: false,
+      equipped: null,   // ITEM-* в руках (оружие)
+      dead: false,
     };
     live.set(charId, s);
     AB.Anim.play(charId, 'idle');
@@ -41,7 +43,7 @@ AB.Chars = (() => {
   // Действие, которое нельзя прервать ходьбой (взаимодействие, урон, пробуждение)
   function busy(s) {
     const tr = AB.Anim.current(s.id);
-    return tr && ['interact', 'hurt', 'wake'].includes(tr.action) && !tr.done;
+    return s.dead || (tr && ['interact', 'hurt', 'wake', 'attack', 'death'].includes(tr.action) && !tr.done);
   }
 
   function update(dt, bounds) {
@@ -85,6 +87,13 @@ AB.Chars = (() => {
     AB.Anim.play(charId, action, { restart: true });
   }
 
+  function equip(charId, itemId) {
+    const s = live.get(charId);
+    if (!s) return;
+    s.equipped = itemId;
+    AB.Bus.emit('char:equip', { charId, itemId });
+  }
+
   function heal(charId, amount) {
     const s = live.get(charId), def = AB.ID.get(charId);
     if (!s) return 0;
@@ -95,15 +104,15 @@ AB.Chars = (() => {
   }
 
   function serialize() {
-    return [...live.values()].map(({ id, room, x, facing, hp, appearance }) => ({ id, room, x, facing, hp, appearance }));
+    return [...live.values()].map(({ id, room, x, facing, hp, appearance, equipped }) => ({ id, room, x, facing, hp, appearance, equipped }));
   }
 
   function restore(list) {
     for (const d of list || []) {
       const s = spawn(d.id, d);
-      if (s) Object.assign(s, { x: d.x, room: d.room, facing: d.facing, hp: d.hp, appearance: d.appearance });
+      if (s) Object.assign(s, { x: d.x, room: d.room, facing: d.facing, hp: d.hp, appearance: d.appearance, equipped: d.equipped || null });
     }
   }
 
-  return { spawn, get, update, playAction, setAppearance, heal, serialize, restore, all: () => [...live.values()] };
+  return { spawn, get, update, playAction, setAppearance, heal, equip, serialize, restore, all: () => [...live.values()] };
 })();

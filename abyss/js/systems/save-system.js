@@ -14,6 +14,9 @@ AB.Save = (() => {
   };
 
   function save() {
+    // не сохраняем посреди боя и после гибели: загрузка вернёт к безопасной точке
+    const hero = AB.Chars.get('CHAR-001');
+    if (!hero || hero.dead || AB.Enemies.inCombat()) return false;
     const data = {
       version: VERSION,
       savedAt: Date.now(),
@@ -21,6 +24,7 @@ AB.Save = (() => {
       rooms: AB.Rooms.serialize(),
       story: AB.Story.serialize(),
       inventory: AB.Inventory.serialize(),
+      enemies: AB.Enemies.serialize(),
     };
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }

@@ -24,6 +24,7 @@ AB.ROOMS = [
     items: [
       { key: 'scrap-pod', item: 'ITEM-001', qty: 2, x: 470 },
     ],
+    map: { x: 0, y: 0, w: 150, h: 46 },   // положение на карте корабля
     containers: [
       { key: 'cabinet', x: 1200, prop: 'cabinet', label: 'Медицинский шкаф', loot: [['ITEM-005', 2], ['ITEM-003', 1]] },
     ],
@@ -61,13 +62,15 @@ AB.ROOMS = [
     theme: 'corridor',
     connections: [{ door: 'west', to: 'ROOM-001', toDoor: 'east' }],
     access: { type: 'open' },
+    map: { x: 150, y: 8, w: 260, h: 30 },
     items: [
+      { key: 'pipe', item: 'ITEM-009', qty: 1, x: 560 },
       { key: 'fuse-lamp', item: 'ITEM-004', qty: 1, x: 960 },
       { key: 'scrap-mid', item: 'ITEM-001', qty: 1, x: 1620 },
       { key: 'parts-end', item: 'ITEM-002', qty: 1, x: 2280 },
     ],
     containers: [],
-    enemies: [],
+    enemies: ['ENEMY-001'],
     equipment: [],
     events: [],
     state: 'emergency_power',

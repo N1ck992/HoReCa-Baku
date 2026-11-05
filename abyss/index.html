@@ -17,10 +17,16 @@
       <div id="hud-hp" aria-label="Здоровье"></div>
     </div>
     <div class="hud-buttons">
+      <button id="btn-map" class="hud-btn" title="Карта (M)">Карта</button>
       <button id="btn-inv" class="hud-btn" title="Инвентарь (I)">Инвентарь</button>
       <button id="btn-ids" class="hud-btn" title="Показать или скрыть ID заглушек">ID</button>
       <button id="btn-menu" class="hud-btn" aria-label="Меню">☰</button>
     </div>
+  </div>
+
+  <div id="navbox">
+    <canvas id="minimap" aria-label="Мини-карта помещения"></canvas>
+    <div id="nav"></div>
   </div>
 
   <div id="title">
@@ -40,6 +46,7 @@
     </div>
     <div class="pad">
       <button data-touch="run" aria-label="Бег">»</button>
+      <button data-touch="attack" aria-label="Удар">⚔</button>
       <button data-touch="action" aria-label="Действие">◉</button>
     </div>
   </div>
@@ -60,10 +67,39 @@
     </div>
   </div>
 
+  <div id="map" hidden>
+    <div class="map-card" role="dialog" aria-label="Карта корабля">
+      <div class="inv-head">
+        <div>
+          <h2>Карта корабля</h2>
+          <div class="muted" id="map-goal"></div>
+        </div>
+        <button class="hud-btn" data-map-close aria-label="Закрыть">✕</button>
+      </div>
+      <svg id="map-svg" role="img" aria-label="Схема исследованных помещений"></svg>
+      <div class="legend">
+        <span><i class="lg-hero"></i>вы</span>
+        <span><i class="lg-open"></i>открытая дверь</span>
+        <span><i class="lg-unexplored"></i>не исследовано</span>
+        <span><i class="lg-locked"></i>заперто</span>
+        <span><i class="lg-goal"></i>куда дальше</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="death" hidden>
+    <div class="death-card">
+      <h2>Вы погибли</h2>
+      <p class="muted">Прогресс вернётся к последнему сохранению: оно делается при входе в помещение и после находок, но не во время боя.</p>
+      <button id="btn-load">Загрузить сохранение</button>
+      <button id="btn-new" class="danger">Начать заново</button>
+    </div>
+  </div>
+
   <div id="menu" hidden>
     <div class="menu-card">
       <h2>ABYSS: LOST SIGNAL</h2>
-      <p class="muted">Прототип v0.2 · этапы 1–4 из GDD.<br>Графика — временные заглушки с ID ресурсов.</p>
+      <p class="muted">Прототип v0.3 · этапы 1–5 из GDD.<br>Графика — временные заглушки с ID ресурсов.</p>
       <button id="btn-close-menu">Продолжить</button>
       <button id="btn-restart" class="danger">Начать заново</button>
     </div>
@@ -78,6 +114,7 @@
   <script src="js/data/rooms.js"></script>
   <script src="js/data/events.js"></script>
   <script src="js/data/items.js"></script>
+  <script src="js/data/enemies.js"></script>
   <!-- Системы -->
   <script src="js/systems/asset-manager.js"></script>
   <script src="js/systems/animation-manager.js"></script>
@@ -87,6 +124,9 @@
   <script src="js/systems/story-events.js"></script>
   <script src="js/systems/inventory.js"></script>
   <script src="js/systems/interaction.js"></script>
+  <script src="js/systems/enemy-system.js"></script>
+  <script src="js/systems/combat.js"></script>
+  <script src="js/systems/navigation.js"></script>
   <script src="js/systems/save-system.js"></script>
   <!-- Отрисовка и запуск -->
   <script src="js/render/renderer.js"></script>

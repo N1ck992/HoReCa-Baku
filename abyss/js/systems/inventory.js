@@ -66,6 +66,7 @@ AB.Inventory = (() => {
     const s = slot(charId, i);
     if (!s) return 'Пустая ячейка';
     const def = AB.ID.get(s.item);
+    if (def.weapon) return 'Это оружие: возьмите его в руки';
     if (!def.use) return 'Используется при ремонте и изготовлении';
     if (def.use.type === 'heal') {
       const c = AB.Chars.get(charId), cd = AB.ID.get(charId);
@@ -91,6 +92,7 @@ AB.Inventory = (() => {
     if (!s || !c) return false;
     const { item, qty } = s;
     bag(charId)[i] = null;
+    if (c.equipped === item && !count(charId, item)) AB.Chars.equip(charId, null);
     AB.Rooms.dropItem(c.room, item, qty, c.x + c.facing * 30);
     AB.Bus.emit('inventory:changed', { charId, itemId: item, delta: -qty });
     return true;

@@ -22,6 +22,8 @@ AB.CHARACTERS = [
       interact: 'ANIM-CHAR001-03',
       hurt: 'ANIM-CHAR001-04',
       wake: 'ANIM-CHAR001-06',
+      attack: 'ANIM-CHAR001-07',
+      death: 'ANIM-CHAR001-08',
     },
   },
 ];
