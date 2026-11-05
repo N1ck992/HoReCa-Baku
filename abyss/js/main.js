@@ -359,6 +359,14 @@
   });
   if (isTouch) document.body.classList.add('touch');
 
+  // ---------- Нажатие на персонажа: что он несёт ----------
+  AB.Input.onScreenTap = (cx, cy) => {
+    const id = AB.Render.pick(cx, cy);
+    if (!id) return false;
+    AB.Render.showCarry(id, AB.Chars.carried(id));
+    return true;
+  };
+
   // ---------- Запуск ----------
   function boot() {
     AB.Assets.load();

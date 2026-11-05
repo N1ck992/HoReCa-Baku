@@ -169,6 +169,19 @@ def run(cfg_path):
         owner[below & (norm['thigh_near'] <= norm['thigh_far'])] = 'thigh_near'
         owner[below & (norm['thigh_near'] > norm['thigh_far'])] = 'thigh_far'
         owner[(owner == 'torso') & (along['torso'] > 1)] = 'head'
+        # видимые куски дальней руки (рукав за спиной, кисть у бедра) не отдаём торсу и бёдрам
+        for far in ('upperarm_far', 'forearm_far'):
+            for other in ('torso', 'thigh_near', 'thigh_far'):
+                grab = (owner == other) & (norm[far] <= 0.8) & (norm[other] > 0.75)
+                owner[grab] = far
+        # части, которые почти не видны, вырезаем целиком: их нарисует ближняя пара
+        skipped = set()
+        for name, j0, j1, ext, rk in BONES:
+            own_n = ((owner == name) & mask).sum()
+            cap_n = ((norm[name] <= 1.0) & mask).sum()
+            if name.endswith('_far') and cap_n and own_n < 0.15 * cap_n:
+                skipped.add(name)
+                owner[(owner == name)] = 'none'
 
         vdir = os.path.join(out_dir, vid)
         os.makedirs(vdir, exist_ok=True)
@@ -178,7 +191,7 @@ def run(cfg_path):
             # закрытое другими частями достраиваем только вдоль самой кости:
             # не за суставами (там соседние части) и никогда под головой
             t = along[name]
-            lo, hi = (0.0, 1.0) if name == 'torso' else (0.06, 0.97)
+            lo, hi = (0.04, 1.0) if name == 'torso' else (0.06, 0.97)
             behind = (norm[name] <= 0.9) & (t > lo) & (t < hi) & mask & (owner != 'head')
             hidden = behind & ~own
             # и только внутри собственного контура части (по строкам): не выходим за спину,
@@ -203,18 +216,20 @@ def run(cfg_path):
                 span = np.zeros_like(own)
                 for y, l, r in zip(rows, L.astype(int), Rt.astype(int)):
                     span[y, l:r + 1] = True
-                lo2, hi2 = (0.0, 1.0) if name == 'torso' else (0.06, 0.97)
+                lo2, hi2 = (0.04, 1.0) if name == 'torso' else (0.06, 0.97)
                 hidden = ((norm[name] <= 1.0) & (t >= lo2) & (t <= hi2) & span & (owner != 'head')) & ~own
             shape = own | hidden
             # запас вокруг верхнего сустава (против щелей при сгибе) — из настоящих пикселей
             jx, jy = Q[j0]
             if name != 'torso':
-                capm = (((xx - jx) ** 2 + (yy - jy) ** 2) < (R[rk] * 0.6) ** 2) & mask & (owner != 'head')
+                k = 1.0 if rk == 'leg' else 0.6
+                parent_ok = (owner == name) | (owner == 'torso') | ((owner == 'upperarm_near') & (name == 'forearm_near'))
+                capm = (((xx - jx) ** 2 + (yy - jy) ** 2) < (R[rk] * k) ** 2) & mask & parent_ok
                 shape |= capm
             if not shape.any():
                 print(f'  ! {vid}/{name}: пусто — проверьте разметку')
                 continue
-            if own.sum() < 0.15 * shape.sum():
+            if name in skipped:
                 # часть почти целиком закрыта (например, дальнее плечо за торсом):
                 # игра возьмёт ближнюю часть и затемнит её
                 print(f'  · {vid}/{name}: видна меньше чем на 15% — будет взята ближняя пара')

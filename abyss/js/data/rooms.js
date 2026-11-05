@@ -60,7 +60,7 @@ AB.ROOMS = [
     height: 340,
     background: 'ASSET-ROOM011-01',
     theme: 'corridor',
-    connections: [{ door: 'west', to: 'ROOM-001', toDoor: 'east' }],
+    connections: [{ door: 'west', to: 'ROOM-001', toDoor: 'east' }, { door: 'east', to: 'ROOM-003', toDoor: 'west' }],
     access: { type: 'open' },
     map: { x: 150, y: 8, w: 260, h: 30 },
     items: [
@@ -77,8 +77,8 @@ AB.ROOMS = [
     spawn: { x: 120 },
     doors: [
       { key: 'west', x: 70, to: 'ROOM-001', access: { type: 'open' } },
-      // Куда ведёт эта дверь, в GDD не указано: пока она обесточена.
-      { key: 'east', x: 2530, to: null, access: { type: 'locked', reason: 'Дверь обесточена' } },
+      // Дверь в энергетический отсек открывается ключ-картой, которую несёт мутант (ENEMY-001)
+      { key: 'east', x: 2530, to: 'ROOM-003', access: { type: 'key', item: 'ITEM-010', reason: 'Нужна ключ-карта' } },
     ],
     props: [],
     lights: [

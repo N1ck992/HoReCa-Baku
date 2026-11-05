@@ -67,6 +67,7 @@ AB.Inventory = (() => {
     if (!s) return 'Пустая ячейка';
     const def = AB.ID.get(s.item);
     if (def.weapon) return 'Это оружие: возьмите его в руки';
+    if (def.category === 'key') return 'Сработает сама, когда подойдёте к двери';
     if (!def.use) return 'Используется при ремонте и изготовлении';
     if (def.use.type === 'heal') {
       const c = AB.Chars.get(charId), cd = AB.ID.get(charId);

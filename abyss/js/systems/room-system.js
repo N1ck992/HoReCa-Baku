@@ -83,8 +83,15 @@ AB.Rooms = (() => {
   }
 
   function canPass(door) {
+    if (door.access.type === 'key' && !AB.Inventory.count('CHAR-001', door.access.item)) {
+      return { ok: false, reason: door.access.reason || 'Нужен ключ' };
+    }
     if (!door.to) return { ok: false, reason: door.access.reason || 'Проход закрыт' };
     if (door.access.type === 'locked') return { ok: false, reason: door.access.reason || 'Заблокировано' };
+    if (door.access.type === 'key') {
+      const t = AB.ID.get(door.to);
+      if (t && t.stub) return { ok: false, reason: `Ключ-карта подошла. ${t.name} появится на этапе 6`, unlocked: true };
+    }
     const target = AB.ID.get(door.to);
     if (!target || target.stub) return { ok: false, reason: 'Помещение недоступно' };
     return { ok: true };

@@ -155,7 +155,7 @@ AB.Enemies = (() => {
       setState(s, 'DEAD');
       dead.add(id);
       s.deadX = s.x;
-      for (const [item, qty] of def.loot) AB.Rooms.dropItem(s.room, item, qty, s.x);
+      if (def.carry) AB.Rooms.dropItem(s.room, def.carry, 1, s.x);
       AB.Bus.emit('enemy:dead', { id, name: def.name });
       return true;
     }

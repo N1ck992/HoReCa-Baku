@@ -29,7 +29,14 @@ AB.Input = (() => {
 
     // Удар мышью по игровому экрану
     const screen = document.getElementById('screen');
-    if (screen) screen.addEventListener('mousedown', (e) => { if (e.button === 0) attackQueued = true; });
+    if (screen) {
+      screen.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        // нажали на персонажа — показать, что он несёт; иначе мышью — удар
+        if (AB.Input.onScreenTap && AB.Input.onScreenTap(e.clientX, e.clientY)) return;
+        if (e.pointerType === 'mouse') attackQueued = true;
+      });
+    }
 
     // Сенсорные кнопки: data-touch="left|right|run|action|attack"
     document.querySelectorAll('[data-touch]').forEach((btn) => {

@@ -17,7 +17,8 @@ AB.Render = (() => {
   const cam = { x: 0, sway: 0 };
   let staticLayer = null;       // кэш неподвижного фона текущего помещения
   let staticFor = null;
-  let showIds = true;           // подписи заглушек
+  let showIds = false;          // служебные подписи ID (кнопка ID); по умолчанию — только имена
+  const bubbles = new Map();    // id персонажа → { item, until } — что он несёт
   let time = 0;
   const particles = [];
   const decals = new Map();     // roomId -> пятна крови на полу
@@ -273,6 +274,49 @@ AB.Render = (() => {
     }
   }
 
+  // ---------- Имя персонажа и вещь над головой ----------
+  function nameTag(id, x, y) {
+    if (showIds) return;
+    const def = AB.ID.get(id);
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = '600 10px "Oswald", "Arial Narrow", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,.6)';
+    ctx.fillText(def.name, x + 0.6, y + 0.6);
+    ctx.fillStyle = 'rgba(225,218,205,.85)';
+    ctx.fillText(def.name, x, y);
+    // вещь, которую несёт персонаж (показывается по нажатию)
+    const bub = bubbles.get(id);
+    if (bub && bub.until > time) {
+      const it = bub.item ? AB.ID.get(bub.item) : null;
+      const text = it ? it.name : 'ничего не несёт';
+      const a = Math.min(1, (bub.until - time) * 2);
+      ctx.font = '11px "Share Tech Mono", monospace';
+      const w = ctx.measureText(text).width + (it ? 30 : 14);
+      const by = y - 24;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(8,10,12,.85)';
+      ctx.strokeStyle = it ? 'rgba(94,230,255,.6)' : 'rgba(255,255,255,.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x - w / 2, by - 11, w, 20, 4) : ctx.rect(x - w / 2, by - 11, w, 20);
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 4, by + 9); ctx.lineTo(x, by + 14); ctx.lineTo(x + 4, by + 9); ctx.fill();
+      if (it) {
+        // значок-заглушка предмета (до появления иконки ASSET-ITEM*)
+        ctx.fillStyle = it.category === 'key' ? '#5ee6ff' : '#9aa4ae';
+        ctx.fillRect(x - w / 2 + 7, by - 5, 14, 10);
+        ctx.fillStyle = '#0b0c0e';
+        ctx.fillRect(x - w / 2 + 9, by - 2, 6, 2);
+      }
+      ctx.fillStyle = '#e1dacd';
+      ctx.textAlign = 'left';
+      ctx.fillText(text, x - w / 2 + (it ? 25 : 7), by + 4);
+    }
+    ctx.restore();
+  }
+
   // ---------- Подпись заглушки ----------
   function idTag(c, id, x, y) {
     if (!showIds) return;
@@ -506,7 +550,7 @@ AB.Render = (() => {
     if (action === 'walk' || action === 'run') {
       const run = action === 'run';
       const cyc = (hero.stride / (run ? 120 : 76)) * Math.PI * 2;
-      const amp = run ? 0.75 : 0.45;
+      const amp = run ? 0.55 : 0.4;   // размах шага: при беге шире, но без «шпагата»
       P.hipL = Math.sin(cyc) * amp;
       P.hipR = Math.sin(cyc + Math.PI) * amp;
       // колено сгибается, когда нога выносится вперёд (угол бедра растёт, cos > 0);
@@ -602,7 +646,7 @@ AB.Render = (() => {
     if (asset.status === 'ready' && asset.parts) {
       // настоящая графика: сборка из частей по скелету (js/data/rigs.js)
       if (pass === 'body') drawHeroRig(hero, P, action, asset, x, b);
-      else if (pass === 'emissive') idTag(ctx, `${hero.appearance} · ${AB.Anim.current(hero.id)?.animId || ''}`, x, b - 142);
+      else if (pass === 'emissive') { idTag(ctx, `${hero.appearance} · ${AB.Anim.current(hero.id)?.animId || ''}`, x, b - 142); nameTag(hero.id, x, b - 134); }
       return;
     }
     if (asset.status === 'ready') {
@@ -676,7 +720,7 @@ AB.Render = (() => {
       ctx.fillRect(-12, shY - 6, 40, 40);
     }
     ctx.restore();
-    if (pass === 'emissive') idTag(ctx, `${hero.appearance} · ${AB.Anim.current(hero.id)?.animId || ''}`, x, b - 142);
+    if (pass === 'emissive') { idTag(ctx, `${hero.appearance} · ${AB.Anim.current(hero.id)?.animId || ''}`, x, b - 142); nameTag(hero.id, x, b - 134); }
   }
 
   // ---------- Герой из частей (cut-out) ----------
@@ -973,6 +1017,7 @@ AB.Render = (() => {
     if (pass === 'emissive') {
       const tr = AB.Anim.current(e.id);
       idTag(ctx, `${def.asset} · ${tr ? tr.animId : ''} · ${e.state}`, x, b - 110);
+      if (e.state !== 'DEAD') nameTag(e.id, x, b - 96);
     }
   }
 
@@ -1424,6 +1469,18 @@ AB.Render = (() => {
 
   return {
     init, frame, snapCamera,
+    showCarry(id, item) { bubbles.set(id, { item, until: time + 2.5 }); },
+    // экранная точка (CSS px) → персонаж под ней, если есть
+    pick(cx, cy) {
+      const r = cv.getBoundingClientRect();
+      const wx = (cx - r.left) * dpr / scale + cam.x, wy = (cy - r.top) * dpr / scale - FLOOR;
+      const list = [];
+      const hero = AB.Chars.get('CHAR-001');
+      if (hero && !hero.hidden) list.push({ id: hero.id, x: hero.x, w: 22, h: 126 });
+      for (const e of AB.Enemies.inRoom(AB.Rooms.current())) if (e.state !== 'DEAD') list.push({ id: e.id, x: e.x, w: 46, h: 90 });
+      const hit = list.find((c) => Math.abs(wx - c.x) < c.w && wy < 4 && wy > -c.h);
+      return hit ? hit.id : null;
+    },
     // точка мира → экранные CSS-пиксели (для интерфейса и проверок)
     screenPos: (x, y) => ({ x: (x - cam.x) * scale / dpr, y: (FLOOR + y) * scale / dpr, unit: scale / dpr }),
     toggleIds() { showIds = !showIds; return showIds; },

@@ -94,6 +94,16 @@ AB.Chars = (() => {
     AB.Bus.emit('char:equip', { charId, itemId });
   }
 
+  // Вещь, которую персонаж несёт (одна на персонажа): у героя — вещь в руках,
+  // у противников — данные carry, пока он жив.
+  function carried(id) {
+    const c = live.get(id);
+    if (c) return c.equipped || null;
+    const e = AB.Enemies.get(id);
+    if (e) return e.state === 'DEAD' ? null : AB.ID.get(id).carry || null;
+    return null;
+  }
+
   function heal(charId, amount) {
     const s = live.get(charId), def = AB.ID.get(charId);
     if (!s) return 0;
@@ -114,5 +124,5 @@ AB.Chars = (() => {
     }
   }
 
-  return { spawn, get, update, playAction, setAppearance, heal, equip, serialize, restore, all: () => [...live.values()] };
+  return { spawn, get, update, playAction, setAppearance, heal, equip, carried, serialize, restore, all: () => [...live.values()] };
 })();

@@ -8,7 +8,7 @@ AB.Nav = (() => {
   // Интересная дверь: ведёт в неисследованное помещение или заперта
   function doorStatus(roomId, door) {
     const pass = AB.Rooms.canPass(door);
-    if (!pass.ok) return { kind: 'locked', reason: pass.reason };
+    if (!pass.ok) return { kind: pass.unlocked ? 'known' : 'locked', reason: pass.reason };
     if (!AB.Rooms.visited().includes(door.to)) return { kind: 'unexplored' };
     return { kind: 'known' };
   }

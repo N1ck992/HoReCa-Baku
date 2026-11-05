@@ -23,6 +23,8 @@ AB.ITEMS = [
   { id: 'ITEM-009', name: 'Металлическая труба', short: 'ТРБ', category: 'weapon', stack: 1, icon: 'ASSET-ITEM009-01', use: null,
     weapon: { damage: 26, range: 64, cooldown: 0.65, hitAt: 0.21 },
     desc: 'Обрезок трубы. Тяжёлый и надёжный. Можно взять в руки как оружие.' },
+  { id: 'ITEM-010', name: 'Ключ-карта', short: 'КЛЮЧ', category: 'key', stack: 1, icon: 'ASSET-ITEM010-01', use: null,
+    desc: 'Магнитная карта доступа. Открывает дверь в конце коридора.' },
   { id: 'ITEM-008', name: 'Боеприпасы', short: 'БП', category: 'ammo', stack: 60, icon: 'ASSET-ITEM008-01', use: null,
     desc: 'Патроны. Понадобятся, когда появится оружие.' },
 ];
