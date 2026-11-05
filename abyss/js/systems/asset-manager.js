@@ -8,9 +8,18 @@ AB.Assets = (() => {
   const disabled = new Set(); // ресурсы, временно выключенные игроком (откат на заглушку)
 
   // Набор частей (type: 'rig'): готов, когда загружены все картинки
-  function loadParts(a) {
+  // Части берутся из манифеста (parts) или из скелета, созданного инструментом:
+  // { rig: 'CHAR001', variant: '01' } → AB.RIGS.CHAR001.variants['01']
+  function partsOf(a) {
+    if (a.parts) return a.parts;
+    const rig = a.rig && AB.RIGS && AB.RIGS[a.rig];
+    return (rig && rig.variants && rig.variants[a.variant]) || null;
+  }
+
+  function loadParts(a, files) {
     const rec = { status: 'loading', img: null, parts: {} };
     state.set(a.id, rec);
+    a = { ...a, parts: files };
     const names = Object.keys(a.parts);
     let left = names.length;
     for (const n of names) {
@@ -26,7 +35,8 @@ AB.Assets = (() => {
 
   function load() {
     for (const a of AB.ASSET_MANIFEST) {
-      if (a.parts) { loadParts(a); continue; }
+      const files = partsOf(a);
+      if (files) { loadParts(a, files); continue; }
       if (!a.src) {
         state.set(a.id, { status: 'missing', img: null });
         continue;

@@ -717,43 +717,66 @@ AB.Render = (() => {
     return { x: x1 + lx * Math.cos(th) - ly * Math.sin(th), y: y1 + lx * Math.sin(th) + ly * Math.cos(th) };
   }
 
+  // Скелет бывает двух видов:
+  //  - ручной (js/data/rigs.js): одна картинка бедра/голени на обе ноги + ботинок;
+  //  - автоматический (tools/rig_from_fullbody.py): у каждой стороны свои части
+  //    (thigh_near, shin_far…), ботинок нарисован вместе со штаниной.
   function drawHeroRig(hero, P, action, asset, x, b) {
     const rig = AB.RIGS[AB.ID.get(hero.appearance).rig];
     const R = rig.parts, B = rig.bones, I = asset.parts, dk = rig.farDarken;
+    // часть → общая часть → ближняя пара (если дальняя часть не нарисована)
+    const get = (name, base) => {
+      const pair = `${base}_near`;
+      const key = I[name] ? name : I[base] ? base : pair;
+      return { img: I[key], spec: R[key], len: B[name] ?? B[base] ?? B[pair] };
+    };
+    const auto = !!rig.unitsPerPx;
     ctx.save();
     ctx.translate(x, b);
     ctx.scale(hero.facing, 1);
     if (action === 'death') ctx.rotate(-U.ease(AB.Anim.progress(hero.id)) * 1.45);
     const hipY = rig.hipY + P.bob * 0.5 + P.crouch;
 
-    const leg = (hx, hip, knee, darken) => {
+    const leg = (side, hip, knee, darken) => {
+      const thigh = get(`thigh_${side}`, 'thigh'), shin = get(`shin_${side}`, 'shin');
+      const hx = auto ? 0 : side === 'near' ? 2 : -2;
       const thighAng = hip, shinAng = hip - knee;
-      const k = rigBone(I.thigh, R.thigh, hx, hipY, thighAng, B.thigh, darken);
-      const a = rigBone(I.shin, R.shin, k.x, k.y, shinAng, B.shin, darken);
-      // стопа почти горизонтальна, слегка следует за голенью
-      rigBone(I.boot, R.boot, a.x, a.y, shinAng * 0.25, R.boot.length, darken);
+      const k = rigBone(thigh.img, thigh.spec, hx, hipY, thighAng, thigh.len, darken);
+      const a = rigBone(shin.img, shin.spec, k.x, k.y, shinAng, shin.len, darken);
+      // отдельный ботинок (ручной скелет): почти горизонтален, слегка следует за голенью
+      if (I.boot && R.boot) rigBone(I.boot, R.boot, a.x, a.y, shinAng * 0.25, R.boot.length, darken);
     };
 
     // торс: от таза вверх, с наклоном
     const torsoAng = Math.PI - P.lean;
-    const sh = rigAnchor(I.torso, R.torso, 0, hipY, torsoAng, B.torso, R.torso.shoulder);
-    const shY = sh.y + P.breath * 0.4;
+    const torso = get('torso', 'torso');
+    const shoulder = (side) => {
+      const anchor = R.torso[`shoulder_${side}`] || R.torso.shoulder;
+      const p = rigAnchor(torso.img, torso.spec, 0, hipY, torsoAng, torso.len, anchor);
+      if (!R.torso[`shoulder_${side}`] && side === 'far') p.x -= 3;
+      p.y += P.breath * 0.4;
+      return p;
+    };
+    const shN = shoulder('near'), shF = shoulder('far');
 
     // дальние конечности
-    leg(-2, P.hipR, P.kneeR, dk);
+    leg('far', P.hipR, P.kneeR, dk);
     {
-      const e = rigBone(I.upperarm_far, R.upperarm_far, sh.x - 3, shY, P.shR, B.upperarm, dk);
-      rigBone(I.forearm_far, R.forearm_far, e.x, e.y, P.shR - P.elR, B.forearm, dk);
+      const up = get('upperarm_far', 'upperarm'), fo = get('forearm_far', 'forearm');
+      const e = rigBone(up.img, up.spec, shF.x, shF.y, P.shR, up.len, dk);
+      rigBone(fo.img, fo.spec, e.x, e.y, P.shR - P.elR, fo.len, dk);
     }
     // торс и голова
-    const neck = rigBone(I.torso, R.torso, 0, hipY, torsoAng, B.torso);
-    rigBone(I.head, R.head, neck.x, neck.y + 3, torsoAng - P.head, B.head);
+    const neck = rigBone(torso.img, torso.spec, 0, hipY, torsoAng, torso.len);
+    const head = get('head', 'head');
+    rigBone(head.img, head.spec, neck.x, neck.y + (auto ? 0 : 3), torsoAng - P.head, head.len);
     // ближние конечности и оружие
-    leg(2, P.hipL, P.kneeL, 0);
+    leg('near', P.hipL, P.kneeL, 0);
     {
-      const e = rigBone(I.upperarm_near, R.upperarm_near, sh.x, shY, P.shL, B.upperarm);
+      const up = get('upperarm_near', 'upperarm'), fo = get('forearm_near', 'forearm');
+      const e = rigBone(up.img, up.spec, shN.x, shN.y, P.shL, up.len);
       const foreAng = P.shL - P.elL;
-      const w = rigBone(I.forearm_near, R.forearm_near, e.x, e.y, foreAng, B.forearm);
+      const w = rigBone(fo.img, fo.spec, e.x, e.y, foreAng, fo.len);
       if (hero.equipped) {
         const hand = { fx: w.x + Math.sin(foreAng) * 4, fy: w.y + Math.cos(foreAng) * 4 };
         drawWeapon(hand, foreAng + (P.pipe || 0.35));

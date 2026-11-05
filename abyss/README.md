@@ -6,6 +6,7 @@
 - Реестр ID и открытые вопросы: [docs/ID-REGISTRY.md](docs/ID-REGISTRY.md)
 - Задание на графику для художника или нейросети: [docs/ART-BRIEF.md](docs/ART-BRIEF.md)
 - Описание локаций для генерации фонов: [docs/LOCATIONS-ART.md](docs/LOCATIONS-ART.md)
+- **Стандарт графики персонажей** и инструмент нарезки: [docs/CHARACTER-ART-SPEC.md](docs/CHARACTER-ART-SPEC.md), `tools/rig_from_fullbody.py`
 - Согласованные дополнения к GDD: [docs/GDD-CHANGES.md](docs/GDD-CHANGES.md)
 
 ## Запуск
