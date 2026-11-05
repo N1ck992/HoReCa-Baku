@@ -18,6 +18,9 @@ AB.ASSET_MANIFEST = [
   // ---- CHAR-002: спутница — графика ждёт утверждения внешности ----
   { id: 'ASSET-CHAR002-01', owner: 'CHAR-002', type: 'sprite', src: null, desc: 'Спутница: основной вид' },
 
+  // ---- ENEMY-002: преследователь — графика ждёт утверждения ----
+  { id: 'ASSET-ENEMY002-01', owner: 'ENEMY-002', type: 'sprite', src: null, desc: 'Преследователь: силуэт' },
+
   // ---- ROOM-001: медицинский отсек ----
   { id: 'ASSET-ROOM001-01', owner: 'ROOM-001', type: 'background', src: null, desc: 'Фон: стены и пол медотсека' },
   { id: 'ASSET-ROOM001-02', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Аварийная криокапсула' },
@@ -30,6 +33,10 @@ AB.ASSET_MANIFEST = [
 
   // ---- ROOM-002: жилой сектор ----
   { id: 'ASSET-ROOM002-01', owner: 'ROOM-002', type: 'background', src: null, desc: 'Фон: жилой сектор' },
+
+  // ---- ROOM-005: склад, ROOM-008: командный центр ----
+  { id: 'ASSET-ROOM005-01', owner: 'ROOM-005', type: 'background', src: null, desc: 'Фон: склад' },
+  { id: 'ASSET-ROOM008-01', owner: 'ROOM-008', type: 'background', src: null, desc: 'Фон: командный центр' },
 
   // ---- ROOM-003: энергетический отсек ----
   // Фон — концепт-арт целиком: генератор, щит, кабельный узел, пульт и двери нарисованы на нём.

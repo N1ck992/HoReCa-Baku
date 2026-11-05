@@ -97,6 +97,11 @@ AB.Render = (() => {
   }
 
   function flicker(l, i) {
+    // сцена: лампы сбоят
+    if (AB.Story.fx.flicker > 0 && !l.source) {
+      const r = Math.sin(time * 47 + i * 13) + Math.sin(time * 23 + i * 5);
+      return r > 0.6 ? 0.9 : r > -0.4 ? 0.35 : 0.03;
+    }
     // плавное мерцание + редкие провалы у неисправных ламп; с питанием свет ровный
     const n = Math.sin(time * 13.1 + i * 7) * 0.5 + Math.sin(time * 31.7 + i * 3) * 0.3 + Math.sin(time * 4.3 + i) * 0.2;
     const fl = l.source ? l.flicker : l.flicker * (1 - AB.World.powerT() * 0.9);
@@ -281,6 +286,10 @@ AB.Render = (() => {
       g.fillStyle = 'rgba(160,30,30,.18)';
       g.fillRect(1040, top + 90, 14, 44);
       g.fillRect(1025, top + 105, 44, 14);
+    } else if (r.theme === 'storage') {
+      for (let x = 300; x < r.width - 200; x += 600) g.fillText(`CARGO ${String(1 + Math.round(x / 600)).padStart(2, '0')}`, x, top + 92);
+    } else if (r.theme === 'bridge') {
+      g.fillText('BRIDGE', 140, top + 92);
     } else if (r.theme === 'living') {
       for (let x = 300; x < r.width - 200; x += 400) g.fillText(`K-${String(1 + Math.round(x / 400)).padStart(2, '0')}`, x, top + 92);
       g.fillText('CREW', 140, top + 92);
@@ -511,6 +520,27 @@ AB.Render = (() => {
       ctx.fillStyle = 'rgba(60,55,50,.8)';
       ctx.beginPath(); ctx.moveTo(x + 30, b - 130); ctx.quadraticCurveTo(x + 60, b - 100, x + 50, b - 70); ctx.lineTo(x + 70, b - 120); ctx.fill();
     },
+    // склад: штабель контейнеров
+    crates(p) {
+      const x = sx(p.x), b = sy(0);
+      const box = (cx, cy, w, h, c) => {
+        ctx.fillStyle = c; ctx.fillRect(cx - w / 2, cy - h, w, h);
+        ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5; ctx.strokeRect(cx - w / 2, cy - h, w, h);
+        ctx.fillStyle = 'rgba(200,160,40,.12)'; ctx.fillRect(cx - w / 2 + 4, cy - h + 6, w - 8, 4);
+      };
+      box(x - 40, b, 80, 70, '#2a2a26'); box(x + 42, b, 80, 70, '#24282a'); box(x, b - 70, 90, 60, '#2c2723');
+    },
+    // мостик: пульт управления
+    console(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#1b1f24';
+      ctx.beginPath(); ctx.moveTo(x - 70, b); ctx.lineTo(x - 70, b - 70); ctx.lineTo(x - 40, b - 110); ctx.lineTo(x + 70, b - 110); ctx.lineTo(x + 70, b); ctx.fill();
+      ctx.fillStyle = '#071210';
+      ctx.fillRect(x - 30, b - 104, 90, 26);
+      ctx.fillStyle = 'rgba(0,0,0,.4)';
+      for (let i = 0; i < 5; i++) ctx.fillRect(x - 60 + i * 26, b - 62, 16, 6);
+    },
+
     // личный шкафчик
     locker(p) {
       const x = sx(p.x), b = sy(0);
@@ -775,8 +805,19 @@ AB.Render = (() => {
         ctx.fillStyle = look.hair;
         ctx.beginPath(); ctx.ellipse(-1, -22, 10.5, 6.5, -0.2, Math.PI, 0); ctx.fill();
       }
-      ctx.fillStyle = light;
-      ctx.beginPath(); ctx.ellipse(-2, -19, 4, 6, 0, 0, 7); ctx.fill();
+      if (look.hood) {
+        // капюшон: лица не видно, только темнота
+        ctx.fillStyle = '#030303';
+        ctx.beginPath(); ctx.ellipse(3, -15, 7.5, 9, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = look.mid;
+        ctx.beginPath();
+        ctx.moveTo(10, -6); ctx.quadraticCurveTo(13, -28, 0, -30); ctx.quadraticCurveTo(-14, -28, -13, -8);
+        ctx.lineTo(-9, 2); ctx.lineTo(-2, -2); ctx.quadraticCurveTo(-4, -20, 6, -22); ctx.quadraticCurveTo(9, -14, 10, -6);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = light;
+        ctx.beginPath(); ctx.ellipse(-2, -19, 4, 6, 0, 0, 7); ctx.fill();
+      }
       ctx.restore();
       // ближняя рука (и оружие в ней)
       const hand = limb(3, shY + 3, P.shL, 21, -P.elL, 20, 8.5, mid);
@@ -990,8 +1031,23 @@ AB.Render = (() => {
     return { Q, action };
   }
 
+  // преследователь: человеческий силуэт (заглушка ASSET-ENEMY002-01), появляется и растворяется
+  function drawPursuer(e, def, pass) {
+    const fake = { id: e.id, x: e.x, facing: e.facing, stride: e.stride, appearance: def.appearance, equipped: 'ITEM-009', hidden: false, room: e.room };
+    ctx.save();
+    ctx.globalAlpha = U.clamp(e.alpha == null ? 1 : e.alpha, 0, 1) * ctx.globalAlpha;
+    drawHero(fake, pass);
+    if (pass === 'body' && e.flash > 0) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = `rgba(255,220,200,${0.25 * e.flash})`;
+      ctx.fillRect(sx(e.x) - 16, sy(-120), 32, 120);
+    }
+    ctx.restore();
+  }
+
   function drawEnemy(e, pass) {
     const def = AB.ID.get(e.id);
+    if (def.humanoid) { drawPursuer(e, def, pass); return; }
     const asset = AB.Assets.get(def.asset);
     const { Q, action } = enemyPose(e);
     const x = sx(e.x + Q.dx * e.facing), b = sy(0);
@@ -1181,6 +1237,10 @@ AB.Render = (() => {
     });
     // двери: индикаторы
     for (const d of r.doors) if (d._light) hole(d._light.x, d._light.y, d._light.near ? 90 : 50, 0.6);
+    // преследователя видно и в темноте — едва-едва
+    for (const e of AB.Enemies.inRoom(r.id)) {
+      if (AB.ID.get(e.id).humanoid) hole(sx(e.x), sy(-70), 140, 0.32 * U.clamp(e.alpha || 0, 0, 1));
+    }
     // герой видит немного вокруг себя
     const hero = AB.Chars.get('CHAR-001');
     if (hero) hole(sx(hero.x), sy(-60), 190, 0.5);

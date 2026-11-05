@@ -42,4 +42,35 @@ AB.ENEMIES = [
   },
 ];
 
+// ENEMY-002 — преследователь (GDD §3). В главе 1 игрок не знает, кто он.
+// Нападает только на спутницу; убить нельзя — после нескольких ударов отступает.
+AB.ENEMIES.push({
+  id: 'ENEMY-002',
+  name: '???',
+  type: 'pursuer',
+  humanoid: true,                 // рисуется как человек (заглушка-силуэт)
+  immortal: true,
+  asset: 'ASSET-ENEMY002-01',
+  appearance: 'ASSET-ENEMY002-01',
+  // силуэт: рваный обгоревший комбинезон, лицо скрыто
+  look: { dark: '#0d0d0f', mid: '#1b1a1c', light: '#2a2725', hood: true, build: 1 },
+  hp: 999,
+  damage: 20,                     // по спутнице
+  shove: 8,                       // по Марку, если тот встал на пути
+  hitsToRetreat: 3,
+  speed: { chase: 150, retreat: 210 },
+  attack: { range: 52, windup: 0.5, cooldown: 1.2 },
+  target: 'CHAR-002',
+  stats: { maxHp: 999, speed: 150, runSpeed: 150 },
+  anims: {
+    idle: 'ANIM-ENEMY002-01',
+    walk: 'ANIM-ENEMY002-02',
+    run: 'ANIM-ENEMY002-03',
+    attack: 'ANIM-ENEMY002-04',
+    hurt: 'ANIM-ENEMY002-05',
+  },
+  carry: null,
+  spawn: null,                    // появляется только по сюжетным событиям
+});
+
 AB.ENEMIES.forEach((e) => AB.ID.register(e.id, e));

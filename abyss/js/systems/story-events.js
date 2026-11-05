@@ -6,7 +6,7 @@
 AB.Story = (() => {
   const done = new Set();
   let running = null; // { def, t, next, wait, skip }
-  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false, ghost: 0 };
+  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false, ghost: 0, flicker: 0 };
 
   const ACTIONS = {
     lock_input: () => AB.Input.lock(),
@@ -60,6 +60,16 @@ AB.Story = (() => {
       AB.Dialog.open(s.id);
       running.wait = () => !AB.Dialog.isOpen();
     },
+    // лампы сбоят
+    flicker: (s) => { fx.flicker = s.duration; },
+    // противник по сценарию; x: 'behind' — позади Марка, откуда он пришёл
+    spawn_enemy: (s) => {
+      const hero = AB.Chars.get('CHAR-001');
+      const x = s.x === 'behind' ? Math.max(80, hero.x - 620) : s.x;
+      AB.Enemies.spawnAt(s.enemy, s.room, x, s.state, s.facing || 1);
+    },
+    despawn_enemy: (s) => AB.Enemies.despawn(s.enemy),
+    flee: (s) => { const c = AB.Chars.get(s.char); if (c) c.flee = s.on; },
     follow: (s) => {
       const c = AB.Chars.get(s.char);
       if (c) { c.follow = s.leader; c.goal = null; }
@@ -86,6 +96,7 @@ AB.Story = (() => {
 
   function update(dt) {
     fx.ghost = Math.max(0, fx.ghost - dt);
+    fx.flicker = Math.max(0, fx.flicker - dt);
     if (fx.fadeDur > 0 && fx.fadeT < fx.fadeDur) {
       fx.fadeT += dt;
       fx.fade = AB.util.lerp(fx.fadeFrom, fx.fadeTo, AB.util.ease(AB.util.clamp(fx.fadeT / fx.fadeDur, 0, 1)));
@@ -129,8 +140,17 @@ AB.Story = (() => {
   AB.Bus.on('world:power', ({ on }) => { if (on) trigger('power_on'); });
   AB.Bus.on('room:enter', ({ roomId }) => trigger(`enter:${roomId}`));
 
+  // события «Марк дошёл до места»: trigger 'zone:ROOM-ID:X' — когда x героя больше X
+  function zone(roomId, x) {
+    for (const def of AB.EVENTS) {
+      if (!def.trigger.startsWith('zone:') || done.has(def.id)) continue;
+      const [, r, xs] = def.trigger.split(':');
+      if (r === roomId && x > Number(xs)) trigger(def.trigger);
+    }
+  }
+
   return {
-    trigger, update, skip, fx,
+    trigger, update, skip, fx, zone,
     isRunning: () => !!running,
     current: () => (running ? { id: running.def.id, t: +running.t.toFixed(2), next: running.next, waiting: !!running.wait } : null),
     isDone: (id) => done.has(id),

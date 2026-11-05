@@ -33,6 +33,16 @@ AB.ANIMATIONS.push(
   { id: 'ANIM-CHAR002-03', owner: 'CHAR-002', action: 'interact', loop: false, sheet: null, desc: 'Взаимодействие', duration: 0.7 },
   { id: 'ANIM-CHAR002-04', owner: 'CHAR-002', action: 'hurt',     loop: false, sheet: null, desc: 'Получение урона', duration: 0.5 },
   { id: 'ANIM-CHAR002-05', owner: 'CHAR-002', action: 'idle',     loop: true,  sheet: null, desc: 'Ожидание' },
+  { id: 'ANIM-CHAR002-06', owner: 'CHAR-002', action: 'death',    loop: false, sheet: null, desc: 'Гибель', duration: 1.4 },
+);
+
+// ENEMY-002: преследователь (процедурные заглушки, движения как у человека)
+AB.ANIMATIONS.push(
+  { id: 'ANIM-ENEMY002-01', owner: 'ENEMY-002', action: 'idle',   loop: true,  sheet: null, desc: 'Стоит неподвижно' },
+  { id: 'ANIM-ENEMY002-02', owner: 'ENEMY-002', action: 'walk',   loop: true,  sheet: null, desc: 'Идёт' },
+  { id: 'ANIM-ENEMY002-03', owner: 'ENEMY-002', action: 'run',    loop: true,  sheet: null, desc: 'Бежит' },
+  { id: 'ANIM-ENEMY002-04', owner: 'ENEMY-002', action: 'attack', loop: false, sheet: null, desc: 'Удар', duration: 0.5 },
+  { id: 'ANIM-ENEMY002-05', owner: 'ENEMY-002', action: 'hurt',   loop: false, sheet: null, desc: 'Получение удара', duration: 0.4 },
 );
 
 AB.ANIMATIONS.forEach((a) => AB.ID.register(a.id, a));

@@ -37,4 +37,23 @@ AB.QUESTS = [
   },
 ];
 
+// QUEST-002: довести спутницу до безопасной зоны (дополнение №18)
+AB.QUESTS.push({
+  id: 'QUEST-002',
+  name: 'Безопасная зона',
+  desc: 'Добраться вместе со спутницей до командного центра — его можно заблокировать изнутри.',
+  start: { event: 'EVENT-003' },
+  requires: ['QUEST-001'],
+  items: [],
+  skills: [],
+  rooms: ['ROOM-002', 'ROOM-005', 'ROOM-008'],
+  stages: [
+    { id: 'reach', objectives: [
+      { id: 'reach', text: 'Добраться до командного центра вместе со спутницей', done: { room: 'ROOM-008', with: 'CHAR-002' }, target: { room: 'ROOM-005', x: 2030 } },
+    ] },
+  ],
+  reward: {},
+  next: [],
+});
+
 AB.QUESTS.forEach((q) => AB.ID.register(q.id, q));

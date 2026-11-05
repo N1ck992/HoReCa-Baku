@@ -280,8 +280,15 @@
   AB.Bus.on('combat:noweapon', () => toast('Нечем драться: найдите что-нибудь тяжёлое', 'info'));
   AB.Bus.on('enemy:dead', ({ name }) => { toast(`${name} убит`, 'good'); setTimeout(() => AB.Save.save(), 1800); });
   AB.Bus.on('char:dead', ({ charId }) => {
-    if (charId !== HERO) return;
+    if (charId !== HERO && charId !== 'CHAR-002') return;
+    // гибель Марка или спутницы — конец: загрузка последнего сохранения
+    $('#death h2').textContent = charId === HERO ? 'Вы погибли' : 'Её больше нет';
+    if (charId !== HERO) { const h = AB.Chars.get(HERO); if (h) h.controllable = false; }
     setTimeout(() => { ui.death.hidden = false; }, 1600);
+  });
+  AB.Bus.on('enemy:retreat', ({ id }) => { if (AB.ID.get(id).type === 'pursuer') toast('Он отступил в темноту', 'info'); });
+  AB.Bus.on('quest:done', ({ id }) => {
+    if (id === 'QUEST-002') setTimeout(() => toast('Безопасная зона: переборки заблокированы изнутри', 'good'), 1400);
   });
   AB.Bus.on('item:pickup', ({ itemId, added }) => {
     const def = AB.ID.get(itemId);
@@ -305,6 +312,12 @@
   AB.Bus.on('anim:end', ({ charId, action }) => { if (action === 'wake') finishWake(charId); });
   let skipRequested = false;
   AB.Bus.on('ui:hint', (kind) => {
+    if (kind === 'protect') {
+      ui.hint.innerHTML = `Защитите её: бейте нападающего (${isTouch ? '⚔' : '<kbd>F</kbd>'}) или уведите её в командный центр`;
+      ui.hint.classList.add('show');
+      setTimeout(() => ui.hint.classList.remove('show'), 6000);
+      return;
+    }
     if (kind !== 'move') return;
     ui.hint.innerHTML = isTouch
       ? '◀ ▶ — идти · <b>»</b> — бег · <b>◉</b> — действие · <b>⚔</b> — удар'
@@ -454,7 +467,10 @@
       setTimeout(() => ui.title.remove(), 6500);
     }
     // задания, которые должны были начаться в уже посещённых помещениях (старые сохранения)
-    for (const q of AB.QUESTS) if (q.start && AB.Rooms.visited().includes(q.start.room)) AB.Quests.start(q.id);
+    for (const q of AB.QUESTS) {
+      if (q.start && q.start.room && AB.Rooms.visited().includes(q.start.room)) AB.Quests.start(q.id);
+      if (q.start && q.start.event && AB.Story.isDone(q.start.event)) AB.Quests.start(q.id);
+    }
     AB.Quests.check();
     AB.Render.snapCamera();
     applyHeroArt();
@@ -467,6 +483,7 @@
       last = now;
       AB.Story.update(dt);
       AB.World.update(dt);
+      { const h = AB.Chars.get(HERO); if (h && !AB.Rooms.inTransition()) AB.Story.zone(AB.Rooms.current(), h.x); }
       if (skipRequested) { skipRequested = false; finishWake(HERO); }
 
       const hero = AB.Chars.get(HERO);

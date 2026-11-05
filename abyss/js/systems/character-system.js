@@ -27,6 +27,7 @@ AB.Chars = (() => {
       dead: false,
       goal: null,       // { x, speed } — идти к точке (сюжетные сцены)
       follow: null,     // ID персонажа, за которым идёт
+      flee: false,      // убегать от угрозы к дальней двери
     };
     live.set(charId, s);
     AB.Anim.play(charId, 'idle');
@@ -60,9 +61,23 @@ AB.Chars = (() => {
         target = ax * (run ? def.stats.runSpeed : def.stats.speed);
         if (ax) s.facing = ax;
       } else if (!busy(s)) {
-        // следование: держится в шаге позади ведущего
+        // бегство: если рядом преследователь — бежит к двери подальше от него
+        const threat = s.flee && AB.Enemies.threatFor(s.id, s.room);
+        if (!threat) s.fleeX = null;
         const lead = s.follow && live.get(s.follow);
-        if (lead && lead.room === s.room) {
+        if (threat) {
+          // дверь выбирается один раз за нападение — по ту сторону от преследователя,
+          // иначе она металась бы и пробегала сквозь него
+          if (s.fleeX == null) {
+            const r = AB.Rooms.room();
+            const side = Math.sign(s.x - threat.x) || 1;
+            const doors = (r.doors || []).filter((d) => d.to && Math.sign(d.x - threat.x) === side);
+            const door = doors.sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0];
+            s.fleeX = door ? door.x - side * 55 : (side > 0 ? r.width - 70 : 70);
+          }
+          if (Math.abs(s.fleeX - s.x) > 10) s.goal = { x: s.fleeX, speed: def.stats.runSpeed, follow: false };
+          else { s.goal = null; s.facing = Math.sign(threat.x - s.x) || s.facing; }  // ждёт у двери, открыть может только Марк
+        } else if (lead && lead.room === s.room) {
           const behind = lead.x - lead.facing * 85;
           const far = Math.abs(behind - s.x);
           if (far > 40) s.goal = { x: behind, speed: far > 260 ? def.stats.runSpeed : def.stats.speed };
@@ -133,7 +148,7 @@ AB.Chars = (() => {
   }
 
   function serialize() {
-    return [...live.values()].map(({ id, room, x, facing, hp, appearance, equipped, follow }) => ({ id, room, x, facing, hp, appearance, equipped, follow }));
+    return [...live.values()].map(({ id, room, x, facing, hp, appearance, equipped, follow, flee }) => ({ id, room, x, facing, hp, appearance, equipped, follow, flee }));
   }
 
   // ведомые переходят в новое помещение вместе с ведущим
@@ -153,7 +168,7 @@ AB.Chars = (() => {
   function restore(list) {
     for (const d of list || []) {
       const s = spawn(d.id, d);
-      if (s) Object.assign(s, { x: d.x, room: d.room, facing: d.facing, hp: d.hp, appearance: d.appearance, equipped: d.equipped || null, follow: d.follow || null });
+      if (s) Object.assign(s, { x: d.x, room: d.room, facing: d.facing, hp: d.hp, appearance: d.appearance, equipped: d.equipped || null, follow: d.follow || null, flee: !!d.flee });
     }
   }
 

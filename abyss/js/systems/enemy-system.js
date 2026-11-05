@@ -63,14 +63,103 @@ AB.Enemies = (() => {
     s.stride += Math.abs(s.vx) * dt;
   }
 
+  // ---------- Преследователь (ENEMY-002) ----------
+  const P_ANIM = { WATCH: 'idle', APPEAR: 'walk', CHASE: 'run', ATTACK: 'attack', RETREAT: 'run', FADE: 'idle' };
+
+  function setP(s, state) {
+    if (s.state === state) return;
+    s.state = state; s.t = 0; s.hitDone = false;
+    AB.Anim.play(s.id, P_ANIM[state], { restart: true });
+  }
+
+  // появиться по сюжетному событию
+  function spawnAt(id, room, x, state, facing = 1) {
+    const s = { id, room, x, facing, vx: 0, hp: 999, state: null, t: 0, cooldown: 0, hits: 0, stagger: 0, knock: 0, flash: 0, stride: 0, alpha: 0 };
+    live.set(id, s);
+    setP(s, state);
+    AB.Bus.emit('enemy:appear', { id, state });
+    return s;
+  }
+
+  function despawn(id) {
+    const s = live.get(id);
+    if (s) setP(s, 'FADE');
+  }
+
+  function gone(s) {
+    live.delete(s.id);
+    AB.Bus.emit('enemy:gone', { id: s.id });
+  }
+
+  function updatePursuer(s, def, dt, r) {
+    const hero = AB.Chars.get('CHAR-001');
+    const target = AB.Chars.get(def.target);
+    s.t += dt;
+    s.cooldown = Math.max(0, s.cooldown - dt);
+    s.flash = Math.max(0, s.flash - dt * 4);
+    if (s.state === 'FADE') { s.alpha -= dt * 1.6; if (s.alpha <= 0) gone(s); return; }
+    if (s.state !== 'RETREAT') s.alpha = Math.min(1, s.alpha + dt * 1.8);
+    if (s.stagger > 0) { s.stagger -= dt; s.x = U.clamp(s.x + s.knock * dt, 40, r.width - 40); s.knock *= 0.85; return; }
+    s.vx = 0;
+    switch (s.state) {
+      case 'WATCH':
+        if (hero) s.facing = Math.sign(hero.x - s.x) || s.facing;
+        break;
+      case 'APPEAR':
+        if (s.t > 0.7) setP(s, 'CHASE');
+        break;
+      case 'CHASE': {
+        if (!target || target.dead || target.room !== s.room) { setP(s, 'RETREAT'); break; }
+        // Марк встал между ним и спутницей — бьёт Марка
+        const blocked = hero && !hero.dead && Math.sign(hero.x - s.x) === Math.sign(target.x - s.x) &&
+          Math.abs(hero.x - s.x) < Math.abs(target.x - s.x) && Math.abs(hero.x - s.x) < def.attack.range;
+        const goalX = blocked ? hero.x : target.x;
+        const d = Math.abs(goalX - s.x);
+        if (d < def.attack.range && s.cooldown <= 0) { s.victim = blocked ? hero.id : target.id; setP(s, 'ATTACK'); break; }
+        move(s, Math.sign(goalX - s.x), d < def.attack.range ? 0 : def.speed.chase, dt, r);
+        break;
+      }
+      case 'ATTACK': {
+        const v = AB.Chars.get(s.victim);
+        if (v) s.facing = Math.sign(v.x - s.x) || s.facing;
+        if (!s.hitDone && s.t >= def.attack.windup) {
+          s.hitDone = true;
+          if (v && !v.dead && Math.abs(v.x - s.x) < def.attack.range + 16) {
+            AB.Combat.damageChar(v.id, v.id === 'CHAR-001' ? def.shove : def.damage, s.x);
+          }
+        }
+        if (s.t > def.attack.windup + 0.4) { s.cooldown = def.attack.cooldown; setP(s, 'CHASE'); }
+        break;
+      }
+      case 'RETREAT': {
+        // отступает в темноту, подальше от Марка, и растворяется
+        const away = hero ? -Math.sign(hero.x - s.x) || -1 : -1;
+        move(s, away, def.speed.retreat, dt, r);
+        if (s.t > 0.6) s.alpha -= dt * 1.2;
+        if (s.alpha <= 0) gone(s);
+        break;
+      }
+    }
+  }
+
+  // угроза для персонажа: активный преследователь в том же помещении
+  function threatFor(charId, room) {
+    for (const s of live.values()) {
+      const def = AB.ID.get(s.id);
+      if (def.type === 'pursuer' && def.target === charId && s.room === room && ['APPEAR', 'CHASE', 'ATTACK'].includes(s.state)) return s;
+    }
+    return null;
+  }
+
   function update(dt) {
     const r = AB.Rooms.room();
     if (!r) return;
     spawnForRoom(r.id);
     const hero = AB.Chars.get('CHAR-001');
-    for (const s of live.values()) {
+    for (const s of [...live.values()]) {
       if (s.room !== r.id || s.state === 'DEAD') continue;
       const def = AB.ID.get(s.id);
+      if (def.type === 'pursuer') { updatePursuer(s, def, dt, r); continue; }
       s.t += dt;
       s.cooldown = Math.max(0, s.cooldown - dt);
       s.flash = Math.max(0, s.flash - dt * 4);
@@ -146,6 +235,18 @@ AB.Enemies = (() => {
     const s = live.get(id);
     if (!s || s.state === 'DEAD') return false;
     const def = AB.ID.get(id);
+    if (def.immortal) {
+      if (!['APPEAR', 'CHASE', 'ATTACK'].includes(s.state)) return false;
+      s.hits++;
+      s.flash = 1;
+      s.stagger = 0.4;
+      s.knock = Math.sign(s.x - fromX) * 200;
+      AB.Anim.play(id, 'hurt', { restart: true });
+      AB.Bus.emit('enemy:hit', { id, x: s.x, hp: s.hp, from: fromX });
+      if (s.hits >= def.hitsToRetreat) { setP(s, 'RETREAT'); AB.Bus.emit('enemy:retreat', { id }); }
+      else if (s.state === 'ATTACK') setP(s, 'CHASE');
+      return true;
+    }
     s.hp = Math.max(0, s.hp - amount);
     s.flash = 1;
     s.lastSeenX = fromX;
@@ -173,15 +274,21 @@ AB.Enemies = (() => {
 
   // Противники, которые сейчас в бою (для автосохранения и музыки)
   function inCombat() {
-    return [...live.values()].some((s) => s.room === AB.Rooms.current() && ['ALERT', 'CHASE', 'ATTACK', 'RETREAT'].includes(s.state));
+    return [...live.values()].some((s) => s.room === AB.Rooms.current() && ['ALERT', 'CHASE', 'ATTACK', 'RETREAT', 'APPEAR'].includes(s.state));
   }
 
+  AB.Bus.on('room:enter', ({ roomId }) => {
+    for (const s of [...live.values()]) {
+      if (AB.ID.get(s.id).type === 'pursuer' && s.room !== roomId) gone(s);
+    }
+  });
+
   return {
-    update, damage, inCombat,
+    update, damage, inCombat, spawnAt, despawn, threatFor,
     inRoom: (roomId) => [...live.values()].filter((s) => s.room === roomId),
     get: (id) => live.get(id) || null,
     isDead: (id) => dead.has(id),
-    serialize: () => ({ dead: [...dead], pos: [...live.values()].map((s) => [s.id, Math.round(s.x), s.hp]) }),
+    serialize: () => ({ dead: [...dead], pos: [...live.values()].filter((s) => AB.ID.get(s.id).type !== 'pursuer').map((s) => [s.id, Math.round(s.x), s.hp]) }),
     restore(d) {
       if (!d) return;
       (d.dead || []).forEach((id) => dead.add(id));

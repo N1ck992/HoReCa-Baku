@@ -141,7 +141,7 @@ AB.ROOMS.push({
   background: 'ASSET-ROOM002-01',
   theme: 'living',
   map: { x: 570, y: 6, w: 190, h: 34 },
-  connections: [{ door: 'west', to: 'ROOM-003', toDoor: 'east' }],
+  connections: [{ door: 'west', to: 'ROOM-003', toDoor: 'east' }, { door: 'east', to: 'ROOM-005', toDoor: 'west' }],
   access: { type: 'open' },
   items: [],
   containers: [],
@@ -152,7 +152,8 @@ AB.ROOMS.push({
   spawn: { x: 140 },
   doors: [
     { key: 'west', x: 70, to: 'ROOM-003', access: { type: 'open' } },
-    { key: 'east', x: 1830, to: null, access: { type: 'locked', reason: 'Заблокировано' } },
+    // открывается после встречи со спутницей (EVENT-003)
+    { key: 'east', x: 1830, to: 'ROOM-005', access: { type: 'event', event: 'EVENT-003', reason: 'Заблокировано' } },
   ],
   props: [
     { kind: 'bunk', x: 420 }, { kind: 'locker', x: 560 },
@@ -166,13 +167,76 @@ AB.ROOMS.push({
   fx: { steam: [1100], sparks: [760], drips: [600, 1400] },
 });
 
+// ROOM-005 — склад. Здесь преследователь впервые показывается (EVENT-004)
+// и нападает (EVENT-005). Графики пока нет — заглушка.
+AB.ROOMS.push({
+  id: 'ROOM-005',
+  name: 'Склад',
+  desc: 'Длинный складской отсек: стеллажи, контейнеры, погрузочные тележки.',
+  width: 2100,
+  height: 380,
+  background: 'ASSET-ROOM005-01',
+  theme: 'storage',
+  map: { x: 770, y: 4, w: 210, h: 38 },
+  connections: [{ door: 'west', to: 'ROOM-002', toDoor: 'east' }, { door: 'east', to: 'ROOM-008', toDoor: 'west' }],
+  access: { type: 'open' },
+  items: [], containers: [], enemies: [], equipment: [],
+  events: ['EVENT-004', 'EVENT-005'],
+  state: 'damaged',
+  spawn: { x: 140 },
+  doors: [
+    { key: 'west', x: 70, to: 'ROOM-002', access: { type: 'open' } },
+    { key: 'east', x: 2030, to: 'ROOM-008', access: { type: 'open' } },
+  ],
+  props: [
+    { kind: 'crates', x: 380 }, { kind: 'locker', x: 640 }, { kind: 'crates', x: 900 },
+    { kind: 'crates', x: 1260 }, { kind: 'locker', x: 1480 }, { kind: 'crates', x: 1720 },
+  ],
+  lights: [
+    { x: 260, y: -350, color: [255, 40, 30], radius: 380, flicker: 0.2 },
+    { x: 1000, y: -350, color: [255, 40, 30], radius: 380, flicker: 0.5, broken: true },
+    { x: 1700, y: -350, color: [255, 40, 30], radius: 380, flicker: 0.2 },
+  ],
+  fx: { steam: [820, 1560], sparks: [1000], drips: [500, 1300, 1900] },
+});
+
+// ROOM-008 — командный центр: безопасная зона. Здесь будут медик (CHAR-003)
+// и иллюминатор, за которым откроется океан. Графики пока нет — заглушка.
+AB.ROOMS.push({
+  id: 'ROOM-008',
+  name: 'Командный центр',
+  desc: 'Мостик корабля. Переборки можно заблокировать изнутри.',
+  width: 1500,
+  height: 420,
+  background: 'ASSET-ROOM008-01',
+  theme: 'bridge',
+  safe: true,                     // безопасная зона: преследователь сюда не проходит
+  map: { x: 980, y: -6, w: 170, h: 58 },
+  connections: [{ door: 'west', to: 'ROOM-005', toDoor: 'east' }],
+  access: { type: 'open' },
+  items: [], containers: [], enemies: [], equipment: [],
+  events: [],
+  state: 'safe',
+  spawn: { x: 140 },
+  doors: [
+    { key: 'west', x: 70, to: 'ROOM-005', access: { type: 'open' } },
+  ],
+  props: [
+    { kind: 'console', x: 520 }, { kind: 'console', x: 760 }, { kind: 'console', x: 1000 },
+  ],
+  lights: [
+    { x: 300, y: -380, color: [255, 40, 30], radius: 420, flicker: 0.05 },
+    { x: 800, y: -380, color: [255, 40, 30], radius: 460, flicker: 0.05 },
+    { x: 1250, y: -380, color: [255, 40, 30], radius: 420, flicker: 0.05 },
+  ],
+  fx: { steam: [], sparks: [], drips: [] },
+});
+
 // Остальные помещения из GDD §6: зарегистрированы, но ещё не построены.
 const ROOM_STUBS = [
   ['ROOM-004', 'Инженерная мастерская'],
-  ['ROOM-005', 'Склад'],
   ['ROOM-006', 'Оружейная'],
   ['ROOM-007', 'Лаборатория'],
-  ['ROOM-008', 'Командный центр'],
   ['ROOM-009', 'Система жизнеобеспечения'],
   ['ROOM-010', 'Шлюз'],
 ];

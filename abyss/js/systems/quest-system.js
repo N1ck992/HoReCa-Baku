@@ -9,6 +9,10 @@ AB.Quests = (() => {
   const prog = new Map(); // QUEST-ID → { stage, status: 'active' | 'done' }
 
   function objectiveDone(o) {
+    if (o.done.room && o.done.with) {
+      const c = AB.Chars.get(o.done.with);
+      return AB.Rooms.current() === o.done.room && c && c.room === o.done.room && !c.dead;
+    }
     if (o.done.room) return AB.Rooms.visited().includes(o.done.room);
     if (o.done.equip) {
       const s = AB.Equip.state(o.done.equip);
@@ -72,6 +76,9 @@ AB.Quests = (() => {
       check();
     });
     AB.Bus.on('equip:changed', check);
+    AB.Bus.on('event:end', (eventId) => {
+      for (const q of AB.QUESTS) if (q.start && q.start.event === eventId) start(q.id);
+    });
   }
 
   return {

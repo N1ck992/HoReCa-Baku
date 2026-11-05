@@ -59,4 +59,36 @@ AB.EVENTS.push(
   },
 );
 
+// EVENT-004 и EVENT-005 утверждены (дополнение №18): сначала намёк, потом нападение.
+AB.EVENTS.push(
+  {
+    id: 'EVENT-004',
+    name: 'Кто-то в темноте',
+    chapter: 1,
+    room: 'ROOM-005',
+    trigger: 'enter:ROOM-005',
+    once: true,
+    steps: [
+      { at: 0.8, action: 'flicker', duration: 2.2 },
+      { at: 1.0, action: 'spawn_enemy', enemy: 'ENEMY-002', room: 'ROOM-005', x: 1650, state: 'WATCH', facing: -1 },
+      { at: 1.1, action: 'face', char: 'CHAR-002', target: 'ENEMY-002' },
+      { at: 2.9, action: 'despawn_enemy', enemy: 'ENEMY-002' },
+    ],
+  },
+  {
+    id: 'EVENT-005',
+    name: 'Нападение',
+    chapter: 1,
+    room: 'ROOM-005',
+    trigger: 'zone:ROOM-005:1050',   // когда Марк проходит середину склада
+    once: true,
+    steps: [
+      { at: 0.0, action: 'flicker', duration: 1.2 },
+      { at: 0.2, action: 'spawn_enemy', enemy: 'ENEMY-002', room: 'ROOM-005', x: 'behind', state: 'APPEAR', facing: 1 },
+      { at: 0.4, action: 'flee', char: 'CHAR-002', on: true },
+      { at: 0.4, action: 'hint', text: 'protect' },
+    ],
+  },
+);
+
 AB.EVENTS.forEach((e) => AB.ID.register(e.id, e));
