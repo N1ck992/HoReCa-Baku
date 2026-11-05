@@ -8,9 +8,8 @@ AB.Combat = (() => {
 
   function weaponOf(charId) {
     const c = AB.Chars.get(charId);
-    if (!c || !c.equipped) return null;
-    if (!AB.Inventory.count(charId, c.equipped)) { c.equipped = null; return null; }
-    return AB.ID.get(c.equipped);
+    const w = c && AB.Inventory.weapon(charId);
+    return w ? AB.ID.get(w.item) : null;
   }
 
   function canAttack(charId) {

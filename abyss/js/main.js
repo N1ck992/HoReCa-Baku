@@ -40,45 +40,42 @@
     ui.hp.classList.toggle('low', h.hp / max < 0.35);
   }
 
-  // ---------- Инвентарь ----------
-  let selected = 0;
+  // ---------- Инвентарь: два слота — оружие и рюкзак ----------
+  let selected = 1;
   const itemName = (id) => AB.ID.get(id).name;
+  const SLOT_NAMES = ['Оружие', 'Рюкзак'];
 
   function renderInventory() {
     const slots = AB.Inventory.slots(HERO);
     const grid = slots.map((s, i) => {
-      if (!s) return `<button class="slot empty ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="Пустая ячейка"></button>`;
+      const label = `<span class="slot-label">${SLOT_NAMES[i]}</span>`;
+      if (!s) return `<button class="slot empty ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${SLOT_NAMES[i]}: пусто">${label}</button>`;
       const def = AB.ID.get(s.item);
       const icon = AB.Assets.get(def.icon);
       const face = icon.status === 'ready'
         ? `<img src="${AB.ID.get(def.icon).src}" alt="">`
-        : `<b>${def.short}</b><small>${def.icon}</small>`;
-      const inHands = AB.Chars.get(HERO).equipped === s.item;
-      return `<button class="slot cat-${def.category} ${i === selected ? 'sel' : ''} ${inHands ? 'held' : ''}" data-slot="${i}" aria-label="${def.name}, ${s.qty} шт.${inHands ? ', в руках' : ''}">
-        ${face}<em>${s.qty}</em>${inHands ? '<u>в руках</u>' : ''}</button>`;
+        : `<b>${def.short}</b>`;
+      return `<button class="slot cat-${def.category} ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${SLOT_NAMES[i]}: ${def.name}${s.qty > 1 ? `, ${s.qty} шт.` : ''}">
+        ${label}${face}${s.qty > 1 ? `<em>${s.qty}</em>` : ''}</button>`;
     }).join('');
     const s = slots[selected];
-    let detail = '<p class="muted">Ячейка пуста.</p>';
+    let detail = `<p class="muted">${selected === 0 ? 'Оружия нет. Подберите что-нибудь тяжёлое.' : 'Рюкзак пуст. В нём помещается одна вещь.'}</p>`;
     if (s) {
       const def = AB.ID.get(s.item);
       const block = AB.Inventory.useBlock(HERO, selected);
       detail = `
-        <h3>${def.name}</h3>
-        <div class="muted ids">${def.id} · ${def.icon}</div>
+        <h3>${def.name}${s.qty > 1 ? ` ×${s.qty}` : ''}</h3>
         <p>${def.desc}</p>
-        <div class="muted">В ячейке: ${s.qty} из ${def.stack} · всего: ${AB.Inventory.count(HERO, s.item)}</div>
         <div class="inv-actions">
-          ${def.weapon
-            ? `<button data-inv="equip">${AB.Chars.get(HERO).equipped === def.id ? 'Убрать из рук' : 'Взять в руки'}</button>`
-            : `<button data-inv="use" ${block ? 'disabled' : ''}>Использовать</button>`}
+          ${def.use ? `<button data-inv="use" ${block ? 'disabled' : ''}>Использовать</button>` : ''}
           <button data-inv="drop" class="ghost">Выбросить</button>
         </div>
-        ${def.weapon ? `<div class="muted">Урон ${def.weapon.damage} · удар: ${isTouch ? 'кнопка ⚔' : 'F, J, пробел или клик'}</div>` : ''}
-        ${block && def.use ? `<div class="muted">${block}</div>` : ''}`;
+        ${def.weapon ? `<div class="muted">В руках · урон ${def.weapon.damage} · удар: ${isTouch ? 'кнопка ⚔' : 'F, J, пробел или клик'}</div>` : ''}
+        ${!def.weapon && block ? `<div class="muted">${block}</div>` : ''}`;
     }
     $('#inv-grid').innerHTML = grid;
     $('#inv-detail').innerHTML = detail;
-    $('#inv-owner').textContent = `${AB.ID.get(HERO).name} · ${HERO}`;
+    $('#inv-owner').textContent = `${AB.ID.get(HERO).name} · одна вещь в рюкзаке, оружие отдельно`;
     updateHp();
   }
 
@@ -102,14 +99,9 @@
     const act = e.target.closest('[data-inv]');
     if (act && !act.disabled) {
       if (act.dataset.inv === 'use' && AB.Inventory.use(HERO, selected)) toast('Медикаменты использованы', 'good');
-      if (act.dataset.inv === 'equip') {
-        const s = AB.Inventory.slot(HERO, selected);
-        const h = AB.Chars.get(HERO);
-        AB.Chars.equip(HERO, h.equipped === s.item ? null : s.item);
-      }
       if (act.dataset.inv === 'drop') {
         const s = AB.Inventory.slot(HERO, selected);
-        if (s && AB.Inventory.drop(HERO, selected)) toast(`Выброшено: ${itemName(s.item)} ×${s.qty}`, 'info');
+        if (s && AB.Inventory.drop(HERO, selected)) toast(`Выброшено: ${itemName(s.item)}${s.qty > 1 ? ` ×${s.qty}` : ''}`, 'info');
       }
       renderInventory();
       AB.Save.save();
@@ -273,13 +265,13 @@
   AB.Bus.on('room:enter', ({ roomId }) => { showRoom(roomId); AB.Save.save(); });
   AB.Bus.on('door:denied', ({ reason }) => toast(reason));
   AB.Bus.on('item:pickup', ({ itemId, added, left }) => {
-    if (added) toast(`+${added} ${itemName(itemId)}${left ? ' · инвентарь заполнен' : ''}`, left ? 'info' : 'good');
-    else toast('Инвентарь заполнен');
+    if (added) toast(`${AB.ID.get(itemId).weapon ? 'В руках' : 'В рюкзаке'}: ${itemName(itemId)}${added > 1 ? ` ×${added}` : ''}`, 'good');
+    else toast('Не помещается');
     AB.Save.save();
   });
   AB.Bus.on('container:looted', ({ label, found, full }) => {
     const list = found.map(([id, n]) => `${itemName(id)} ×${n}`).join(', ');
-    toast(found.length ? `${label}: ${list}${full ? ' · не всё поместилось' : ''}` : `${label}: инвентарь заполнен`, found.length ? 'good' : 'bad');
+    toast(found.length ? `${label}: ${list}${full ? ' · остальное оставлено рядом' : ''}` : `${label}: рюкзак занят — находки оставлены рядом`, found.length ? 'good' : 'info');
     AB.Save.save();
   });
   AB.Bus.on('container:empty', ({ label }) => toast(`${label}: пусто`, 'info'));
@@ -292,11 +284,11 @@
   });
   AB.Bus.on('item:pickup', ({ itemId, added }) => {
     const def = AB.ID.get(itemId);
-    const h = AB.Chars.get(HERO);
-    if (added && def.weapon && h && !h.equipped) {
-      AB.Chars.equip(HERO, itemId);
-      setTimeout(() => toast(`${def.name} в руках · удар: ${isTouch ? 'кнопка ⚔' : 'F или клик'}`, 'good'), 900);
-    }
+    if (added && def.weapon) setTimeout(() => toast(`${def.name} в руках · удар: ${isTouch ? 'кнопка ⚔' : 'F или клик'}`, 'good'), 900);
+  });
+  // рюкзак на одну вещь: подобрали новую — старая осталась на полу
+  AB.Bus.on('inventory:swapped', ({ dropped, taken }) => {
+    setTimeout(() => toast(`${itemName(taken)} в ${AB.ID.get(taken).weapon ? 'руках' : 'рюкзаке'} · ${itemName(dropped)} оставлен на полу`, 'info'), 50);
   });
   AB.Bus.on('transition:end', () => { const h = AB.Chars.get(HERO); if (h) h.controllable = true; });
   // после выхода из капсулы герой остаётся там, где закончилась анимация

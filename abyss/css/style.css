@@ -166,9 +166,10 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 .inv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .inv-head h2 { margin: 0; font: 700 20px var(--display); letter-spacing: 3px; text-transform: uppercase; }
 .inv-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
-#inv-grid { display: grid; grid-template-columns: repeat(4, 64px); gap: 6px; }
+#inv-grid { display: grid; grid-template-columns: repeat(2, 84px); gap: 8px; }
+.slot-label { position: absolute; left: 0; right: 0; top: 3px; font-size: 9px; color: var(--muted); text-align: center; letter-spacing: .5px; }
 .slot {
-  position: relative; width: 64px; height: 64px; border-radius: 6px; border: 1px solid var(--line);
+  position: relative; width: 84px; height: 84px; padding-top: 10px !important; border-radius: 6px; border: 1px solid var(--line);
   background: #111316; color: var(--fg); cursor: pointer; display: grid; place-content: center; gap: 2px; padding: 0;
   font-family: var(--mono);
 }
@@ -194,8 +195,8 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 .inv-actions button:disabled { opacity: .4; cursor: not-allowed; }
 @media (max-width: 560px) {
   .inv-body { grid-template-columns: 1fr; }
-  #inv-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .slot { width: auto; aspect-ratio: 1; height: auto; }
+  #inv-grid { grid-template-columns: repeat(2, 84px); }
+
 }
 
 /* ---------- Меню ---------- */

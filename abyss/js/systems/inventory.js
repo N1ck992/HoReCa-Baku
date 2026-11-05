@@ -1,39 +1,55 @@
 // =====================================================================
-// INVENTORY SYSTEM (GDD §13.5). Инвентарь у каждого персонажа свой (GDD §7).
-// Ячейки с ограничением стака из данных предмета (ITEM-*.stack).
+// INVENTORY SYSTEM (GDD §13.5). У каждого персонажа два слота (GDD §7,
+// согласованное дополнение №12):
+//   0 — оружие: отдельный слот, оружие сразу в руках;
+//   1 — рюкзак: одна вещь, которую персонаж несёт с собой (ключ-карта,
+//       предохранитель, аптечка). Её видно над головой по нажатию.
+// Одинаковые вещи складываются в рюкзаке до предела стака (ITEM-*.stack).
 // =====================================================================
 
 AB.Inventory = (() => {
-  const SLOTS = 8;
-  const bags = new Map(); // charId -> [ {item, qty} | null ]
+  const SLOTS = 2;
+  const WEAPON = 0, PACK = 1;
+  const bags = new Map(); // charId -> [weapon | null, backpack | null], ячейка = {item, qty}
 
   function bag(charId) {
-    if (!bags.has(charId)) bags.set(charId, new Array(SLOTS).fill(null));
+    if (!bags.has(charId)) bags.set(charId, [null, null]);
     return bags.get(charId);
   }
 
-  // Добавляет сколько поместится. Возвращает, сколько добавлено.
-  function add(charId, itemId, qty) {
+  const slotFor = (itemId) => (AB.ID.get(itemId).weapon ? WEAPON : PACK);
+
+  function syncHands(charId) {
+    const w = bag(charId)[WEAPON];
+    if (AB.Chars.get(charId)) AB.Chars.equip(charId, w ? w.item : null);
+  }
+
+  // Положить вещь. swap: true — если слот занят другой вещью, старая падает на пол
+  // (подбор с пола); swap: false — не помещается, значит не берём (обыск).
+  // Возвращает, сколько штук взято.
+  function add(charId, itemId, qty, { swap = true } = {}) {
     const def = AB.ID.get(itemId);
     if (!def) return 0;
-    const b = bag(charId);
-    let left = qty;
-    for (const s of b) {
-      if (left <= 0) break;
-      if (s && s.item === itemId && s.qty < def.stack) {
-        const n = Math.min(left, def.stack - s.qty);
-        s.qty += n; left -= n;
-      }
+    const b = bag(charId), i = slotFor(itemId), cur = b[i];
+    let taken = 0;
+    if (!cur) {
+      taken = Math.min(qty, def.stack);
+      b[i] = { item: itemId, qty: taken };
+    } else if (cur.item === itemId) {
+      taken = Math.min(qty, def.stack - cur.qty);
+      cur.qty += taken;
+    } else if (swap) {
+      const c = AB.Chars.get(charId);
+      if (c) AB.Rooms.dropItem(c.room, cur.item, cur.qty, c.x - c.facing * 18);
+      AB.Bus.emit('inventory:swapped', { charId, dropped: cur.item, qty: cur.qty, taken: itemId });
+      taken = Math.min(qty, def.stack);
+      b[i] = { item: itemId, qty: taken };
     }
-    for (let i = 0; i < b.length && left > 0; i++) {
-      if (!b[i]) {
-        const n = Math.min(left, def.stack);
-        b[i] = { item: itemId, qty: n }; left -= n;
-      }
+    if (taken) {
+      if (i === WEAPON) syncHands(charId);
+      AB.Bus.emit('inventory:changed', { charId, itemId, delta: taken });
     }
-    const added = qty - left;
-    if (added) AB.Bus.emit('inventory:changed', { charId, itemId, delta: added });
-    return added;
+    return taken;
   }
 
   function count(charId, itemId) {
@@ -42,17 +58,11 @@ AB.Inventory = (() => {
 
   // Убирает qty штук. Возвращает true, если хватило.
   function remove(charId, itemId, qty) {
-    if (count(charId, itemId) < qty) return false;
-    const b = bag(charId);
-    let left = qty;
-    for (let i = b.length - 1; i >= 0 && left > 0; i--) {
-      const s = b[i];
-      if (s && s.item === itemId) {
-        const n = Math.min(left, s.qty);
-        s.qty -= n; left -= n;
-        if (!s.qty) b[i] = null;
-      }
-    }
+    const b = bag(charId), i = slotFor(itemId), s = b[i];
+    if (!s || s.item !== itemId || s.qty < qty) return false;
+    s.qty -= qty;
+    if (!s.qty) b[i] = null;
+    if (i === WEAPON) syncHands(charId);
     AB.Bus.emit('inventory:changed', { charId, itemId, delta: -qty });
     return true;
   }
@@ -61,14 +71,14 @@ AB.Inventory = (() => {
     return bag(charId)[i] || null;
   }
 
-  // Что мешает использовать предмет из ячейки (null — можно)
+  // Что мешает использовать вещь из слота (null — можно)
   function useBlock(charId, i) {
     const s = slot(charId, i);
-    if (!s) return 'Пустая ячейка';
+    if (!s) return 'Пусто';
     const def = AB.ID.get(s.item);
-    if (def.weapon) return 'Это оружие: возьмите его в руки';
+    if (def.weapon) return 'Оружие уже в руках';
     if (def.category === 'key') return 'Сработает сама, когда подойдёте к двери';
-    if (!def.use) return 'Используется при ремонте и изготовлении';
+    if (!def.use) return 'Понадобится для ремонта';
     if (def.use.type === 'heal') {
       const c = AB.Chars.get(charId), cd = AB.ID.get(charId);
       if (c && c.hp >= cd.stats.maxHp) return 'Здоровье полное';
@@ -86,23 +96,41 @@ AB.Inventory = (() => {
     return true;
   }
 
-  // Выбросить всю ячейку: предмет появляется на полу рядом с персонажем
+  // Выбросить слот целиком: вещь падает на пол рядом с персонажем
   function drop(charId, i) {
     const s = slot(charId, i);
     const c = AB.Chars.get(charId);
     if (!s || !c) return false;
     const { item, qty } = s;
     bag(charId)[i] = null;
-    if (c.equipped === item && !count(charId, item)) AB.Chars.equip(charId, null);
+    if (i === WEAPON) syncHands(charId);
     AB.Rooms.dropItem(c.room, item, qty, c.x + c.facing * 30);
     AB.Bus.emit('inventory:changed', { charId, itemId: item, delta: -qty });
     return true;
   }
 
   return {
-    SLOTS, add, remove, count, slot, use, useBlock, drop,
+    SLOTS, WEAPON, PACK, add, remove, count, slot, use, useBlock, drop,
+    weapon: (charId) => bag(charId)[WEAPON],
+    pack: (charId) => bag(charId)[PACK],
     slots: (charId) => bag(charId).slice(),
     serialize: () => [...bags].map(([id, b]) => [id, b]),
-    restore(d) { (d || []).forEach(([id, b]) => bags.set(id, b.concat(new Array(Math.max(0, SLOTS - b.length)).fill(null)))); },
+    // Старые сохранения (8 ячеек): оружие — в слот оружия, первая другая вещь — в рюкзак,
+    // остальное ложится на пол рядом с персонажем.
+    restore(d) {
+      for (const [id, old] of d || []) {
+        const b = [null, null];
+        const extra = [];
+        for (const s of old || []) {
+          if (!s || !AB.ID.get(s.item)) continue;
+          const i = slotFor(s.item);
+          if (!b[i]) b[i] = s; else extra.push(s);
+        }
+        bags.set(id, b);
+        const c = AB.Chars.get(id);
+        if (c) extra.forEach((s, k) => AB.Rooms.dropItem(c.room, s.item, s.qty, c.x + 25 + k * 22));
+        if (c) syncHands(id);
+      }
+    },
   };
 })();

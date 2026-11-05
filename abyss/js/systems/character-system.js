@@ -94,11 +94,11 @@ AB.Chars = (() => {
     AB.Bus.emit('char:equip', { charId, itemId });
   }
 
-  // Вещь, которую персонаж несёт (одна на персонажа): у героя — вещь в руках,
+  // Вещь, которую персонаж несёт (одна на персонажа): у героя — рюкзак,
   // у противников — данные carry, пока он жив.
   function carried(id) {
     const c = live.get(id);
-    if (c) return c.equipped || null;
+    if (c) { const p = AB.Inventory.pack(id); return p ? p.item : null; }
     const e = AB.Enemies.get(id);
     if (e) return e.state === 'DEAD' ? null : AB.ID.get(id).carry || null;
     return null;

@@ -98,7 +98,7 @@ AB.Interact = (() => {
     let full = false;
     const c = AB.Chars.get(charId);
     for (const [itemId, qty] of container.loot) {
-      const added = AB.Inventory.add(charId, itemId, qty);
+      const added = AB.Inventory.add(charId, itemId, qty, { swap: false });
       if (added) found.push([itemId, added]);
       // что не поместилось — остаётся лежать рядом с контейнером
       if (qty - added > 0) { full = true; AB.Rooms.dropItem(roomId, itemId, qty - added, container.x - 40); }
