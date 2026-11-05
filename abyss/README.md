@@ -5,6 +5,7 @@
 - Основной документ: [docs/GDD-v0.1.md](docs/GDD-v0.1.md)
 - Реестр ID и открытые вопросы: [docs/ID-REGISTRY.md](docs/ID-REGISTRY.md)
 - Задание на графику для художника или нейросети: [docs/ART-BRIEF.md](docs/ART-BRIEF.md)
+- Описание локаций для генерации фонов: [docs/LOCATIONS-ART.md](docs/LOCATIONS-ART.md)
 
 ## Запуск
 
