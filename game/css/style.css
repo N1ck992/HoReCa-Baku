@@ -13,6 +13,7 @@
   --bad: #ff5c6c;
   --radius: 14px;
   --nav-h: 64px;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -44,7 +45,7 @@ body {
 }
 
 #resbar {
-  position: sticky; top: 0; z-index: 10;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
   padding: 8px 16px; max-width: 900px; margin: 0 auto;
   background: rgba(11, 15, 26, .85); backdrop-filter: blur(8px);

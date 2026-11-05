@@ -65,13 +65,21 @@ function onAction(btn) {
       showSettings();
       return;
     case 'reset':
-      if (confirm('Удалить весь прогресс и начать заново?')) {
-        SaveStore.clear();
-        S = START_STATE();
-        save();
-        closeModal();
-        toast('Новая колония основана');
-      }
+      // подтверждение внутри игры (системный confirm() работает не везде)
+      openModal(`
+        <h2>Сбросить прогресс?</h2>
+        <p class="muted">Все постройки, войска и герои будут удалены. Это нельзя отменить.</p>
+        <div class="row between">
+          <button class="btn ghost" data-action="settings">Отмена</button>
+          <button class="btn danger" data-action="reset-confirm">Да, начать заново</button>
+        </div>`);
+      return;
+    case 'reset-confirm':
+      SaveStore.clear();
+      S = START_STATE();
+      save();
+      closeModal();
+      toast('Основана новая колония');
       return;
   }
   save();
