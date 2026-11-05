@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0f1a">
+  <title>Нулевой Рубеж</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo">◈</span>
+      <span>Нулевой Рубеж</span>
+    </div>
+    <button class="icon-btn" data-action="settings" aria-label="Настройки">⚙</button>
+  </header>
+  <div id="resbar"></div>
+
+  <main id="view"></main>
+
+  <nav id="tabs">
+    <button data-tab="base"><span>🏗️</span>База</button>
+    <button data-tab="army"><span>⚔️</span>Армия</button>
+    <button data-tab="heroes"><span>🧬</span>Герои</button>
+    <button data-tab="map"><span>🗺️</span>Карта</button>
+  </nav>
+
+  <div id="modal" hidden>
+    <div id="modal-body" class="modal-card"></div>
+  </div>
+  <div id="toasts"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
