@@ -107,7 +107,7 @@ AB.ROOMS.push({
   artDoors: true,         // двери нарисованы на фоне
   theme: 'power',
   map: { x: 410, y: 0, w: 150, h: 46 },
-  connections: [{ door: 'west', to: 'ROOM-011', toDoor: 'east' }],
+  connections: [{ door: 'west', to: 'ROOM-011', toDoor: 'east' }, { door: 'east', to: 'ROOM-002', toDoor: 'west' }],
   access: { type: 'key', item: 'ITEM-010' },
   items: [],
   containers: [],
@@ -118,8 +118,8 @@ AB.ROOMS.push({
   spawn: { x: 116 },
   doors: [
     { key: 'west', x: 54, to: 'ROOM-011', access: { type: 'open' } },
-    // дальше по кораблю — пока закрыто (не задано в GDD)
-    { key: 'east', x: 1163, to: null, access: { type: 'locked', reason: 'Проход дальше пока закрыт' } },
+    // в жилой сектор: дверь оживает, когда есть питание (после QUEST-001)
+    { key: 'east', x: 1163, to: 'ROOM-002', access: { type: 'power', reason: 'Нет питания' } },
   ],
   props: [],
   lights: [
@@ -130,9 +130,44 @@ AB.ROOMS.push({
   fx: { steam: [611], sparks: [], drips: [347, 925] },
 });
 
+// ROOM-002 — жилой сектор. Здесь Марк встречает спутницу (EVENT-003).
+// Графики пока нет — рисуется заглушкой. Дальний конец отсека тёмный: свет там не горит.
+AB.ROOMS.push({
+  id: 'ROOM-002',
+  name: 'Жилой сектор',
+  desc: 'Каюты экипажа. Свет горит только у входа, дальше темнота.',
+  width: 1900,
+  height: 360,
+  background: 'ASSET-ROOM002-01',
+  theme: 'living',
+  map: { x: 570, y: 6, w: 190, h: 34 },
+  connections: [{ door: 'west', to: 'ROOM-003', toDoor: 'east' }],
+  access: { type: 'open' },
+  items: [],
+  containers: [],
+  enemies: [],
+  equipment: [],
+  events: ['EVENT-003'],
+  state: 'dark',
+  spawn: { x: 140 },
+  doors: [
+    { key: 'west', x: 70, to: 'ROOM-003', access: { type: 'open' } },
+    { key: 'east', x: 1830, to: null, access: { type: 'locked', reason: 'Заблокировано' } },
+  ],
+  props: [
+    { kind: 'bunk', x: 420 }, { kind: 'locker', x: 560 },
+    { kind: 'bunk', x: 820 }, { kind: 'locker', x: 960 },
+    { kind: 'bunk', x: 1220 }, { kind: 'bunk', x: 1560 },
+  ],
+  lights: [
+    { x: 260, y: -330, color: [255, 40, 30], radius: 380, flicker: 0.12 },
+    { x: 760, y: -330, color: [255, 40, 30], radius: 300, flicker: 0.7, broken: true },
+  ],
+  fx: { steam: [1100], sparks: [760], drips: [600, 1400] },
+});
+
 // Остальные помещения из GDD §6: зарегистрированы, но ещё не построены.
 const ROOM_STUBS = [
-  ['ROOM-002', 'Жилой сектор'],
   ['ROOM-004', 'Инженерная мастерская'],
   ['ROOM-005', 'Склад'],
   ['ROOM-006', 'Оружейная'],

@@ -281,6 +281,9 @@ AB.Render = (() => {
       g.fillStyle = 'rgba(160,30,30,.18)';
       g.fillRect(1040, top + 90, 14, 44);
       g.fillRect(1025, top + 105, 44, 14);
+    } else if (r.theme === 'living') {
+      for (let x = 300; x < r.width - 200; x += 400) g.fillText(`K-${String(1 + Math.round(x / 400)).padStart(2, '0')}`, x, top + 92);
+      g.fillText('CREW', 140, top + 92);
     } else {
       for (let x = 260; x < r.width - 200; x += 520) g.fillText(`C-${String(1 + Math.round(x / 520)).padStart(2, '0')}`, x, top + 92);
       g.fillStyle = 'rgba(230,180,40,.12)';
@@ -487,6 +490,41 @@ AB.Render = (() => {
       idTag(ctx, p.asset, x, b - 110);
     },
 
+    // жилой сектор: двухъярусная койка
+    bunk(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.strokeStyle = '#22262b';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(x - 90, b); ctx.lineTo(x - 90, b - 170);
+      ctx.moveTo(x + 90, b); ctx.lineTo(x + 90, b - 170);
+      ctx.stroke();
+      for (const yy of [b - 40, b - 125]) {
+        ctx.fillStyle = '#2a2e33';
+        ctx.fillRect(x - 92, yy, 184, 9);
+        ctx.fillStyle = '#3d3a36';
+        ctx.fillRect(x - 86, yy - 9, 172, 10);
+        ctx.fillStyle = 'rgba(80,70,60,.6)';
+        ctx.fillRect(x - 84, yy - 15, 40, 8);
+      }
+      // скомканное одеяло свисает с верхней полки
+      ctx.fillStyle = 'rgba(60,55,50,.8)';
+      ctx.beginPath(); ctx.moveTo(x + 30, b - 130); ctx.quadraticCurveTo(x + 60, b - 100, x + 50, b - 70); ctx.lineTo(x + 70, b - 120); ctx.fill();
+    },
+    // личный шкафчик
+    locker(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#1e2226';
+      ctx.fillRect(x - 28, b - 175, 56, 175);
+      ctx.strokeStyle = 'rgba(0,0,0,.5)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x - 28, b - 175, 56, 175);
+      ctx.fillStyle = 'rgba(0,0,0,.45)';
+      for (let i = 0; i < 4; i++) ctx.fillRect(x - 18, b - 160 + i * 6, 36, 2);
+      ctx.fillStyle = '#3a3f45';
+      ctx.fillRect(x + 16, b - 95, 4, 14);
+    },
+
     cabinet(p) {
       const x = sx(p.x), b = sy(0);
       ctx.fillStyle = '#1b1f23';
@@ -572,7 +610,7 @@ AB.Render = (() => {
     const action = tr ? tr.action : 'idle';
     const t = tr ? tr.t : 0;
     const P = { lean: 0, bob: 0, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, shL: 0.1, shR: -0.05, elL: -0.2, elR: -0.25, head: 0, dx: 0, crouch: 0, breath: 0 };
-    const breath = Math.sin(time * 1.7);
+    const breath = Math.sin(time * 1.45 + (hero.id === 'CHAR-002' ? 1.3 : 0));
     P.breath = breath;
 
     if (action === 'walk' || action === 'run') {
@@ -650,11 +688,19 @@ AB.Render = (() => {
       P.head = 0.5; P.lean = 0.08; P.bob = Math.sin(time * 0.8) * 0.6;
       P.shL = 0.15; P.shR = 0.1; P.elL = -0.1; P.elR = -0.1; P.crouch = 2;
     } else {
-      // ANIM-CHAR001-05: дыхание, лёгкое покачивание
-      P.bob = breath * 0.8;
-      P.lean = 0.03 + Math.sin(time * 0.6) * 0.015;
-      P.head = Math.sin(time * 0.45) * 0.06;
-      P.shL = 0.08 + breath * 0.03; P.shR = -0.06 - breath * 0.03;
+      // ANIM-CHAR001-05: дыхание в покое (вдох ~1,8 с): грудь поднимается, плечи и голова
+      // идут за ней, руки чуть покачиваются, вес медленно переносится с ноги на ногу
+      const sway = Math.sin(time * 0.55);
+      P.breath = breath;
+      P.chest = breath;                      // для скелета из частей: вдох удлиняет торс
+      P.bob = breath * 0.9;
+      P.lean = 0.025 + sway * 0.018 - breath * 0.012;
+      P.head = Math.sin(time * 0.45) * 0.05 - breath * 0.035;
+      P.shL = 0.08 + breath * 0.045 + Math.sin(time * 0.9) * 0.02;
+      P.shR = -0.06 - breath * 0.045 - Math.sin(time * 0.9 + 1) * 0.02;
+      P.elL = -0.22 - breath * 0.04; P.elR = -0.25 - breath * 0.04;
+      P.hipL = sway * 0.025; P.hipR = -sway * 0.025;
+      P.kneeL = 0.05 + Math.max(0, sway) * 0.05; P.kneeR = 0.05 + Math.max(0, -sway) * 0.05;
     }
     return { P, action };
   }
@@ -694,7 +740,9 @@ AB.Render = (() => {
     const hipY = -54 + P.bob * 0.5 + P.crouch;
 
     if (pass === 'body') {
-      const dark = '#1c2026', mid = '#363e48', light = '#4a5560';
+      const look = AB.ID.get(hero.id).look || {};
+      const dark = look.dark || '#1c2026', mid = look.mid || '#363e48', light = look.light || '#4a5560';
+      if (look.build) { ctx.scale(look.build, 1); }
       // дальние конечности (темнее)
       // знак сгиба: колени гнутся назад, локти вперёд
       limb(-2, hipY, P.hipR, 27, -P.kneeR, 27, 9, dark);
@@ -716,8 +764,17 @@ AB.Render = (() => {
       ctx.translate(2, shY - 4); ctx.rotate(P.head);
       ctx.fillStyle = '#1d2126';
       ctx.fillRect(-4, -8, 8, 8);
+      if (look.hair) {
+        // длинные волосы до плеч (заглушка спутницы)
+        ctx.fillStyle = look.hair;
+        ctx.beginPath(); ctx.moveTo(-9, -20); ctx.quadraticCurveTo(-13, 0, -10, 10); ctx.lineTo(2, 8); ctx.lineTo(4, -20); ctx.fill();
+      }
       ctx.fillStyle = mid;
       ctx.beginPath(); ctx.ellipse(1, -16, 9.5, 11, 0, 0, 7); ctx.fill();
+      if (look.hair) {
+        ctx.fillStyle = look.hair;
+        ctx.beginPath(); ctx.ellipse(-1, -22, 10.5, 6.5, -0.2, Math.PI, 0); ctx.fill();
+      }
       ctx.fillStyle = light;
       ctx.beginPath(); ctx.ellipse(-2, -19, 4, 6, 0, 0, 7); ctx.fill();
       ctx.restore();
@@ -728,7 +785,8 @@ AB.Render = (() => {
       // ближняя нога
       limb(2, hipY, P.hipL, 27, -P.kneeL, 27, 10, mid);
     } else if (pass === 'emissive') {
-      // светящиеся элементы криокостюма — поверх темноты
+      // светящиеся элементы криокостюма — поверх темноты (только у Марка)
+      if (hero.id !== 'CHAR-001') { ctx.restore(); nameTag(hero.id, x, b - 134); return; }
       ctx.translate(0, hipY); ctx.rotate(P.lean); ctx.translate(0, -hipY);
       const shY = hipY - 38 + P.breath * 0.4;
       // контровой свет аварийных ламп по краю силуэта
@@ -824,11 +882,12 @@ AB.Render = (() => {
     // торс: от таза вверх, с наклоном
     const torsoAng = Math.PI - P.lean;
     const torso = get('torso', 'torso');
+    if (P.chest) torso.len *= 1 + P.chest * 0.012;   // вдох: грудь поднимается
     const shoulder = (side) => {
       const anchor = R.torso[`shoulder_${side}`] || R.torso.shoulder;
       const p = rigAnchor(torso.img, torso.spec, 0, hipY, torsoAng, torso.len, anchor);
       if (!R.torso[`shoulder_${side}`] && side === 'far') p.x -= 3;
-      p.y += P.breath * 0.4;
+      p.y += P.breath * 0.4 - (P.chest || 0) * 0.6;   // плечи поднимаются на вдохе
       return p;
     };
     const shN = shoulder('near'), shF = shoulder('far');
@@ -1216,6 +1275,7 @@ AB.Render = (() => {
     AB.Enemies.inRoom(r.id).forEach((e) => drawEnemy(e, 'emissive'));
     drawNavMarker();
     ctx.globalCompositeOperation = 'source-over';
+    AB.Chars.all().filter((c) => c.id !== 'CHAR-001' && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'emissive'));
     drawHero(AB.Chars.get('CHAR-001'), 'emissive');
   }
 
@@ -1321,6 +1381,25 @@ AB.Render = (() => {
           ctx.lineTo(x + Math.cos(a) * 68, y + Math.sin(a) * 68);
           ctx.stroke();
         }
+      }
+      if (e.id === 'EQUIP-004' && AB.Story.fx.ghost > 0) {
+        // EVENT-002: на среднем экране мелькает женский силуэт с помехами
+        const g = AB.Story.fx.ghost;
+        const a = Math.min(1, g * 2) * (Math.sin(time * 37) > -0.3 ? 1 : 0.25);
+        // средний экран пульта (по картинке): x 1022–1065, y −157…−128
+        const cx = sx(1043) + (Math.random() - 0.5) * 2, cy = sy(-143);
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `rgba(150,255,210,${0.35 * a})`;
+        ctx.fillRect(cx - 21, cy - 14, 42, 29);
+        ctx.fillStyle = `rgba(4,10,8,${0.9 * a})`;
+        ctx.beginPath(); ctx.ellipse(cx, cy - 5, 6, 7, 0, 0, 7); ctx.fill();          // голова
+        ctx.beginPath(); ctx.moveTo(cx - 7, cy - 6); ctx.quadraticCurveTo(cx - 10, cy + 6, cx - 9, cy + 9);
+        ctx.lineTo(cx + 9, cy + 9); ctx.quadraticCurveTo(cx + 10, cy + 6, cx + 7, cy - 6); ctx.fill(); // волосы
+        ctx.beginPath(); ctx.moveTo(cx - 15, cy + 14); ctx.quadraticCurveTo(cx, cy + 2, cx + 15, cy + 14); ctx.fill();  // плечи
+        ctx.fillStyle = `rgba(200,255,230,${0.5 * a})`;
+        for (let k = 0; k < 3; k++) ctx.fillRect(cx - 21, cy - 14 + Math.random() * 29, 42, 1.2);
+        ctx.restore();
       }
       if (e.id === 'EQUIP-004' && AB.World.hasPower()) {
         // пульт: оживают три экрана
@@ -1559,6 +1638,8 @@ AB.Render = (() => {
     drawItems(r);
     const enemies = AB.Enemies.inRoom(r.id);
     enemies.filter((e) => e.state === 'DEAD').forEach((e) => drawEnemy(e, 'body'));
+    // остальные персонажи в этом помещении (спутница и др.)
+    AB.Chars.all().filter((c) => c.id !== 'CHAR-001' && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'body'));
     if (hero && !hero.inPod) drawHero(hero, 'body');
     enemies.filter((e) => e.state !== 'DEAD').forEach((e) => drawEnemy(e, 'body'));
     if (!AB.debugFullLight) drawLighting(r);   // отладка: AB.debugFullLight = true — без темноты
@@ -1578,6 +1659,7 @@ AB.Render = (() => {
       const list = [];
       const hero = AB.Chars.get('CHAR-001');
       if (hero && !hero.hidden) list.push({ id: hero.id, x: hero.x, w: 22, h: 126 });
+      for (const c of AB.Chars.all()) if (c.id !== 'CHAR-001' && c.room === AB.Rooms.current()) list.push({ id: c.id, x: c.x, w: 22, h: 120 });
       for (const e of AB.Enemies.inRoom(AB.Rooms.current())) if (e.state !== 'DEAD') list.push({ id: e.id, x: e.x, w: 46, h: 90 });
       const hit = list.find((c) => Math.abs(wx - c.x) < c.w && wy < 4 && wy > -c.h);
       return hit ? hit.id : null;

@@ -5,8 +5,8 @@
 
 AB.Story = (() => {
   const done = new Set();
-  let running = null; // { def, t, next }
-  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false };
+  let running = null; // { def, t, next, wait, skip }
+  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false, ghost: 0 };
 
   const ACTIONS = {
     lock_input: () => AB.Input.lock(),
@@ -30,11 +30,50 @@ AB.Story = (() => {
       if (hero) hero.inPod = false;
     },
     hint: (s) => AB.Bus.emit('ui:hint', s.text),
+    // силуэт на экране пульта (EVENT-002)
+    console_ghost: (s) => { fx.ghost = s.duration; },
+    // появиться в помещении
+    spawn: (s) => {
+      const c = AB.Chars.spawn(s.char, { room: s.room, x: s.x, facing: s.facing || 1 });
+      if (c) { c.room = s.room; c.x = s.x; c.facing = s.facing || 1; c.controllable = false; }
+    },
+    // идти к точке или к другому персонажу (с зазором)
+    walk_to: (s) => {
+      const c = AB.Chars.get(s.char);
+      if (!c) return;
+      let x = s.x;
+      if (s.near) { const o = AB.Chars.get(s.near); x = o.x + (c.x > o.x ? s.gap : -s.gap); }
+      if (running.skip) { c.x = x; return; }
+      c.goal = { x, speed: s.speed || 100, follow: false };
+    },
+    // ждать, пока персонаж дойдёт
+    wait_arrive: (s) => {
+      running.wait = () => { const c = AB.Chars.get(s.char); return !c || !c.goal; };
+    },
+    face: (s) => {
+      const c = AB.Chars.get(s.char), t = AB.Chars.get(s.target);
+      if (c && t) c.facing = Math.sign(t.x - c.x) || c.facing;
+    },
+    // показать диалог и ждать его конца
+    dialog: (s) => {
+      if (running.skip) return;
+      AB.Dialog.open(s.id);
+      running.wait = () => !AB.Dialog.isOpen();
+    },
+    follow: (s) => {
+      const c = AB.Chars.get(s.char);
+      if (c) { c.follow = s.leader; c.goal = null; }
+    },
   };
+
+  const queue = []; // события, которые ждут, пока закончится текущее
 
   function trigger(kind) {
     for (const def of AB.EVENTS) {
-      if (def.trigger === kind && !(def.once && done.has(def.id))) start(def.id);
+      if (def.trigger !== kind || (def.once && done.has(def.id))) continue;
+      if (running) { if (running.def.id !== def.id && !queue.includes(def.id)) queue.push(def.id); }
+      else start(def.id);
+      return;
     }
   }
 
@@ -46,36 +85,54 @@ AB.Story = (() => {
   }
 
   function update(dt) {
+    fx.ghost = Math.max(0, fx.ghost - dt);
     if (fx.fadeDur > 0 && fx.fadeT < fx.fadeDur) {
       fx.fadeT += dt;
       fx.fade = AB.util.lerp(fx.fadeFrom, fx.fadeTo, AB.util.ease(AB.util.clamp(fx.fadeT / fx.fadeDur, 0, 1)));
     } else if (fx.fadeDur > 0) fx.fade = fx.fadeTo;
 
     if (!running) return;
+    if (running.wait) {
+      if (!running.skip && !running.wait()) return;   // ждём: персонаж идёт, идёт диалог
+      running.wait = null;
+    }
     running.t += dt;
     const steps = running.def.steps;
-    while (running.next < steps.length && steps[running.next].at <= running.t) {
+    while (running && running.next < steps.length && steps[running.next].at <= running.t && !running.wait) {
       const s = steps[running.next++];
       (ACTIONS[s.action] || (() => console.warn(`[Story] Неизвестный шаг ${s.action}`)))(s);
     }
+    if (running.wait) return;
     if (running.next >= steps.length) {
       done.add(running.def.id);
       AB.Bus.emit('event:end', running.def.id);
       running = null;
+      // следующее событие из очереди (одна сцена за раз)
+      while (queue.length) {
+        const id = queue.shift();
+        if (!done.has(id)) { start(id); break; }
+      }
     }
   }
 
   // Пропуск сцены: мгновенно выполнить оставшиеся шаги
   function skip() {
     if (!running) return;
+    running.skip = true;
     running.t = 1e9;
+    if (AB.Dialog.isOpen()) AB.Dialog.close();
     fx.fadeDur = 0.01; fx.fadeT = 1; fx.fadeTo = 0;
-    AB.Rooms.setPropState(`${AB.Rooms.current()}:cryopod-main`, 'open');
+    if (running.def.id === 'EVENT-001') AB.Rooms.setPropState(`${AB.Rooms.current()}:cryopod-main`, 'open');
   }
+
+  // Триггеры от других систем
+  AB.Bus.on('world:power', ({ on }) => { if (on) trigger('power_on'); });
+  AB.Bus.on('room:enter', ({ roomId }) => trigger(`enter:${roomId}`));
 
   return {
     trigger, update, skip, fx,
     isRunning: () => !!running,
+    current: () => (running ? { id: running.def.id, t: +running.t.toFixed(2), next: running.next, waiting: !!running.wait } : null),
     isDone: (id) => done.has(id),
     serialize: () => ({ done: [...done], alarm: fx.alarm }),
     restore(d) {

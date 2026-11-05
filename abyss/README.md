@@ -25,6 +25,8 @@
 
 6. **Задание из нескольких этапов.** `QUEST-001` «Восстановление энергоснабжения» в `ROOM-003`: QUEST SYSTEM (этапы и цели, проверка по состоянию мира), EQUIPMENT SYSTEM (`EQUIP-001…004`), навык инженера, работа с оборудованием с полосой прогресса. После запуска генератора на всём корабле аварийный красный свет сменяется рабочим.
 
+Сюжет: после включения света — силуэт на пульте (`EVENT-002`) и встреча со спутницей в жилом секторе `ROOM-002` (`EVENT-003`), диалоги (`DIALOG-*`, окно с печатью текста), спутница следует за Марком между помещениями.
+
 Навигация: мини-карта текущего помещения, карта корабля (`M`) и указатель на ближайший неисследованный или запертый проход.
 
 ## Структура
@@ -44,6 +46,7 @@ abyss/
     items.js                  ITEM-*
     equipment.js              EQUIP-*
     quests.js                 QUEST-*
+    dialogs.js                DIALOG-*
     enemies.js                ENEMY-*
   js/systems/                 игровые системы (GDD §13)
     asset-manager.js          ASSET MANAGER
@@ -55,6 +58,7 @@ abyss/
     interaction.js            взаимодействие: двери, предметы, обыск
     equipment-system.js       EQUIPMENT SYSTEM и питание корабля
     quest-system.js           QUEST SYSTEM
+    dialog.js                 DIALOG SYSTEM
     enemy-system.js           ENEMY SYSTEM
     combat.js                 COMBAT SYSTEM
     navigation.js             куда идти дальше

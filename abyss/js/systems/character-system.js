@@ -25,6 +25,8 @@ AB.Chars = (() => {
       hidden: false,
       equipped: null,   // ITEM-* в руках (оружие)
       dead: false,
+      goal: null,       // { x, speed } — идти к точке (сюжетные сцены)
+      follow: null,     // ID персонажа, за которым идёт
     };
     live.set(charId, s);
     AB.Anim.play(charId, 'idle');
@@ -47,7 +49,9 @@ AB.Chars = (() => {
   }
 
   function update(dt, bounds) {
+    const room = AB.Rooms.current();
     for (const s of live.values()) {
+      if (s.room !== room) continue;           // персонажи в других помещениях стоят на месте
       const def = AB.ID.get(s.id);
       let target = 0;
       if (s.controllable && !busy(s)) {
@@ -55,6 +59,21 @@ AB.Chars = (() => {
         const run = AB.Input.running();
         target = ax * (run ? def.stats.runSpeed : def.stats.speed);
         if (ax) s.facing = ax;
+      } else if (!busy(s)) {
+        // следование: держится в шаге позади ведущего
+        const lead = s.follow && live.get(s.follow);
+        if (lead && lead.room === s.room) {
+          const behind = lead.x - lead.facing * 85;
+          const far = Math.abs(behind - s.x);
+          if (far > 40) s.goal = { x: behind, speed: far > 260 ? def.stats.runSpeed : def.stats.speed };
+          else if (s.goal && s.goal.follow !== false && far < 12) s.goal = null;
+          if (!s.goal && Math.abs(lead.x - s.x) > 6) s.facing = Math.sign(lead.x - s.x);
+        }
+        if (s.goal) {
+          const dx = s.goal.x - s.x;
+          if (Math.abs(dx) < 6) { s.goal = null; AB.Bus.emit('char:arrived', { charId: s.id }); }
+          else { target = Math.sign(dx) * s.goal.speed; s.facing = Math.sign(dx); }
+        }
       }
       // плавный разгон и торможение
       const accel = target === 0 ? 900 : 700;
@@ -114,13 +133,27 @@ AB.Chars = (() => {
   }
 
   function serialize() {
-    return [...live.values()].map(({ id, room, x, facing, hp, appearance, equipped }) => ({ id, room, x, facing, hp, appearance, equipped }));
+    return [...live.values()].map(({ id, room, x, facing, hp, appearance, equipped, follow }) => ({ id, room, x, facing, hp, appearance, equipped, follow }));
   }
+
+  // ведомые переходят в новое помещение вместе с ведущим
+  AB.Bus.on('room:enter', ({ roomId }) => {
+    const hero = live.get('CHAR-001');
+    if (!hero) return;
+    for (const s of live.values()) {
+      if (s.follow !== hero.id) continue;
+      s.room = roomId;
+      s.x = hero.x - hero.facing * 70;
+      s.facing = hero.facing;
+      s.vx = 0;
+      s.goal = null;
+    }
+  });
 
   function restore(list) {
     for (const d of list || []) {
       const s = spawn(d.id, d);
-      if (s) Object.assign(s, { x: d.x, room: d.room, facing: d.facing, hp: d.hp, appearance: d.appearance, equipped: d.equipped || null });
+      if (s) Object.assign(s, { x: d.x, room: d.room, facing: d.facing, hp: d.hp, appearance: d.appearance, equipped: d.equipped || null, follow: d.follow || null });
     }
   }
 

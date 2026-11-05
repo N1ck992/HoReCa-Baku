@@ -26,4 +26,13 @@ AB.ANIMATIONS = [
   { id: 'ANIM-ENEMY001-07', owner: 'ENEMY-001', action: 'death',  loop: false, sheet: null, desc: 'Гибель', duration: 1.6 },
 ];
 
+// CHAR-002: спутница (процедурные заглушки)
+AB.ANIMATIONS.push(
+  { id: 'ANIM-CHAR002-01', owner: 'CHAR-002', action: 'walk',     loop: true,  sheet: null, desc: 'Ходьба' },
+  { id: 'ANIM-CHAR002-02', owner: 'CHAR-002', action: 'run',      loop: true,  sheet: null, desc: 'Бег' },
+  { id: 'ANIM-CHAR002-03', owner: 'CHAR-002', action: 'interact', loop: false, sheet: null, desc: 'Взаимодействие', duration: 0.7 },
+  { id: 'ANIM-CHAR002-04', owner: 'CHAR-002', action: 'hurt',     loop: false, sheet: null, desc: 'Получение урона', duration: 0.5 },
+  { id: 'ANIM-CHAR002-05', owner: 'CHAR-002', action: 'idle',     loop: true,  sheet: null, desc: 'Ожидание' },
+);
+
 AB.ANIMATIONS.forEach((a) => AB.ID.register(a.id, a));

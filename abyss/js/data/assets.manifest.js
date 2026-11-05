@@ -15,6 +15,9 @@ AB.ASSET_MANIFEST = [
   // Повреждённый костюм: пока та же картинка — ждём вариант 02 в той же позе.
   { id: 'ASSET-CHAR001-02', owner: 'CHAR-001', type: 'rig', rig: 'MARK', variant: '01', src: null, desc: 'Повреждённый костюм (временно как основной)' },
 
+  // ---- CHAR-002: спутница — графика ждёт утверждения внешности ----
+  { id: 'ASSET-CHAR002-01', owner: 'CHAR-002', type: 'sprite', src: null, desc: 'Спутница: основной вид' },
+
   // ---- ROOM-001: медицинский отсек ----
   { id: 'ASSET-ROOM001-01', owner: 'ROOM-001', type: 'background', src: null, desc: 'Фон: стены и пол медотсека' },
   { id: 'ASSET-ROOM001-02', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Аварийная криокапсула' },
@@ -24,6 +27,9 @@ AB.ASSET_MANIFEST = [
 
   // ---- ROOM-011: первый коридор ----
   { id: 'ASSET-ROOM011-01', owner: 'ROOM-011', type: 'background', src: null, desc: 'Фон: первый коридор' },
+
+  // ---- ROOM-002: жилой сектор ----
+  { id: 'ASSET-ROOM002-01', owner: 'ROOM-002', type: 'background', src: null, desc: 'Фон: жилой сектор' },
 
   // ---- ROOM-003: энергетический отсек ----
   // Фон — концепт-арт целиком: генератор, щит, кабельный узел, пульт и двери нарисованы на нём.

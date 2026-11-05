@@ -28,4 +28,26 @@ AB.CHARACTERS = [
   },
 ];
 
+// CHAR-002 — спутница (GDD §3). Имя, внешность и реплики ждут утверждения:
+// пока имя-заглушка и графика-заглушка (силуэт) с ID ресурса.
+AB.CHARACTERS.push({
+  id: 'CHAR-002',
+  name: 'Спутница',           // заглушка: она представляется бывшей девушкой Марка — имя не задано
+  role: 'Выжившая (по её словам)',
+  specialization: null,
+  crew: false,
+  stats: { maxHp: 80, speed: 120, runSpeed: 230 },
+  skills: {},
+  appearances: ['ASSET-CHAR002-01'],
+  // цвета силуэта-заглушки
+  look: { dark: '#221c22', mid: '#3c3038', light: '#55464e', hair: '#1a1416', build: 0.92 },
+  anims: {
+    idle: 'ANIM-CHAR002-05',
+    walk: 'ANIM-CHAR002-01',
+    run: 'ANIM-CHAR002-02',
+    interact: 'ANIM-CHAR002-03',
+    hurt: 'ANIM-CHAR002-04',
+  },
+});
+
 AB.CHARACTERS.forEach((c) => AB.ID.register(c.id, c));

@@ -352,6 +352,48 @@
   });
   if (isTouch) document.body.classList.add('touch');
 
+  // ---------- Диалог ----------
+  const dlg = $('#dialog');
+  let typeTimer = null;
+  function showLine(l) {
+    dlg.hidden = false;
+    dlg.classList.toggle('mark', l.speaker === HERO);
+    dlg.querySelector('.dlg-name').textContent = l.name;
+    const txt = dlg.querySelector('.dlg-text');
+    // печатаем текст по буквам
+    clearInterval(typeTimer);
+    let n = 0;
+    txt.textContent = '';
+    dlg.dataset.typing = '1';
+    typeTimer = setInterval(() => {
+      n++;
+      txt.textContent = l.text.slice(0, n);
+      if (n >= l.text.length) { clearInterval(typeTimer); dlg.dataset.typing = ''; }
+    }, 28);
+    dlg.dataset.full = l.text;
+    dlg.querySelector('.dlg-next').textContent = `${l.last ? 'закрыть' : 'дальше'}: ${isTouch ? 'нажмите' : 'E'}`;
+  }
+  function advanceDialog() {
+    if (!AB.Dialog.isOpen()) return false;
+    if (dlg.dataset.typing) {
+      // сначала дописать строку целиком
+      clearInterval(typeTimer);
+      dlg.querySelector('.dlg-text').textContent = dlg.dataset.full;
+      dlg.dataset.typing = '';
+      return true;
+    }
+    AB.Dialog.next();
+    return true;
+  }
+  AB.Bus.on('dialog:line', showLine);
+  AB.Bus.on('dialog:end', () => { clearInterval(typeTimer); dlg.hidden = true; });
+  dlg.addEventListener('click', advanceDialog);
+  window.addEventListener('keydown', (e) => {
+    if (!AB.Dialog.isOpen() || e.repeat) return;
+    if (['KeyE', 'Enter', 'Space', 'KeyF'].includes(e.code)) { e.preventDefault(); advanceDialog(); }
+  });
+  document.querySelectorAll('[data-touch="action"]').forEach((b) => b.addEventListener('pointerdown', advanceDialog));
+
   // ---------- Задание в интерфейсе ----------
   let lastQuest = '';
   function updateQuest() {

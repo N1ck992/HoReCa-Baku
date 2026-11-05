@@ -149,6 +149,23 @@ kbd.no { border-color: rgba(255, 59, 47, .5); color: var(--red); }
   border-radius: 6px; padding: 8px 14px; cursor: pointer; letter-spacing: 1px;
 }
 
+/* ---------- Диалог ---------- */
+#dialog {
+  position: fixed; z-index: 12; left: 50%; transform: translateX(-50%);
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px)); width: min(680px, calc(100% - 32px));
+  background: rgba(6, 7, 9, .9); border: 1px solid var(--line); border-left: 3px solid #b9a3c8;
+  border-radius: 6px; padding: 12px 16px 10px; display: grid; gap: 6px; cursor: pointer;
+  animation: dlg-in .25s ease-out;
+}
+#dialog[hidden] { display: none; }
+#dialog.mark { border-left-color: var(--cyan); }
+#dialog .dlg-name { font: 500 13px var(--display); letter-spacing: 2px; text-transform: uppercase; color: #b9a3c8; }
+#dialog.mark .dlg-name { color: var(--cyan); }
+#dialog .dlg-text { font-size: 16px; line-height: 1.45; color: #e8e2d8; min-height: 23px; }
+#dialog .dlg-next { font-size: 11px; color: var(--muted); text-align: right; }
+@keyframes dlg-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+body.touch #dialog { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
+
 /* ---------- Сенсорное управление ---------- */
 #touch {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; display: none; justify-content: space-between;
