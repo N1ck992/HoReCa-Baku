@@ -5,7 +5,8 @@
 function structureKey() {
   // Если что-то из этого изменилось — вкладку нужно перерисовать целиком.
   return JSON.stringify([S.buildings, S.build && S.build.id, S.training && S.training.unit,
-    S.units, S.missions.cleared, Object.keys(S.heroes).length]);
+    S.units, S.missions.cleared, Object.keys(S.heroes).length,
+    S.march && S.march.target, S.march && S.march.phase]);
 }
 
 function save() {
@@ -16,6 +17,13 @@ function handleEvents(events) {
   for (const e of events) {
     if (e.type === 'built') toast(`${BUILDINGS[e.id].icon} ${BUILDINGS[e.id].name}: уровень ${e.level}`, 'good');
     if (e.type === 'trained') toast(`${UNITS[e.unit].icon} Обучено: ${UNITS[e.unit].name} ×${e.count}`, 'good');
+    if (e.type === 'battle') {
+      if (e.result.win) MapScene.select(Math.min(MISSION_COUNT, S.missions.cleared + 1));
+      // отряд дошёл до цели: показываем бой, если ничего другого не открыто
+      if ($('#modal').hidden) showBattle(e.result);
+      else toast(e.result.win ? '🏆 Отряд победил в секторе' : '☠ Отряд проиграл бой', e.result.win ? 'good' : 'bad');
+    }
+    if (e.type === 'returned') toast(e.recalled ? '↩ Отряд вернулся на базу' : '🚩 Отряд вернулся на базу', 'good');
   }
 }
 
@@ -50,11 +58,34 @@ function onAction(btn) {
       if (r) { save(); showRecruit(r); return; }
       break;
     }
-    case 'mission': {
-      const r = runMission(Number(id));
-      if (r) { save(); showBattle(r); return; }
+    case 'mission':
+      if (launchMarch(Number(id))) {
+        toast(`🚩 Отряд выступил: ${fmtTime(marchTime(Number(id)))} в пути`);
+        if (currentTab !== 'map') currentTab = 'map';
+        MapScene.focus(Number(id));
+      }
       break;
-    }
+    case 'recall':
+      if (recallMarch()) toast('Отряд разворачивается');
+      break;
+    case 'battle-report':
+      if (S.march && S.march.result) showBattle(S.march.result);
+      return;
+    case 'select-building':
+      BaseScene.select(id);
+      $('#base-panel').innerHTML = buildingCard(id);
+      markChips(id);
+      refresh();
+      return;
+    case 'map-zoom':
+      MapScene.zoomBy(btn.dataset.delta === 'in' ? 1.25 : 0.8);
+      return;
+    case 'map-home':
+      MapScene.focus(0, false);
+      return;
+    case 'map-follow':
+      MapScene.focusMarch();
+      return;
     case 'skip-battle':
       showBattle.skip && showBattle.skip();
       return;
@@ -134,6 +165,16 @@ function init() {
       refresh();
     }
   }, 250);
+  // анимация сцен базы и карты
+  const frame = () => {
+    if (!document.hidden) {
+      if (currentTab === 'base') BaseScene.draw();
+      if (currentTab === 'map') MapScene.draw();
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+
   setInterval(save, 5000);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();

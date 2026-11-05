@@ -6,15 +6,66 @@ const MAX_ROUNDS = 20;
 
 function missionBlockReason(i) {
   if (i > S.missions.cleared + 1) return 'Сектор ещё не открыт';
+  if (S.march) return 'Отряд уже в походе';
   if (armySize() === 0) return 'Нет войск';
   if (S.res.food < missionDef(i).foodCost) return 'Не хватает провизии';
   return null;
 }
 
-function runMission(i) {
-  if (missionBlockReason(i)) return null;
+// ---------- Поход ----------
+// Отряд идёт к сектору, на месте происходит бой, затем отряд возвращается.
+function launchMarch(i) {
+  if (missionBlockReason(i)) return false;
+  S.res.food -= missionDef(i).foodCost;
+  const t = now(), travel = marchTime(i) * 1000;
+  S.march = { target: i, departAt: t, arriveAt: t + travel, returnAt: t + travel * 2, phase: 'out', result: null };
+  return true;
+}
+
+function recallMarch() {
+  // отозвать отряд до боя: он разворачивается и идёт назад тем же путём
+  const m = S.march;
+  if (!m || m.phase !== 'out') return false;
+  const t = now();
+  const passed = t - m.departAt;
+  m.phase = 'back';
+  m.recalled = true;
+  m.arriveAt = t - passed;       // точка разворота — текущая позиция
+  m.turnAt = t;
+  m.returnAt = t + passed;
+  return true;
+}
+
+// Положение отряда на карте (доля пути от базы до цели, 0..1)
+function marchProgress(t = now()) {
+  const m = S.march;
+  if (!m) return 0;
+  if (m.phase === 'out') {
+    return Math.min(1, (t - m.departAt) / (m.arriveAt - m.departAt));
+  }
+  if (m.recalled) {
+    const peak = (m.turnAt - m.departAt) / (marchTime(m.target) * 1000);
+    return Math.max(0, peak * (1 - (t - m.turnAt) / (m.returnAt - m.turnAt)));
+  }
+  return Math.max(0, 1 - (t - m.arriveAt) / (m.returnAt - m.arriveAt));
+}
+
+function tickMarch(t, events) {
+  const m = S.march;
+  if (!m) return;
+  if (m.phase === 'out' && t >= m.arriveAt) {
+    m.result = resolveBattle(m.target);
+    m.phase = 'back';
+    events.push({ type: 'battle', result: m.result });
+  }
+  if (m.phase === 'back' && t >= m.returnAt) {
+    events.push({ type: 'returned', recalled: !!m.recalled, win: m.result && m.result.win });
+    S.march = null;
+  }
+}
+
+function resolveBattle(i) {
   const m = missionDef(i);
-  S.res.food -= m.foodCost;
 
   const army = armyStats();
   let pHp = army.hp, eHp = m.hp;

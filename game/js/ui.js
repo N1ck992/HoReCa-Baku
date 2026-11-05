@@ -50,54 +50,67 @@ function renderResBar() {
 }
 
 // ---------- Вкладка: База ----------
-function renderBase() {
-  const cards = Object.entries(BUILDINGS).map(([id, b]) => {
-    const L = S.buildings[id];
-    const isMax = L >= b.maxLevel;
-    const building = S.build && S.build.id === id;
-    let effect = '';
-    if (b.produces) {
-      effect = `${RESOURCES[b.produces].icon} ${fmt(prodRate(b.produces) * 60)}/мин`;
-    } else if (id === 'storage') {
-      effect = `Лимит: ${fmt(storageCap())}`;
-    } else if (id === 'barracks') {
-      effect = `Армия до ${unitCap()}`;
-    } else if (id === 'hq') {
-      effect = `Слоты героев: ${squadSlots()}`;
-    }
-    return `
-      <div class="card building ${building ? 'is-busy' : ''}">
-        <div class="card-head">
-          <div class="b-icon">${b.icon}</div>
-          <div class="grow">
-            <div class="card-title">${b.name}</div>
-            <div class="muted">Уровень ${L}${isMax ? ' (макс.)' : ''} · ${effect}</div>
-          </div>
+function buildingCard(id) {
+  const b = BUILDINGS[id];
+  const L = S.buildings[id];
+  const isMax = L >= b.maxLevel;
+  const building = S.build && S.build.id === id;
+  let effect = '';
+  if (b.produces) {
+    effect = `${RESOURCES[b.produces].icon} ${fmt(prodRate(b.produces) * 60)}/мин`;
+  } else if (id === 'storage') {
+    effect = `Лимит: ${fmt(storageCap())}`;
+  } else if (id === 'barracks') {
+    effect = `Армия до ${unitCap()}`;
+  } else if (id === 'hq') {
+    effect = `Слоты героев: ${squadSlots()}`;
+  }
+  return `
+    <div class="card building ${building ? 'is-busy' : ''}">
+      <div class="card-head">
+        <div class="b-icon">${b.icon}</div>
+        <div class="grow">
+          <div class="card-title">${b.name}</div>
+          <div class="muted">Уровень ${L}${isMax ? ' (макс.)' : ''} · ${effect}</div>
         </div>
-        <p class="desc">${b.desc}</p>
-        ${building ? `
-          <div class="progress"><i data-progress="build"></i></div>
-          <div class="row between">
-            <span class="muted">До ур. ${L + 1}: <b data-timer="build"></b></span>
-            <button class="btn small accent" data-action="speedup-build" data-check="speedup-build">
-              Ускорить 💎 <span data-speedcost="build"></span>
-            </button>
-          </div>` : isMax ? '' : `
-          <div class="row between wrap">
-            ${costHtml(upgradeCost(id))}
-            <span class="muted">⏱ ${fmtTime(upgradeTime(id))}</span>
-          </div>
-          <button class="btn full" data-action="upgrade" data-id="${id}" data-check="upgrade:${id}">
-            Улучшить до ур. ${L + 1}
+      </div>
+      <p class="desc">${b.desc}</p>
+      ${building ? `
+        <div class="progress"><i data-progress="build"></i></div>
+        <div class="row between">
+          <span class="muted">До ур. ${L + 1}: <b data-timer="build"></b></span>
+          <button class="btn small accent" data-action="speedup-build" data-check="speedup-build">
+            Ускорить 💎 <span data-speedcost="build"></span>
           </button>
-          <div class="reason" data-reason="upgrade:${id}"></div>`}
-      </div>`;
-  });
+        </div>` : isMax ? '' : `
+        <div class="row between wrap">
+          ${costHtml(upgradeCost(id))}
+          <span class="muted">⏱ ${fmtTime(upgradeTime(id))}</span>
+        </div>
+        <button class="btn full" data-action="upgrade" data-id="${id}" data-check="upgrade:${id}">
+          Улучшить до ур. ${L + 1}
+        </button>
+        <div class="reason" data-reason="upgrade:${id}"></div>`}
+    </div>`;
+}
+
+function renderBase() {
+  const sel = BaseScene.getSelected();
+  const chips = Object.entries(BUILDINGS).map(([id, b]) => `
+    <button class="chip ${id === sel ? 'active' : ''} ${S.build && S.build.id === id ? 'busy' : ''}"
+      data-action="select-building" data-id="${id}" title="${b.name}">
+      <span>${b.icon}</span>${S.buildings[id]}
+    </button>`).join('');
   return `
     <section class="panel">
       <h2>Колония «Рубеж-7»</h2>
-      <p class="muted intro">Развивайте базу: постройки добывают ресурсы даже когда вы не в игре.</p>
-      <div class="grid">${cards.join('')}</div>
+      <div class="scene-wrap">
+        <canvas id="base-canvas" class="scene base-scene" aria-label="Вид базы"></canvas>
+        <div class="scene-hint">Нажмите на постройку</div>
+        ${S.march ? '<div class="scene-badge">🚩 Отряд в походе</div>' : ''}
+      </div>
+      <div class="chips">${chips}</div>
+      <div id="base-panel">${buildingCard(sel)}</div>
     </section>`;
 }
 
@@ -237,37 +250,67 @@ function winChance(m) {
   return { label: 'Низкий', cls: 'bad' };
 }
 
+function missionCard(i) {
+  const m = missionDef(i);
+  const cleared = i <= S.missions.cleared;
+  const ch = winChance(m);
+  const marchingHere = S.march && S.march.target === i;
+  return `
+    <div class="card mission ${cleared ? 'cleared' : 'current'} ${m.boss ? 'boss' : ''}">
+      <div class="card-head">
+        <div class="b-icon">${m.boss ? '💀' : cleared ? '✅' : '🎯'}</div>
+        <div class="grow">
+          <div class="card-title">${m.name}${m.boss ? ' · Босс' : ''}</div>
+          <div class="muted">${m.enemy} · ⚔ ${fmt(m.atk)} · ❤ ${fmt(m.hp)}</div>
+        </div>
+        <span class="chance ${ch.cls}">${ch.label}</span>
+      </div>
+      <div class="row between wrap">
+        <span class="muted">Награда${cleared ? ' (повтор, ×0.5)' : ''}:</span>
+        ${costHtml(cleared ? scaleCost(m.reward, 0.5) : m.reward).replace(/data-cost-res="\w+"/g, '')}
+        ${cleared ? '' : `<span class="cost-item">💎 ${m.crystals}</span>`}
+      </div>
+      <div class="row between wrap">
+        <span class="cost">
+          <span class="cost-item" data-cost-res="food" data-cost-val="${m.foodCost}">🌾 ${m.foodCost}</span>
+          <span class="cost-item">🕒 ${fmtTime(marchTime(i))} в пути</span>
+        </span>
+        ${marchingHere ? '' : `
+        <button class="btn ${cleared ? 'ghost' : 'accent'}" data-action="mission" data-id="${i}" data-check="mission:${i}">
+          ${cleared ? 'Отправить снова' : 'Отправить отряд'}
+        </button>`}
+      </div>
+      <div class="reason" data-reason="mission:${i}"></div>
+    </div>`;
+}
+
+function marchCard() {
+  const m = S.march;
+  if (!m) return '';
+  const def = missionDef(m.target);
+  const back = m.phase === 'back';
+  let status;
+  if (!back) status = `Идёт к сектору ${m.target}: ${def.enemy}`;
+  else if (m.recalled) status = 'Отозван, возвращается на базу';
+  else status = m.result && m.result.win ? '🏆 Победа! Возвращается с трофеями' : '☠ Отступает после поражения';
+  return `
+    <div class="card march ${back ? 'back' : ''}">
+      <b>🚩 ${status}</b>
+      <div class="progress"><i data-progress="march"></i></div>
+      <div class="row between wrap">
+        <span class="muted">${back ? 'До базы' : 'До цели'}: <b data-timer="march"></b></span>
+        <span class="row">
+          <button class="btn small ghost" data-action="map-follow">Показать</button>
+          ${back ? (m.result ? '<button class="btn small ghost" data-action="battle-report">Отчёт о бою</button>' : '')
+                 : '<button class="btn small ghost" data-action="recall">Отозвать</button>'}
+        </span>
+      </div>
+    </div>`;
+}
+
 function renderMap() {
-  const list = [];
-  const last = Math.min(MISSION_COUNT, S.missions.cleared + 1);
-  for (let i = last; i >= 1; i--) {
-    const m = missionDef(i);
-    const cleared = i <= S.missions.cleared;
-    const ch = winChance(m);
-    list.push(`
-      <div class="card mission ${cleared ? 'cleared' : 'current'} ${m.boss ? 'boss' : ''}">
-        <div class="card-head">
-          <div class="b-icon">${m.boss ? '💀' : cleared ? '✅' : '🎯'}</div>
-          <div class="grow">
-            <div class="card-title">${m.name}${m.boss ? ' · Босс' : ''}</div>
-            <div class="muted">${m.enemy} · ⚔ ${fmt(m.atk)} · ❤ ${fmt(m.hp)}</div>
-          </div>
-          <span class="chance ${ch.cls}">${ch.label}</span>
-        </div>
-        <div class="row between wrap">
-          <span class="muted">Награда${cleared ? ' (повтор, ×0.5)' : ''}:</span>
-          ${costHtml(cleared ? scaleCost(m.reward, 0.5) : m.reward).replace(/data-cost-res="\w+"/g, '')}
-          ${cleared ? '' : `<span class="cost-item">💎 ${m.crystals}</span>`}
-        </div>
-        <div class="row between">
-          <span class="cost"><span class="cost-item" data-cost-res="food" data-cost-val="${m.foodCost}">🌾 ${m.foodCost} на поход</span></span>
-          <button class="btn ${cleared ? 'ghost' : 'accent'}" data-action="mission" data-id="${i}" data-check="mission:${i}">
-            ${cleared ? 'Повторить' : 'В бой'}
-          </button>
-        </div>
-        <div class="reason" data-reason="mission:${i}"></div>
-      </div>`);
-  }
+  const sel = Math.min(MapScene.getSelected(), S.missions.cleared + 1, MISSION_COUNT);
+  MapScene.select(sel);
   const done = S.missions.cleared >= MISSION_COUNT;
   return `
     <section class="panel">
@@ -275,10 +318,20 @@ function renderMap() {
       <div class="card summary">
         <div class="stat"><span>Пройдено</span><b>${S.missions.cleared} / ${MISSION_COUNT}</b></div>
         <div class="stat"><span>Победы</span><b>${S.stats.battlesWon}</b></div>
-        <div class="stat"><span>Поражения</span><b>${S.stats.battlesLost}</b></div>
+        <div class="stat"><span>Сила армии</span><b>⚔ ${fmt(armyStats().atk)}</b></div>
       </div>
-      ${done ? '<div class="card"><b>🏆 Все сектора зачищены!</b> Новые территории — в следующих обновлениях.</div>' : ''}
-      <div class="grid one">${list.join('')}</div>
+      <div class="scene-wrap">
+        <canvas id="map-canvas" class="scene map-scene" aria-label="Карта мира"></canvas>
+        <div class="map-tools">
+          <button class="icon-btn" data-action="map-zoom" data-delta="in" aria-label="Приблизить">＋</button>
+          <button class="icon-btn" data-action="map-zoom" data-delta="out" aria-label="Отдалить">－</button>
+          <button class="icon-btn" data-action="map-home" aria-label="К базе">⌂</button>
+        </div>
+        <div class="scene-hint">Двигайте карту, нажмите на сектор</div>
+      </div>
+      ${done ? '<div class="card"><b>🏆 Все сектора зачищены!</b> Новые территории появятся в следующих обновлениях.</div>' : ''}
+      <div id="march-panel">${marchCard()}</div>
+      <div id="map-panel">${missionCard(sel)}</div>
     </section>`;
 }
 
@@ -287,8 +340,16 @@ const VIEWS = { base: renderBase, army: renderArmy, heroes: renderHeroes, map: r
 
 function render() {
   $('#view').innerHTML = VIEWS[currentTab]();
+  const bc = $('#base-canvas');
+  if (bc) BaseScene.mount(bc, (id) => { $('#base-panel').innerHTML = buildingCard(id); markChips(id); refresh(); });
+  const mc = $('#map-canvas');
+  if (mc) MapScene.mount(mc, (i) => { $('#map-panel').innerHTML = missionCard(i); refresh(); });
   $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === currentTab));
   refresh();
+}
+
+function markChips(id) {
+  $$('.chip').forEach((c) => c.classList.toggle('active', c.dataset.id === id));
 }
 
 function setTab(tab) {
@@ -327,6 +388,14 @@ function refresh() {
     $$('[data-timer="train"]').forEach((e) => (e.textContent = fmtTime((endAt - t) / 1000)));
     $$('[data-speedcost="train"]').forEach((e) => (e.textContent = speedupCost(endAt)));
     $$('[data-train-left]').forEach((e) => (e.textContent = tr.total - tr.remaining));
+  }
+
+  if (S.march) {
+    const m = S.march;
+    const k = marchProgress(t);
+    const back = m.phase === 'back';
+    $$('[data-progress="march"]').forEach((e) => (e.style.width = (back ? 100 - k * 100 : k * 100) + '%'));
+    $$('[data-timer="march"]').forEach((e) => (e.textContent = fmtTime(((back ? m.returnAt : m.arriveAt) - t) / 1000)));
   }
 
   $$('[data-cost-res]').forEach((e) => {

@@ -177,6 +177,43 @@ h3 { margin: 18px 0 8px; color: var(--muted); font-size: 15px; text-transform: u
 .result.win h3 { color: var(--good); }
 .result.lose h3 { color: var(--bad); }
 
+/* ---------- Сцены (база и карта) ---------- */
+.scene-wrap {
+  position: relative; border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--line); margin-bottom: 12px; background: var(--bg2);
+}
+.scene { display: block; width: 100%; }
+.base-scene { aspect-ratio: 1000 / 720; cursor: pointer; }
+.map-scene { height: min(58vh, 520px); touch-action: none; cursor: grab; }
+.map-scene:active { cursor: grabbing; }
+.scene-hint {
+  position: absolute; left: 10px; bottom: 10px; pointer-events: none;
+  background: rgba(11, 15, 26, .75); color: var(--muted); font-size: 12px;
+  padding: 4px 10px; border-radius: 8px;
+}
+.scene-badge {
+  position: absolute; right: 10px; top: 10px; pointer-events: none;
+  background: rgba(11, 15, 26, .8); color: var(--mid); font-size: 12px; font-weight: 700;
+  padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255, 193, 69, .4);
+}
+.map-tools { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.map-tools .icon-btn { background: rgba(21, 29, 46, .9); }
+
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+.chip {
+  flex: none; display: flex; align-items: center; gap: 4px; cursor: pointer;
+  background: var(--card); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 6px 10px; font: inherit; font-weight: 700;
+}
+.chip span { font-size: 18px; }
+.chip.active { border-color: var(--accent); background: rgba(35, 213, 196, .12); }
+.chip.busy { border-style: dashed; border-color: var(--mid); }
+
+.march { border-color: rgba(255, 193, 69, .5); }
+.march.back { border-color: rgba(61, 220, 132, .5); }
+.march .progress i { background: linear-gradient(90deg, var(--mid), #ffde8a); }
+.march.back .progress i { background: linear-gradient(90deg, var(--good), #9af0bf); }
+
 /* ---------- Навигация ---------- */
 #tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
@@ -222,6 +259,10 @@ h3 { margin: 18px 0 8px; color: var(--muted); font-size: 15px; text-transform: u
 .toast.good { border-color: var(--good); }
 .toast.bad { border-color: var(--bad); }
 .toast.hide { opacity: 0; transform: translateY(10px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
 
 @media (max-width: 420px) {
   #resbar { gap: 4px; padding: 6px 10px; }

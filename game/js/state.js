@@ -256,5 +256,7 @@ function tick() {
       events.push({ type: 'unit' });
     }
   }
+
+  tickMarch(t, events);
   return events;
 }

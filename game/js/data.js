@@ -125,8 +125,43 @@ const START_STATE = () => ({
   build: null,          // { id, startAt, endAt }
   units: { trooper: 10, drone: 0, crawler: 0 },
   training: null,       // { unit, remaining, total, each, nextAt }
+  march: null,          // { target, departAt, arriveAt, returnAt, phase, result }
   heroes: { orin: { level: 1, xp: 0 } },
   squad: ['orin'],
   missions: { cleared: 0 },
   stats: { battlesWon: 0, battlesLost: 0 },
 });
+
+// ---------- Карта мира ----------
+// Детерминированный генератор случайных чисел: карта одинакова у всех игроков.
+function seededRng(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Координаты секторов. База игрока — в точке (0, 0), маршрут уходит на северо-восток.
+const SECTOR_POS = (() => {
+  const rng = seededRng(7);
+  const out = [{ x: 0, y: 0 }];
+  let x = 0, y = 0, ang = -0.7;
+  for (let i = 1; i <= MISSION_COUNT; i++) {
+    ang = Math.max(-1.7, Math.min(0.3, ang + (rng() - 0.5) * 1.3));
+    const step = 170 + rng() * 70;
+    x += Math.cos(ang) * step;
+    y += Math.sin(ang) * step;
+    out.push({ x: Math.round(x), y: Math.round(y) });
+  }
+  return out;
+})();
+
+const MARCH_SPEED = 30; // единиц карты в секунду
+
+function marchTime(i) {
+  // время в пути в одну сторону, секунды
+  const p = SECTOR_POS[i];
+  return Math.round(6 + Math.hypot(p.x, p.y) / MARCH_SPEED);
+}
