@@ -509,8 +509,10 @@ AB.Render = (() => {
       const amp = run ? 0.75 : 0.45;
       P.hipL = Math.sin(cyc) * amp;
       P.hipR = Math.sin(cyc + Math.PI) * amp;
-      P.kneeL = Math.max(0, -Math.cos(cyc)) * (run ? 1.3 : 0.7) + 0.05;
-      P.kneeR = Math.max(0, -Math.cos(cyc + Math.PI)) * (run ? 1.3 : 0.7) + 0.05;
+      // колено сгибается, когда нога выносится вперёд (угол бедра растёт, cos > 0);
+      // опорная нога прямая и уходит назад — иначе получается «лунная походка»
+      P.kneeL = Math.max(0, Math.cos(cyc)) * (run ? 1.3 : 0.7) + 0.05;
+      P.kneeR = Math.max(0, Math.cos(cyc + Math.PI)) * (run ? 1.3 : 0.7) + 0.05;
       P.shL = -Math.sin(cyc) * amp * 0.8;
       P.shR = -Math.sin(cyc + Math.PI) * amp * 0.8;
       P.elL = -0.3 - (run ? 0.9 : 0.2);
@@ -817,7 +819,7 @@ AB.Render = (() => {
       Q.fA = 0.5 + Math.sin(cyc) * amp; Q.fA2 = 0.5 + Math.sin(cyc + Math.PI) * amp;
       Q.fE = -0.9 - Math.max(0, Math.cos(cyc)) * 0.6; Q.fE2 = -0.9 - Math.max(0, Math.cos(cyc + Math.PI)) * 0.6;
       Q.hA = Math.sin(cyc + Math.PI) * amp * 0.8; Q.hA2 = Math.sin(cyc) * amp * 0.8;
-      Q.hK = 0.8 + Math.max(0, -Math.cos(cyc + Math.PI)) * 0.7; Q.hK2 = 0.8 + Math.max(0, -Math.cos(cyc)) * 0.7;
+      Q.hK = 0.8 + Math.max(0, Math.cos(cyc + Math.PI)) * 0.7; Q.hK2 = 0.8 + Math.max(0, Math.cos(cyc)) * 0.7;
       Q.h += Math.abs(Math.sin(cyc)) * (run ? 5 : 2);
       Q.head = Math.sin(cyc * 0.5) * 0.08 + twitch;
       Q.rot = run ? 0.08 : 0;

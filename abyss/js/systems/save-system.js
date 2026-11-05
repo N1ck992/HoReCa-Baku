@@ -13,7 +13,10 @@ AB.Save = (() => {
     1: (raw) => raw.replace(/ROOM-TMP-001/g, 'ROOM-011'),
   };
 
+  let frozen = false; // после «Начать заново» больше не сохраняем до перезагрузки
+
   function save() {
+    if (frozen) return false;
     // не сохраняем посреди боя и после гибели: загрузка вернёт к безопасной точке
     const hero = AB.Chars.get('CHAR-001');
     if (!hero || hero.dead || AB.Enemies.inCombat()) return false;
@@ -44,6 +47,7 @@ AB.Save = (() => {
   }
 
   function clear() {
+    frozen = true;
     try { localStorage.removeItem(KEY); } catch (e) { /* хранилище недоступно */ }
   }
 

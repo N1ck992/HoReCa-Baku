@@ -183,13 +183,28 @@ def run(cfg_path):
             hidden = behind & ~own
             # и только внутри собственного контура части (по строкам): не выходим за спину,
             # за край бедра и т.п.
-            if name == 'torso' and own.any():
-                span = np.zeros_like(own)
+            if name != 'head' and own.any():
+                # контур торса по строкам. Край, который граничит с фоном, — настоящий;
+                # край, за которым другая часть (например, рука закрывает спину), — неизвестен,
+                # его достраиваем по соседним строкам, где контур виден.
                 rows = np.nonzero(own.any(axis=1))[0]
+                L, Rt, kl, kr = [], [], [], []
                 for y in rows:
                     xs_ = np.nonzero(own[y])[0]
-                    span[y, xs_.min():xs_.max() + 1] = True
-                hidden &= span
+                    l, r = xs_.min(), xs_.max()
+                    L.append(l); Rt.append(r)
+                    kl.append(l < 3 or not mask[y, max(0, l - 3)])
+                    kr.append(r > w - 4 or not mask[y, min(w - 1, r + 3)])
+                L, Rt, kl, kr = map(np.array, (L, Rt, kl, kr))
+                if kl.sum() >= 2:
+                    L = np.where(kl, L, np.interp(rows, rows[kl], L[kl]))
+                if kr.sum() >= 2:
+                    Rt = np.where(kr, Rt, np.interp(rows, rows[kr], Rt[kr]))
+                span = np.zeros_like(own)
+                for y, l, r in zip(rows, L.astype(int), Rt.astype(int)):
+                    span[y, l:r + 1] = True
+                lo2, hi2 = (0.0, 1.0) if name == 'torso' else (0.06, 0.97)
+                hidden = ((norm[name] <= 1.0) & (t >= lo2) & (t <= hi2) & span & (owner != 'head')) & ~own
             shape = own | hidden
             # запас вокруг верхнего сустава (против щелей при сгибе) — из настоящих пикселей
             jx, jy = Q[j0]
