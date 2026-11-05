@@ -11,6 +11,7 @@ AB.Rooms = (() => {
   let transition = null;       // { to, toDoor, t, phase }
   const taken = new Map();     // 'ROOM-001:scrap-pod' -> сколько уже подобрано
   const searched = new Set();  // 'ROOM-001:cabinet'
+  const unlocked = new Set();  // 'ROOM-011:east' — дверь, открытая ключом, дальше открыта
   let dropped = [];            // выброшенные предметы: { room, key, item, qty, x }
   let dropSeq = 0;
 
@@ -83,7 +84,8 @@ AB.Rooms = (() => {
   }
 
   function canPass(door) {
-    if (door.access.type === 'key' && !AB.Inventory.count('CHAR-001', door.access.item)) {
+    const opened = unlocked.has(`${current}:${door.key}`);
+    if (door.access.type === 'key' && !opened && !AB.Inventory.count('CHAR-001', door.access.item)) {
       return { ok: false, reason: door.access.reason || 'Нужен ключ' };
     }
     if (!door.to) return { ok: false, reason: door.access.reason || 'Проход закрыт' };
@@ -102,6 +104,10 @@ AB.Rooms = (() => {
     if (!res.ok) {
       AB.Bus.emit('door:denied', { roomId: current, door: door.key, reason: res.reason });
       return false;
+    }
+    if (door.access.type === 'key' && !unlocked.has(`${current}:${door.key}`)) {
+      unlocked.add(`${current}:${door.key}`);
+      AB.Bus.emit('door:unlocked', { roomId: current, door: door.key });
     }
     const conn = room().connections.find((c) => c.door === door.key);
     transition = { to: door.to, toDoor: conn ? conn.toDoor : null, door: door.key, t: 0, phase: 'open' };
@@ -151,7 +157,7 @@ AB.Rooms = (() => {
     doorOpen: (key) => doorAnim.get(key) || 0,
     serialize: () => ({
       current, visited: [...visited], props: [...propState].map(([k, v]) => [k, v.state]),
-      taken: [...taken], searched: [...searched], dropped, dropSeq,
+      taken: [...taken], searched: [...searched], dropped, dropSeq, unlocked: [...unlocked],
     }),
     restore(d) {
       if (!d) return;
@@ -159,6 +165,7 @@ AB.Rooms = (() => {
       (d.props || []).forEach(([k, st]) => propState.set(k, { state: st, t: 99 }));
       (d.taken || []).forEach(([k, n]) => taken.set(k, n));
       (d.searched || []).forEach((k) => searched.add(k));
+      (d.unlocked || []).forEach((k) => unlocked.add(k));
       dropped = d.dropped || [];
       dropSeq = d.dropSeq || 0;
     },

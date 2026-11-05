@@ -30,6 +30,13 @@ body { font: 14px/1.4 var(--mono); user-select: none; -webkit-user-select: none;
 #hud-hp i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #7a1a14, #c9372b); transition: width .4s; }
 #hud-hp span { position: relative; display: block; text-align: center; font-size: 10px; line-height: 12px; color: #f1e6dc; text-shadow: 0 0 3px #000; }
 #hud-hp.low i { animation: hp-low 1s infinite; }
+#hud-quest { display: grid; gap: 2px; max-width: min(320px, 40vw); font-size: 11px; text-shadow: 0 0 6px #000; }
+#hud-quest:empty { display: none; }
+#hud-quest .q-name { color: #ffc145; letter-spacing: .5px; text-transform: uppercase; font-size: 10px; }
+#hud-quest .q-obj { color: var(--fg); }
+#hud-quest .q-obj.ok { color: var(--muted); text-decoration: line-through; }
+#hud-quest .q-obj::before { content: '▸ '; color: #ffc145; }
+#hud-quest .q-obj.ok::before { content: '✓ '; color: #4bd88a; }
 @keyframes hp-low { 50% { opacity: .55; } }
 #hud-room b { font: 500 18px var(--display); letter-spacing: 2px; text-transform: uppercase; color: var(--fg); }
 #hud-room span { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
@@ -55,6 +62,7 @@ body { font: 14px/1.4 var(--mono); user-select: none; -webkit-user-select: none;
 #nav.show { opacity: 1; }
 #nav b { color: var(--cyan); }
 #nav b.locked { color: var(--red); }
+#nav b.quest { color: #ffc145; }
 #hint { top: calc(84px + env(safe-area-inset-top, 0px)); }
 
 /* ---------- Карта корабля ---------- */

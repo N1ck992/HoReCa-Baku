@@ -28,6 +28,9 @@ AB.Save = (() => {
       story: AB.Story.serialize(),
       inventory: AB.Inventory.serialize(),
       enemies: AB.Enemies.serialize(),
+      quests: AB.Quests.serialize(),
+      equipment: AB.Equip.serialize(),
+      world: AB.World.serialize(),
     };
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }

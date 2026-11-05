@@ -25,6 +25,14 @@ AB.ASSET_MANIFEST = [
   // ---- ROOM-011: первый коридор ----
   { id: 'ASSET-ROOM011-01', owner: 'ROOM-011', type: 'background', src: null, desc: 'Фон: первый коридор' },
 
+  // ---- ROOM-003: энергетический отсек ----
+  // Фон — концепт-арт целиком: генератор, щит, кабельный узел, пульт и двери нарисованы на нём.
+  { id: 'ASSET-ROOM003-01', owner: 'ROOM-003', type: 'background', src: 'assets/rooms/ROOM003-01.jpg', desc: 'Фон энергоотсека (концепт-арт)' },
+  { id: 'ASSET-ROOM003-02', owner: 'EQUIP-003', type: 'prop', src: null, desc: 'Генератор (пока на фоне; сердечник — эффект движка)' },
+  { id: 'ASSET-ROOM003-03', owner: 'EQUIP-001', type: 'prop', src: null, desc: 'Электрощит (пока на фоне)' },
+  { id: 'ASSET-ROOM003-04', owner: 'EQUIP-002', type: 'prop', src: null, desc: 'Кабельный узел (пока на фоне)' },
+  { id: 'ASSET-ROOM003-05', owner: 'EQUIP-004', type: 'prop', src: null, desc: 'Пульт управления (пока на фоне)' },
+
   // ---- Предметы (GDD §9). Иконка в инвентаре и вид на полу ----
   { id: 'ASSET-ITEM001-01', owner: 'ITEM-001', type: 'icon', src: null, desc: 'Металлолом' },
   { id: 'ASSET-ITEM002-01', owner: 'ITEM-002', type: 'icon', src: null, desc: 'Электронные компоненты' },

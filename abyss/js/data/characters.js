@@ -13,7 +13,7 @@ AB.CHARACTERS = [
     specialization: 'engineer',   // инженер: ремонт оборудования (GDD §7)
     crew: true,                   // обычный участник экипажа (GDD §7)
     stats: { maxHp: 100, speed: 140, runSpeed: 260 },
-    skills: {},
+    skills: { repair: true },    // инженер: чинит оборудование (GDD §7)
     appearances: ['ASSET-CHAR001-01', 'ASSET-CHAR001-02'],
     anims: {
       idle: 'ANIM-CHAR001-05',

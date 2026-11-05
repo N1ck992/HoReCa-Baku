@@ -89,10 +89,19 @@ AB.Render = (() => {
   const sy = (y) => FLOOR + y;
 
   // ---------- Свет ----------
+  // цвет лампы: аварийный красный → рабочий тёплый белый, когда есть питание
+  const WORK_LIGHT = [255, 236, 212];
+  function lightColor(l) {
+    const p = l.source ? 0 : AB.World.powerT();
+    return l.color.map((c, k) => Math.round(c + (WORK_LIGHT[k] - c) * p));
+  }
+
   function flicker(l, i) {
-    // плавное мерцание + редкие провалы у неисправных ламп
+    // плавное мерцание + редкие провалы у неисправных ламп; с питанием свет ровный
     const n = Math.sin(time * 13.1 + i * 7) * 0.5 + Math.sin(time * 31.7 + i * 3) * 0.3 + Math.sin(time * 4.3 + i) * 0.2;
-    let k = 1 - l.flicker * (0.5 + n * 0.5);
+    const fl = l.source ? l.flicker : l.flicker * (1 - AB.World.powerT() * 0.9);
+    let k = 1 - fl * (0.5 + n * 0.5);
+    if (!l.source && AB.World.powerT() > 0.5) return U.clamp(k, 0, 1);
     if (l.flicker > 0.3) {
       const blink = Math.sin(time * 2.3 + i * 11) + Math.sin(time * 5.9 + i * 2);
       if (blink > 1.55) k *= 0.08;
@@ -120,7 +129,21 @@ AB.Render = (() => {
     const top = sy(-r.height);
     const bg = AB.Assets.get(r.background);
 
-    if (bg.status === 'ready') {
+    if (bg.status === 'ready' && r.bgFloor) {
+      // картинка ставится так, чтобы её линия пола совпала с полом игры
+      const H = r.bgHeight || FLOOR / r.bgFloor;
+      const top0 = FLOOR - r.bgFloor * H;
+      if (top0 > 0) {
+        // над картинкой — продолжение потолка: растянутая верхняя полоса и затемнение
+        g.drawImage(bg.img, 0, 0, bg.img.width, 6, 0, 0, r.width, top0 + 2);
+        const fade = g.createLinearGradient(0, 0, 0, top0 + 2);
+        fade.addColorStop(0, 'rgba(3,3,4,1)');
+        fade.addColorStop(1, 'rgba(3,3,4,.55)');
+        g.fillStyle = fade;
+        g.fillRect(0, 0, r.width, top0 + 2);
+      }
+      g.drawImage(bg.img, 0, top0, r.width, H);
+    } else if (bg.status === 'ready') {
       g.drawImage(bg.img, 0, 0, r.width, VH);
     } else {
       drawGreyboxRoom(g, r, rng, top);
@@ -497,6 +520,11 @@ AB.Render = (() => {
     const hero = AB.Chars.get('CHAR-001');
     for (const d of r.doors) {
       const x = sx(d.x), b = sy(0);
+      if (r.artDoors) {
+        // дверь нарисована на фоне: только индикатор доступа
+        d._light = { x: x + (d.x < r.width / 2 ? 58 : -58), y: b - 150, locked: !AB.Rooms.canPass(d).ok, near: hero && Math.abs(hero.x - d.x) < 80 };
+        continue;
+      }
       const open = AB.Rooms.doorOpen(`${r.id}:${d.key}`);
       const locked = !AB.Rooms.canPass(d).ok;
       const near = hero && Math.abs(hero.x - d.x) < 80;
@@ -1063,7 +1091,7 @@ AB.Render = (() => {
     const L = lctx;
     L.setTransform(1, 0, 0, 1, 0, 0);
     L.globalCompositeOperation = 'source-over';
-    L.fillStyle = 'rgba(2,3,5,0.94)';
+    L.fillStyle = `rgba(2,3,5,${0.94 - AB.World.powerT() * 0.1})`;   // с питанием светлее
     L.fillRect(0, 0, lightCv.width, lightCv.height);
     L.setTransform(scale, 0, 0, scale, 0, 0);
     L.globalCompositeOperation = 'destination-out';
@@ -1109,7 +1137,7 @@ AB.Render = (() => {
     ctx.globalCompositeOperation = 'lighter';
     r.lights.forEach((l, i) => {
       const k = flicker(l, i);
-      const [cr, cg, cb] = l.color;
+      const [cr, cg, cb] = lightColor(l);
       const x = sx(l.x), y = sy(l.y);
       const g = ctx.createRadialGradient(x, y + (l.source ? 0 : 60), 0, x, y + (l.source ? 0 : 60), l.radius * 0.9);
       g.addColorStop(0, `rgba(${cr},${cg},${cb},${0.22 * k})`);
@@ -1183,6 +1211,7 @@ AB.Render = (() => {
       }
     }
     drawItemGlints(r);
+    drawEquipFx(r);
     drawTargetHighlight();
     AB.Enemies.inRoom(r.id).forEach((e) => drawEnemy(e, 'emissive'));
     drawNavMarker();
@@ -1248,11 +1277,80 @@ AB.Render = (() => {
     });
   }
 
+  // ---------- Оборудование энергоотсека: эффекты поверх фона ----------
+  function led(x, y, rgb, a) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, 14);
+    g.addColorStop(0, `rgba(${rgb},${0.55 * a})`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 14, y - 14, 28, 28);
+    ctx.fillStyle = `rgba(${rgb},${a})`;
+    ctx.fillRect(x - 2, y - 2, 4, 4);
+  }
+
+  function drawEquipFx(r) {
+    for (const e of AB.Equip.inRoom(r.id)) {
+      const st = AB.Equip.state(e.id);
+      const x = sx(e.x), y = sy(e.y);
+      if (e.id === 'EQUIP-001') {
+        // электрощит: красный мигает — пустое гнездо, зелёный — предохранитель на месте
+        if (st === 'done') led(x + 30, y - 40, '80,255,140', 0.9);
+        else led(x + 30, y - 40, '255,50,40', Math.sin(time * 5) > 0 ? 0.9 : 0.15);
+      }
+      if (e.id === 'EQUIP-002') {
+        if (st === 'done') led(x, y - 60, '80,255,140', 0.9);
+        else led(x, y - 60, '255,170,40', Math.sin(time * 3 + 1) > 0 ? 0.8 : 0.2);
+      }
+      if (e.id === 'EQUIP-003' && st === 'done') {
+        // генератор работает: сердечник светится, по нему бегут блики вращения
+        const p = AB.World.powerT();
+        const pulse = 0.8 + Math.sin(time * 6) * 0.2;
+        const g = ctx.createRadialGradient(x, y, 4, x, y, 112);
+        g.addColorStop(0, `rgba(170,240,255,${0.55 * p * pulse})`);
+        g.addColorStop(0.45, `rgba(90,200,255,${0.22 * p})`);
+        g.addColorStop(1, 'rgba(90,200,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x - 112, y - 112, 224, 224);
+        ctx.strokeStyle = `rgba(200,245,255,${0.28 * p})`;
+        ctx.lineWidth = 3;
+        const rot = time * 9;
+        for (let k = 0; k < 8; k++) {
+          const a = rot + (k * Math.PI) / 4;
+          ctx.beginPath();
+          ctx.moveTo(x + Math.cos(a) * 15, y + Math.sin(a) * 15);
+          ctx.lineTo(x + Math.cos(a) * 68, y + Math.sin(a) * 68);
+          ctx.stroke();
+        }
+      }
+      if (e.id === 'EQUIP-004' && AB.World.hasPower()) {
+        // пульт: оживают три экрана
+        const p = AB.World.powerT();
+        for (const [x0, x1] of [[977, 1017], [1022, 1065], [1070, 1111]]) {
+          const fl = Math.sin(time * 23 + x0) > 0.96 ? 0.4 : 1;
+          ctx.fillStyle = `rgba(90,255,190,${0.16 * p * fl})`;
+          ctx.fillRect(sx(x0), sy(-157), x1 - x0, 29);
+          ctx.fillStyle = `rgba(150,255,210,${0.45 * p * fl})`;
+          for (let k = 0; k < 4; k++) ctx.fillRect(sx(x0) + 4, sy(-152) + k * 6, (x1 - x0 - 10) * (0.4 + ((k * 37 + x0) % 50) / 100), 1.5);
+        }
+      }
+    }
+  }
+
   // подсветка объекта, с которым сейчас можно взаимодействовать
   function drawTargetHighlight() {
     const t = AB.Interact.target('CHAR-001');
     const hero = AB.Chars.get('CHAR-001');
     if (!t || !hero || !hero.controllable || t.kind === 'door') return;
+    if (t.kind === 'equip') {
+      const e = t.ref, a = 0.3 + Math.sin(time * 4) * 0.12;
+      ctx.strokeStyle = `rgba(94,230,255,${a})`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.lineDashOffset = -time * 12;
+      ctx.strokeRect(sx(e.x) - e.w / 2, sy(e.y) - e.h / 2, e.w, e.h);
+      ctx.setLineDash([]);
+      return;
+    }
     const x = sx(t.x), b = sy(0);
     const h = t.kind === 'container' ? 200 : 26;
     const w = t.kind === 'container' ? 96 : 40;
@@ -1273,6 +1371,9 @@ AB.Render = (() => {
     }
     for (const x of r.fx.steam) {
       if (Math.random() < dt * 9) particles.push({ k: 'steam', x: x + (Math.random() - 0.5) * 10, y: -4, vx: (Math.random() - 0.5) * 10, vy: -25 - Math.random() * 25, life: 3 + Math.random() * 2, age: 0, s: 8 + Math.random() * 8 });
+    }
+    if (r.id === 'ROOM-003' && AB.Equip.state('EQUIP-002') !== 'done' && Math.random() < dt * 1.6) {
+      for (let i = 0; i < 10; i++) particles.push({ k: 'spark', x: 859 + Math.random() * 25, y: -25, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 90, life: 0.5 + Math.random() * 0.6, age: 0, s: 1.5 });
     }
     for (const x of r.fx.sparks) {
       if (Math.random() < dt * 1.2) {

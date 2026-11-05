@@ -22,6 +22,7 @@
     nav: $('#nav'),
     mini: $('#minimap'),
     death: $('#death'),
+    quest: $('#hud-quest'),
   };
   let toastTimer = null;
 
@@ -351,6 +352,27 @@
   });
   if (isTouch) document.body.classList.add('touch');
 
+  // ---------- Задание в интерфейсе ----------
+  let lastQuest = '';
+  function updateQuest() {
+    const q = AB.Quests.current();
+    const html = q ? `<div class="q-name">${q.name}</div>${q.objectives.map((o) => `<div class="q-obj ${o.ok ? 'ok' : ''}">${o.text}</div>`).join('')}` : '';
+    if (html !== lastQuest) { ui.quest.innerHTML = html; lastQuest = html; }
+  }
+  AB.Bus.on('quest:start', ({ name }) => { toast(`Новое задание: ${name}`, 'info'); updateQuest(); });
+  AB.Bus.on('quest:stage', () => { updateQuest(); AB.Save.save(); });
+  AB.Bus.on('quest:done', ({ name }) => { toast(`Задание выполнено: ${name}`, 'good'); updateQuest(); });
+  AB.Bus.on('equip:changed', ({ text }) => { toast(text, 'good'); AB.Save.save(); });
+  AB.Bus.on('equip:blocked', ({ text }) => toast(text, 'info'));
+  AB.Bus.on('equip:info', ({ text }) => toast(text, 'info'));
+  AB.Bus.on('door:unlocked', () => toast('Ключ-карта подошла: дверь открыта', 'good'));
+  AB.Bus.on('world:power', ({ on }) => {
+    if (!on) return;
+    AB.Story.fx.alarm = false;   // тревога стихает, включается рабочий свет
+    setTimeout(() => toast('Питание корабля восстановлено', 'good'), 1200);
+    AB.Save.save();
+  });
+
   // ---------- Нажатие на персонажа: что он несёт ----------
   AB.Input.onScreenTap = (cx, cy) => {
     const id = AB.Render.pick(cx, cy);
@@ -363,6 +385,7 @@
   function boot() {
     AB.Assets.load();
     AB.Input.init();
+    AB.Quests.init();
     AB.Render.init($('#screen'));
 
     const save = AB.Save.load();
@@ -372,6 +395,9 @@
       AB.Story.restore(save.story);
       AB.Inventory.restore(save.inventory);
       AB.Enemies.restore(save.enemies);
+      AB.Quests.restore(save.quests);
+      AB.Equip.restore(save.equipment);
+      AB.World.restore(save.world);
       const hero = AB.Chars.get(HERO);
       AB.Rooms.enter(save.rooms.current || 'ROOM-001', { x: hero ? hero.x : null });
       if (hero) hero.controllable = true;
@@ -385,6 +411,9 @@
       ui.title.classList.add('play');
       setTimeout(() => ui.title.remove(), 6500);
     }
+    // задания, которые должны были начаться в уже посещённых помещениях (старые сохранения)
+    for (const q of AB.QUESTS) if (q.start && AB.Rooms.visited().includes(q.start.room)) AB.Quests.start(q.id);
+    AB.Quests.check();
     AB.Render.snapCamera();
     applyHeroArt();
     ui.ids.classList.toggle('on', AB.Render.idsShown());
@@ -395,6 +424,7 @@
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       AB.Story.update(dt);
+      AB.World.update(dt);
       if (skipRequested) { skipRequested = false; finishWake(HERO); }
 
       const hero = AB.Chars.get(HERO);
@@ -416,6 +446,7 @@
       updatePrompt();
       drawMinimap();
       updateNav();
+      updateQuest();
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

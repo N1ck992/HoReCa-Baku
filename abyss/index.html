@@ -15,6 +15,7 @@
     <div class="hud-left">
       <div id="hud-room"></div>
       <div id="hud-hp" aria-label="Здоровье"></div>
+      <div id="hud-quest" aria-live="polite"></div>
     </div>
     <div class="hud-buttons">
       <button id="btn-map" class="hud-btn" title="Карта (M)">Карта</button>
@@ -99,7 +100,7 @@
   <div id="menu" hidden>
     <div class="menu-card">
       <h2>ABYSS: LOST SIGNAL</h2>
-      <p class="muted">Прототип v0.3 · этапы 1–5 из GDD.<br>Графика — временные заглушки с ID ресурсов.</p>
+      <p class="muted">Прототип v0.4 · этапы 1–6 из GDD.<br>Графика — временные заглушки с ID ресурсов.</p>
       <button id="btn-close-menu">Продолжить</button>
       <button id="btn-hero-art" class="ghost-btn"></button>
       <button id="btn-hero-suit" class="ghost-btn"></button>
@@ -117,6 +118,8 @@
   <script src="js/data/events.js"></script>
   <script src="js/data/items.js"></script>
   <script src="js/data/enemies.js"></script>
+  <script src="js/data/equipment.js"></script>
+  <script src="js/data/quests.js"></script>
   <script src="js/data/rigs/MARK.js"></script>
   <script src="js/data/rigs.js"></script>
   <!-- Системы -->
@@ -128,6 +131,8 @@
   <script src="js/systems/story-events.js"></script>
   <script src="js/systems/inventory.js"></script>
   <script src="js/systems/interaction.js"></script>
+  <script src="js/systems/equipment-system.js"></script>
+  <script src="js/systems/quest-system.js"></script>
   <script src="js/systems/enemy-system.js"></script>
   <script src="js/systems/combat.js"></script>
   <script src="js/systems/navigation.js"></script>
