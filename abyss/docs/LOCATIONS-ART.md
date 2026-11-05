@@ -155,6 +155,129 @@ no colored light, no cast shadows, dark industrial sci-fi horror, desaturated mu
 
 ---
 
+## ROOM-003 — Энергетический отсек
+
+**Что происходит здесь в игре (этап 6, `QUEST-001`):** Марк входит по ключ-карте из коридора.
+Главный генератор корабля стоит мёртвым. Марк осматривает его, приносит предохранитель
+к электрощиту и провода к кабельному узлу, затем чинит генератор. Аварийный красный свет
+сменяется рабочим белым.
+
+**Настроение:** сердце корабля, которое остановилось. Высокий машинный зал, массивное
+оборудование, толстые кабели, копоть от старого короткого замыкания. Тишина, гул где-то в стенах,
+изредка — треск искр.
+
+### Разметка (слева направо)
+
+Ширина отсека в игре 1800 единиц → картинка **3600×960 px**. Пол на **844 px сверху**,
+потолок у самого верха (зал высокий, как медотсек).
+
+| Позиция, px | Что там | В фоне или отдельно |
+|---|---|---|
+| 140 | гермодверь из коридора | отдельно: ASSET-SHARED-01 |
+| 420 | красная аварийная лампа | корпус в фоне, свет — игра |
+| 700 | **электрощит** на стене, центр ~420 px над полом: открытая дверца, пустое гнездо предохранителя | отдельно: ASSET-ROOM003-03 |
+| 900–2300 | толстые кабельные трассы по стене и полу, уходят к генератору | фон |
+| 1600 | **главный генератор** — массивный, ~760 px шириной, ~560 px высотой, стоит на полу | отдельно: ASSET-ROOM003-02 |
+| 1600 | над генератором — вытяжной короб и красная лампа | фон |
+| 2500 | **кабельный узел**: распределительная коробка у пола, оборванные концы кабелей | отдельно: ASSET-ROOM003-04 |
+| 2700 | решётка в полу (пар) | фон |
+| 3000 | **пульт управления** с тёмными экранами, центр ~300 px над полом | отдельно: ASSET-ROOM003-05 |
+| 3100 | красная аварийная лампа | корпус в фоне |
+| 3460 | вторая гермодверь (дальше по кораблю, пока закрыта) | отдельно: ASSET-SHARED-01 |
+
+### Что нарисовать отдельно и как
+
+| ID | Что | Важно |
+|---|---|---|
+| `ASSET-ROOM003-02` | Главный генератор | **два слоя:** корпус и отдельно **сердечник** (круглая турбина или колба в центре). Сердечник движок будет вращать и подсвечивать, когда генератор заработает. Нарисовать выключенным |
+| `ASSET-ROOM003-03` | Электрощит | **дверца отдельным слоем**; внутри — пустое гнездо под предохранитель |
+| `ASSET-ROOM003-04` | Кабельный узел | **два варианта:** с оборванными концами кабелей и с подключёнными |
+| `ASSET-ROOM003-05` | Пульт управления | **экраны пустые и тёмные**: изображение на них рисует движок |
+
+### Что на стенах (для фона)
+
+- высокие стены из тёмных металлических панелей с рёбрами, местами — решётчатые секции,
+  за которыми видны трубы и кабели;
+- по стенам и полу — толстые кабельные трассы и лотки, сходятся к месту генератора;
+- **следы копоти и оплавления** вокруг места генератора и щита — здесь когда-то было замыкание;
+- предупреждающая жёлто-чёрная разметка на полу вокруг генератора;
+- под потолком — вытяжные короба, мостики, балки;
+- пол — металлическая решётка, местами лужи масла.
+
+### Промпт: концепт-арт
+
+```
+Side-view cross-section of the main power room of a derelict deep-sea research ship.
+A tall machine hall with dark ribbed metal walls, grated wall sections showing pipes and cables
+behind them, overhead ducts, catwalk beams and ventilation housings near the ceiling.
+In the middle stands a massive dead power generator with a round turbine core, thick cables
+running from it along the walls and floor. On the left wall an electrical fuse panel with its
+door open and an empty fuse slot. On the right a cable junction box with torn cable ends near the
+floor and a control console with dark screens. Heavy sliding bulkhead doors at both ends.
+Soot and scorch marks around the generator and the panel from an old short circuit,
+yellow-black hazard markings on the floor around the generator, oil puddles on the grating floor.
+Dim red emergency lamps, deep shadows, oppressive silence.
+2D side-scrolling game concept art, strict side view, orthographic, no perspective,
+dark industrial sci-fi horror, Pandorum movie inspired, desaturated muted palette,
+no people, no creatures, no text, cinematic, high detail
+```
+
+### Промпт: игровой фон (пустой)
+
+```
+Empty side-view background of the main power room of a derelict ship, 3600x960,
+flat back wall only: tall dark ribbed metal wall panels, a few grated wall sections with pipes
+and cables visible behind them, thick cable trays running along the wall and converging to the
+center, soot and scorch marks on the wall in the center and on the left, overhead ducts and
+beams near the ceiling, three empty red emergency lamp housings under the ceiling,
+metal grating floor strip at the bottom with yellow-black hazard markings in the center,
+one floor vent, oil puddles.
+No machines, no generator, no panels, no consoles, no doors, no people, no text.
+2D game background, strict side view, orthographic, no perspective, neutral flat lighting,
+no colored light, no cast shadows, dark industrial sci-fi horror, desaturated muted palette
+```
+
+### Промпты: отдельные предметы
+
+Добавьте в конец каждого: `isolated on flat solid pure green background #00FF00, no floor, no shadow,
+strict side view, orthographic, neutral flat lighting, realistic dark industrial sci-fi, muted palette, no text`.
+
+**Генератор, корпус (`ASSET-ROOM003-02`):**
+```
+Massive industrial power generator of a derelict ship, side view, switched off, heavy steel
+housing with access hatches, pipes and thick cables coming out of the back, warning stickers
+without text, soot around the vents. In the center an empty round opening where the turbine
+core sits.
+```
+
+**Генератор, сердечник (`ASSET-ROOM003-02`, второй слой):**
+```
+Round industrial turbine core with radial metal blades and a central hub, separate object,
+switched off, dark metal, side view facing the viewer.
+```
+
+**Электрощит (`ASSET-ROOM003-03`):**
+```
+Wall-mounted electrical fuse panel of a derelict ship, metal box with breakers and cables,
+the door removed and shown separately next to it, one empty fuse slot in the center,
+scorch marks.
+```
+
+**Кабельный узел (`ASSET-ROOM003-04`), два варианта:**
+```
+Floor-standing cable junction box of a derelict ship, thick industrial cables entering it,
+two cables torn with exposed copper ends hanging loose.
+```
+```
+Same cable junction box, same framing, the cables are reconnected with clamps and tape.
+```
+
+**Пульт управления (`ASSET-ROOM003-05`):**
+```
+Industrial control console of a derelict ship, standing on the floor, two dark empty screens,
+switches and dials, worn metal, side view.
+```
+
 ## Если генератор не умеет такие широкие картинки
 
 Сгенерируйте **бесшовный фрагмент 1024×960 px** той же стены (добавьте в промпт
@@ -164,6 +287,6 @@ no colored light, no cast shadows, dark industrial sci-fi horror, desaturated mu
 
 ## Другие помещения
 
-Для `ROOM-002`…`ROOM-010` из GDD описания пока не даю: в документе есть только их названия,
+Для `ROOM-002`, `ROOM-004`…`ROOM-010` из GDD описания пока не даю: в документе есть только их названия,
 а внешний вид и расположение ещё не утверждены. Как только решите, где они и как связаны, —
 подготовлю такие же листы.
