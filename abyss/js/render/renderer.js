@@ -687,7 +687,7 @@ AB.Render = (() => {
     const py = spec.pivot[1] * H, ey = spec.end[1] * H;
     if (spec.flipX) { px = W - px; ex = W - ex; }
     const vx = ex - px, vy = ey - py;
-    return { W, H, px, py, imgAng: Math.atan2(vx, vy), s: len / Math.hypot(vx, vy) };
+    return { W, H, px, py, imgAng: Math.atan2(vx, vy), s: len / Math.hypot(vx, vy), sx: spec.scaleX || 1 };
   }
 
   function rigBone(img, spec, x1, y1, ang, len, darken) {
@@ -695,7 +695,7 @@ AB.Render = (() => {
     ctx.save();
     ctx.translate(x1, y1);
     ctx.rotate(g.imgAng - ang);
-    ctx.scale(g.s, g.s);
+    ctx.scale(g.s * g.sx, g.s);
     if (darken) ctx.filter = `brightness(${darken})`;
     if (spec.flipX) {
       ctx.scale(-1, 1);
@@ -712,7 +712,7 @@ AB.Render = (() => {
     const g = rigGeom(img, spec, len);
     let ax = anchor[0] * g.W;
     if (spec.flipX) ax = g.W - ax;
-    const lx = (ax - g.px) * g.s, ly = (anchor[1] * g.H - g.py) * g.s;
+    const lx = (ax - g.px) * g.s * g.sx, ly = (anchor[1] * g.H - g.py) * g.s;
     const th = g.imgAng - ang;
     return { x: x1 + lx * Math.cos(th) - ly * Math.sin(th), y: y1 + lx * Math.sin(th) + ly * Math.cos(th) };
   }
