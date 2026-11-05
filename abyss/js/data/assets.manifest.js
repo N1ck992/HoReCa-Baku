@@ -8,12 +8,12 @@
 
 AB.ASSET_MANIFEST = [
   // ---- CHAR-001: главный герой ----
-  // Набор частей для анимации по частям; скелет — в js/data/rigs.js.
-  // Чтобы вернуть заглушку: parts: null (или переключатель в меню игры).
-  { id: 'ASSET-CHAR001-01', owner: 'CHAR-001', type: 'rig', rig: 'CHAR001', src: null, desc: 'Основной внешний вид',
-    parts: { torso: 'assets/char001/01/torso.png', head: 'assets/char001/01/head.png', upperarm_near: 'assets/char001/01/upperarm_near.png', forearm_near: 'assets/char001/01/forearm_near.png', upperarm_far: 'assets/char001/01/upperarm_far.png', forearm_far: 'assets/char001/01/forearm_far.png', thigh: 'assets/char001/01/thigh.png', shin: 'assets/char001/01/shin.png', boot: 'assets/char001/01/boot.png' } },
-  { id: 'ASSET-CHAR001-02', owner: 'CHAR-001', type: 'rig', rig: 'CHAR001', src: null, desc: 'Повреждённый костюм',
-    parts: { torso: 'assets/char001/02/torso.png', head: 'assets/char001/02/head.png', upperarm_near: 'assets/char001/02/upperarm_near.png', forearm_near: 'assets/char001/02/forearm_near.png', upperarm_far: 'assets/char001/02/upperarm_far.png', forearm_far: 'assets/char001/02/forearm_far.png', thigh: 'assets/char001/02/thigh.png', shin: 'assets/char001/02/shin.png', boot: 'assets/char001/02/boot.png' } },
+  // Марк нарезан программой tools/rig_from_fullbody.py из одной фигуры в полный рост
+  // (assets/source/CHAR001-01.png, разметка tools/rigs/MARK.json → js/data/rigs/MARK.js).
+  // Откат на первую версию: rig: 'CHAR001' и parts из assets/char001/01|02 (см. git).
+  { id: 'ASSET-CHAR001-01', owner: 'CHAR-001', type: 'rig', rig: 'MARK', variant: '01', src: null, desc: 'Основной внешний вид' },
+  // Повреждённый костюм: пока та же картинка — ждём вариант 02 в той же позе.
+  { id: 'ASSET-CHAR001-02', owner: 'CHAR-001', type: 'rig', rig: 'MARK', variant: '01', src: null, desc: 'Повреждённый костюм (временно как основной)' },
 
   // ---- ROOM-001: медицинский отсек ----
   { id: 'ASSET-ROOM001-01', owner: 'ROOM-001', type: 'background', src: null, desc: 'Фон: стены и пол медотсека' },

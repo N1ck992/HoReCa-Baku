@@ -73,6 +73,13 @@ LAYERS = ['forearm_near', 'upperarm_near', 'shin_near', 'thigh_near', 'head', 't
           'thigh_far', 'shin_far', 'upperarm_far', 'forearm_far']
 
 
+def seg_t(px, py, a, b):
+    """Положение проекции пикселя вдоль отрезка a-b: 0 — у a, 1 — у b."""
+    ax, ay = a
+    vx, vy = b[0] - ax, b[1] - ay
+    return ((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy or 1e-6)
+
+
 def seg_dist(px, py, a, b):
     """Расстояние от пикселей (сетки px, py) до отрезка a-b."""
     ax, ay = a
@@ -140,10 +147,11 @@ def run(cfg_path):
 
         # 1) «капсула» каждой части: расстояние до кости в долях её толщины
         names = [b[0] for b in BONES]
-        norm = {}
+        norm, along = {}, {}
         for name, j0, j1, ext, rk in BONES:
             a, b = Q[j0], Q[j1]
             d = seg_dist(xx, yy, a, b)
+            along[name] = seg_t(xx, yy, a, b)
             if ext:
                 d = np.minimum(d, seg_dist(xx, yy, b, Q[ext]))
             norm[name] = d / R[rk]
@@ -156,20 +164,37 @@ def run(cfg_path):
             inside = (norm[name] <= 1.0) & mask & ~assigned
             owner[inside] = name
             assigned |= inside
+        # торс кончается на тазе и шее: ниже таза — бедро (ближайшее), выше шеи — голова
+        below = (owner == 'torso') & (along['torso'] < 0)
+        owner[below & (norm['thigh_near'] <= norm['thigh_far'])] = 'thigh_near'
+        owner[below & (norm['thigh_near'] > norm['thigh_far'])] = 'thigh_far'
+        owner[(owner == 'torso') & (along['torso'] > 1)] = 'head'
 
         vdir = os.path.join(out_dir, vid)
         os.makedirs(vdir, exist_ok=True)
         files = {}
         for name, j0, j1, ext, rk in BONES:
             own = (owner == name) & mask
-            # полная форма части: её капсула внутри силуэта (включая закрытое другими)
-            shape = own | ((norm[name] <= 1.0) & mask)
-            hidden = shape & ~own
-            # запас вокруг верхнего сустава (против щелей при сгибе)
+            # закрытое другими частями достраиваем только вдоль самой кости:
+            # не за суставами (там соседние части) и никогда под головой
+            t = along[name]
+            lo, hi = (0.0, 1.0) if name == 'torso' else (0.06, 0.97)
+            behind = (norm[name] <= 0.9) & (t > lo) & (t < hi) & mask & (owner != 'head')
+            hidden = behind & ~own
+            # и только внутри собственного контура части (по строкам): не выходим за спину,
+            # за край бедра и т.п.
+            if name == 'torso' and own.any():
+                span = np.zeros_like(own)
+                rows = np.nonzero(own.any(axis=1))[0]
+                for y in rows:
+                    xs_ = np.nonzero(own[y])[0]
+                    span[y, xs_.min():xs_.max() + 1] = True
+                hidden &= span
+            shape = own | hidden
+            # запас вокруг верхнего сустава (против щелей при сгибе) — из настоящих пикселей
             jx, jy = Q[j0]
             if name != 'torso':
-                capm = (((xx - jx) ** 2 + (yy - jy) ** 2) < (R[rk] * 0.9) ** 2) & mask
-                hidden |= capm & ~own & ~shape
+                capm = (((xx - jx) ** 2 + (yy - jy) ** 2) < (R[rk] * 0.6) ** 2) & mask & (owner != 'head')
                 shape |= capm
             if not shape.any():
                 print(f'  ! {vid}/{name}: пусто — проверьте разметку')
@@ -184,7 +209,11 @@ def run(cfg_path):
             px_rgb = rgb.copy()
             if hidden.any() and cv2 is not None and own.any():
                 # достраиваем закрытое по видимой текстуре этой же части
-                bad = (~own).astype(np.uint8) * 255
+                # источник текстуры — часть без краевой полосы (там цвета соседей)
+                core = np.asarray(Image.fromarray((own * 255).astype(np.uint8)).filter(ImageFilter.MinFilter(9))) > 0
+                if core.sum() < 50:
+                    core = own
+                bad = (~core).astype(np.uint8) * 255
                 filled = cv2.inpaint(np.ascontiguousarray(px_rgb[..., ::-1]), bad, 9, cv2.INPAINT_TELEA)[..., ::-1]
                 px_rgb = np.where(hidden[..., None], filled, px_rgb)
             elif hidden.any():

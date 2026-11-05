@@ -1,0 +1,89 @@
+{
+  "rig": "MARK",
+  "height_units": 120,
+  "out_dir": "assets/char001/v2",
+  "js_out": "js/data/rigs/MARK.js",
+  "background": "green",
+  "variants": {
+    "01": {
+      "image": "assets/source/CHAR001-01.png"
+    }
+  },
+  "points": {
+    "crown": [
+      420,
+      30
+    ],
+    "neck": [
+      390,
+      268
+    ],
+    "hip": [
+      395,
+      820
+    ],
+    "shoulder_near": [
+      300,
+      345
+    ],
+    "elbow_near": [
+      265,
+      680
+    ],
+    "wrist_near": [
+      420,
+      858
+    ],
+    "hand_near": [
+      450,
+      955
+    ],
+    "shoulder_far": [
+      330,
+      360
+    ],
+    "elbow_far": [
+      215,
+      680
+    ],
+    "wrist_far": [
+      228,
+      868
+    ],
+    "hand_far": [
+      238,
+      962
+    ],
+    "knee_near": [
+      250,
+      1320
+    ],
+    "ankle_near": [
+      218,
+      1610
+    ],
+    "toe_near": [
+      395,
+      1690
+    ],
+    "knee_far": [
+      440,
+      1310
+    ],
+    "ankle_far": [
+      470,
+      1600
+    ],
+    "toe_far": [
+      655,
+      1655
+    ],
+    "sole_y": 1712
+  },
+  "radius": {
+    "head": 118,
+    "torso": 165,
+    "arm": 66,
+    "leg": 105
+  }
+}
