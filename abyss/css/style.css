@@ -212,6 +212,8 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
   background: #16181b; color: var(--fg); border: 1px solid var(--line);
 }
 .menu-card button.danger { color: var(--red); border-color: rgba(255, 59, 47, .4); }
+.menu-card button.ghost-btn { color: var(--muted); font-size: 13px; }
+.menu-card button:disabled { opacity: .4; cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
   #title.play { animation-duration: 3s; }

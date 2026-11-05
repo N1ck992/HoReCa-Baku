@@ -597,6 +597,12 @@ AB.Render = (() => {
       ctx.beginPath(); ctx.ellipse(x, b + 1, 26, 5, 0, 0, 7); ctx.fill();
     }
 
+    if (asset.status === 'ready' && asset.parts) {
+      // настоящая графика: сборка из частей по скелету (js/data/rigs.js)
+      if (pass === 'body') drawHeroRig(hero, P, action, asset, x, b);
+      else if (pass === 'emissive') idTag(ctx, `${hero.appearance} · ${AB.Anim.current(hero.id)?.animId || ''}`, x, b - 142);
+      return;
+    }
     if (asset.status === 'ready') {
       if (pass === 'body') {
         ctx.save(); ctx.translate(x, b); ctx.scale(hero.facing, 1);
@@ -669,6 +675,91 @@ AB.Render = (() => {
     }
     ctx.restore();
     if (pass === 'emissive') idTag(ctx, `${hero.appearance} · ${AB.Anim.current(hero.id)?.animId || ''}`, x, b - 142);
+  }
+
+  // ---------- Герой из частей (cut-out) ----------
+  // Кость: картинка ставится суставом (pivot) в точку (x1, y1) и поворачивается
+  // так, чтобы направление pivot → end совпало с углом кости ang (0 — вниз,
+  // положительный — вперёд). Возвращает конец кости.
+  function rigGeom(img, spec, len) {
+    const W = img.width, H = img.height;
+    let px = spec.pivot[0] * W, ex = spec.end[0] * W;
+    const py = spec.pivot[1] * H, ey = spec.end[1] * H;
+    if (spec.flipX) { px = W - px; ex = W - ex; }
+    const vx = ex - px, vy = ey - py;
+    return { W, H, px, py, imgAng: Math.atan2(vx, vy), s: len / Math.hypot(vx, vy) };
+  }
+
+  function rigBone(img, spec, x1, y1, ang, len, darken) {
+    const g = rigGeom(img, spec, len);
+    ctx.save();
+    ctx.translate(x1, y1);
+    ctx.rotate(g.imgAng - ang);
+    ctx.scale(g.s, g.s);
+    if (darken) ctx.filter = `brightness(${darken})`;
+    if (spec.flipX) {
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, -(g.W - g.px), -g.py);
+    } else {
+      ctx.drawImage(img, -g.px, -g.py);
+    }
+    ctx.restore();
+    return { x: x1 + Math.sin(ang) * len, y: y1 + Math.cos(ang) * len };
+  }
+
+  // Точка на картинке части (в долях) → координаты скелета
+  function rigAnchor(img, spec, x1, y1, ang, len, anchor) {
+    const g = rigGeom(img, spec, len);
+    let ax = anchor[0] * g.W;
+    if (spec.flipX) ax = g.W - ax;
+    const lx = (ax - g.px) * g.s, ly = (anchor[1] * g.H - g.py) * g.s;
+    const th = g.imgAng - ang;
+    return { x: x1 + lx * Math.cos(th) - ly * Math.sin(th), y: y1 + lx * Math.sin(th) + ly * Math.cos(th) };
+  }
+
+  function drawHeroRig(hero, P, action, asset, x, b) {
+    const rig = AB.RIGS[AB.ID.get(hero.appearance).rig];
+    const R = rig.parts, B = rig.bones, I = asset.parts, dk = rig.farDarken;
+    ctx.save();
+    ctx.translate(x, b);
+    ctx.scale(hero.facing, 1);
+    if (action === 'death') ctx.rotate(-U.ease(AB.Anim.progress(hero.id)) * 1.45);
+    const hipY = rig.hipY + P.bob * 0.5 + P.crouch;
+
+    const leg = (hx, hip, knee, darken) => {
+      const thighAng = hip, shinAng = hip - knee;
+      const k = rigBone(I.thigh, R.thigh, hx, hipY, thighAng, B.thigh, darken);
+      const a = rigBone(I.shin, R.shin, k.x, k.y, shinAng, B.shin, darken);
+      // стопа почти горизонтальна, слегка следует за голенью
+      rigBone(I.boot, R.boot, a.x, a.y, shinAng * 0.25, R.boot.length, darken);
+    };
+
+    // торс: от таза вверх, с наклоном
+    const torsoAng = Math.PI - P.lean;
+    const sh = rigAnchor(I.torso, R.torso, 0, hipY, torsoAng, B.torso, R.torso.shoulder);
+    const shY = sh.y + P.breath * 0.4;
+
+    // дальние конечности
+    leg(-2, P.hipR, P.kneeR, dk);
+    {
+      const e = rigBone(I.upperarm_far, R.upperarm_far, sh.x - 3, shY, P.shR, B.upperarm, dk);
+      rigBone(I.forearm_far, R.forearm_far, e.x, e.y, P.shR - P.elR, B.forearm, dk);
+    }
+    // торс и голова
+    const neck = rigBone(I.torso, R.torso, 0, hipY, torsoAng, B.torso);
+    rigBone(I.head, R.head, neck.x, neck.y + 3, torsoAng - P.head, B.head);
+    // ближние конечности и оружие
+    leg(2, P.hipL, P.kneeL, 0);
+    {
+      const e = rigBone(I.upperarm_near, R.upperarm_near, sh.x, shY, P.shL, B.upperarm);
+      const foreAng = P.shL - P.elL;
+      const w = rigBone(I.forearm_near, R.forearm_near, e.x, e.y, foreAng, B.forearm);
+      if (hero.equipped) {
+        const hand = { fx: w.x + Math.sin(foreAng) * 4, fy: w.y + Math.cos(foreAng) * 4 };
+        drawWeapon(hand, foreAng + (P.pipe || 0.35));
+      }
+    }
+    ctx.restore();
   }
 
   // ---------- Оружие в руке: заглушка ASSET-ITEM009-01 ----------
@@ -1299,7 +1390,7 @@ AB.Render = (() => {
     enemies.filter((e) => e.state === 'DEAD').forEach((e) => drawEnemy(e, 'body'));
     if (hero && !hero.inPod) drawHero(hero, 'body');
     enemies.filter((e) => e.state !== 'DEAD').forEach((e) => drawEnemy(e, 'body'));
-    drawLighting(r);
+    if (!AB.debugFullLight) drawLighting(r);   // отладка: AB.debugFullLight = true — без темноты
     drawEmissive(r);
     drawFx('glow');
     drawForeground(r);
@@ -1308,6 +1399,8 @@ AB.Render = (() => {
 
   return {
     init, frame, snapCamera,
+    // точка мира → экранные CSS-пиксели (для интерфейса и проверок)
+    screenPos: (x, y) => ({ x: (x - cam.x) * scale / dpr, y: (FLOOR + y) * scale / dpr, unit: scale / dpr }),
     toggleIds() { showIds = !showIds; return showIds; },
     idsShown: () => showIds,
   };

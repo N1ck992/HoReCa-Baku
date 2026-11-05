@@ -329,6 +329,30 @@
   });
   $('#btn-menu').addEventListener('click', () => $('#menu').hidden = false);
   $('#btn-close-menu').addEventListener('click', () => $('#menu').hidden = true);
+  // ---------- Графика героя: откат на заглушку и выбор костюма ----------
+  const HERO_ART = ['ASSET-CHAR001-01', 'ASSET-CHAR001-02'];
+  const PREF = 'abyss_hero_art';
+  const artOff = () => { try { return localStorage.getItem(PREF) === 'off'; } catch (e) { return false; } };
+  function applyHeroArt() {
+    const off = artOff();
+    HERO_ART.forEach((id) => AB.Assets.setDisabled(id, off));
+    $('#btn-hero-art').textContent = `Графика героя: ${off ? 'заглушка' : 'новая'}`;
+    const h = AB.Chars.get(HERO);
+    $('#btn-hero-suit').textContent = `Костюм: ${h && h.appearance === 'ASSET-CHAR001-02' ? 'повреждённый' : 'обычный'}`;
+    $('#btn-hero-suit').disabled = off;
+  }
+  $('#btn-hero-art').addEventListener('click', () => {
+    try { localStorage.setItem(PREF, artOff() ? 'on' : 'off'); } catch (e) { /* без хранилища — только на эту сессию */ }
+    applyHeroArt();
+  });
+  $('#btn-hero-suit').addEventListener('click', () => {
+    const h = AB.Chars.get(HERO);
+    AB.Chars.setAppearance(HERO, h.appearance === 'ASSET-CHAR001-02' ? 'ASSET-CHAR001-01' : 'ASSET-CHAR001-02');
+    applyHeroArt();
+    AB.Save.save();
+  });
+  $('#btn-menu').addEventListener('click', applyHeroArt);
+
   $('#btn-restart').addEventListener('click', () => {
     AB.Save.clear();
     location.reload();
@@ -362,6 +386,7 @@
       setTimeout(() => ui.title.remove(), 6500);
     }
     AB.Render.snapCamera();
+    applyHeroArt();
     ui.ids.classList.toggle('on', AB.Render.idsShown());
     updateHp();
 
