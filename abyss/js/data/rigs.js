@@ -15,20 +15,23 @@
 
 AB.RIGS = {
   CHAR001: {
-    // Пропорции взрослого человека: таз на половине роста, кисти у середины бедра.
-    bones: { torso: 40, head: 22, upperarm: 25, forearm: 23, thigh: 30, shin: 24 },
-    hipY: -63,
+    // Пропорции сняты с фигуры в полный рост на исходном листе
+    // (assets/source/CHAR001-sheet.png, рост 452 px = 120 единиц):
+    // голова 16%, торс 30%, плечо 17%, предплечье 13%, бедро 22%, голень 19%.
+    bones: { torso: 36.4, head: 19, upperarm: 20, forearm: 16, thigh: 26.5, shin: 25.5 },
+    hipY: -64.5,
     parts: {
-      // торс нарисован в три четверти — в профиль сужаем
-      torso:         { pivot: [0.56, 0.90], end: [0.56, 0.06], shoulder: [0.44, 0.20], scaleX: 0.78 },
-      head:          { pivot: [0.50, 0.80], end: [0.55, 0.05] },
-      upperarm_near: { pivot: [0.50, 0.07], end: [0.47, 0.95] },
-      forearm_near:  { pivot: [0.30, 0.06], end: [0.55, 0.72] },
-      upperarm_far:  { pivot: [0.52, 0.07], end: [0.50, 0.95] },
-      forearm_far:   { pivot: [0.45, 0.06], end: [0.45, 0.72] },
-      thigh:         { pivot: [0.50, 0.07], end: [0.50, 0.93] },
-      shin:          { pivot: [0.50, 0.06], end: [0.52, 0.96] },
-      boot:          { pivot: [0.30, 0.42], end: [0.30, 1.00], flipX: true, length: 9 },
+      // отдельные рисунки торса и рук крупнее, чем на фигуре в полный рост — сужаем до её толщины
+      torso:         { pivot: [0.56, 0.90], end: [0.56, 0.06], shoulder: [0.50, 0.165], scaleX: 0.8 },
+      head:          { pivot: [0.47, 0.79], end: [0.55, 0.05] },
+      upperarm_near: { pivot: [0.50, 0.07], end: [0.47, 0.95], scaleX: 0.78 },
+      forearm_near:  { pivot: [0.30, 0.06], end: [0.55, 0.72], scaleX: 0.8 },
+      upperarm_far:  { pivot: [0.52, 0.07], end: [0.50, 0.95], scaleX: 0.78 },
+      forearm_far:   { pivot: [0.45, 0.06], end: [0.45, 0.72], scaleX: 0.8 },
+      thigh:         { pivot: [0.50, 0.07], end: [0.50, 0.93], scaleX: 1.25 },
+      shin:          { pivot: [0.50, 0.06], end: [0.52, 0.96], scaleX: 1.2 },
+      // голенище ботинка заходит на голень и закрывает лодыжку
+      boot:          { pivot: [0.30, 0.30], end: [0.30, 1.00], flipX: true, length: 9 },
     },
     farDarken: 0.55,
   },
