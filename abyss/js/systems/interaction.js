@@ -4,7 +4,7 @@
 // =====================================================================
 
 AB.Interact = (() => {
-  const RANGE = { door: 80, item: 55, container: 75, equip: 0, npc: 70 };  // у оборудования — по ширине
+  const RANGE = { door: 80, item: 55, container: 75, equip: 0, npc: 70, log: 62 };  // у оборудования — по ширине
   const SEARCH_TIME = 1.3;
   let search = null; // { charId, roomId, container, t } — обыск
   let work = null;   // { charId, equip, t, time } — работа с оборудованием
@@ -18,6 +18,7 @@ AB.Interact = (() => {
     for (const d of r.doors) list.push({ kind: 'door', x: d.x, ref: d });
     for (const it of AB.Rooms.worldItems(r.id)) list.push({ kind: 'item', x: it.x, ref: it });
     for (const ct of r.containers || []) list.push({ kind: 'container', x: ct.x, ref: ct });
+    for (const lg of AB.Logs.inRoom(r.id)) list.push({ kind: 'log', x: lg.x, ref: lg });
     for (const eq of AB.Equip.inRoom(r.id)) list.push({ kind: 'equip', x: eq.x, ref: eq, range: eq.w / 2 + 30 });
     for (const n of AB.Chars.all()) {
       const d = AB.ID.get(n.id);
@@ -30,6 +31,7 @@ AB.Interact = (() => {
       let score = Math.abs(dx) - (Math.sign(dx) === c.facing ? 15 : 0);
       // предметы на полу важнее; уже обысканный контейнер — в последнюю очередь
       if (o.kind === 'item') score -= 20;
+      if (o.kind === 'log') score -= o.ref.read ? -30 : 18;   // непрочитанная находка — важнее
       if (o.kind === 'container' && AB.Rooms.isSearched(r.id, o.ref.key)) score += 80;
       if (o.kind === 'equip') score += 10; // крупное оборудование — после мелочей рядом
       if (score < bestScore) { best = o; bestScore = score; }
@@ -52,6 +54,7 @@ AB.Interact = (() => {
       return { label: `Подобрать: ${def.name}${t.ref.qty > 1 ? ` ×${t.ref.qty}` : ''}`, ok: true };
     }
     if (t.kind === 'npc') return { label: AB.ID.get(t.ref.id).npc.action, ok: true };
+    if (t.kind === 'log') return { label: `${AB.Logs.verb(t.ref.log)}: ${t.ref.log.title}${t.ref.read ? ' (прочитано)' : ''}`, ok: true };
     if (t.kind === 'equip') {
       const a = AB.Equip.action(t.ref.id, charId);
       return { label: a.kind === 'info' || a.kind === 'done' || a.kind === 'blocked' ? `${t.ref.name}: ${a.label.charAt(0).toLowerCase()}${a.label.slice(1)}` : a.label, ok: a.ok };
@@ -79,6 +82,13 @@ AB.Interact = (() => {
       const added = AB.Inventory.add(charId, t.ref.item, t.ref.qty);
       if (added) AB.Rooms.takeItem(AB.Rooms.current(), t.ref.key, added);
       AB.Bus.emit('item:pickup', { charId, itemId: t.ref.item, added, left: t.ref.qty - added });
+      return true;
+    }
+
+    if (t.kind === 'log') {
+      c.reachLow = t.ref.y === 0 && t.ref.log.form !== 'trace';
+      AB.Chars.playAction(charId, 'interact');
+      AB.Logs.read(t.ref.log.id);
       return true;
     }
 

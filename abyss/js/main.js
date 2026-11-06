@@ -28,6 +28,8 @@
     boss: $('#bossbar'),
     actEnd: $('#act-end'),
     party: $('#party'),
+    reader: $('#reader'),
+    journal: $('#journal'),
   };
   ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); AB.Input.queueAction(); });
   ui.party.addEventListener('click', (e) => {
@@ -189,7 +191,9 @@
   $('#btn-inv').addEventListener('click', () => (ui.inv.hidden ? openInventory() : closeInventory()));
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); ui.inv.hidden ? openInventory() : closeInventory(); }
-    if (e.code === 'Escape') { closeInventory(); closeMap(); }
+    if (!ui.reader.hidden && ['KeyE', 'Enter', 'Escape', 'Space'].includes(e.code)) { e.preventDefault(); e.stopImmediatePropagation(); closeReader(); return; }
+    if (e.code === 'Escape') { closeInventory(); closeMap(); closeJournal(); }
+    if (e.code === 'KeyL') { e.preventDefault(); ui.journal.hidden ? openJournal() : closeJournal(); }
     if (e.code === 'KeyM') { e.preventDefault(); ui.map.hidden ? openMap() : closeMap(); }
   });
 
@@ -216,6 +220,11 @@
     for (const c of r.containers || []) {
       mctx.fillStyle = AB.Rooms.isSearched(r.id, c.key) ? 'rgba(255,255,255,.25)' : '#5ee6ff';
       mctx.fillRect(X(c.x) - 3, mid - 3, 6, 6);
+    }
+    for (const lg of AB.Logs.inRoom(r.id)) {
+      if (lg.read) continue;
+      mctx.fillStyle = '#5ee6ff';
+      mctx.save(); mctx.translate(X(lg.x), mid); mctx.rotate(Math.PI / 4); mctx.fillRect(-2.5, -2.5, 5, 5); mctx.restore();
     }
     for (const it of AB.Rooms.worldItems(r.id)) {
       mctx.fillStyle = '#9ff3ff';
@@ -354,6 +363,59 @@
   });
   AB.Bus.on('container:empty', ({ label }) => toast(`${label}: пусто`, 'info'));
   AB.Bus.on('char:hp', updateHp);
+  // ---------- Находки: чтение и журнал ----------
+  const LOG_KIND = { pad: 'Текстовая запись', terminal: 'Запись терминала', audio: 'Аудиозапись · расшифровка', trace: 'Находка', tag: 'Находка' };
+  const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  function openReader(id) {
+    const l = AB.ID.get(id);
+    const cat = AB.LOG_CATEGORIES.find((c) => c.id === l.cat);
+    $('#reader-kind').textContent = `${LOG_KIND[l.form] || 'Запись'} · ${cat ? cat.name : ''}`;
+    $('#reader-title').textContent = l.title;
+    $('#reader-meta').textContent = [l.author, l.when].filter((v) => v && v !== '—').join(' · ');
+    $('#reader-text').innerHTML = l.text.split(/\n\s*\n/).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
+    $('#reader-foot').textContent = `${l.id} · найдено ${AB.Logs.found().length} из ${AB.Logs.total()}${l.pending ? ' · черновик текста' : ''}`;
+    ui.reader.classList.toggle('audio', l.form === 'audio');
+    ui.reader.hidden = false;
+    AB.Input.lock();
+  }
+  function closeReader() {
+    if (ui.reader.hidden) return;
+    ui.reader.hidden = true;
+    if (ui.journal.hidden) AB.Input.unlock();
+  }
+  function renderJournal() {
+    const found = AB.Logs.found();
+    $('#journal-count').textContent = `Найдено ${found.length} из ${AB.Logs.total()}`;
+    $('#journal-list').innerHTML = AB.LOG_CATEGORIES.map((c) => {
+      const all = AB.LOGS.filter((l) => l.cat === c.id), mine = all.filter((l) => AB.Logs.isFound(l.id));
+      const rows = all.map((l) => AB.Logs.isFound(l.id)
+        ? `<button class="jl" data-log="${l.id}"><b>${esc(l.title)}</b><span>${esc(AB.ID.get(l.room || AB.ID.get(l.from).spawn.room).name)}</span></button>`
+        : '<div class="jl unknown">— не найдено —</div>').join('');
+      return `<section><h3>${c.name} <em>${mine.length}/${all.length}</em></h3>${rows}</section>`;
+    }).join('');
+  }
+  function openJournal() {
+    const h = AB.Chars.get(L());
+    if (!h || h.dead || !ui.inv.hidden || !ui.map.hidden) return;
+    renderJournal();
+    ui.journal.hidden = false;
+    AB.Input.lock();
+  }
+  function closeJournal() {
+    if (ui.journal.hidden) return;
+    ui.journal.hidden = true;
+    if (ui.reader.hidden) AB.Input.unlock();
+  }
+  AB.Bus.on('log:open', ({ id }) => setTimeout(() => openReader(id), 260));
+  AB.Bus.on('log:found', ({ title, count, total }) => { toast(`Новая запись (${count}/${total}): ${title}`, 'good'); AB.Save.save(); });
+  ui.reader.addEventListener('click', (e) => { if (e.target === ui.reader || e.target.closest('[data-reader-close]') || !ui.journal.hidden) closeReader(); });
+  ui.journal.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-log]');
+    if (b) { openReader(b.dataset.log); return; }
+    if (e.target === ui.journal || e.target.closest('[data-journal-close]')) closeJournal();
+  });
+  $('#btn-logs').addEventListener('click', () => (ui.journal.hidden ? openJournal() : closeJournal()));
+
   AB.Bus.on('combat:noweapon', () => toast('Нечем драться: найдите что-нибудь тяжёлое', 'info'));
   AB.Bus.on('enemy:dead', ({ name }) => { toast(`${name} убит`, 'good'); setTimeout(() => AB.Save.save(), 1800); });
   AB.Bus.on('char:dead', ({ charId }) => {
@@ -429,7 +491,7 @@
     if (kind !== 'move') return;
     ui.hint.innerHTML = isTouch
       ? 'Джойстик слева — идти, дальше от центра — бег · подсказка по центру — действие · <b>⚔</b> — удар'
-      : '<kbd>A</kbd><kbd>D</kbd> — идти · <kbd>Shift</kbd> — бег · <kbd>E</kbd> — действие · <kbd>F</kbd> — удар · <kbd>I</kbd> — инвентарь · <kbd>M</kbd> — карта';
+      : '<kbd>A</kbd><kbd>D</kbd> — идти · <kbd>Shift</kbd> — бег · <kbd>E</kbd> — действие · <kbd>F</kbd> — удар · <kbd>I</kbd> — инвентарь · <kbd>M</kbd> — карта · <kbd>L</kbd> — записи';
     ui.hint.classList.add('show');
     setTimeout(() => ui.hint.classList.remove('show'), 7000);
   });
@@ -562,6 +624,7 @@
       AB.Equip.restore(save.equipment);
       AB.World.restore(save.world);
       AB.Party.restore(save.party);
+      AB.Logs.restore(save.logs);
       const hero = AB.Chars.get(L());
       AB.Rooms.enter(save.rooms.current || 'ROOM-001', { x: hero ? hero.x : null });
       if (hero) hero.controllable = true;

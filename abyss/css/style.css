@@ -307,3 +307,27 @@ body.touch #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 #hud-ammo.heat b { display: block; height: 100%; background: linear-gradient(90deg, #5ee6ff, #b48cff 60%, #ff6a3a); transition: width .1s; }
 #hud-ammo.heat.low span { color: #ff8a5a; animation: hp-low .5s infinite; }
 #party .pm u.hot { color: #ff8a5a; }
+
+/* ---------- Находки: чтение и журнал ---------- */
+#reader, #journal { position: fixed; inset: 0; z-index: 17; display: grid; place-items: center; background: rgba(0, 0, 0, .74); padding: 16px; }
+#reader { z-index: 18; }
+#reader[hidden], #journal[hidden] { display: none; }
+.reader-card, .journal-card {
+  width: 100%; max-width: 620px; max-height: calc(100% - 8px); overflow-y: auto; display: grid; gap: 12px; padding: 20px 22px;
+  background: #090b0c; border: 1px solid var(--line); border-left: 3px solid var(--cyan); border-radius: 8px;
+  animation: rise-in .35s ease-out;
+}
+#reader.audio .reader-card { border-left-color: #ff5a46; }
+.reader-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.reader-head h2 { margin: 2px 0 2px; font: 700 20px var(--display); letter-spacing: 1.5px; }
+.reader-kind { font: 11px var(--mono); letter-spacing: 2px; text-transform: uppercase; color: var(--cyan); }
+#reader.audio .reader-kind { color: #ff7a66; }
+.reader-text { font: 14px/1.6 var(--mono); color: #ddd6ca; }
+.reader-text p { margin: 0 0 10px; }
+.reader-foot { font-size: 11px; }
+#journal-list { display: grid; gap: 14px; }
+#journal-list h3 { margin: 0 0 6px; font: 600 13px var(--display); letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+#journal-list h3 em { font-style: normal; color: var(--cyan); margin-left: 6px; }
+#journal-list .jl { display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; margin-bottom: 4px; border-radius: 5px; border: 1px solid var(--line); background: #111316; color: var(--fg); font: 13px var(--mono); cursor: pointer; }
+#journal-list .jl span { color: var(--muted); font-size: 11px; white-space: nowrap; }
+#journal-list .jl.unknown { color: #4a4f55; cursor: default; border-style: dashed; background: none; }

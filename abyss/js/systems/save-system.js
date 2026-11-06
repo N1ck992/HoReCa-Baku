@@ -31,6 +31,7 @@ AB.Save = (() => {
       quests: AB.Quests.serialize(),
       equipment: AB.Equip.serialize(),
       world: AB.World.serialize(),
+      logs: AB.Logs.serialize(),
       party: AB.Party.serialize(),
     };
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }

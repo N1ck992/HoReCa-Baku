@@ -1675,6 +1675,7 @@ AB.Render = (() => {
     drawEquipFx(r);
     drawWindowView(r);
     drawTargetHighlight();
+    drawLogs(r, 'emissive');
     AB.Enemies.inRoom(r.id).forEach((e) => drawEnemy(e, 'emissive'));
     drawNavMarker();
     ctx.globalCompositeOperation = 'source-over';
@@ -1684,6 +1685,65 @@ AB.Render = (() => {
 
   // ---------- Предметы на полу (заглушки ASSET-ITEM*) ----------
   const CAT_COLOR = { resource: [150, 160, 170], medical: [220, 225, 220], ammo: [190, 160, 90] };
+
+  // ---------- Находки и записи экипажа (LOG-*) ----------
+  function drawLogs(r, pass) {
+    for (const lg of AB.Logs.inRoom(r.id)) {
+      const l = lg.log, x = sx(lg.x), b = sy(lg.y || 0);
+      if (pass === 'emissive') {
+        // непрочитанное слабо пульсирует, прочитанное — едва заметно
+        const a = lg.read ? 0.12 : 0.35 + Math.sin(time * 3 + lg.x) * 0.2;
+        const col = l.form === 'trace' && l.look === 'algae' ? '150,230,120' : l.form === 'audio' ? '255,90,70' : '94,230,255';
+        const cy = l.form === 'trace' ? b - 30 : b - 8;
+        const g = ctx.createRadialGradient(x, cy, 0, x, cy, l.form === 'trace' ? 46 : 22);
+        g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(1, `rgba(${col},0)`);
+        ctx.fillStyle = g; ctx.fillRect(x - 50, cy - 50, 100, 100);
+        idTag(ctx, l.id, x, b - 40);
+        continue;
+      }
+      ctx.save();
+      if (l.form === 'pad') {
+        ctx.fillStyle = '#16191c'; ctx.fillRect(x - 11, b - 4, 22, 4);
+        ctx.fillStyle = lg.read ? '#0d2a30' : '#1d6a78'; ctx.fillRect(x - 8, b - 3.5, 16, 2.5);
+      } else if (l.form === 'terminal') {
+        ctx.fillStyle = '#15181b'; ctx.fillRect(x - 22, b - 18, 44, 34);
+        ctx.strokeStyle = '#2c3137'; ctx.lineWidth = 3; ctx.strokeRect(x - 22, b - 18, 44, 34);
+        ctx.fillStyle = lg.read ? '#081a1d' : '#0e3e46'; ctx.fillRect(x - 17, b - 13, 34, 20);
+        ctx.fillStyle = 'rgba(94,230,255,.5)';
+        for (let i = 0; i < 4; i++) ctx.fillRect(x - 14, b - 10 + i * 4, 10 + ((i * 7 + 5) % 16), 1.5);
+      } else if (l.form === 'audio') {
+        ctx.fillStyle = '#1a1c1f'; ctx.fillRect(x - 8, b - 6, 16, 6);
+        ctx.fillStyle = '#2c3036'; ctx.fillRect(x - 6, b - 9, 4, 3);
+        ctx.fillStyle = lg.read ? '#401010' : (Math.sin(time * 4) > 0 ? '#ff3a2a' : '#601818'); ctx.fillRect(x + 3, b - 5, 3, 2);
+      } else if (l.form === 'tag') {
+        ctx.fillStyle = '#8a8f94'; ctx.fillRect(x - 5, b - 3, 10, 3);
+        ctx.strokeStyle = 'rgba(160,160,165,.6)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x - 5, b - 2); ctx.quadraticCurveTo(x - 14, b - 1, x - 18, b); ctx.stroke();
+      } else if (l.look === 'tally') {
+        ctx.strokeStyle = 'rgba(190,185,170,.32)'; ctx.lineWidth = 1.2;
+        for (let row = 0; row < 7; row++) for (let g = 0; g < 6; g++) {
+          const gx = x - 54 + g * 18, gy = b - 50 + row * 12 + (g % 2);
+          for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.moveTo(gx + k * 3, gy); ctx.lineTo(gx + k * 3, gy + 8); ctx.stroke(); }
+          ctx.beginPath(); ctx.moveTo(gx - 2, gy + 6); ctx.lineTo(gx + 12, gy + 1); ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(120,40,30,.45)'; ctx.lineWidth = 3;
+        for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(x - 30 + k * 12, b + 40); ctx.lineTo(x - 18 + k * 12, b + 90); ctx.stroke(); }
+      } else if (l.look === 'shelter') {
+        ctx.fillStyle = '#2a2a22';
+        ctx.beginPath(); ctx.moveTo(x - 60, b); ctx.lineTo(x - 50, b - 52); ctx.lineTo(x + 46, b - 46); ctx.lineTo(x + 58, b); ctx.fill();
+        ctx.fillStyle = '#1b1c18'; ctx.fillRect(x - 40, b - 10, 70, 10);
+        ctx.fillStyle = '#4a3a2a'; ctx.fillRect(x + 30, b - 14, 10, 14);
+        ctx.fillStyle = 'rgba(120,180,90,.5)'; ctx.fillRect(x + 31, b - 15, 8, 3);
+      } else if (l.look === 'algae') {
+        ctx.fillStyle = 'rgba(70,120,60,.55)';
+        for (let i = 0; i < 9; i++) {
+          const ax = x - 40 + i * 10, h = 30 + ((i * 37) % 40);
+          ctx.beginPath(); ctx.moveTo(ax, b); ctx.quadraticCurveTo(ax + Math.sin(time + i) * 8, b - h / 2, ax + Math.sin(time * 0.7 + i) * 5, b - h); ctx.lineTo(ax + 4, b); ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+  }
 
   function drawItems(r) {
     for (const it of AB.Rooms.worldItems(r.id)) {
@@ -2137,6 +2197,7 @@ AB.Render = (() => {
     drawProps(r);
     drawDoors(r);
     drawItems(r);
+    drawLogs(r, 'body');
     const enemies = AB.Enemies.inRoom(r.id);
     enemies.filter((e) => e.state === 'DEAD').forEach((e) => drawEnemy(e, 'body'));
     // остальные персонажи в этом помещении (спутница и др.)
