@@ -264,16 +264,38 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 .act-card button { font: 14px var(--mono); padding: 10px; border-radius: 6px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid var(--line); }
 .act-card button.danger { color: var(--red); border-color: rgba(255, 59, 47, .4); }
 
-/* ---------- Группа: ведущий и ведомые ---------- */
-#party { display: grid; gap: 4px; margin-top: 8px; width: 170px; pointer-events: auto; }
+/* ---------- Группа: ведущий и ведомые (компактные карточки в ряд) ---------- */
+#party { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; pointer-events: auto; }
 #party[hidden] { display: none; }
-#party .pm { position: relative; display: grid; gap: 3px; padding: 5px 7px 6px; text-align: left; cursor: pointer; font: 11px var(--mono); color: var(--fg); background: rgba(10, 12, 14, .72); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-#party .pm.lead { border-color: rgba(94, 230, 255, .6); box-shadow: 0 0 10px rgba(94, 230, 255, .15); cursor: default; }
-#party .pm b { font: 600 12px var(--display); letter-spacing: 1px; color: #e6dccf; }
+#party .pm { position: relative; display: grid; gap: 2px; min-width: 76px; padding: 3px 7px 4px; text-align: left; cursor: pointer; font: 10px var(--mono); color: var(--fg); background: rgba(10, 12, 14, .6); border: 1px solid var(--line); border-radius: 5px; }
+#party .pm.lead { border-color: rgba(94, 230, 255, .6); cursor: default; }
+#party .pm b { font: 600 11px var(--display); letter-spacing: .5px; color: #d9cfc2; line-height: 13px; }
 #party .pm.lead b { color: #8eeeff; }
-#party .pm i { display: block; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #7a1a14, #c9372b); }
-#party .pm span { display: flex; gap: 4px; }
-#party .pm u { text-decoration: none; font-size: 9px; padding: 1px 4px; border-radius: 3px; background: rgba(255, 255, 255, .07); color: #cfe9ef; }
+#party .pm i { display: block; height: 2px; border-radius: 1px; background: #c9372b; }
+#party .pm span { display: flex; gap: 3px; }
+#party .pm u { text-decoration: none; font-size: 8px; line-height: 11px; padding: 0 3px; border-radius: 2px; background: rgba(255, 255, 255, .07); color: #cfe9ef; }
 #party .pm u.empty { color: var(--muted); }
-#touch .lead-btn { display: none; }
-body.has-party #touch .lead-btn { display: grid; }
+
+/* ---------- Телефон: джойстик, удар, действие по центру ---------- */
+#stick {
+  position: relative; width: 132px; height: 132px; pointer-events: auto; touch-action: none;
+  border-radius: 50%; background: radial-gradient(circle, rgba(10, 11, 13, .25), rgba(10, 11, 13, .55));
+  border: 1px solid var(--line);
+}
+#stick b { position: absolute; left: 14%; right: 14%; top: 50%; height: 2px; transform: translateY(-50%); background: linear-gradient(90deg, rgba(94,230,255,.35), rgba(255,255,255,.08) 30% 70%, rgba(94,230,255,.35)); border-radius: 1px; }
+#stick i {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: rgba(40, 44, 50, .85); border: 1px solid rgba(255, 255, 255, .25);
+  transition: transform .12s ease-out, border-color .2s, background .2s;
+}
+#stick.walk i { transition: border-color .2s, background .2s; border-color: rgba(94, 230, 255, .6); }
+#stick.run i { background: rgba(94, 230, 255, .22); border-color: var(--cyan); }
+body.touch #prompt {
+  pointer-events: auto; cursor: pointer; bottom: calc(30px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 22px; font-size: 15px; border-color: rgba(94, 230, 255, .55); color: #e9fbff;
+  max-width: calc(100% - 340px); box-shadow: 0 0 18px rgba(94, 230, 255, .12);
+}
+body.touch #prompt.no { border-color: rgba(255, 59, 47, .45); color: #ffb3aa; box-shadow: none; }
+body.touch #prompt:active { background: rgba(94, 230, 255, .18); }
+body.touch #navbox { width: min(240px, 30vw); }
+body.touch #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }

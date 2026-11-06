@@ -48,15 +48,10 @@
   <button id="btn-skip" hidden>Пропустить ▸▸</button>
 
   <div id="touch">
+    <!-- аналоговый джойстик: потянуть — идти, дальше от центра — бег -->
+    <div id="stick" role="slider" aria-label="Движение: потяните влево или вправо, дальше от центра — бег"><b></b><i></i></div>
     <div class="pad">
-      <button data-touch="left" aria-label="Влево">◀</button>
-      <button data-touch="right" aria-label="Вправо">▶</button>
-    </div>
-    <div class="pad">
-      <button data-touch="run" aria-label="Бег">»</button>
-      <button data-touch="lead" class="lead-btn" aria-label="Передать управление">⇄</button>
       <button data-touch="attack" aria-label="Удар">⚔</button>
-      <button data-touch="action" aria-label="Действие">◉</button>
     </div>
   </div>
 

@@ -29,6 +29,7 @@
     actEnd: $('#act-end'),
     party: $('#party'),
   };
+  ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); AB.Input.queueAction(); });
   ui.party.addEventListener('click', (e) => {
     const b = e.target.closest('[data-char]');
     if (b && !AB.Party.isLeader(b.dataset.char)) switchLeader(b.dataset.char);
@@ -69,9 +70,9 @@
     };
     const html = list.length < 2 ? '' : list.map((c) => {
       const d = AB.ID.get(c.id), lead = AB.Party.isLeader(c.id);
-      return `<button class="pm ${lead ? 'lead' : ''}" data-char="${c.id}" aria-pressed="${lead}" title="${lead ? 'Ведёт группу' : `Передать управление (${isTouch ? '⇄' : 'Q'})`}">
-        <b>${lead ? '▸ ' : ''}${d.name}</b><i style="width:${Math.round((c.hp / d.stats.maxHp) * 100)}%"></i>
-        <span>${chip(AB.Inventory.weapon(c.id))}${chip(AB.Inventory.pack(c.id))}</span></button>`;
+      return `<button class="pm ${lead ? 'lead' : ''}" data-char="${c.id}" aria-pressed="${lead}" title="${lead ? 'Ведёт группу' : `Передать управление (${isTouch ? 'нажмите' : 'Q'})`}">
+        <b>${d.name}</b><span>${chip(AB.Inventory.weapon(c.id))}${chip(AB.Inventory.pack(c.id))}</span>
+        <i style="width:${Math.round((c.hp / d.stats.maxHp) * 100)}%"></i></button>`;
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
     ui.party.hidden = !html;
@@ -310,10 +311,11 @@
     const p = hero && !AB.Rooms.inTransition() && ui.inv.hidden && (hero.controllable || AB.Interact.isSearching())
       ? AB.Interact.prompt(L()) : null;
     if (!p) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
-    const key = isTouch ? '◉' : 'E';
+    // на телефоне подсказка — это и есть кнопка действия
     const html = p.progress !== undefined
       ? `${p.label}<span class="bar"><i style="width:${Math.round(p.progress * 100)}%"></i></span>`
-      : `<kbd class="${p.ok ? '' : 'no'}">${key}</kbd> ${p.label}`;
+      : isTouch ? p.label : `<kbd class="${p.ok ? '' : 'no'}">E</kbd> ${p.label}`;
+    ui.prompt.classList.toggle('no', !p.ok);
     if (html !== lastPrompt) { ui.prompt.innerHTML = html; lastPrompt = html; }
     ui.prompt.classList.add('show');
   }
@@ -401,7 +403,7 @@
     }
     if (kind !== 'move') return;
     ui.hint.innerHTML = isTouch
-      ? '◀ ▶ — идти · <b>»</b> — бег · <b>◉</b> — действие · <b>⚔</b> — удар'
+      ? 'Джойстик слева — идти, дальше от центра — бег · подсказка по центру — действие · <b>⚔</b> — удар'
       : '<kbd>A</kbd><kbd>D</kbd> — идти · <kbd>Shift</kbd> — бег · <kbd>E</kbd> — действие · <kbd>F</kbd> — удар · <kbd>I</kbd> — инвентарь · <kbd>M</kbd> — карта';
     ui.hint.classList.add('show');
     setTimeout(() => ui.hint.classList.remove('show'), 7000);
