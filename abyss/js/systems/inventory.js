@@ -1,23 +1,35 @@
 // =====================================================================
-// INVENTORY SYSTEM (GDD §13.5). У каждого персонажа два слота (GDD §7,
-// согласованное дополнение №12):
+// INVENTORY SYSTEM (GDD §13.5). У каждого персонажа три слота (дополнение №38):
 //   0 — оружие: отдельный слот, оружие сразу в руках;
-//   1 — рюкзак: одна вещь, которую персонаж несёт с собой (ключ-карта,
-//       предохранитель, аптечка). Её видно над головой по нажатию.
+//   1, 2 — рюкзак: две вещи, которые персонаж несёт с собой. Вещи в рюкзаках
+//       общие для группы: подобранное ложится тому, у кого есть место, а
+//       оборудование берёт нужную вещь у любого из группы рядом.
 // Одинаковые вещи складываются в рюкзаке до предела стака (ITEM-*.stack).
 // =====================================================================
 
 AB.Inventory = (() => {
-  const SLOTS = 2;
-  const WEAPON = 0, PACK = 1;
-  const bags = new Map(); // charId -> [weapon | null, backpack | null], ячейка = {item, qty}
+  const SLOTS = 3;
+  const WEAPON = 0, PACK = 1, PACKS = [1, 2];
+  const bags = new Map(); // charId -> [оружие, рюкзак 1, рюкзак 2], ячейка = {item, qty}
 
   function bag(charId) {
-    if (!bags.has(charId)) bags.set(charId, [null, null]);
-    return bags.get(charId);
+    if (!bags.has(charId)) bags.set(charId, [null, null, null]);
+    const b = bags.get(charId);
+    while (b.length < SLOTS) b.push(null);
+    return b;
   }
 
-  const slotFor = (itemId) => (AB.ID.get(itemId).weapon ? WEAPON : PACK);
+  // куда положить вещь: оружие — в руки; остальное — в стопку того же или в свободный слот рюкзака
+  function slotFor(itemId, b) {
+    const def = AB.ID.get(itemId);
+    if (def.weapon) return WEAPON;
+    b = b || [];
+    const same = PACKS.find((i) => b[i] && b[i].item === itemId && b[i].qty < def.stack);
+    if (same != null) return same;
+    const free = PACKS.find((i) => !b[i]);
+    return free != null ? free : PACK;
+  }
+  const findSlot = (b, itemId) => PACKS.concat(WEAPON).find((i) => b[i] && b[i].item === itemId);
 
   function syncHands(charId) {
     const w = bag(charId)[WEAPON];
@@ -40,7 +52,7 @@ AB.Inventory = (() => {
       if (taken > 0) { w.ammo = (w.ammo || 0) + taken; AB.Bus.emit('inventory:changed', { charId, itemId, delta: taken }); }
       return taken;
     }
-    const b = bag(charId), i = slotFor(itemId), cur = b[i];
+    const b = bag(charId), i = slotFor(itemId, b), cur = b[i];
     let taken = 0;
     if (!cur) {
       taken = Math.min(qty, def.stack);
@@ -60,12 +72,13 @@ AB.Inventory = (() => {
     if (taken) {
       if (i === WEAPON) syncHands(charId);
       // взяли ружьё — гарпуны из рюкзака сразу уходят в магазин
-      const pk = b[PACK];
-      if (i === WEAPON && def.weapon.ranged && b[WEAPON].ammo != null && pk && AB.ID.get(pk.item).category === 'ammo') {
+      for (const k of PACKS) {
+        const pk = b[k];
+        if (!(i === WEAPON && def.weapon.ranged && b[WEAPON].ammo != null && pk && AB.ID.get(pk.item).category === 'ammo')) continue;
         const load = Math.min(pk.qty, AMMO_CAP - (b[WEAPON].ammo || 0));
         b[WEAPON].ammo = (b[WEAPON].ammo || 0) + load;
         pk.qty -= load;
-        if (!pk.qty) b[PACK] = null;
+        if (!pk.qty) b[k] = null;
         AB.Bus.emit('inventory:changed', { charId, itemId: pk.item, delta: -load });
       }
       AB.Bus.emit('inventory:changed', { charId, itemId, delta: taken });
@@ -79,13 +92,49 @@ AB.Inventory = (() => {
 
   // Убирает qty штук. Возвращает true, если хватило.
   function remove(charId, itemId, qty) {
-    const b = bag(charId), i = slotFor(itemId), s = b[i];
-    if (!s || s.item !== itemId || s.qty < qty) return false;
+    const b = bag(charId), i = findSlot(b, itemId), s = i != null ? b[i] : null;
+    if (!s || s.qty < qty) return false;
     s.qty -= qty;
     if (!s.qty) b[i] = null;
     if (i === WEAPON) syncHands(charId);
     AB.Bus.emit('inventory:changed', { charId, itemId, delta: -qty });
     return true;
+  }
+
+  // ---------- Общие вещи группы ----------
+  const nearby = (charId) => {
+    const c = AB.Chars.get(charId);
+    const list = AB.Party.members().filter((m) => !m.dead && (!c || m.room === c.room));
+    return c && !list.includes(c) ? [c, ...list] : list;
+  };
+  // у кого в группе (рядом, в том же помещении) есть эта вещь — сначала у самого персонажа
+  function holderOf(charId, itemId) {
+    if (count(charId, itemId)) return charId;
+    const m = nearby(charId).find((p) => count(p.id, itemId));
+    return m ? m.id : null;
+  }
+  const hasRoom = (charId, itemId) => {
+    const b = bag(charId), def = AB.ID.get(itemId);
+    return PACKS.some((i) => !b[i] || (b[i].item === itemId && b[i].qty < def.stack));
+  };
+  // есть ли свободное место у кого-нибудь в группе
+  function partyHasRoom(charId, itemId) {
+    return nearby(charId).some((m) => hasRoom(m.id, itemId)) || hasRoom(charId, itemId);
+  }
+  // положить в общий рюкзак группы: сначала себе, потом тому, у кого есть место.
+  // swap — если места нет ни у кого, обменять (старая вещь падает на пол).
+  function addShared(charId, itemId, qty, { swap = true } = {}) {
+    const def = AB.ID.get(itemId);
+    if (def.weapon || def.category === 'ammo') return { taken: add(charId, itemId, qty, { swap }), who: charId };
+    let left = qty, who = null;
+    const order = [charId, ...nearby(charId).map((m) => m.id).filter((id) => id !== charId)];
+    for (const id of order) {
+      if (!left || !hasRoom(id, itemId)) continue;
+      const t = add(id, itemId, left, { swap: false });
+      if (t) { left -= t; who = who || id; }
+    }
+    if (left && swap) { const t = add(charId, itemId, left, { swap: true }); left -= t; who = who || charId; }
+    return { taken: qty - left, who: who || charId };
   }
 
   function slot(charId, i) {
@@ -182,22 +231,24 @@ AB.Inventory = (() => {
 
   return {
     heat, fire, cool, exchange, exchangeBlock,
-    SLOTS, WEAPON, PACK, AMMO_CAP, add, remove, count, slot, use, useBlock, drop,
+    holderOf, addShared, partyHasRoom,
+    SLOTS, WEAPON, PACK, PACKS, AMMO_CAP, add, remove, count, slot, use, useBlock, drop,
     ammo: (charId) => { const w = bag(charId)[WEAPON]; return w && w.ammo != null ? w.ammo : null; },
     spendAmmo: (charId) => { const w = bag(charId)[WEAPON]; if (!w || !w.ammo) return false; w.ammo--; return true; },
     weapon: (charId) => bag(charId)[WEAPON],
-    pack: (charId) => bag(charId)[PACK],
+    pack: (charId) => PACKS.map((i) => bag(charId)[i]).find(Boolean) || null,
+    packs: (charId) => PACKS.map((i) => bag(charId)[i]),
     slots: (charId) => bag(charId).slice(),
     serialize: () => [...bags].map(([id, b]) => [id, b]),
     // Старые сохранения (8 ячеек): оружие — в слот оружия, первая другая вещь — в рюкзак,
     // остальное ложится на пол рядом с персонажем.
     restore(d) {
       for (const [id, old] of d || []) {
-        const b = [null, null];
+        const b = [null, null, null];
         const extra = [];
         for (const s of old || []) {
           if (!s || !AB.ID.get(s.item)) continue;
-          const i = slotFor(s.item);
+          const i = slotFor(s.item, b);
           if (!b[i]) b[i] = s; else extra.push(s);
         }
         bags.set(id, b);

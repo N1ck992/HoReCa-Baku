@@ -80,9 +80,9 @@ AB.Interact = (() => {
     if (t.kind === 'item') {
       c.reachLow = true;
       AB.Chars.playAction(charId, 'interact');
-      const added = AB.Inventory.add(charId, t.ref.item, t.ref.qty);
+      const { taken: added, who } = AB.Inventory.addShared(charId, t.ref.item, t.ref.qty);
       if (added) AB.Rooms.takeItem(AB.Rooms.current(), t.ref.key, added);
-      AB.Bus.emit('item:pickup', { charId, itemId: t.ref.item, added, left: t.ref.qty - added });
+      AB.Bus.emit('item:pickup', { charId: who, by: charId, itemId: t.ref.item, added, left: t.ref.qty - added });
       return true;
     }
 
@@ -160,7 +160,7 @@ AB.Interact = (() => {
     const c = AB.Chars.get(charId);
     for (const [itemId, qty] of container.loot) {
       // оружие из шкафа берётся в руки (старое остаётся рядом), остальное — если есть место
-      const added = AB.Inventory.add(charId, itemId, qty, { swap: !!AB.ID.get(itemId).weapon });
+      const { taken: added } = AB.Inventory.addShared(charId, itemId, qty, { swap: !!AB.ID.get(itemId).weapon });
       if (added) found.push([itemId, added]);
       // что не поместилось — остаётся лежать рядом с контейнером
       if (qty - added > 0) { full = true; AB.Rooms.dropItem(roomId, itemId, qty - added, container.x - 40); }

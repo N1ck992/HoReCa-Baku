@@ -387,8 +387,9 @@ AB.Render = (() => {
     // вещь, которую несёт персонаж (показывается по нажатию)
     const bub = bubbles.get(id);
     if (bub && bub.until > time) {
-      const it = bub.item ? AB.ID.get(bub.item) : null;
-      const text = it ? it.name : 'ничего не несёт';
+      const items = Array.isArray(bub.item) ? bub.item : bub.item ? [bub.item] : [];
+      const text = items.length ? items.map((i) => AB.ID.get(i).name).join(' · ') : 'ничего не несёт';
+      const it = items.length ? AB.ID.get(items[0]) : null;
       const a = Math.min(1, (bub.until - time) * 2);
       ctx.font = '11px "Share Tech Mono", monospace';
       const w = ctx.measureText(text).width + (it ? 30 : 14);

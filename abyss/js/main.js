@@ -73,7 +73,7 @@
     const html = list.length < 2 ? '' : list.map((c) => {
       const d = AB.ID.get(c.id), lead = AB.Party.isLeader(c.id);
       return `<button class="pm ${lead ? 'lead' : ''}" data-char="${c.id}" aria-pressed="${lead}" title="${lead ? 'Ведёт группу' : `Передать управление (${isTouch ? 'нажмите' : 'Q'})`}">
-        <b>${d.name}</b><span>${chip(AB.Inventory.weapon(c.id))}${chip(AB.Inventory.pack(c.id))}</span>
+        <b>${d.name}</b><span>${chip(AB.Inventory.weapon(c.id))}${AB.Inventory.packs(c.id).map(chip).join('')}</span>
         <i style="width:${Math.round((c.hp / d.stats.maxHp) * 100)}%"></i></button>`;
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
@@ -111,7 +111,7 @@
   // ---------- Инвентарь: два слота — оружие и рюкзак ----------
   let selected = 1;
   const itemName = (id) => AB.ID.get(id).name;
-  const SLOT_NAMES = ['Оружие', 'Рюкзак'];
+  const SLOT_NAMES = ['Оружие', 'Рюкзак', 'Рюкзак'];
 
   function renderInventory() {
     const slots = AB.Inventory.slots(L());
@@ -136,7 +136,7 @@
       const label = s && os ? `Обменяться ⇄ ${name}: ${itemName(os.item)}` : s ? `Отдать → ${name}` : `Взять ← ${name}: ${itemName(os.item)}`;
       return `<button data-inv="give" data-to="${m.id}" ${block ? `disabled title="${block}"` : ''}>${label}</button>${block ? `<div class="muted">${block}</div>` : ''}`;
     }).join('');
-    let detail = `<p class="muted">${selected === 0 ? 'Оружия нет. Подберите что-нибудь тяжёлое.' : 'Рюкзак пуст. В нём помещается одна вещь.'}</p>${swaps ? `<div class="inv-actions">${swaps}</div>` : ''}`;
+    let detail = `<p class="muted">${selected === 0 ? 'Оружия нет. Подберите что-нибудь тяжёлое.' : 'Свободное место в рюкзаке. Вещи в рюкзаках общие: оборудование возьмёт нужную у любого из группы рядом.'}</p>${swaps ? `<div class="inv-actions">${swaps}</div>` : ''}`;
     if (s) {
       const def = AB.ID.get(s.item);
       const block = AB.Inventory.useBlock(L(), selected);
@@ -153,7 +153,7 @@
     }
     $('#inv-grid').innerHTML = grid;
     $('#inv-detail').innerHTML = detail;
-    $('#inv-owner').textContent = `${AB.ID.get(L()).name} · одна вещь в рюкзаке, оружие отдельно`;
+    $('#inv-owner').textContent = `${AB.ID.get(L()).name} · оружие и две вещи в рюкзаке · рюкзаки группы общие`;
     updateHp();
   }
 
@@ -260,15 +260,18 @@
     if (!ui.inv.hidden) closeInventory();
     const h = AB.Chars.get(L());
     if (!h || h.dead) return;
+    // карта — прозрачная поверх игры, игра не останавливается (дополнение №38)
     ui.map.hidden = false;
-    AB.Input.lock();
     renderMap();
+    clearInterval(mapTimer);
+    mapTimer = setInterval(() => { if (!ui.map.hidden) renderMap(); }, 350);
   }
+  let mapTimer = null;
 
   function closeMap() {
     if (ui.map.hidden) return;
     ui.map.hidden = true;
-    AB.Input.unlock();
+    clearInterval(mapTimer);
   }
 
   function renderMap() {
@@ -330,7 +333,7 @@
     $('#map-goal').textContent = h ? `Куда дальше: ${h.text}` : 'Все известные проходы исследованы';
   }
 
-  ui.map.addEventListener('click', (e) => { if (e.target === ui.map || e.target.closest('[data-map-close]')) closeMap(); });
+  ui.map.addEventListener('click', (e) => { if (e.target.closest('[data-map-close]')) closeMap(); });
   $('#btn-map').addEventListener('click', () => (ui.map.hidden ? openMap() : closeMap()));
   $('#btn-load').addEventListener('click', () => location.reload());
   $('#btn-new').addEventListener('click', () => { AB.Save.clear(); location.reload(); });
@@ -361,8 +364,9 @@
   // ---------- События модулей ----------
   AB.Bus.on('room:enter', ({ roomId }) => { showRoom(roomId); AB.Save.save(); });
   AB.Bus.on('door:denied', ({ reason }) => toast(reason));
+  AB.Bus.on('equip:shared', ({ from, itemId }) => toast(`${itemName(itemId)} — из рюкзака: ${AB.ID.get(from).name}`, 'info'));
   AB.Bus.on('item:pickup', ({ charId, itemId, added, left }) => {
-    if (added) toast(`${charId !== MARK ? `${AB.ID.get(charId).name} · ` : ''}${AB.ID.get(itemId).weapon ? 'В руках' : 'В рюкзаке'}: ${itemName(itemId)}${added > 1 ? ` ×${added}` : ''}`, 'good');
+    if (added) toast(`${charId !== L() ? `${AB.ID.get(charId).name} несёт · ` : ''}${AB.ID.get(itemId).weapon ? 'В руках' : 'В рюкзаке'}: ${itemName(itemId)}${added > 1 ? ` ×${added}` : ''}`, 'good');
     else toast('Не помещается');
     AB.Save.save();
   });

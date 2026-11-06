@@ -38,8 +38,7 @@ AB.Equip = (() => {
     const d = def(id), s = st(id);
     if (d.info) return { label: AB.World.hasPower() ? d.text.on : d.text.off, ok: true, kind: 'info' };
     if (d.gives) {
-      const p = AB.Inventory.pack(charId);
-      return p ? { label: d.text.full, ok: false, kind: 'blocked' } : { label: d.text.ready, ok: true, time: d.time, kind: 'work' };
+      return AB.Inventory.partyHasRoom(charId, d.gives) ? { label: d.text.ready, ok: true, time: d.time, kind: 'work' } : { label: d.text.full, ok: false, kind: 'blocked' };
     }
     if (s === 'done') return { label: d.text.done, ok: false, kind: 'done' };
     if (d.after && !d.after.every((r) => st(r) === 'done')) return { label: d.text.after || d.text.missing, ok: false, kind: 'blocked' };
@@ -50,10 +49,7 @@ AB.Equip = (() => {
       const c = AB.ID.get(charId);
       if (!c.skills || !c.skills[d.skill]) return { label: 'Нужен инженер', ok: false, kind: 'blocked' };
     }
-    if (d.needs) {
-      const p = AB.Inventory.pack(charId);
-      if (!p || p.item !== d.needs) return { label: d.text.missing, ok: false, kind: 'blocked' };
-    }
+    if (d.needs && !AB.Inventory.holderOf(charId, d.needs)) return { label: d.text.missing, ok: false, kind: 'blocked' };
     return { label: d.text.ready, ok: true, time: d.time, kind: 'work' };
   }
 
@@ -63,7 +59,7 @@ AB.Equip = (() => {
     if (!a.ok) return a;
     if (a.kind === 'info') { AB.Bus.emit('equip:info', { id, text: a.label }); return a; }
     if (d.gives) {
-      AB.Inventory.add(charId, d.gives, 1, { swap: false });
+      AB.Inventory.addShared(charId, d.gives, 1, { swap: false });
       AB.Bus.emit('equip:info', { id, text: d.text.gave });
       return a;
     }
@@ -72,7 +68,12 @@ AB.Equip = (() => {
       AB.Bus.emit('equip:changed', { id, state: 'inspected', text: d.inspect });
       return a;
     }
-    if (d.needs) AB.Inventory.remove(charId, d.needs, 1);
+    if (d.needs) {
+      // вещь берётся у того, у кого она есть в группе (Марк жмёт — предохранитель у Миры)
+      const holder = AB.Inventory.holderOf(charId, d.needs);
+      AB.Inventory.remove(holder, d.needs, 1);
+      if (holder !== charId) AB.Bus.emit('equip:shared', { id, from: holder, itemId: d.needs });
+    }
     state.set(id, 'done');
     AB.Bus.emit('equip:changed', { id, state: 'done', text: d.text.done });
     return a;

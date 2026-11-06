@@ -137,7 +137,7 @@ AB.Chars = (() => {
   // у противников — данные carry, пока он жив.
   function carried(id) {
     const c = live.get(id);
-    if (c) { const p = AB.Inventory.pack(id); return p ? p.item : null; }
+    if (c) { const items = AB.Inventory.packs(id).filter(Boolean).map((p) => p.item); return items.length ? items : null; }
     const e = AB.Enemies.get(id);
     if (e) return e.state === 'DEAD' ? null : AB.ID.get(id).carry || null;
     return null;

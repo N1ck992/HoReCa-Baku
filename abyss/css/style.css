@@ -191,7 +191,7 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 .inv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .inv-head h2 { margin: 0; font: 700 20px var(--display); letter-spacing: 3px; text-transform: uppercase; }
 .inv-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
-#inv-grid { display: grid; grid-template-columns: repeat(2, 84px); gap: 8px; }
+#inv-grid { display: grid; grid-template-columns: repeat(3, 84px); gap: 8px; }
 .slot-label { position: absolute; left: 0; right: 0; top: 3px; font-size: 9px; color: var(--muted); text-align: center; letter-spacing: .5px; }
 .slot {
   position: relative; width: 84px; height: 84px; padding-top: 10px !important; border-radius: 6px; border: 1px solid var(--line);
@@ -220,7 +220,7 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 .inv-actions button:disabled { opacity: .4; cursor: not-allowed; }
 @media (max-width: 560px) {
   .inv-body { grid-template-columns: 1fr; }
-  #inv-grid { grid-template-columns: repeat(2, 84px); }
+  #inv-grid { grid-template-columns: repeat(3, 76px); }
 
 }
 
@@ -334,3 +334,14 @@ body.touch #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 
 /* ---------- Карта: шахты и люки между палубами ---------- */
 #map-svg .shaft { stroke: #5ee6ff; stroke-width: 1.5; stroke-dasharray: 3 3; opacity: .7; }
+
+/* ---------- Карта поверх игры: прозрачная, не мешает играть (дополнение №38) ---------- */
+#map { background: none; pointer-events: none; place-items: start center; padding-top: calc(78px + env(safe-area-inset-top, 0px)); z-index: 8; }
+#map .map-card { pointer-events: none; background: rgba(6, 8, 10, .42); border-color: rgba(255, 255, 255, .1); backdrop-filter: none; max-width: 680px; padding: 10px 14px; gap: 6px; }
+#map .map-card h2 { font-size: 15px; }
+#map [data-map-close] { pointer-events: auto; }
+#map #map-svg { max-height: 34vh; opacity: .92; }
+#map-svg .room rect { fill: rgba(21, 24, 28, .82); stroke: #5a626c; }
+#map-svg .room.cur rect { fill: rgba(18, 35, 42, .88); }
+#map-svg .room text { font-size: 9px; }
+#map .legend { font-size: 10px; opacity: .8; }
