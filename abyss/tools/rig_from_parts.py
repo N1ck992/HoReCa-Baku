@@ -39,11 +39,19 @@ def main(cfg_path):
         a = np.array(imgs[n])[:, :, 3] > 128
         H = a.shape[0]; ys = np.where(a.any(axis=1))[0]
         return (ys.max() - parts[n]['end'][1] * H)
-    px_total = (plen('thigh_near') + plen('shin_near') + sole_below_ankle('shin_near')
-                + plen('torso') + plen('head'))
+    # укоротить руки/ноги, не меняя их толщину (limb_scale: {"arm": 0.85, "leg": 0.8})
+    ls = cfg.get('limb_scale', {})
+    def k_of(n):
+        if n.startswith(('upperarm', 'forearm')): return ls.get('arm', 1.0)
+        if n.startswith(('thigh', 'shin')): return ls.get('leg', 1.0)
+        return 1.0
+    for n in parts:
+        if k_of(n) != 1.0: parts[n]['scaleX'] = round(1 / k_of(n), 4)
+    legs_px = (plen('thigh_near') + plen('shin_near') + sole_below_ankle('shin_near')) * ls.get('leg', 1.0)
+    px_total = legs_px + plen('torso') + plen('head')
     upp = cfg['height_units'] / px_total
-    bones = {n: round(plen(n) * upp, 2) for n in parts}
-    hipY = -round((plen('thigh_near') + plen('shin_near') + sole_below_ankle('shin_near')) * upp, 2)
+    bones = {n: round(plen(n) * k_of(n) * upp, 2) for n in parts}
+    hipY = -round(legs_px * upp, 2)
     rig = {
         'source': os.path.relpath(cfg_path, ROOT), 'unitsPerPx': round(upp, 5),
         'parts': parts, 'bones': bones,

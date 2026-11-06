@@ -1,20 +1,122 @@
 {
   "rig": "MARK3",
-  "height_units": 122,
+  "height_units": 118,
   "out_dir": "assets/char001/v4",
   "js_out": "js/data/rigs/MARK3.js",
   "source_sheet": "assets/source/CHAR001-parts-v4.webp",
   "far_darken": 0.55,
   "joints": {
-    "head":          { "pivot": [null, 0.80], "end": [null, 0.03] },
-    "torso":         { "pivot": [null, 0.96], "end": [null, 0.06], "shoulder_near": [0.30, 0.20], "shoulder_far": [0.36, 0.21] },
-    "upperarm_near": { "pivot": [null, 0.15], "end": [null, 0.88] },
-    "forearm_near":  { "pivot": [null, 0.10], "end": [null, 0.72] },
-    "upperarm_far":  { "pivot": [null, 0.15], "end": [null, 0.88] },
-    "forearm_far":   { "pivot": [null, 0.10], "end": [null, 0.72] },
-    "thigh_near":    { "pivot": [null, 0.13], "end": [null, 0.88] },
-    "shin_near":     { "pivot": [null, 0.12], "end": [null, 0.78] },
-    "thigh_far":     { "pivot": [null, 0.13], "end": [null, 0.88] },
-    "shin_far":      { "pivot": [null, 0.12], "end": [null, 0.78] }
+    "head": {
+      "pivot": [
+        null,
+        0.8
+      ],
+      "end": [
+        null,
+        0.03
+      ]
+    },
+    "torso": {
+      "pivot": [
+        null,
+        0.96
+      ],
+      "end": [
+        null,
+        0.06
+      ],
+      "shoulder_near": [
+        0.3,
+        0.2
+      ],
+      "shoulder_far": [
+        0.36,
+        0.21
+      ]
+    },
+    "upperarm_near": {
+      "pivot": [
+        null,
+        0.15
+      ],
+      "end": [
+        null,
+        0.88
+      ]
+    },
+    "forearm_near": {
+      "pivot": [
+        null,
+        0.1
+      ],
+      "end": [
+        null,
+        0.72
+      ]
+    },
+    "upperarm_far": {
+      "pivot": [
+        null,
+        0.15
+      ],
+      "end": [
+        null,
+        0.88
+      ]
+    },
+    "forearm_far": {
+      "pivot": [
+        null,
+        0.1
+      ],
+      "end": [
+        null,
+        0.72
+      ]
+    },
+    "thigh_near": {
+      "pivot": [
+        null,
+        0.13
+      ],
+      "end": [
+        null,
+        0.88
+      ]
+    },
+    "shin_near": {
+      "pivot": [
+        null,
+        0.12
+      ],
+      "end": [
+        null,
+        0.78
+      ]
+    },
+    "thigh_far": {
+      "pivot": [
+        null,
+        0.13
+      ],
+      "end": [
+        null,
+        0.88
+      ]
+    },
+    "shin_far": {
+      "pivot": [
+        null,
+        0.12
+      ],
+      "end": [
+        null,
+        0.78
+      ]
+    }
+  },
+  "limb_scale": {
+    "arm": 0.85,
+    "leg": 0.8
   }
 }

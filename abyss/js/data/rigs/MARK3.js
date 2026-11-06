@@ -3,7 +3,7 @@
 AB.RIGS = AB.RIGS || {};
 AB.RIGS.MARK3 = {
   "source": "tools/rigs/MARK3.json",
-  "unitsPerPx": 0.10344,
+  "unitsPerPx": 0.11223,
   "parts": {
     "head": {
       "pivot": [
@@ -41,7 +41,8 @@ AB.RIGS.MARK3 = {
       "end": [
         0.5789,
         0.88
-      ]
+      ],
+      "scaleX": 1.1765
     },
     "forearm_near": {
       "pivot": [
@@ -51,7 +52,8 @@ AB.RIGS.MARK3 = {
       "end": [
         0.5985,
         0.72
-      ]
+      ],
+      "scaleX": 1.1765
     },
     "upperarm_far": {
       "pivot": [
@@ -61,7 +63,8 @@ AB.RIGS.MARK3 = {
       "end": [
         0.5891,
         0.88
-      ]
+      ],
+      "scaleX": 1.1765
     },
     "forearm_far": {
       "pivot": [
@@ -71,7 +74,8 @@ AB.RIGS.MARK3 = {
       "end": [
         0.6531,
         0.72
-      ]
+      ],
+      "scaleX": 1.1765
     },
     "thigh_near": {
       "pivot": [
@@ -81,7 +85,8 @@ AB.RIGS.MARK3 = {
       "end": [
         0.379,
         0.88
-      ]
+      ],
+      "scaleX": 1.25
     },
     "shin_near": {
       "pivot": [
@@ -91,7 +96,8 @@ AB.RIGS.MARK3 = {
       "end": [
         0.2937,
         0.78
-      ]
+      ],
+      "scaleX": 1.25
     },
     "thigh_far": {
       "pivot": [
@@ -101,7 +107,8 @@ AB.RIGS.MARK3 = {
       "end": [
         0.3843,
         0.88
-      ]
+      ],
+      "scaleX": 1.25
     },
     "shin_far": {
       "pivot": [
@@ -111,20 +118,21 @@ AB.RIGS.MARK3 = {
       "end": [
         0.3043,
         0.78
-      ]
+      ],
+      "scaleX": 1.25
     }
   },
   "bones": {
-    "head": 19.65,
-    "torso": 36.14,
-    "upperarm_near": 26.53,
-    "forearm_near": 25.27,
-    "upperarm_far": 27.06,
-    "forearm_far": 24.91,
-    "thigh_near": 30.76,
-    "shin_near": 26.9,
-    "thigh_far": 30.6,
-    "shin_far": 27.11
+    "head": 21.32,
+    "torso": 39.21,
+    "upperarm_near": 24.47,
+    "forearm_near": 23.31,
+    "upperarm_far": 24.95,
+    "forearm_far": 22.97,
+    "thigh_near": 26.7,
+    "shin_near": 23.35,
+    "thigh_far": 26.56,
+    "shin_far": 23.53
   },
   "variants": {
     "01": {
@@ -140,6 +148,6 @@ AB.RIGS.MARK3 = {
       "shin_far": "assets/char001/v4/01/shin_far.png"
     }
   },
-  "hipY": -66.21,
+  "hipY": -57.47,
   "farDarken": 0.55
 };
