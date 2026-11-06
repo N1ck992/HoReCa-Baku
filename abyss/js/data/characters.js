@@ -32,8 +32,8 @@ AB.CHARACTERS = [
 // пока имя-заглушка и графика-заглушка (силуэт) с ID ресурса.
 AB.CHARACTERS.push({
   id: 'CHAR-002',
-  name: 'Спутница',           // заглушка: она представляется бывшей девушкой Марка — имя не задано
-  role: 'Выжившая (по её словам)',
+  name: 'Спутница',           // заглушка: представляется коллегой Марка по экспедиции — имя не задано
+  role: 'Говорит, что раньше работала с Марком (на самом деле — неизвестный организм, docs/STORY.md §4)',
   specialization: null,
   crew: false,
   stats: { maxHp: 80, speed: 120, runSpeed: 230 },
@@ -55,14 +55,14 @@ AB.CHARACTERS.push({
 // CHAR-003 — медик (дополнение №6). Имя и внешность — предложение, ждут правки.
 AB.CHARACTERS.push({
   id: 'CHAR-003',
-  name: 'Доктор Хейл',          // Саймон Хейл, судовой врач
+  name: 'Доктор Хейл',          // судовой врач, женщина (docs/STORY.md §5); имя — ждёт утверждения
   role: 'Медик',
   specialization: 'medic',
   crew: true,
   stats: { maxHp: 90, speed: 110, runSpeed: 210 },
   skills: { heal: true },
   appearances: ['ASSET-CHAR003-01'],
-  look: { dark: '#2b2d2f', mid: '#6e7372', light: '#8f9493', build: 1.02 },
+  look: { dark: '#2b2d2f', mid: '#6e7372', light: '#8f9493', hair: '#3a2e28', build: 0.94 },
   // разговор лечит Марка и спутницу (пока он в безопасной зоне)
   npc: { action: 'Поговорить с доктором', heal: true },
   anims: {
