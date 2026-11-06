@@ -1,4 +1,4 @@
-# ABYSS: LOST SIGNAL
+# PROJECT ABYSS
 
 Сюжетный sci-fi survival horror с видом сбоку. Браузерная игра на чистом JavaScript (canvas), без сборки и зависимостей.
 

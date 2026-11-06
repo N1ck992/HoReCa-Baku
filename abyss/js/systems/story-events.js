@@ -31,6 +31,36 @@ AB.Story = (() => {
       if (hero) hero.inPod = false;
     },
     hint: (s) => AB.Bus.emit('ui:hint', s.text),
+    // выстрел дротиком с транквилизатором (EVENT-006)
+    tranq: (s) => {
+      const a = AB.Chars.get(s.from), t = AB.Chars.get(s.to);
+      if (!a || !t) return;
+      a.facing = Math.sign(t.x - a.x) || a.facing;
+      AB.Bus.emit('combat:shot', { charId: s.from, fromX: a.x + a.facing * 30, toX: t.x, landed: true });
+      if (!running.skip) AB.Chars.playAction(s.to, 'hurt');
+    },
+    // персонаж падает без сознания (on) и поднимается (off)
+    down: (s) => {
+      const c = AB.Chars.get(s.char);
+      if (!c) return;
+      c.down = !!s.on;
+      c.goal = null; c.vx = 0;
+      if (s.on) { AB.Chars.playAction(s.char, 'death'); const tr = AB.Anim.current(s.char); if (running.skip && tr) { tr.t = 99; tr.done = true; } }
+      else AB.Chars.playAction(s.char, 'hurt');
+    },
+    // дать вещь персонажу (рюкзак занят — вещь ложится рядом)
+    give_item: (s) => {
+      const c = AB.Chars.get(s.char);
+      if (!c) return;
+      const got = AB.Inventory.add(s.char, s.item, s.qty || 1, { swap: false });
+      if (!got) AB.Rooms.dropItem(c.room, s.item, s.qty || 1, c.x + c.facing * 30);
+      AB.Bus.emit('item:given', { charId: s.char, itemId: s.item, onFloor: !got });
+    },
+    // уйти из помещения (за дверь) — персонаж больше не здесь
+    leave: (s) => {
+      const c = AB.Chars.get(s.char);
+      if (c) { c.room = null; c.goal = null; c.hidden = true; }
+    },
     // силуэт на экране пульта (EVENT-002)
     console_ghost: (s) => { fx.ghost = s.duration; },
     // появиться в помещении

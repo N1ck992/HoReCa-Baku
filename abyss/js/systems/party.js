@@ -26,6 +26,7 @@ AB.Party = (() => {
     if (!l || !c || id === leaderId) return 'Уже ведёт группу';
     if (!members().includes(c)) return 'Не в группе';
     if (c.dead) return 'Погиб';
+    if (c.down) return 'Без сознания';
     if (c.room !== l.room) return 'В другом помещении';
     if (AB.Story.isRunning() || AB.Dialog.isOpen()) return 'Сейчас идёт сцена';
     if (AB.Rooms.inTransition() || AB.Interact.isSearching() || !l.controllable) return 'Сейчас нельзя';
@@ -81,7 +82,7 @@ AB.Party = (() => {
     for (const m of members()) {
       if (m === l) continue;
       m.engage = null;
-      if (quiet || m.dead || m.room !== l.room) continue;
+      if (quiet || m.dead || m.down || m.room !== l.room) continue;
       if (AB.Enemies.threatFor(m.id, m.room)) continue;       // её цель — спастись, а не драться
       const w = AB.Combat.weaponOf(m.id);
       if (!w) continue;

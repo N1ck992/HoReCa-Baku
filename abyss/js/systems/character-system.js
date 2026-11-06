@@ -47,7 +47,7 @@ AB.Chars = (() => {
   // Действие, которое нельзя прервать ходьбой (взаимодействие, урон, пробуждение)
   function busy(s) {
     const tr = AB.Anim.current(s.id);
-    return s.dead || (tr && ['interact', 'hurt', 'wake', 'attack', 'death'].includes(tr.action) && !tr.done);
+    return s.dead || s.down || (tr && ['interact', 'hurt', 'wake', 'attack', 'death'].includes(tr.action) && !tr.done);
   }
 
   function update(dt, bounds) {

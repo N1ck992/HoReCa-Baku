@@ -38,6 +38,8 @@ AB.Equip = (() => {
     const d = def(id), s = st(id);
     if (d.info) return { label: AB.World.hasPower() ? d.text.on : d.text.off, ok: true, kind: 'info' };
     if (s === 'done') return { label: d.text.done, ok: false, kind: 'done' };
+    if (d.after && !d.after.every((r) => st(r) === 'done')) return { label: d.text.after || d.text.missing, ok: false, kind: 'blocked' };
+    if (d.enemyDead && !AB.Enemies.isDead(d.enemyDead)) return { label: d.text.missing, ok: false, kind: 'blocked' };
     if (d.inspect && s === 'broken') return { label: d.text.inspect, ok: true, kind: 'inspect' };
     if (d.requires && !d.requires.every((r) => st(r) === 'done')) return { label: d.text.missing, ok: false, kind: 'blocked' };
     if (d.skill) {

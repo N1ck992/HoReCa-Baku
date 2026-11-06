@@ -52,8 +52,8 @@ AB.ENEMIES.push({
   immortal: true,
   asset: 'ASSET-ENEMY002-01',
   appearance: 'ASSET-ENEMY002-01',
-  // силуэт: рваный обгоревший комбинезон, лицо скрыто
-  look: { dark: '#0d0d0f', mid: '#1b1a1c', light: '#2a2725', hood: true, build: 1 },
+  // канон (docs/STORY.md §6): неизвестный человек в защитном костюме, лицо за щитком шлема
+  look: { dark: '#14161a', mid: '#2c3036', light: '#454a50', helmet: true, build: 1.04 },
   hp: 999,
   damage: 20,                     // по спутнице
   shove: 8,                       // по Марку, если тот встал на пути

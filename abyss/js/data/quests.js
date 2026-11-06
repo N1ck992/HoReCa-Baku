@@ -73,6 +73,12 @@ AB.QUESTS.push({
     { id: 'boss', objectives: [
       { id: 'boss', text: 'Победить Колосса', done: { enemyDead: 'ENEMY-003' }, target: { room: 'ROOM-009', x: 1250 } },
     ] },
+    { id: 'power', objectives: [
+      { id: 'power', text: 'Запустить основное питание (нужен инженер)', done: { equip: 'EQUIP-006', state: 'done' }, target: { equip: 'EQUIP-006' } },
+    ] },
+    { id: 'cams', objectives: [
+      { id: 'cams', text: 'Включить внешние камеры в шлюзе', done: { equip: 'EQUIP-007', state: 'done' }, target: { equip: 'EQUIP-007' } },
+    ] },
     { id: 'suit', objectives: [
       { id: 'suit', text: 'Осмотреть экзокостюм в шлюзе', done: { equip: 'EQUIP-005', state: 'inspected' }, target: { equip: 'EQUIP-005' } },
     ] },

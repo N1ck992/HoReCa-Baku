@@ -293,7 +293,7 @@ AB.ROOMS.push(
     connections: [{ door: 'west', to: 'ROOM-006', toDoor: 'east' }, { door: 'east', to: 'ROOM-010', toDoor: 'west' }],
     access: { type: 'open' },
     items: [{ key: 'meds-ls', item: 'ITEM-005', qty: 1, x: 420 }],
-    containers: [], enemies: ['ENEMY-003'], equipment: [],
+    containers: [], enemies: ['ENEMY-003'], equipment: ['EQUIP-006'],
     events: ['EVENT-009'], state: 'flooded', spawn: { x: 140 },
     doors: [
       { key: 'west', x: 70, to: 'ROOM-006', access: { type: 'open' } },
@@ -301,7 +301,7 @@ AB.ROOMS.push(
       { key: 'east', x: 1930, to: 'ROOM-010', access: { type: 'enemy', enemy: 'ENEMY-003', reason: 'Проход перекрыт: дорогу держит Колосс' } },
     ],
     props: [
-      { kind: 'bigtank', x: 640 }, { kind: 'bigtank', x: 1250, broken: true }, { kind: 'bigtank', x: 1700 },
+      { kind: 'bigtank', x: 640 }, { kind: 'powerpanel', x: 945, equip: 'EQUIP-006' }, { kind: 'bigtank', x: 1250, broken: true }, { kind: 'bigtank', x: 1700 },
     ],
     lights: [
       { x: 350, y: -400, color: [255, 40, 30], radius: 420, flicker: 0.15 },
@@ -317,13 +317,15 @@ AB.ROOMS.push(
     map: { x: 1690, y: 0, w: 150, h: 46 },
     connections: [{ door: 'west', to: 'ROOM-009', toDoor: 'east' }],
     access: { type: 'open' },
-    items: [], containers: [], enemies: [], equipment: ['EQUIP-005'],
+    items: [], containers: [], enemies: [], equipment: ['EQUIP-007', 'EQUIP-005'],
     events: ['EVENT-010'], state: 'ready', spawn: { x: 140 },
     doors: [
       { key: 'west', x: 70, to: 'ROOM-009', access: { type: 'open' } },
       { key: 'east', x: 1430, to: null, art: 'ASSET-ROOM010-03', access: { type: 'locked', reason: 'Внешний люк: только в экзокостюме' } },
     ],
     props: [
+      // пульт и экран внешних камер (EQUIP-007, EVENT-012)
+      { kind: 'window', x: 245, w: 210, top: -300, h: 120, camera: true }, { kind: 'console', x: 245 },
       // одна картинка ASSET-ROOM010-02: целый костюм и два разбитых (затемнены, без света визора)
       { kind: 'exorack', x: 480, broken: true, asset: 'ASSET-ROOM010-02', h: 300, dim: true },
       { kind: 'exorack', x: 980, asset: 'ASSET-ROOM010-02', h: 300, visor: [50, -246] },

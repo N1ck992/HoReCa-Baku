@@ -550,7 +550,7 @@ AB.Render = (() => {
     },
     // мостик: панорамный иллюминатор (рама и заслонки; вода за стеклом — в drawWindowView)
     window(p) {
-      const x = sx(p.x), w = p.w, top = sy(-340), h = 200;
+      const x = sx(p.x), w = p.w, top = sy(p.top ?? -340), h = p.h ?? 200;
       ctx.fillStyle = '#020405';
       ctx.fillRect(x - w / 2, top, w, h);
       p._win = { x: x - w / 2, y: top, w, h };
@@ -639,6 +639,25 @@ AB.Render = (() => {
       ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(x, b - 250, 30, 26, 0, 0, 7); ctx.fill();
       ctx.fillStyle = p.broken ? '#0b0c0d' : '#0a1418'; ctx.fillRect(x - 20, b - 258, 40, 12);
       p._visor = p.broken ? null : { x, y: b - 252 };
+    },
+
+    // отсек жизнеобеспечения: распределитель основного питания (EQUIP-006)
+    powerpanel(p) {
+      const x = sx(p.x), b = sy(0);
+      const on = AB.Equip.state(p.equip) === 'done';
+      ctx.fillStyle = '#17191c'; ctx.fillRect(x - 70, b - 250, 140, 220);
+      ctx.strokeStyle = '#2c3137'; ctx.lineWidth = 6; ctx.strokeRect(x - 70, b - 250, 140, 220);
+      ctx.fillStyle = '#0c0d0f'; ctx.fillRect(x - 56, b - 236, 112, 120);
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = '#24282d'; ctx.fillRect(x - 48 + i * 17, b - 226, 12, 40);
+        ctx.fillStyle = on ? 'rgba(80,220,140,.9)' : (i % 2 ? 'rgba(255,60,40,.85)' : 'rgba(60,20,20,.9)');
+        ctx.fillRect(x - 45 + i * 17, b - 180, 6, 5);
+      }
+      ctx.fillStyle = 'rgba(200,160,40,.35)';
+      for (let i = 0; i < 4; i++) ctx.fillRect(x - 56 + i * 32, b - 100, 18, 6);
+      // толстые кабели в пол
+      ctx.strokeStyle = '#111316'; ctx.lineWidth = 9;
+      for (const dx of [-40, -10, 22]) { ctx.beginPath(); ctx.moveTo(x + dx, b - 30); ctx.quadraticCurveTo(x + dx + 10, b - 8, x + dx + 40, b); ctx.stroke(); }
     },
 
     // склад: штабель контейнеров
@@ -946,7 +965,17 @@ AB.Render = (() => {
         ctx.fillStyle = look.hair;
         ctx.beginPath(); ctx.ellipse(-1, -22, 10.5, 6.5, -0.2, Math.PI, 0); ctx.fill();
       }
-      if (look.hood) {
+      if (look.helmet) {
+        // защитный шлем: купол, тёмный щиток, шланг дыхательной системы
+        ctx.fillStyle = look.light;
+        ctx.beginPath(); ctx.ellipse(1, -17, 12.5, 13.5, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = '#05080a';
+        ctx.beginPath(); ctx.ellipse(6, -17, 6.5, 8.5, 0, -Math.PI / 2, Math.PI / 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,170,80,.35)';
+        ctx.fillRect(7, -21, 3, 2);                     // отблеск на щитке
+        ctx.strokeStyle = look.dark; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-8, -8); ctx.quadraticCurveTo(-16, 2, -10, 12); ctx.stroke();
+      } else if (look.hood) {
         // капюшон: лица не видно, только темнота
         ctx.fillStyle = '#030303';
         ctx.beginPath(); ctx.ellipse(3, -15, 7.5, 9, 0, 0, 7); ctx.fill();
@@ -1728,7 +1757,8 @@ AB.Render = (() => {
         ctx.restore();
       }
       if (p.kind !== 'window' || !p._win) continue;
-      const open = AB.Story.isDone('EVENT-007') ? 1 : AB.Story.fx.window;
+      // окна и экраны внешних камер открываются в конце акта I (EVENT-012)
+      const open = AB.Story.isDone('EVENT-012') ? 1 : AB.Story.fx.window;
       const { x, y, w, h } = p._win;
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';

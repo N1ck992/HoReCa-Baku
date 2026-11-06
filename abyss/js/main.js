@@ -374,6 +374,7 @@
     const to = AB.ID.get(toId).name;
     toast(given && taken ? `Обмен с ${to}: ${itemName(given)} ⇄ ${itemName(taken)}` : given ? `${to} получает: ${itemName(given)}` : `Взято у ${to}: ${itemName(taken)}`, 'good');
   });
+  AB.Bus.on('item:given', ({ itemId, onFloor }) => setTimeout(() => toast(`Доктор Хейл: ${itemName(itemId)}${onFloor ? ' — рюкзак занят, оставлено рядом' : ' — в рюкзаке'}`, 'good'), 200));
   AB.Bus.on('npc:talk', ({ healed }) => { if (healed) toast('Доктор Хейл перевязал раны', 'good'); });
   // ---------- Конец акта ----------
   AB.Bus.on('act:end', ({ act }) => {

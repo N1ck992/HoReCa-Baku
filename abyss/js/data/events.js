@@ -95,6 +95,8 @@ AB.EVENTS.push(
 // Колосс, шлюз и экзокостюм.
 AB.EVENTS.push(
   {
+    // канон (docs/STORY.md §5, §7): врач добра к Марку, но видит, кто рядом с ним, —
+    // предупреждает и стреляет в спутницу транквилизатором. Марк считает это нападением.
     id: 'EVENT-006', name: 'Судовой врач', chapter: 1, room: 'ROOM-008',
     trigger: 'enter:ROOM-008', once: true,
     steps: [
@@ -103,19 +105,27 @@ AB.EVENTS.push(
       { at: 0.9, action: 'walk_to', char: 'CHAR-003', near: 'CHAR-001', gap: 190, speed: 70 },
       { at: 0.9, action: 'wait_arrive', char: 'CHAR-003' },
       { at: 0.9, action: 'face', char: 'CHAR-001', target: 'CHAR-003' },
+      { at: 0.9, action: 'face', char: 'CHAR-002', target: 'CHAR-003' },
       { at: 1.2, action: 'dialog', id: 'DIALOG-002' },
-      { at: 1.2, action: 'unlock_input' },
+      { at: 1.3, action: 'give_item', char: 'CHAR-001', item: 'ITEM-005', qty: 1 },
+      { at: 1.4, action: 'face', char: 'CHAR-003', target: 'CHAR-002' },
+      { at: 1.6, action: 'tranq', from: 'CHAR-003', to: 'CHAR-002' },
+      { at: 2.0, action: 'down', char: 'CHAR-002', on: true },
+      { at: 3.2, action: 'dialog', id: 'DIALOG-006' },
+      { at: 3.3, action: 'walk_to', char: 'CHAR-003', x: 1420, speed: 120 },
+      { at: 3.3, action: 'wait_arrive', char: 'CHAR-003' },
+      { at: 3.4, action: 'leave', char: 'CHAR-003' },
     ],
   },
   {
-    id: 'EVENT-007', name: 'Иллюминатор', chapter: 1, room: 'ROOM-008',
+    id: 'EVENT-007', name: 'Она очнулась', chapter: 1, room: 'ROOM-008',
     trigger: 'after:EVENT-006', once: true,
     steps: [
       { at: 0.0, action: 'lock_input' },
-      { at: 0.3, action: 'window', open: true },
-      { at: 2.0, action: 'leviathan' },
-      { at: 4.8, action: 'dialog', id: 'DIALOG-003' },
-      { at: 4.8, action: 'unlock_input' },
+      { at: 0.6, action: 'down', char: 'CHAR-002', on: false },
+      { at: 1.4, action: 'face', char: 'CHAR-001', target: 'CHAR-002' },
+      { at: 1.5, action: 'dialog', id: 'DIALOG-005' },
+      { at: 1.5, action: 'unlock_input' },
     ],
   },
   {
@@ -136,6 +146,26 @@ AB.EVENTS.push(
       { at: 0.4, action: 'flee', char: 'CHAR-002', on: true },
       { at: 0.6, action: 'enemy_state', enemy: 'ENEMY-003', state: 'ALERT' },
       { at: 0.8, action: 'hint', text: 'boss' },
+    ],
+  },
+  {
+    id: 'EVENT-011', name: 'Основное питание', chapter: 1, room: 'ROOM-009',
+    trigger: 'equip:EQUIP-006', once: true,
+    steps: [
+      { at: 0.0, action: 'flicker', duration: 1.4 },
+      { at: 0.0, action: 'shake', power: 3, duration: 1.2 },
+    ],
+  },
+  {
+    // первый большой поворот (docs/STORY.md §9): внешние камеры — корабль на дне океана
+    id: 'EVENT-012', name: 'Внешние камеры', chapter: 1, room: 'ROOM-010',
+    trigger: 'equip:EQUIP-007', once: true,
+    steps: [
+      { at: 0.0, action: 'lock_input' },
+      { at: 0.3, action: 'window', open: true },
+      { at: 2.0, action: 'leviathan' },
+      { at: 4.6, action: 'dialog', id: 'DIALOG-003' },
+      { at: 4.6, action: 'unlock_input' },
     ],
   },
   {
