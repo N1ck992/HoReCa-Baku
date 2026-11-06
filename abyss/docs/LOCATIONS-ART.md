@@ -590,6 +590,72 @@ Empty side-view background of the airlock and dive suit bay of a derelict ship o
 flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
+## Реквизит: криокапсулы, койки, двери
+
+Общее: **строго сбоку, без перспективы, однотонный зелёный фон `#00FF00`, без тени и пола**, ровный свет,
+стиль — как у присланных фонов (ржавый металл, грязь, водоросли). Детали, которые двигаются
+(крышка капсулы, створки двери), — **отдельными частями на одном листе с промежутками**.
+
+### Криокапсула — `ASSET-ROOM001-02` (медотсек, 3 шт.)
+
+В игре: высота ≈ 1,6 роста человека. Одна капсула — та, из которой выходит Марк (крышка открывается),
+вторая разбита, третья пустая и тёмная. Стекло крышки игра делает полупрозрачным.
+
+```
+Game asset sheet, strict side view, orthographic, three separate parts with empty space between them
+on flat solid pure green background #00FF00, no floor, no shadow, no text:
+1) an emergency cryo pod body standing upright: heavy rusty metal frame with hoses and cables at the
+base, small status display, the interior is an empty dark niche shaped for a lying-standing human,
+frost and grime on the edges;
+2) the matching curved glass lid alone: clear glass, frost at the edges, light reflections, thin
+metal rim with hinges at the top;
+3) the same glass lid shattered: cracked and broken glass with a hole in the middle, bent rim.
+Derelict deep-sea research ship, dark industrial sci-fi horror, muted palette with faint cyan light
+from the status display, high detail. Vertical image 1536x1536.
+```
+
+### Двухъярусная койка — `ASSET-ROOM002-02` (жилой сектор, 4 шт.)
+
+В игре: длина ≈ 2 роста человека, высота ≈ 1,6 роста.
+
+```
+Game asset, strict side view, orthographic: a steel double bunk bed of a derelict ship crew quarters,
+worn thin mattresses, crumpled dirty blankets hanging down, a pillow, a few personal things —
+a mug, a folded shirt, a small photo taped to the frame without readable text, rust on the frame,
+the bed has been lived in for years. Isolated on flat solid pure green background #00FF00,
+no floor, no shadow, no text, dark industrial sci-fi horror, muted palette, high detail.
+Horizontal image 2048x1024.
+```
+
+### Гермодверь — `ASSET-SHARED-01` (все помещения)
+
+В игре: проём ≈ 1,5 роста человека; створки разъезжаются в стороны, индикатор доступа (красный/зелёный)
+рисует игра. Нужны **рама и две створки отдельно**.
+
+```
+Game asset sheet, strict front view, orthographic, three separate parts with empty space between them
+on flat solid pure green background #00FF00, no floor, no shadow, no text:
+1) a heavy sliding bulkhead door frame of a derelict ship: thick riveted steel frame with yellow-black
+hazard stripes, small empty access panel on the right side, the opening inside the frame is filled
+with pure flat black #000000;
+2) the left door leaf alone: thick armored steel plate with ribs, rust and grime, hazard stripes along
+the inner edge;
+3) the right door leaf alone, mirrored.
+The two leaves together exactly fill the opening. Dark industrial sci-fi horror, muted palette, high detail.
+Horizontal image 2048x1024.
+```
+
+### По желанию: люк в полу и лестница (переходы между палубами)
+
+```
+Game asset sheet, strict side view, orthographic, separate parts on flat solid pure green background
+#00FF00, no shadow, no text: 1) a round steel floor hatch with a frame seen from the side (thin
+horizontal shape) and its lid opened upward on a hinge; 2) a rusty vertical maintenance ladder,
+long rails and rungs; 3) a small ceiling hatch frame seen from the side. Derelict ship, rust,
+grime, dark industrial sci-fi horror, muted palette, high detail. Horizontal image 2048x1024.
+```
+
+
 ## Отдельные предметы новых помещений
 
 | ID | Что | Промпт (на прозрачном или однотонном зелёном фоне) |

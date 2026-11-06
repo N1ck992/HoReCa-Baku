@@ -13,11 +13,8 @@ AB.Barks = (() => {
   let clock = 0, lastAny = -99, idleAt = 20, pending = [];
 
   const quiet = () => AB.Story.isRunning() || AB.Dialog.isOpen() || AB.Rooms.inTransition();
-  const fileOf = (id) => {
-    if (AB.BARKS[id]) return AB.BARKS[id];
-    const d = AB.ID.get(id);
-    return d && d.type === 'mutant' ? AB.BARKS.mutant : null;
-  };
+  // мутанты не говорят (дополнение №36): реплики только у тех, у кого есть свой файл
+  const fileOf = (id) => AB.BARKS[id] || null;
   // говорящий рядом: персонаж в текущем помещении, не спит, не погиб
   function present(id) {
     const room = AB.Rooms.current();
@@ -74,15 +71,11 @@ AB.Barks = (() => {
       seenRooms.add(room);
       groupSay(`enter:${room}`, { force: true });
     }
-    // долгая тишина: мысль или разговор; мутант бормочет, если рядом
+    // долгая тишина: мысль или разговор
     if (clock > idleAt && clock - lastAny > 14 && !AB.Enemies.inCombat()) {
       idleAt = clock + 16 + Math.random() * 16;
-      const near = AB.Enemies.inRoom(room).find((e) => AB.ID.get(e.id).type === 'mutant' && e.state !== 'DEAD' && ['IDLE', 'PATROL'].includes(e.state));
-      if (near && Math.random() < 0.35) say(near.id, 'idle');
-      else {
-        const members = AB.Party.members().slice().sort(() => Math.random() - 0.5);
-        for (const m of members) if (say(m.id, `idle:${room}`) || say(m.id, 'idle')) break;
-      }
+      const members = AB.Party.members().slice().sort(() => Math.random() - 0.5);
+      for (const m of members) if (say(m.id, `idle:${room}`) || say(m.id, 'idle')) break;
     }
   }
   let enteredAt = 0;
@@ -91,8 +84,6 @@ AB.Barks = (() => {
   AB.Bus.on('room:enter', () => { enteredAt = clock; bubbles.clear(); pending = []; });
   AB.Bus.on('enemy:state', ({ id, state }) => {
     if (state !== 'ALERT') return;
-    const d = AB.ID.get(id);
-    if (d.type === 'mutant') say(id, 'alert', { force: true });
     if (!groupSay(`alert:${id}`, { force: true })) groupSay('alert');
   });
   AB.Bus.on('enemy:appear', ({ id }) => {

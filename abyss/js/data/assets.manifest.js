@@ -52,6 +52,7 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ROOM002-01', owner: 'ROOM-002', type: 'background', src: 'assets/rooms/ROOM002-01.jpg', desc: 'Фон: жилой сектор' },
 
   // ---- ROOM-005: склад, ROOM-008: командный центр ----
+  { id: 'ASSET-ROOM002-02', owner: 'ROOM-002', type: 'prop', src: null, desc: 'Двухъярусная койка' },
   { id: 'ASSET-ROOM005-01', owner: 'ROOM-005', type: 'background', src: null, desc: 'Фон: склад' },
   { id: 'ASSET-ROOM008-01', owner: 'ROOM-008', type: 'background', src: null, desc: 'Фон: командный центр' },
 

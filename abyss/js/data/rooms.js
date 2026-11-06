@@ -163,9 +163,9 @@ AB.ROOMS.push({
     { key: 'hatch', kind: 'hatch', x: 1690, to: 'ROOM-012', access: { type: 'open' } },
   ],
   props: [
-    { kind: 'bunk', x: 420 }, { kind: 'locker', x: 560 },
-    { kind: 'bunk', x: 820 }, { kind: 'locker', x: 960 },
-    { kind: 'bunk', x: 1220 }, { kind: 'bunk', x: 1560 },
+    { kind: 'bunk', x: 420, assetSlot: 'ASSET-ROOM002-02' }, { kind: 'locker', x: 560 },
+    { kind: 'bunk', x: 820, assetSlot: 'ASSET-ROOM002-02' }, { kind: 'locker', x: 960 },
+    { kind: 'bunk', x: 1220, assetSlot: 'ASSET-ROOM002-02' }, { kind: 'bunk', x: 1560, assetSlot: 'ASSET-ROOM002-02' },
   ],
   lights: [
     { x: 260, y: -330, color: [255, 40, 30], radius: 380, flicker: 0.12 },
