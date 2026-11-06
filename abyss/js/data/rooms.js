@@ -280,7 +280,7 @@ AB.ROOMS.push(
       { key: 'east', x: 1130, to: 'ROOM-009', access: { type: 'open' } },
     ],
     props: [
-      { kind: 'rack', x: 380 }, { kind: 'cabinet', x: 640, asset: 'ASSET-ROOM006-01', container: 'gun-locker' }, { kind: 'rack', x: 880 },
+      { kind: 'rack', x: 380 }, { kind: 'cabinet', x: 640, asset: 'ASSET-ROOM006-02', assetOpen: 'ASSET-ROOM006-03', h: 200, container: 'gun-locker' }, { kind: 'rack', x: 880 },
     ],
     lights: [{ x: 600, y: -330, color: [255, 40, 30], radius: 420, flicker: 0.05 }],
     fx: { steam: [], sparks: [], drips: [300] },
@@ -321,14 +321,18 @@ AB.ROOMS.push(
     events: ['EVENT-010'], state: 'ready', spawn: { x: 140 },
     doors: [
       { key: 'west', x: 70, to: 'ROOM-009', access: { type: 'open' } },
-      { key: 'east', x: 1430, to: null, access: { type: 'locked', reason: 'Внешний люк: только в экзокостюме' } },
+      { key: 'east', x: 1430, to: null, art: 'ASSET-ROOM010-03', access: { type: 'locked', reason: 'Внешний люк: только в экзокостюме' } },
     ],
     props: [
-      { kind: 'exorack', x: 560, broken: true }, { kind: 'exorack', x: 980 }, { kind: 'exorack', x: 1220, broken: true },
+      // одна картинка ASSET-ROOM010-02: целый костюм и два разбитых (затемнены, без света визора)
+      { kind: 'exorack', x: 480, broken: true, asset: 'ASSET-ROOM010-02', h: 300, dim: true },
+      { kind: 'exorack', x: 980, asset: 'ASSET-ROOM010-02', h: 300, visor: [50, -246] },
+      { kind: 'exorack', x: 730, broken: true, asset: 'ASSET-ROOM010-02', h: 300, dim: true },
     ],
     lights: [
       { x: 400, y: -380, color: [255, 40, 30], radius: 420, flicker: 0.05 },
       { x: 1000, y: -380, color: [255, 40, 30], radius: 460, flicker: 0.05 },
+      { x: 1370, y: -300, color: [255, 40, 30], radius: 300, flicker: 0.03 },   // над внешним люком
     ],
     fx: { steam: [1300], sparks: [], drips: [] },
   },

@@ -383,10 +383,17 @@ AB.Render = (() => {
   // ---------- Реквизит ----------
   function drawProps(r) {
     for (const p of r.props) {
-      const asset = AB.Assets.get(p.asset);
+      // картинка из манифеста: открытый вариант после обыска, высота в единицах игры (h)
+      const opened = p.assetOpen && p.container && AB.Rooms.isSearched(r.id, p.container);
+      let asset = AB.Assets.get(opened ? p.assetOpen : p.asset);
+      if (opened && asset.status !== 'ready') asset = AB.Assets.get(p.asset);
       if (asset.status === 'ready') {
-        const w = asset.img.width / 4, h = asset.img.height / 4;
-        ctx.drawImage(asset.img, sx(p.x) - w / 2, sy(p.y || 0) - h, w, h);
+        const h = p.h || asset.img.height / 4, w = asset.img.width * (h / asset.img.height);
+        const x = sx(p.x), b = sy(p.y || 0);
+        if (p.dim) { ctx.save(); ctx.filter = 'brightness(0.42) saturate(0.35)'; }
+        ctx.drawImage(asset.img, x - w / 2, b - h, w, h);
+        if (p.dim) ctx.restore();
+        p._visor = p.visor ? { x: x + p.visor[0], y: b + p.visor[1] } : null;
         continue;
       }
       const fn = PROPS[p.kind];
@@ -703,6 +710,15 @@ AB.Render = (() => {
       const open = AB.Rooms.doorOpen(`${r.id}:${d.key}`);
       const locked = !AB.Rooms.canPass(d).ok;
       const near = hero && Math.abs(hero.x - d.x) < 80;
+      // своя картинка двери (внешний люк шлюза)
+      const art = d.art && AB.Assets.get(d.art);
+      if (art && art.status === 'ready') {
+        const h = 230, w = art.img.width * (h / art.img.height);
+        const cx = x - (d.x > r.width / 2 ? 24 : -24);
+        ctx.drawImage(art.img, cx - w / 2, b - h, w, h);
+        d._light = { x: cx - (d.x > r.width / 2 ? w / 2 + 8 : -w / 2 - 8), y: b - 150, locked, near };
+        continue;
+      }
       // проём
       ctx.fillStyle = '#030304';
       ctx.fillRect(x - 46, b - 190, 92, 190);

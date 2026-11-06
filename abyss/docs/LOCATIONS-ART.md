@@ -485,7 +485,7 @@ flat back wall only, strict side view, orthographic, no perspective, no furnitur
 | 140 | гермодверь из лаборатории | отдельно: ASSET-SHARED-01 |
 | 760 | оружейная стойка (пустая) | пока рисует игра |
 | 1200 | лампа | корпус в фоне |
-| 1280 | **шкаф с оружием** | отдельно: ASSET-ROOM006-01 — закрытый и открытый варианты |
+| 1280 | **шкаф с оружием** | **получено**: ASSET-ROOM006-02 (закрыт), ASSET-ROOM006-03 (открыт) |
 | 1760 | оружейная стойка (пустая) | пока рисует игра |
 | 2260 | гермодверь в систему жизнеобеспечения | отдельно: ASSET-SHARED-01 |
 
@@ -569,11 +569,11 @@ flat back wall only, strict side view, orthographic, no perspective, no furnitur
 |---|---|---|
 | 140 | гермодверь из системы жизнеобеспечения | отдельно: ASSET-SHARED-01 |
 | 800 | лампа | корпус в фоне |
-| 1120 | стойка с разбитым экзокостюмом | пока рисует игра |
+| 960 | стойка с разбитым экзокостюмом | ASSET-ROOM010-02, затемнён |
 | 1960 | стойка с **целым экзокостюмом** | отдельно: ASSET-ROOM010-02 |
 | 2000 | лампа | корпус в фоне |
-| 2440 | стойка с разбитым экзокостюмом | пока рисует игра |
-| 2860 | **внешний люк** — круглый, массивный, со штурвалом | отдельно: ASSET-SHARED-01 (или свой вариант позже) |
+| 1460 | стойка с разбитым экзокостюмом | ASSET-ROOM010-02, затемнён |
+| 2860 | **внешний люк** — круглый, массивный, со штурвалом | **получено**: ASSET-ROOM010-03 |
 
 ### Что на стенах (для фона)
 
@@ -601,9 +601,9 @@ flat back wall only, strict side view, orthographic, no perspective, no furnitur
 
 | ID | Что | Промпт (на прозрачном или однотонном зелёном фоне) |
 |---|---|---|
-| `ASSET-ROOM006-01` | Шкаф с оружием, **два варианта: закрытый и открытый пустой** | `Heavy armored weapon locker of a derelict sci-fi ship, strict side view, orthographic, scratched dark metal, yellow-black hazard stripes, keypad lock without text, {закрытый: doors closed / открытый: doors open, empty inside with weapon mounts}, isolated on flat green background, no text, game asset` |
-| `ASSET-ROOM010-02` | Целый экзокостюм в стойке | `Massive deep-sea mechanized exosuit standing in a maintenance gantry, heavy armored powered suit like a walking diving bell with a round armored helmet and narrow glowing visor slit, thick hydraulic arms and legs, oxygen tanks and reactor pack on the back, scratched industrial yellow-grey paint, strict side view facing right, orthographic, isolated on flat green background, no text, game asset` |
-| `ASSET-SHARED-01` | Внешний люк шлюза (вариант гермодвери) | `Huge round pressure hatch of a submarine airlock with a central wheel, massive hinges and bolts, salt crust, strict front view, isolated on flat green background, no text, game asset` |
+| `ASSET-ROOM006-02`, `-03` (получено) | Шкаф с оружием, **два варианта: закрытый и открытый пустой** | `Heavy armored weapon locker of a derelict sci-fi ship, strict side view, orthographic, scratched dark metal, yellow-black hazard stripes, keypad lock without text, {закрытый: doors closed / открытый: doors open, empty inside with weapon mounts}, isolated on flat green background, no text, game asset` |
+| `ASSET-ROOM010-02` (получено) | Целый экзокостюм в стойке | `Massive deep-sea mechanized exosuit standing in a maintenance gantry, heavy armored powered suit like a walking diving bell with a round armored helmet and narrow glowing visor slit, thick hydraulic arms and legs, oxygen tanks and reactor pack on the back, scratched industrial yellow-grey paint, strict side view facing right, orthographic, isolated on flat green background, no text, game asset` |
+| `ASSET-ROOM010-03` (получено) | Внешний люк шлюза | `Huge round pressure hatch of a submarine airlock with a central wheel, massive hinges and bolts, salt crust, strict front view, isolated on flat green background, no text, game asset` |
 
 ## Если генератор не умеет такие широкие картинки
 

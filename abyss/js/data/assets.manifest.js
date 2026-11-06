@@ -29,7 +29,10 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ROOM007-01', owner: 'ROOM-007', type: 'background', src: null, desc: 'Фон: лаборатория' },
   { id: 'ASSET-ROOM009-01', owner: 'ROOM-009', type: 'background', src: null, desc: 'Фон: система жизнеобеспечения' },
   { id: 'ASSET-ROOM010-01', owner: 'ROOM-010', type: 'background', src: null, desc: 'Фон: шлюз' },
-  { id: 'ASSET-ROOM010-02', owner: 'EQUIP-005', type: 'prop', src: null, desc: 'Экзокостюм' },
+  { id: 'ASSET-ROOM010-02', owner: 'EQUIP-005', type: 'prop', src: 'assets/props/exosuit-rack.png', desc: 'Экзокостюм в стойке (вырезан из assets/source/ACT1-PROPS-01.png)' },
+  { id: 'ASSET-ROOM010-03', owner: 'ROOM-010', type: 'prop', src: 'assets/props/outer-hatch.png', desc: 'Внешний люк шлюза' },
+  { id: 'ASSET-ROOM006-02', owner: 'ROOM-006', type: 'prop', src: 'assets/props/locker-closed.png', desc: 'Шкаф с оружием, закрыт' },
+  { id: 'ASSET-ROOM006-03', owner: 'ROOM-006', type: 'prop', src: 'assets/props/locker-open.png', desc: 'Шкаф с оружием, открыт и пуст' },
 
   // ---- ROOM-001: медицинский отсек ----
   { id: 'ASSET-ROOM001-01', owner: 'ROOM-001', type: 'background', src: null, desc: 'Фон: стены и пол медотсека' },
