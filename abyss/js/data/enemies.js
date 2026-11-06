@@ -36,7 +36,7 @@ AB.ENEMIES = [
       death: 'ANIM-ENEMY001-07',
     },
     // Каждый персонаж несёт одну вещь (видна над головой по нажатию); после гибели выпадает
-    carry: 'ITEM-010',
+    carry: null,                    // ключ-карта теперь у Миры (дополнение №37)
     // Условия появления
     spawn: { room: 'ROOM-011', x: 1650, patrol: [1250, 2000], requires: [] },
   },
@@ -79,6 +79,8 @@ AB.ENEMIES.push(
   { ...MUTANT, id: 'ENEMY-004', carry: null, spawn: { room: 'ROOM-007', x: 900, patrol: [700, 1150], requires: [] } },
   // тоннель под палубой (ROOM-012): затаился в темноте
   { ...MUTANT, id: 'ENEMY-006', carry: null, spawn: { room: 'ROOM-012', x: 1300, patrol: [900, 1550], requires: [] } },
+  // гидропоника (ROOM-013): кормится у баков с водорослями
+  { ...MUTANT, id: 'ENEMY-007', carry: null, spawn: { room: 'ROOM-013', x: 900, patrol: [500, 1350], requires: [] } },
   { ...MUTANT, id: 'ENEMY-005', carry: null, spawn: { room: 'ROOM-007', x: 1500, patrol: [1350, 1750], requires: [] } },
 );
 

@@ -683,6 +683,68 @@ AB.Render = (() => {
       p._visor = p.broken ? null : { x, y: b - 252 };
     },
 
+    // жилой сектор: дверь каюты Миры (EQUIP-008) — вмятая, заклинившая; после вскрытия открыта
+    cabindoor(p) {
+      const x = sx(p.x), b = sy(0);
+      const open = AB.Equip.state(p.equip) === 'done';
+      ctx.fillStyle = '#060708'; ctx.fillRect(x - 40, b - 200, 80, 200);
+      ctx.strokeStyle = '#33383e'; ctx.lineWidth = 6; ctx.strokeRect(x - 43, b - 203, 86, 203);
+      if (open) {
+        ctx.fillStyle = '#272b30'; ctx.fillRect(x + 30, b - 196, 12, 196);   // створка уехала в стену
+      } else {
+        ctx.fillStyle = '#2a2e33'; ctx.fillRect(x - 40, b - 200, 80, 200);
+        ctx.fillStyle = '#1c1f23';
+        ctx.beginPath(); ctx.moveTo(x - 10, b - 120); ctx.lineTo(x + 18, b - 132); ctx.lineTo(x + 8, b - 96); ctx.lineTo(x - 16, b - 92); ctx.fill();   // вмятина
+        ctx.fillStyle = 'rgba(200,160,40,.25)'; for (let i = 0; i < 5; i++) ctx.fillRect(x - 34, b - 180 + i * 34, 68, 5);
+        ctx.fillStyle = '#ff3a2a'; ctx.fillRect(x + 48, b - 120, 5, 5);     // замок мигает красным
+      }
+      ctx.fillStyle = 'rgba(220,215,200,.35)'; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.fillText('Б-14', x, b - 210);
+    },
+    // генераторная: горловина топливного бака (EQUIP-010)
+    fueltank(p) {
+      const x = sx(p.x), b = sy(0);
+      const full = AB.Equip.state(p.equip) === 'done';
+      ctx.fillStyle = '#1d2024'; ctx.fillRect(x - 34, b - 120, 68, 120);
+      ctx.strokeStyle = '#2f3439'; ctx.lineWidth = 4; ctx.strokeRect(x - 34, b - 120, 68, 120);
+      ctx.fillStyle = 'rgba(200,160,40,.35)'; ctx.fillRect(x - 34, b - 70, 68, 8);
+      ctx.fillStyle = '#2a2e33'; ctx.fillRect(x - 10, b - 136, 20, 18);     // горловина
+      ctx.fillStyle = '#0b0c0d'; ctx.fillRect(x - 24, b - 108, 12, 70);    // шкала
+      ctx.fillStyle = full ? '#6fd08c' : '#802a20'; ctx.fillRect(x - 22, b - 40 - (full ? 64 : 6), 8, full ? 64 : 6);
+    },
+    // гидропоника: бак с водорослями — светится зелёным даже без питания
+    algaetank(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#16191b'; ctx.fillRect(x - 56, b - 26, 112, 26); ctx.fillRect(x - 56, b - 250, 112, 16);
+      if (!p.broken) {
+        const g = ctx.createLinearGradient(0, b - 234, 0, b - 26);
+        g.addColorStop(0, 'rgba(70,170,100,.30)'); g.addColorStop(1, 'rgba(40,120,70,.55)');
+        ctx.fillStyle = g; ctx.fillRect(x - 48, b - 234, 96, 208);
+        ctx.strokeStyle = 'rgba(120,220,140,.45)'; ctx.lineWidth = 2;
+        for (let i = 0; i < 7; i++) {
+          const ax = x - 40 + i * 13;
+          ctx.beginPath(); ctx.moveTo(ax, b - 26);
+          ctx.quadraticCurveTo(ax + Math.sin(time * 0.8 + i) * 10, b - 120, ax + Math.sin(time * 0.6 + i * 2) * 6, b - 200 - (i % 3) * 12); ctx.stroke();
+        }
+      } else {
+        ctx.strokeStyle = 'rgba(180,220,200,.25)'; ctx.lineWidth = 1.2;
+        for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.moveTo(x - 48 + i * 18, b - 26); ctx.lineTo(x - 44 + i * 16, b - 90 - (i % 3) * 30); ctx.stroke(); }
+        ctx.fillStyle = 'rgba(60,120,70,.45)'; ctx.beginPath(); ctx.ellipse(x + 30, b, 90, 6, 0, 0, 7); ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(200,230,210,.18)'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 48, b - 234, 96, 208);
+    },
+    // гидропоника: ферма — стеллаж лотков с водорослями (EQUIP-009)
+    algaefarm(p) {
+      const x = sx(p.x), b = sy(0);
+      ctx.fillStyle = '#15181a'; ctx.fillRect(x - 110, b - 230, 220, 230);
+      for (let i = 0; i < 4; i++) {
+        const y = b - 210 + i * 52;
+        ctx.fillStyle = '#23272b'; ctx.fillRect(x - 104, y + 34, 208, 6);
+        ctx.fillStyle = `rgba(80,${190 + (i % 2) * 20},110,${0.55 + Math.sin(time * 1.3 + i) * 0.08})`;
+        ctx.fillRect(x - 100, y + 18, 200, 16);
+        for (let k = 0; k < 9; k++) { ctx.fillRect(x - 96 + k * 23, y + 6 + Math.sin(time + k + i) * 2, 3, 14); }
+      }
+    },
+
     // отсек жизнеобеспечения: распределитель основного питания (EQUIP-006)
     powerpanel(p) {
       const x = sx(p.x), b = sy(0);

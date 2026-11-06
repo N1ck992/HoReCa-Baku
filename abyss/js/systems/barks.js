@@ -99,6 +99,10 @@ AB.Barks = (() => {
   });
   let healAt = -99;
   AB.Bus.on('aura:heal', ({ charId }) => { if (clock - healAt > 30 && say(charId, 'heal')) healAt = clock; });
+  AB.Bus.on('item:used', ({ charId, itemId }) => {
+    const d = AB.ID.get(itemId);
+    if (d && d.use && d.use.algae) setTimeout(() => say(charId, 'algae', { force: true }), 400);
+  });
   AB.Bus.on('party:leader', ({ id }) => setTimeout(() => say(id, 'lead', { force: true }), 300));
   AB.Bus.on('item:pickup', ({ charId, itemId, added }) => { if (added) setTimeout(() => say(charId, `pickup:${itemId}`, { force: true }), 500); });
   AB.Bus.on('log:found', ({ id }) => {

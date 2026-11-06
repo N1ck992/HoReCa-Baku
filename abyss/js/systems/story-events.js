@@ -130,6 +130,7 @@ AB.Story = (() => {
   function trigger(kind) {
     for (const def of AB.EVENTS) {
       if (def.trigger !== kind || (def.once && done.has(def.id))) continue;
+      if (def.needs === 'power' && !AB.World.hasPower()) continue;
       if (running) { if (running.def.id !== def.id && !queue.includes(def.id)) queue.push(def.id); }
       else start(def.id);
       return;

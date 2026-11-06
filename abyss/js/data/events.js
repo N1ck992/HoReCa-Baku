@@ -40,28 +40,32 @@ AB.EVENTS.push(
     ],
   },
   {
-    id: 'EVENT-003',
-    name: 'Встреча',
-    chapter: 1,
-    room: 'ROOM-002',
-    trigger: 'enter:ROOM-002',
-    once: true,
+    // дополнение №37: голос за заклинившей дверью каюты — ещё в темноте, до ремонта генератора
+    id: 'EVENT-014', name: 'Голос за дверью', chapter: 1, room: 'ROOM-002',
+    trigger: 'enter:ROOM-002', once: true,
     steps: [
       { at: 0.0, action: 'lock_input' },
-      { at: 0.0, action: 'spawn', char: 'CHAR-002', room: 'ROOM-002', x: 440, facing: -1 },
-      { at: 0.0, action: 'give_item', char: 'CHAR-002', item: 'ITEM-012', qty: 1, silent: true },
-      { at: 0.3, action: 'walk_to', char: 'CHAR-002', near: 'CHAR-001', gap: 140, speed: 120 },
-      { at: 0.3, action: 'wait_arrive', char: 'CHAR-002' },
-      { at: 0.3, action: 'face', char: 'CHAR-001', target: 'CHAR-002' },
-      { at: 0.4, action: 'dialog', id: 'DIALOG-001' },
-      { at: 1.9, action: 'follow', char: 'CHAR-002', leader: 'CHAR-001' },
-      { at: 1.9, action: 'unlock_input' },
+      { at: 0.6, action: 'shake', power: 1.5, duration: 0.6 },
+      { at: 0.8, action: 'dialog', id: 'DIALOG-008' },
+      { at: 0.8, action: 'unlock_input' },
     ],
   },
-);
-
-// EVENT-004 и EVENT-005 утверждены (дополнение №18): сначала намёк, потом нападение.
-AB.EVENTS.push(
+  {
+    // Марк вскрыл дверь каюты — Мира. Она знает код от генераторной.
+    id: 'EVENT-003', name: 'Встреча', chapter: 1, room: 'ROOM-002',
+    trigger: 'equip:EQUIP-008', once: true,
+    steps: [
+      { at: 0.0, action: 'lock_input' },
+      { at: 0.1, action: 'spawn', char: 'CHAR-002', room: 'ROOM-002', x: 1100, facing: -1 },
+      { at: 0.1, action: 'give_item', char: 'CHAR-002', item: 'ITEM-012', qty: 1, silent: true },
+      { at: 0.4, action: 'walk_to', char: 'CHAR-002', near: 'CHAR-001', gap: 110, speed: 90 },
+      { at: 0.4, action: 'wait_arrive', char: 'CHAR-002' },
+      { at: 0.4, action: 'face', char: 'CHAR-001', target: 'CHAR-002' },
+      { at: 0.5, action: 'dialog', id: 'DIALOG-001' },
+      { at: 0.6, action: 'follow', char: 'CHAR-002', leader: 'CHAR-001' },
+      { at: 0.6, action: 'unlock_input' },
+    ],
+  },
   {
     id: 'EVENT-004',
     name: 'Кто-то в темноте',
@@ -82,6 +86,7 @@ AB.EVENTS.push(
     chapter: 1,
     room: 'ROOM-005',
     trigger: 'zone:ROOM-005:1050',   // когда Марк проходит середину склада
+    needs: 'power',                  // только когда на корабле есть свет (дополнение №37)
     once: true,
     steps: [
       { at: 0.0, action: 'flicker', duration: 1.2 },

@@ -37,6 +37,10 @@ AB.Equip = (() => {
   function action(id, charId) {
     const d = def(id), s = st(id);
     if (d.info) return { label: AB.World.hasPower() ? d.text.on : d.text.off, ok: true, kind: 'info' };
+    if (d.gives) {
+      const p = AB.Inventory.pack(charId);
+      return p ? { label: d.text.full, ok: false, kind: 'blocked' } : { label: d.text.ready, ok: true, time: d.time, kind: 'work' };
+    }
     if (s === 'done') return { label: d.text.done, ok: false, kind: 'done' };
     if (d.after && !d.after.every((r) => st(r) === 'done')) return { label: d.text.after || d.text.missing, ok: false, kind: 'blocked' };
     if (d.enemyDead && !AB.Enemies.isDead(d.enemyDead)) return { label: d.text.missing, ok: false, kind: 'blocked' };
@@ -58,6 +62,11 @@ AB.Equip = (() => {
     const d = def(id), a = action(id, charId);
     if (!a.ok) return a;
     if (a.kind === 'info') { AB.Bus.emit('equip:info', { id, text: a.label }); return a; }
+    if (d.gives) {
+      AB.Inventory.add(charId, d.gives, 1, { swap: false });
+      AB.Bus.emit('equip:info', { id, text: d.text.gave });
+      return a;
+    }
     if (a.kind === 'inspect') {
       state.set(id, 'inspected');
       AB.Bus.emit('equip:changed', { id, state: 'inspected', text: d.inspect });

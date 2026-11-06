@@ -604,7 +604,10 @@
   AB.Bus.on('equip:changed', ({ text }) => { toast(text, 'good'); AB.Save.save(); });
   AB.Bus.on('equip:blocked', ({ text }) => toast(text, 'info'));
   AB.Bus.on('equip:info', ({ text }) => toast(text, 'info'));
-  AB.Bus.on('door:unlocked', () => toast('Ключ-карта подошла: дверь открыта', 'good'));
+  AB.Bus.on('door:unlocked', ({ roomId, door }) => {
+    const d = (AB.ID.get(roomId).doors || []).find((q) => q.key === door);
+    toast(d && d.access.lever ? 'Люк поддался рычагу' : 'Ключ-карта подошла: дверь открыта', 'good');
+  });
   AB.Bus.on('world:power', ({ on }) => {
     if (!on) return;
     AB.Story.fx.alarm = false;   // тревога стихает, включается рабочий свет

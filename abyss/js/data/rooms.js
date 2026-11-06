@@ -27,7 +27,7 @@ AB.ROOMS = [
     ],
     map: { x: 0, y: 0, w: 150, h: 46 },   // положение на карте корабля
     containers: [
-      { key: 'cabinet', x: 1200, prop: 'cabinet', label: 'Медицинский шкаф', loot: [['ITEM-005', 2], ['ITEM-003', 1]] },
+      { key: 'cabinet', x: 1200, prop: 'cabinet', label: 'Медицинский шкаф', loot: [['ITEM-005', 2]] },
     ],
     enemies: [],      // этап 5
     equipment: [],    // этап 6+
@@ -79,10 +79,10 @@ AB.ROOMS = [
     spawn: { x: 120 },
     doors: [
       { key: 'west', x: 70, to: 'ROOM-001', access: { type: 'open' } },
-      // Дверь в энергетический отсек открывается ключ-картой, которую несёт мутант (ENEMY-001)
-      { key: 'east', x: 2530, to: 'ROOM-003', access: { type: 'key', item: 'ITEM-010', reason: 'Нужна ключ-карта' } },
+      // Дверь в генераторную — кодовый замок; код знает Мира (дополнение №37)
+      { key: 'east', x: 2530, to: 'ROOM-003', access: { type: 'event', event: 'EVENT-003', reason: 'Кодовый замок: нужен код доступа' } },
       // люк в полу: технический тоннель под палубой (дополнение №35)
-      { key: 'hatch', kind: 'hatch', x: 1150, to: 'ROOM-012', access: { type: 'power', reason: 'Люк заклинило: без питания гидравлика не работает' } },
+      { key: 'hatch', kind: 'hatch', x: 1150, to: 'ROOM-012', access: { type: 'key', item: 'ITEM-009', reason: 'Люк заклинило: нужен рычаг — что-нибудь тяжёлое', lever: true } },
     ],
     props: [],
     lights: [
@@ -116,7 +116,7 @@ AB.ROOMS.push({
   items: [],
   containers: [],
   enemies: [],
-  equipment: ['EQUIP-001', 'EQUIP-002', 'EQUIP-003', 'EQUIP-004'],
+  equipment: ['EQUIP-001', 'EQUIP-010', 'EQUIP-002', 'EQUIP-003', 'EQUIP-004'],
   events: [],
   state: 'emergency_power',
   spawn: { x: 116 },
@@ -125,7 +125,7 @@ AB.ROOMS.push({
     // в жилой сектор: дверь оживает, когда есть питание (после QUEST-001)
     { key: 'east', x: 1163, to: 'ROOM-002', access: { type: 'power', reason: 'Нет питания' } },
   ],
-  props: [],
+  props: [{ kind: 'fueltank', x: 372, equip: 'EQUIP-010' }],
   lights: [
     { x: 268, y: -276, color: [255, 40, 30], radius: 400, flicker: 0.15 },
     { x: 614, y: -276, color: [255, 40, 30], radius: 440, flicker: 0.25 },
@@ -151,13 +151,13 @@ AB.ROOMS.push({
   items: [],
   containers: [],
   enemies: [],
-  equipment: [],
-  events: ['EVENT-003'],
+  equipment: ['EQUIP-008'],
+  events: ['EVENT-014', 'EVENT-003'],
   state: 'dark',
   spawn: { x: 140 },
   doors: [
-    { key: 'west', x: 70, to: 'ROOM-003', access: { type: 'open' } },
-    // открывается после встречи со спутницей (EVENT-003)
+    { key: 'west', x: 70, to: 'ROOM-003', access: { type: 'power', reason: 'Дверь обесточена' } },
+    // открывается после встречи с Мирой (EVENT-003)
     { key: 'east', x: 1830, to: 'ROOM-005', access: { type: 'event', event: 'EVENT-003', reason: 'Заблокировано' } },
     // люк в полу в технический тоннель (ROOM-012)
     { key: 'hatch', kind: 'hatch', x: 1690, to: 'ROOM-012', access: { type: 'open' } },
@@ -165,7 +165,8 @@ AB.ROOMS.push({
   props: [
     { kind: 'bunk', x: 420, assetSlot: 'ASSET-ROOM002-02' }, { kind: 'locker', x: 560 },
     { kind: 'bunk', x: 820, assetSlot: 'ASSET-ROOM002-02' }, { kind: 'locker', x: 960 },
-    { kind: 'bunk', x: 1220, assetSlot: 'ASSET-ROOM002-02' }, { kind: 'bunk', x: 1560, assetSlot: 'ASSET-ROOM002-02' },
+    { kind: 'cabindoor', x: 1100, equip: 'EQUIP-008' },
+    { kind: 'bunk', x: 1290, assetSlot: 'ASSET-ROOM002-02' }, { kind: 'bunk', x: 1560, assetSlot: 'ASSET-ROOM002-02' },
   ],
   lights: [
     { x: 260, y: -330, color: [255, 40, 30], radius: 380, flicker: 0.12 },
@@ -185,15 +186,17 @@ AB.ROOMS.push({
   background: 'ASSET-ROOM005-01',
   theme: 'storage',
   map: { x: 770, y: 4, w: 210, h: 38 },
-  connections: [{ door: 'west', to: 'ROOM-002', toDoor: 'east' }, { door: 'east', to: 'ROOM-008', toDoor: 'west' }],
+  connections: [{ door: 'west', to: 'ROOM-002', toDoor: 'east' }, { door: 'east', to: 'ROOM-008', toDoor: 'west' }, { door: 'hatch', to: 'ROOM-013', toDoor: 'up' }],
   access: { type: 'open' },
-  items: [], containers: [], enemies: [], equipment: [],
+  items: [{ key: 'fuel', item: 'ITEM-006', qty: 1, x: 1100 }], containers: [], enemies: [], equipment: [],
   events: ['EVENT-004', 'EVENT-005'],
   state: 'damaged',
   spawn: { x: 140 },
   doors: [
     { key: 'west', x: 70, to: 'ROOM-002', access: { type: 'open' } },
-    { key: 'east', x: 2030, to: 'ROOM-008', access: { type: 'open' } },
+    { key: 'east', x: 2030, to: 'ROOM-008', access: { type: 'power', reason: 'Переборка обесточена' } },
+    // грузовой люк вниз — гидропоника (ROOM-013)
+    { key: 'hatch', kind: 'hatch', x: 1880, to: 'ROOM-013', access: { type: 'open' } },
   ],
   props: [
     { kind: 'crates', x: 380 }, { kind: 'locker', x: 640 }, { kind: 'crates', x: 900 },
@@ -373,6 +376,30 @@ AB.ROOMS.push({
     { x: 1240, y: -190, color: [255, 40, 30], radius: 250, flicker: 0.2 },
   ],
   fx: { steam: [760], sparks: [], drips: [300, 900, 1480] },
+});
+
+// ROOM-013 — гидропоника (дополнение №37): продовольственный отсек, где выжившие выращивали
+// водоросли. Баки светятся — единственный свет на корабле без питания. Вход — люк со склада.
+AB.ROOMS.push({
+  id: 'ROOM-013', name: 'Гидропоника', desc: 'Продовольственный отсек: баки с водорослями светятся в темноте.',
+  width: 1900, height: 330, background: 'ASSET-ROOM013-01', theme: 'hydroponics',
+  connections: [{ door: 'up', to: 'ROOM-005', toDoor: 'hatch' }],
+  access: { type: 'open' },
+  map: { x: 760, y: 80, w: 240, h: 22 },
+  items: [{ key: 'wires', item: 'ITEM-003', qty: 1, x: 260 }],
+  containers: [], enemies: ['ENEMY-007'], equipment: ['EQUIP-009'], events: [], state: 'flooded', spawn: { x: 1700 },
+  doors: [{ key: 'up', kind: 'ladder', x: 1790, to: 'ROOM-005', access: { type: 'open' } }],
+  props: [
+    { kind: 'algaetank', x: 480 }, { kind: 'algaetank', x: 760, broken: true },
+    { kind: 'algaefarm', x: 1040, equip: 'EQUIP-009' },
+    { kind: 'algaetank', x: 1320 }, { kind: 'algaetank', x: 1560 },
+  ],
+  lights: [
+    { x: 480, y: -200, color: [90, 230, 130], radius: 300, flicker: 0.04, source: true },
+    { x: 1040, y: -200, color: [90, 230, 130], radius: 340, flicker: 0.04, source: true },
+    { x: 1440, y: -200, color: [90, 230, 130], radius: 300, flicker: 0.04, source: true },
+  ],
+  fx: { steam: [1200], sparks: [], drips: [600, 1500] },
 });
 
 AB.ROOMS.forEach((r) => AB.ID.register(r.id, r));
