@@ -75,10 +75,32 @@ AB.Party = (() => {
     return def.type === 'pursuer' ? PURSUING.includes(e.state) : FIGHTING.includes(e.state);
   }
 
+  // Автобой (дополнение №35): ведущий сам бьёт или стреляет, когда враг в досягаемости.
+  // Игрок только двигается; если уходит от врага — ведущий не оборачивается.
+  let autoFight = true;
+  try { autoFight = localStorage.getItem('abyss_autofight') !== 'off'; } catch (e) { /* хранилище недоступно */ }
+  function leaderAuto(l) {
+    if (!autoFight || !l.controllable || l.dead || l.down || AB.Combat.isSwinging(l.id) || AB.Input.isLocked()) return;
+    const w = AB.Combat.weaponOf(l.id);
+    if (!w) return;
+    const ht = AB.Inventory.heat(l.id);
+    const shoot = w.weapon.ranged && (w.weapon.infinite || (ht ? !ht.over : AB.Inventory.ammo(l.id) > 0));
+    const reach = shoot ? w.weapon.range * 0.85 : (w.weapon.ranged ? 58 : w.weapon.range + 8);
+    const foes = AB.Enemies.inRoom(l.room).filter((e) => hostile(e) && Math.abs(e.x - l.x) <= reach)
+      .sort((a, b) => Math.abs(a.x - l.x) - Math.abs(b.x - l.x));
+    const e = foes[0];
+    if (!e) return;
+    const dir = Math.sign(e.x - l.x) || l.facing, ax = AB.Input.axis();
+    if (ax && ax !== dir) return;          // отступает — не мешаем
+    l.facing = dir;
+    AB.Combat.attack(l.id);
+  }
+
   function update() {
     const l = lead();
     if (!l) return;
     const quiet = AB.Rooms.inTransition() || AB.Dialog.isOpen();
+    if (!quiet && !AB.Story.isRunning()) leaderAuto(l);
     for (const m of members()) {
       if (m === l) continue;
       m.engage = null;
@@ -113,6 +135,8 @@ AB.Party = (() => {
     leader: () => leaderId,
     lead, members, setLeader, switchBlock, cycle, update,
     isLeader: (id) => id === leaderId,
+    autoFight: () => autoFight,
+    setAutoFight(on) { autoFight = !!on; try { localStorage.setItem('abyss_autofight', on ? 'on' : 'off'); } catch (e) { /* хранилище недоступно */ } },
     serialize: () => ({ leader: leaderId }),
     restore(d) {
       const id = d && d.leader;

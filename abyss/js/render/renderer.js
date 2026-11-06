@@ -159,7 +159,14 @@ AB.Render = (() => {
         g.fillStyle = fade;
         g.fillRect(0, 0, r.width, top0 + 2);
       }
-      g.drawImage(bg.img, 0, top0, r.width, H);
+      if (r.bgTile) {
+        // фон плиткой: ширина по высоте картинки, каждая вторая — зеркально (без швов)
+        const tw = bg.img.width * (H / bg.img.height);
+        for (let x = 0, k = 0; x < r.width; x += tw, k++) {
+          if (k % 2) { g.save(); g.translate(x + tw, 0); g.scale(-1, 1); g.drawImage(bg.img, 0, top0, tw, H); g.restore(); }
+          else g.drawImage(bg.img, x, top0, tw, H);
+        }
+      } else g.drawImage(bg.img, 0, top0, r.width, H);
     } else if (bg.status === 'ready') {
       g.drawImage(bg.img, 0, 0, r.width, VH);
     } else {
@@ -168,8 +175,42 @@ AB.Render = (() => {
     return { canvas: c, K };
   }
 
+  // технический тоннель (ROOM-012): трубы и кабели в упор, низкий потолок, вода на полу
+  function drawTunnelRoom(g, r, rng, top) {
+    g.fillStyle = '#050607'; g.fillRect(0, 0, r.width, VH);
+    const wall = g.createLinearGradient(0, top, 0, FLOOR);
+    wall.addColorStop(0, '#15181b'); wall.addColorStop(1, '#1d2124');
+    g.fillStyle = wall; g.fillRect(0, top, r.width, FLOOR - top);
+    // рёбра шпангоутов
+    for (let x = 40; x < r.width; x += 120 + rng() * 40) {
+      g.fillStyle = '#0d0f11'; g.fillRect(x, top, 16, FLOOR - top);
+      g.fillStyle = 'rgba(255,255,255,.04)'; g.fillRect(x + 2, top, 2, FLOOR - top);
+    }
+    // пучки труб вдоль стены
+    for (let i = 0; i < 5; i++) {
+      const y = top + 18 + i * 22 + rng() * 6, h = 7 + rng() * 6;
+      g.fillStyle = ['#2a2d2f', '#33302b', '#262b2e'][i % 3]; g.fillRect(0, y, r.width, h);
+      g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, y + h - 2, r.width, 2);
+      for (let x = 60 + rng() * 80; x < r.width; x += 220 + rng() * 120) { g.fillStyle = '#1a1c1e'; g.fillRect(x, y - 2, 8, h + 4); }
+    }
+    // потёки и водоросли у пола
+    for (let x = 0; x < r.width; x += 30 + rng() * 60) {
+      g.fillStyle = `rgba(60,90,50,${0.15 + rng() * 0.25})`;
+      g.fillRect(x, FLOOR - 20 - rng() * 40, 3 + rng() * 6, 60);
+    }
+    // потолок — сразу над головой
+    g.fillStyle = '#0a0b0c'; g.fillRect(0, top - 30, r.width, 34);
+    g.fillStyle = '#202326'; g.fillRect(0, top - 2, r.width, 6);
+    // решётка пола и вода
+    g.fillStyle = '#111315'; g.fillRect(0, FLOOR, r.width, VH - FLOOR);
+    g.fillStyle = 'rgba(40,70,80,.35)'; g.fillRect(0, FLOOR - 4, r.width, 10);
+    g.fillStyle = 'rgba(150,200,210,.08)';
+    for (let x = 0; x < r.width; x += 40 + rng() * 50) g.fillRect(x, FLOOR - 1, 20 + rng() * 40, 1.5);
+  }
+
   function drawGreyboxRoom(g, r, rng, top) {
     const med = r.theme === 'medbay';
+    if (r.theme === 'tunnel') { drawTunnelRoom(g, r, rng, top); return; }
     // пространство над потолком и под полом — тёмные конструкции
     g.fillStyle = '#07080a';
     g.fillRect(0, 0, r.width, VH);
@@ -737,6 +778,30 @@ AB.Render = (() => {
       const open = AB.Rooms.doorOpen(`${r.id}:${d.key}`);
       const locked = !AB.Rooms.canPass(d).ok;
       const near = hero && Math.abs(hero.x - d.x) < 80;
+      if (d.kind === 'hatch') {
+        // люк в полу: рама, крышка откидывается, под ней — темнота шахты
+        ctx.fillStyle = '#030304'; ctx.fillRect(x - 44, b - 3, 88, 10);
+        ctx.fillStyle = '#2b3036'; ctx.fillRect(x - 50, b - 5, 100, 5);
+        const lid = open * 1.3;
+        ctx.save(); ctx.translate(x - 44, b - 4); ctx.rotate(-lid);
+        ctx.fillStyle = '#3a4047'; ctx.fillRect(0, -4, 88, 5);
+        ctx.fillStyle = 'rgba(200,160,40,.4)'; for (let i = 0; i < 4; i++) ctx.fillRect(8 + i * 20, -3.5, 10, 3);
+        ctx.restore();
+        d._light = { x: x + 58, y: b - 14, locked, near };
+        continue;
+      }
+      if (d.kind === 'ladder') {
+        // лестница вверх: стойки, перекладины, люк в потолке
+        const top = sy(-r.height);
+        ctx.strokeStyle = '#3a3f45'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(x - 16, b); ctx.lineTo(x - 16, top); ctx.moveTo(x + 16, b); ctx.lineTo(x + 16, top); ctx.stroke();
+        ctx.lineWidth = 3;
+        for (let y = b - 18; y > top; y -= 22) { ctx.beginPath(); ctx.moveTo(x - 16, y); ctx.lineTo(x + 16, y); ctx.stroke(); }
+        ctx.fillStyle = '#030304'; ctx.fillRect(x - 30, top - 2, 60, 8);
+        ctx.fillStyle = '#2b3036'; ctx.fillRect(x - 34, top + 4, 68, 4);
+        d._light = { x: x + 30, y: top + 24, locked, near };
+        continue;
+      }
       // своя картинка двери (внешний люк шлюза)
       const art = d.art && AB.Assets.get(d.art);
       if (art && art.status === 'ready') {
@@ -1790,6 +1855,54 @@ AB.Render = (() => {
     ctx.globalCompositeOperation = 'source-over';
     AB.Chars.all().filter((c) => c.id !== AB.Party.leader() && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'emissive'));
     drawHero(AB.Party.lead(), 'emissive');
+    drawBarks(r);
+  }
+
+  // ---------- Реплики над головой (BARK SYSTEM) ----------
+  function wrapText(text, maxW) {
+    const words = text.split(' '), lines = [];
+    let cur = '';
+    for (const w of words) {
+      const t = cur ? `${cur} ${w}` : w;
+      if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function drawBarks(r) {
+    for (const bk of AB.Barks.active()) {
+      const c = AB.Chars.get(bk.id), e = !c && AB.Enemies.get(bk.id);
+      const who = c || e;
+      if (!who || who.room !== r.id) continue;
+      const mutant = e && AB.ID.get(e.id).type === 'mutant';
+      const x = sx(who.x), y = sy(c ? -152 : mutant ? -150 : -150);
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = bk.a;
+      ctx.font = `${bk.think ? 'italic ' : ''}9.5px "Share Tech Mono", monospace`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      const text = bk.think ? `(${bk.text})` : bk.text;
+      const lines = wrapText(text, 150);
+      const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 12, h = lines.length * 11 + 7;
+      const bx = Math.max(sx(0) + 4, Math.min(x - w / 2, sx(r.width) - w - 4)), by = y - h;
+      if (mutant) {
+        // мутант: без рамки, дрожащий красноватый шёпот
+        ctx.fillStyle = 'rgba(255,120,100,.85)';
+        lines.forEach((l, i) => ctx.fillText(l, bx + 6 + Math.sin(time * 30 + i) * 0.8, by + 12 + i * 11));
+      } else {
+        ctx.fillStyle = bk.think ? 'rgba(8,10,12,.55)' : 'rgba(8,10,12,.82)';
+        roundRect(bx, by, w, h, 4); ctx.fill();
+        ctx.strokeStyle = bk.think ? 'rgba(255,255,255,.12)' : (AB.Party.isLeader(bk.id) ? 'rgba(94,230,255,.45)' : 'rgba(255,255,255,.22)');
+        ctx.lineWidth = 1; roundRect(bx, by, w, h, 4); ctx.stroke();
+        // хвостик: у мысли — кружки, у речи — уголок
+        ctx.fillStyle = bk.think ? 'rgba(8,10,12,.55)' : 'rgba(8,10,12,.82)';
+        if (bk.think) { ctx.beginPath(); ctx.arc(x, by + h + 4, 2.2, 0, 7); ctx.arc(x + 3, by + h + 9, 1.4, 0, 7); ctx.fill(); }
+        else { ctx.beginPath(); ctx.moveTo(x - 4, by + h); ctx.lineTo(x + 4, by + h); ctx.lineTo(x, by + h + 6); ctx.fill(); }
+        ctx.fillStyle = bk.think ? 'rgba(190,200,205,.9)' : 'rgba(240,236,228,.95)';
+        lines.forEach((l, i) => ctx.fillText(l, bx + 6, by + 12 + i * 11));
+      }
+      ctx.restore();
+    }
   }
 
   // ---------- Предметы на полу (заглушки ASSET-ITEM*) ----------

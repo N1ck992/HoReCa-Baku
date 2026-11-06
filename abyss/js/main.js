@@ -305,6 +305,16 @@
             <text x="${m.x + m.w + 35}" y="${m.y + m.h / 2 + 1}">?</text></g>
             <line class="link" x1="${dx + 2}" y1="${m.y + m.h / 2}" x2="${m.x + m.w + 10}" y2="${m.y + m.h / 2}"/>`);
         }
+        if ((d.kind === 'hatch' || d.kind === 'ladder') && d.to) {
+          // люк/лестница: вертикальная связь между палубами
+          const tr = AB.ID.get(d.to), conn = (r.connections || []).find((c) => c.door === d.key);
+          const td = tr && tr.map && conn && (tr.doors || []).find((q) => q.key === conn.toDoor);
+          if (td && (visited.includes(tr.id) || st.kind !== 'locked')) {
+            const tx = tr.map.x + (td.x / tr.width) * tr.map.w;
+            const y1 = m.y + (d.kind === 'hatch' ? m.h : 0), y2 = tr.map.y + (d.kind === 'hatch' ? 0 : tr.map.h);
+            parts.push(`<line class="shaft" x1="${dx}" y1="${y1}" x2="${tx}" y2="${y2}"/>`);
+          }
+        }
         if (goal && goal.roomId === r.id && goal.door.key === d.key) {
           parts.push(`<circle class="goal" cx="${dx}" cy="${m.y + m.h / 2}" r="9"/>`);
         }
@@ -490,8 +500,8 @@
     }
     if (kind !== 'move') return;
     ui.hint.innerHTML = isTouch
-      ? 'Джойстик слева — идти, дальше от центра — бег · подсказка по центру — действие · <b>⚔</b> — удар'
-      : '<kbd>A</kbd><kbd>D</kbd> — идти · <kbd>Shift</kbd> — бег · <kbd>E</kbd> — действие · <kbd>F</kbd> — удар · <kbd>I</kbd> — инвентарь · <kbd>M</kbd> — карта · <kbd>L</kbd> — записи';
+      ? 'Джойстик слева — идти, дальше от центра — бег · подсказка по центру — действие · бой — сам (или <b>⚔</b>)'
+      : '<kbd>A</kbd><kbd>D</kbd> — идти · <kbd>Shift</kbd> — бег · <kbd>E</kbd> — действие · <kbd>F</kbd> — удар (бой идёт и сам) · <kbd>I</kbd> — инвентарь · <kbd>M</kbd> — карта · <kbd>L</kbd> — записи';
     ui.hint.classList.add('show');
     setTimeout(() => ui.hint.classList.remove('show'), 7000);
   });
@@ -505,6 +515,10 @@
   });
   $('#btn-menu').addEventListener('click', () => $('#menu').hidden = false);
   $('#btn-close-menu').addEventListener('click', () => $('#menu').hidden = true);
+  const afBtn = $('#btn-autofight');
+  const afLabel = () => { afBtn.textContent = `Автобой: ${AB.Party.autoFight() ? 'включён' : 'выключен'}`; };
+  afBtn.addEventListener('click', () => { AB.Party.setAutoFight(!AB.Party.autoFight()); afLabel(); });
+  afLabel();
   // ---------- Графика героя: откат на заглушку и выбор костюма ----------
   const HERO_ART = ['ASSET-CHAR001-01', 'ASSET-CHAR001-02'];
   const PREF = 'abyss_hero_art';
@@ -625,6 +639,7 @@
       AB.World.restore(save.world);
       AB.Party.restore(save.party);
       AB.Logs.restore(save.logs);
+      AB.Barks.restore(save.barks);
       // старые сохранения: у спутницы должен быть её дротиковый пистолет
       { const c = AB.Chars.get('CHAR-002'); if (c && !AB.Chars.all().some((m) => AB.Inventory.count(m.id, 'ITEM-012'))) AB.Inventory.add('CHAR-002', 'ITEM-012', 1, { swap: false }); }
       const hero = AB.Chars.get(L());
@@ -669,6 +684,7 @@
       }
       if (AB.Input.consumeLead()) switchLeader();
       AB.Party.update(dt);
+      AB.Barks.update(dt);
       AB.Interact.update(dt);
       AB.Combat.update(dt);
       if (!AB.Rooms.inTransition()) AB.Enemies.update(dt);

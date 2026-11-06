@@ -47,6 +47,7 @@ AB.Combat = (() => {
         const max = AB.ID.get(m.id).stats.maxHp;
         if (m.hp < max) { m.hp = Math.min(max, m.hp + au.heal * dt); any = true; AB.Bus.emit('char:hp', { charId: m.id, hp: m.hp, delta: 0 }); }
       }
+      if (any && !(healing.get(c.id) > 0)) AB.Bus.emit('aura:heal', { charId: c.id });
       healing.set(c.id, any ? 0.4 : Math.max(0, (healing.get(c.id) || 0) - dt));
     }
   }

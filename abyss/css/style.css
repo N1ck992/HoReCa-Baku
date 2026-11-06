@@ -331,3 +331,6 @@ body.touch #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 #journal-list .jl { display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; margin-bottom: 4px; border-radius: 5px; border: 1px solid var(--line); background: #111316; color: var(--fg); font: 13px var(--mono); cursor: pointer; }
 #journal-list .jl span { color: var(--muted); font-size: 11px; white-space: nowrap; }
 #journal-list .jl.unknown { color: #4a4f55; cursor: default; border-style: dashed; background: none; }
+
+/* ---------- Карта: шахты и люки между палубами ---------- */
+#map-svg .shaft { stroke: #5ee6ff; stroke-width: 1.5; stroke-dasharray: 3 3; opacity: .7; }

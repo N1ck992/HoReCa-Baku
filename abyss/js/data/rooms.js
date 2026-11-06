@@ -18,6 +18,7 @@ AB.ROOMS = [
     width: 1500,
     height: 420,
     background: 'ASSET-ROOM001-01',
+    bgFloor: 0.94, bgHeight: 392, bgTile: true,   // фон из картинки: пол на 94% высоты, плитка с зеркалом
     theme: 'medbay',
     connections: [{ door: 'east', to: 'ROOM-011', toDoor: 'west' }],
     access: { type: 'open' },
@@ -59,8 +60,9 @@ AB.ROOMS = [
     width: 2600,
     height: 340,
     background: 'ASSET-ROOM011-01',
+    bgFloor: 0.9, bgHeight: 445, bgTile: true,
     theme: 'corridor',
-    connections: [{ door: 'west', to: 'ROOM-001', toDoor: 'east' }, { door: 'east', to: 'ROOM-003', toDoor: 'west' }],
+    connections: [{ door: 'west', to: 'ROOM-001', toDoor: 'east' }, { door: 'east', to: 'ROOM-003', toDoor: 'west' }, { door: 'hatch', to: 'ROOM-012', toDoor: 'up-west' }],
     access: { type: 'open' },
     map: { x: 150, y: 8, w: 260, h: 30 },
     items: [
@@ -79,6 +81,8 @@ AB.ROOMS = [
       { key: 'west', x: 70, to: 'ROOM-001', access: { type: 'open' } },
       // Дверь в энергетический отсек открывается ключ-картой, которую несёт мутант (ENEMY-001)
       { key: 'east', x: 2530, to: 'ROOM-003', access: { type: 'key', item: 'ITEM-010', reason: 'Нужна ключ-карта' } },
+      // люк в полу: технический тоннель под палубой (дополнение №35)
+      { key: 'hatch', kind: 'hatch', x: 1150, to: 'ROOM-012', access: { type: 'power', reason: 'Люк заклинило: без питания гидравлика не работает' } },
     ],
     props: [],
     lights: [
@@ -139,9 +143,10 @@ AB.ROOMS.push({
   width: 1900,
   height: 360,
   background: 'ASSET-ROOM002-01',
+    bgFloor: 0.9, bgHeight: 400, bgTile: true,
   theme: 'living',
   map: { x: 570, y: 6, w: 190, h: 34 },
-  connections: [{ door: 'west', to: 'ROOM-003', toDoor: 'east' }, { door: 'east', to: 'ROOM-005', toDoor: 'west' }],
+  connections: [{ door: 'west', to: 'ROOM-003', toDoor: 'east' }, { door: 'east', to: 'ROOM-005', toDoor: 'west' }, { door: 'hatch', to: 'ROOM-012', toDoor: 'up-east' }],
   access: { type: 'open' },
   items: [],
   containers: [],
@@ -154,6 +159,8 @@ AB.ROOMS.push({
     { key: 'west', x: 70, to: 'ROOM-003', access: { type: 'open' } },
     // открывается после встречи со спутницей (EVENT-003)
     { key: 'east', x: 1830, to: 'ROOM-005', access: { type: 'event', event: 'EVENT-003', reason: 'Заблокировано' } },
+    // люк в полу в технический тоннель (ROOM-012)
+    { key: 'hatch', kind: 'hatch', x: 1690, to: 'ROOM-012', access: { type: 'open' } },
   ],
   props: [
     { kind: 'bunk', x: 420 }, { kind: 'locker', x: 560 },
@@ -344,6 +351,29 @@ AB.ROOMS.push(
 const ROOM_STUBS = [
   ['ROOM-004', 'Инженерная мастерская'],
 ];
+
+// ROOM-012 — технический тоннель под жилыми палубами (дополнение №35): не прямой коридор слева
+// направо, а проход под палубой — спуск по люку из коридора ROOM-011, выход по лестнице в жилой
+// сектор ROOM-002. Низкий потолок, вода на полу, мутант и схрон выживших.
+AB.ROOMS.push({
+  id: 'ROOM-012', name: 'Технический тоннель', desc: 'Низкий тоннель под палубами: трубы, вода, следы выживших.',
+  width: 1800, height: 215, background: 'ASSET-ROOM012-01', theme: 'tunnel',
+  connections: [{ door: 'up-west', to: 'ROOM-011', toDoor: 'hatch' }, { door: 'up-east', to: 'ROOM-002', toDoor: 'hatch' }],
+  access: { type: 'open' },
+  map: { x: 230, y: 78, w: 540, h: 18 },
+  items: [{ key: 'meds-tunnel', item: 'ITEM-005', qty: 1, x: 1020 }],
+  containers: [], enemies: ['ENEMY-006'], equipment: [], events: [], state: 'flooded', spawn: { x: 200 },
+  doors: [
+    { key: 'up-west', kind: 'ladder', x: 110, to: 'ROOM-011', access: { type: 'open' } },
+    { key: 'up-east', kind: 'ladder', x: 1690, to: 'ROOM-002', access: { type: 'open' } },
+  ],
+  props: [],
+  lights: [
+    { x: 420, y: -190, color: [255, 40, 30], radius: 250, flicker: 0.35 },
+    { x: 1240, y: -190, color: [255, 40, 30], radius: 250, flicker: 0.2 },
+  ],
+  fx: { steam: [760], sparks: [], drips: [300, 900, 1480] },
+});
 
 AB.ROOMS.forEach((r) => AB.ID.register(r.id, r));
 ROOM_STUBS.forEach(([id, name]) => AB.ID.register(id, { name, stub: true, connections: [], access: { type: 'locked' } }));

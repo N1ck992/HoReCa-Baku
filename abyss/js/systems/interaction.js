@@ -47,7 +47,8 @@ AB.Interact = (() => {
     if (!t) return null;
     if (t.kind === 'door') {
       const pass = AB.Rooms.canPass(t.ref);
-      return { label: pass.ok ? 'Открыть дверь' : pass.reason, ok: pass.ok };
+      const verb = t.ref.kind === 'hatch' ? 'Спуститься в люк' : t.ref.kind === 'ladder' ? 'Подняться по лестнице' : 'Открыть дверь';
+      return { label: pass.ok ? verb : pass.reason, ok: pass.ok };
     }
     if (t.kind === 'item') {
       const def = AB.ID.get(t.ref.item);

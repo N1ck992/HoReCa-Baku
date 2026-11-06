@@ -32,6 +32,7 @@ AB.Save = (() => {
       equipment: AB.Equip.serialize(),
       world: AB.World.serialize(),
       logs: AB.Logs.serialize(),
+      barks: AB.Barks.serialize(),
       party: AB.Party.serialize(),
     };
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }

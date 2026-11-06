@@ -77,6 +77,8 @@ AB.ENEMIES.push({
 const MUTANT = AB.ENEMIES.find((e) => e.id === 'ENEMY-001');
 AB.ENEMIES.push(
   { ...MUTANT, id: 'ENEMY-004', carry: null, spawn: { room: 'ROOM-007', x: 900, patrol: [700, 1150], requires: [] } },
+  // тоннель под палубой (ROOM-012): затаился в темноте
+  { ...MUTANT, id: 'ENEMY-006', carry: null, spawn: { room: 'ROOM-012', x: 1300, patrol: [900, 1550], requires: [] } },
   { ...MUTANT, id: 'ENEMY-005', carry: null, spawn: { room: 'ROOM-007', x: 1500, patrol: [1350, 1750], requires: [] } },
 );
 

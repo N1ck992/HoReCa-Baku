@@ -32,23 +32,24 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ROOM007-01', owner: 'ROOM-007', type: 'background', src: null, desc: 'Фон: лаборатория' },
   { id: 'ASSET-ROOM009-01', owner: 'ROOM-009', type: 'background', src: null, desc: 'Фон: система жизнеобеспечения' },
   { id: 'ASSET-ROOM010-01', owner: 'ROOM-010', type: 'background', src: null, desc: 'Фон: шлюз' },
+  { id: 'ASSET-ROOM012-01', owner: 'ROOM-012', type: 'background', src: null, desc: 'Фон: технический тоннель' },
   { id: 'ASSET-ROOM010-02', owner: 'EQUIP-005', type: 'prop', src: 'assets/props/exosuit-rack.png', desc: 'Экзокостюм в стойке (вырезан из assets/source/ACT1-PROPS-01.png)' },
   { id: 'ASSET-ROOM010-03', owner: 'ROOM-010', type: 'prop', src: 'assets/props/outer-hatch.png', desc: 'Внешний люк шлюза' },
   { id: 'ASSET-ROOM006-02', owner: 'ROOM-006', type: 'prop', src: 'assets/props/locker-closed.png', desc: 'Шкаф с оружием, закрыт' },
   { id: 'ASSET-ROOM006-03', owner: 'ROOM-006', type: 'prop', src: 'assets/props/locker-open.png', desc: 'Шкаф с оружием, открыт и пуст' },
 
   // ---- ROOM-001: медицинский отсек ----
-  { id: 'ASSET-ROOM001-01', owner: 'ROOM-001', type: 'background', src: null, desc: 'Фон: стены и пол медотсека' },
+  { id: 'ASSET-ROOM001-01', owner: 'ROOM-001', type: 'background', src: 'assets/rooms/ROOM001-01.jpg', desc: 'Фон: стены и пол медотсека' },
   { id: 'ASSET-ROOM001-02', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Аварийная криокапсула' },
   { id: 'ASSET-ROOM001-03', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Медицинская кушетка' },
   { id: 'ASSET-ROOM001-04', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Настенный монитор' },
   { id: 'ASSET-ROOM001-05', owner: 'ROOM-001', type: 'prop', src: null, desc: 'Медицинский шкаф' },
 
   // ---- ROOM-011: первый коридор ----
-  { id: 'ASSET-ROOM011-01', owner: 'ROOM-011', type: 'background', src: null, desc: 'Фон: первый коридор' },
+  { id: 'ASSET-ROOM011-01', owner: 'ROOM-011', type: 'background', src: 'assets/rooms/ROOM011-01.jpg', desc: 'Фон: первый коридор' },
 
   // ---- ROOM-002: жилой сектор ----
-  { id: 'ASSET-ROOM002-01', owner: 'ROOM-002', type: 'background', src: null, desc: 'Фон: жилой сектор' },
+  { id: 'ASSET-ROOM002-01', owner: 'ROOM-002', type: 'background', src: 'assets/rooms/ROOM002-01.jpg', desc: 'Фон: жилой сектор' },
 
   // ---- ROOM-005: склад, ROOM-008: командный центр ----
   { id: 'ASSET-ROOM005-01', owner: 'ROOM-005', type: 'background', src: null, desc: 'Фон: склад' },
