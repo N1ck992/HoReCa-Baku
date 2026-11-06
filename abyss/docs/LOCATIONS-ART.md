@@ -75,15 +75,8 @@ no people, no creatures, no text, cinematic, high detail
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of an abandoned cryo medical bay on a derelict ship, 3000x960,
-flat back wall only: dirty off-white and grey-green medical wall panels and tiles, several
-panels missing with exposed cable bundles, a faded red cross on the wall on the right side,
-heavy ceiling beams with horizontal pipes and valves, two empty red emergency lamp housings
-under the ceiling, metal grating floor strip at the bottom with yellow-black hazard stripes
-along the baseboard, two floor vents, rust streaks, grime, water stains.
-No furniture, no cryo pods, no doors, no monitors, no people, no text.
-2D game background, strict side view, orthographic, no perspective, neutral flat lighting,
-no colored light, no cast shadows, dark industrial sci-fi horror, desaturated muted palette
+Empty side-view background of an abandoned cryo medical bay on a derelict ship that sank decades ago, 3000x960, dirty off-white and grey-green medical wall panels and tiles, several panels missing with exposed cable bundles, a faded red cross on the wall on the right side, heavy ceiling beams with horizontal pipes and valves, two empty emergency lamp housings under the ceiling, old crude welding patches on the wall, thin pale-green algae streaks creeping from the vents, rust streaks, grime, water stains, metal grating floor strip at the bottom with yellow-black hazard stripes along the baseboard, two floor vents, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ---
@@ -142,15 +135,8 @@ no people, no creatures, no text, cinematic, high detail
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of a long narrow service corridor on a derelict ship, 5200x960,
-flat back wall only: ribbed dark metal wall panels with vertical stiffeners, a few panels torn
-off with hanging cables, low ceiling at the top quarter with pipes and cable trays, dark
-technical ducts above the ceiling, four empty emergency lamp housings, one of them broken with
-dangling wires and soot marks, claw marks and dark stains on the wall in the right half,
-metal grating floor strip at the bottom, two floor vents, two puddles.
-No doors, no objects, no people, no text. Horizontally seamless segments.
-2D game background, strict side view, orthographic, no perspective, neutral flat lighting,
-no colored light, no cast shadows, dark industrial sci-fi horror, desaturated muted palette
+Empty side-view background of a long narrow service corridor on a derelict sunken ship, 5200x960, ribbed dark metal wall panels with vertical stiffeners, a few panels torn off with hanging cables, low ceiling in the top quarter with pipes and cable trays, dark technical ducts above the ceiling, four empty emergency lamp housings, one broken with dangling wires and soot marks, old makeshift repairs with wire and tape, dark dried stains and deep claw marks on the wall in the right half, pale algae growing along the floor seam, metal grating floor strip with two puddles, floor line at 844 px from the top, horizontally seamless,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ---
@@ -284,6 +270,10 @@ switches and dials, worn metal, side view.
 
 ## Новые помещения акта I
 
+> Промпты фонов обновлены по канону (docs/STORY.md §14): следы многолетнего выживания,
+> самодельный ремонт, водоросли и органические наросты, корабль лежит на дне. Распределитель
+> питания в `ROOM-009` и экран камер в `ROOM-010` рисует игра — на фоне для них оставлено место.
+
 Все листы — в том же формате, что выше: **2 px на единицу игры, высота 960 px, пол на 844 px сверху**.
 Мебель и предметы (койки, ящики, пульты, баки, стойки) пока рисует игра заглушками — в **пустой фон их не включать**.
 Если захотите заменить их картинками — рисовать отдельно, на прозрачном фоне, как оборудование энергоотсека.
@@ -329,8 +319,8 @@ Side-view cross-section of the crew living quarters of a derelict deep-sea resea
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of the crew living quarters of a derelict ship, 3800x960, worn pale plastic wall panels over metal, some panels missing with pipes behind, wall niches with small shelves, taped photos and drawings without readable text, ventilation grilles, water stains and mold near the floor, two empty ceiling lamp housings, floor strip at the bottom: old linoleum over metal grating, floor line at 844 px from the top,
-flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, high detail
+Empty side-view background of the crew living quarters of a derelict sunken ship where survivors lived for years, 3800x960, worn pale plastic wall panels over metal, some panels missing with pipes behind, wall niches with small shelves, faded taped photos and children's drawings without readable text, crude curtains made of torn blankets hanging from the ceiling pipes, makeshift shelves of scrap metal, soot above an improvised cooking spot, ventilation grilles, water stains and pale algae and mold near the floor, two empty ceiling lamp housings, floor strip of old linoleum over metal grating, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ## ROOM-005 — Склад
@@ -375,8 +365,8 @@ Side-view cross-section of a cargo storage hold of a derelict deep-sea research 
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of a cargo storage hold of a derelict ship, 4200x960, tall metal shelving racks against the back wall with boxes fading into darkness, wire mesh partitions, overhead crane rail with hanging hooks and chains near the ceiling, three empty lamp housings, metal floor strip at the bottom with yellow-black loading zone markings, floor line at 844 px from the top,
-flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, high detail
+Empty side-view background of a cargo storage hold of a derelict sunken ship, 4200x960, tall metal shelving racks against the back wall with empty broken boxes fading into darkness, wire mesh partitions torn open by force, overhead crane rail with hanging hooks and chains near the ceiling, old barricade marks and bullet dents on the wall, a crude hand-painted warning sign without readable text, three empty lamp housings, metal floor strip with faded yellow-black loading zone markings, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ## ROOM-008 — Командный центр (мостик)
@@ -419,8 +409,8 @@ Side-view cross-section of the command bridge of a derelict deep-sea research sh
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of the command bridge of a derelict ship, 3000x960, clean dark wall panels, a huge panoramic window opening in the back wall 1520 px wide and 560 px tall with its bottom edge 250 px above the floor line, thick riveted frame with heavy bolts and armored shutter rails on the sides, the glass area filled with pure flat black #000000 (to be cut out), a row of dead monitors above the window, three empty lamp housings, metal floor strip with a low raised platform in the middle, floor line at 844 px from the top,
-flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, high detail
+Empty side-view background of the command bridge of a derelict ship resting on the ocean floor, 3000x960, dark wall panels, the most intact room of the ship but abandoned for years, a huge panoramic window opening in the back wall 1520 px wide and 560 px tall with its bottom edge 250 px above the floor line, thick riveted frame with heavy bolts and armored shutter rails on the sides, the glass area filled with pure flat black #000000 (to be cut out), a row of dead monitors above the window, scratches from a barricade near the left side, three empty lamp housings, metal floor strip with a low raised platform in the middle, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ## ROOM-007 — Лаборатория
@@ -466,8 +456,8 @@ Side-view cross-section of a biology research laboratory of a derelict deep-sea 
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of a biology research laboratory of a derelict ship, 4000x960, once-white tiled walls with dark organic stains and streaks, empty wall shelves with sample racks, diagrams on the walls without readable text, hoses and tubes running into the wall, organic growths near the vents in the upper corners, four empty lamp housings, tiled floor strip with puddles of greenish liquid, floor line at 844 px from the top,
-flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, high detail
+Empty side-view background of a biology research laboratory of a derelict sunken ship where an experiment went wrong, 4000x960, once-white tiled walls with dark organic stains and streaks, empty wall shelves with sample racks, anatomy and DNA diagrams on the walls without readable text, hoses and tubes running into the wall, translucent bioluminescent organic growths and algae spreading from the vents in the upper corners, quarantine hazard stripes, four empty lamp housings, tiled floor strip with puddles of greenish liquid, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ## ROOM-006 — Оружейная
@@ -507,8 +497,8 @@ Side-view cross-section of a small armory room of a derelict deep-sea research s
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of a small armory room of a derelict ship, 2400x960, thick armored wall panels with reinforced ribs, empty weapon wall mounts with dusty outlines of removed rifles, diving air tanks and fins hanging on hooks, ventilation grilles with bars, one empty lamp housing in the center, metal floor strip with a yellow-black hazard marking in the center, floor line at 844 px from the top,
-flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, high detail
+Empty side-view background of a small looted armory room of a derelict sunken ship, 2400x960, thick armored wall panels with reinforced ribs, empty weapon wall mounts with dusty outlines of removed rifles, diving air tanks and fins hanging on hooks, ventilation grilles with bars, scratched tally marks and crude repairs, one empty lamp housing in the center, metal floor strip with a yellow-black hazard marking in the center, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ## ROOM-009 — Система жизнеобеспечения
@@ -551,8 +541,8 @@ Side-view cross-section of a huge life support hall of a derelict deep-sea resea
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of a huge life support hall of a derelict ship, 4000x960, tall back wall with thick pipes, valve wheels and pressure gauges without numbers, filter cassettes in the wall with some missing, rust and condensation streaks, slimy organic growths spreading across the wall from the center up to the ceiling, three empty lamp housings, wet metal grating floor strip with puddles and steam grates, floor line at 844 px from the top,
-flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, high detail
+Empty side-view background of a huge life support hall of a derelict sunken ship turned into a monster's nest, 4000x960, tall back wall with thick pipes, valve wheels and pressure gauges without numbers, filter cassettes in the wall with some missing, rust and condensation streaks, slimy organic growths and pale glowing algae spreading across the wall from the center up to the ceiling like a nest, leave a clear wall area in the middle-left for a large power distribution cabinet that the game draws, three empty lamp housings, wet metal grating floor strip with puddles and steam grates, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ## ROOM-010 — Шлюз
@@ -568,6 +558,7 @@ flat back wall only, strict side view, orthographic, no perspective, no furnitur
 | Позиция, px | Что там | В фоне или отдельно |
 |---|---|---|
 | 140 | гермодверь из системы жизнеобеспечения | отдельно: ASSET-SHARED-01 |
+| 490 | экран и пульт внешних камер (`EQUIP-007`) | рисует игра — на стене оставить свободное место |
 | 800 | лампа | корпус в фоне |
 | 960 | стойка с разбитым экзокостюмом | ASSET-ROOM010-02, затемнён |
 | 1960 | стойка с **целым экзокостюмом** | отдельно: ASSET-ROOM010-02 |
@@ -593,8 +584,8 @@ Side-view cross-section of the airlock and dive suit bay of a derelict deep-sea 
 ### Промпт: игровой фон (пустой)
 
 ```
-Empty side-view background of the airlock and dive suit bay of a derelict ship, 3000x960, massive pressure-rated wall panels with stiffening ribs and huge rivets, air and power hoses hanging from the ceiling, empty mounting points on the wall, salt crust and seaweed stains on the right side of the wall, two empty lamp housings, wet metal floor strip with a drain grating, floor line at 844 px from the top,
-flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, high detail
+Empty side-view background of the airlock and dive suit bay of a derelict ship on the ocean floor, 3000x960, massive pressure-rated wall panels with stiffening ribs and huge rivets, air and power hoses hanging from the ceiling, empty mounting points on the wall, salt crust and seaweed stains on the right side of the wall near where the outer hatch is, a clear wall area on the left for a monitor that the game draws, two empty lamp housings, wet metal floor strip with a drain grating, floor line at 844 px from the top,
+flat back wall only, strict side view, orthographic, no perspective, no furniture in front of the wall, no doors, no people, no creatures, no text, neutral dim lighting without strong colored light, desaturated muted palette, dark industrial sci-fi horror, Pandorum movie inspired, high detail
 ```
 
 ## Отдельные предметы новых помещений
