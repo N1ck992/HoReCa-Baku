@@ -1,0 +1,17 @@
+{
+  "rig": "COMPANION",
+  "height_units": 112,
+  "out_dir": "assets/char002/v1",
+  "js_out": "js/data/rigs/COMPANION.js",
+  "background": "green",
+  "variants": { "01": { "image": "assets/source/CHAR002-01.png" } },
+  "points": {
+    "crown": [455, 18], "neck": [452, 228], "hip": [445, 745],
+    "shoulder_near": [372, 318], "elbow_near": [382, 650], "wrist_near": [442, 842], "hand_near": [482, 925],
+    "shoulder_far": [470, 330], "elbow_far": [552, 700], "wrist_far": [620, 832], "hand_far": [640, 920],
+    "knee_near": [400, 1237], "ankle_near": [262, 1567], "toe_near": [410, 1717],
+    "knee_far": [550, 1227], "ankle_far": [552, 1567], "toe_far": [740, 1690],
+    "sole_y": 1752
+  },
+  "radius": { "head": 100, "torso": 98, "arm": 46, "leg": 70 }
+}

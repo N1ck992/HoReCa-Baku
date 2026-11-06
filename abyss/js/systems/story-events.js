@@ -6,7 +6,7 @@
 AB.Story = (() => {
   const done = new Set();
   let running = null; // { def, t, next, wait, skip }
-  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false, ghost: 0, flicker: 0,
+  const fx = { fade: 0, fadeFrom: 0, fadeTo: 0, fadeT: 0, fadeDur: 0, alarm: false, ghost: 0, flicker: 0, trueForm: null,
     window: 0, leviathan: -1, shake: 0, shakePower: 0 };
 
   const ACTIONS = {
@@ -93,6 +93,8 @@ AB.Story = (() => {
     },
     // лампы сбоят
     flicker: (s) => { fx.flicker = s.duration; },
+    // вспышка истинного облика (docs/STORY.md §4): на миг игрок видит то, что видят другие
+    true_form: (s) => { if (!running.skip) { fx.trueForm = { char: s.char, t: s.duration, dur: s.duration }; fx.flicker = Math.max(fx.flicker, s.duration); } },
     // заслонки обзорного иллюминатора мостика
     window: (s) => { fx.window = s.open ? 0.001 : 0; },
     // за стеклом проплывает что-то огромное
@@ -135,6 +137,7 @@ AB.Story = (() => {
   function update(dt) {
     fx.ghost = Math.max(0, fx.ghost - dt);
     fx.flicker = Math.max(0, fx.flicker - dt);
+    if (fx.trueForm) { fx.trueForm.t -= dt; if (fx.trueForm.t <= 0) fx.trueForm = null; }
     fx.shake = Math.max(0, fx.shake - dt);
     if (fx.window > 0 && fx.window < 1) fx.window = Math.min(1, fx.window + dt / 1.6);
     if (fx.leviathan >= 0) { fx.leviathan += dt; if (fx.leviathan > 9) fx.leviathan = -1; }

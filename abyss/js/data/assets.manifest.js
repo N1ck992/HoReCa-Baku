@@ -16,8 +16,9 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-CHAR001-02', owner: 'CHAR-001', type: 'rig', rig: 'MARK', variant: '01', src: null, desc: 'Повреждённый костюм (временно как основной)' },
 
   // ---- CHAR-002: спутница — графика ждёт утверждения внешности ----
-  { id: 'ASSET-CHAR002-01', owner: 'CHAR-002', type: 'sprite', src: null, desc: 'Спутница: основной вид' },
-  { id: 'ASSET-CHAR002-02', owner: 'CHAR-002', type: 'rig', src: null, desc: 'Истинный облик: глубоководный арахнид (docs/STORY.md §4); видят все, кроме Марка' },
+  // спутница: из одной фигуры assets/source/CHAR002-01.png (разметка tools/rigs/COMPANION.json). Откат: type 'sprite', без rig.
+  { id: 'ASSET-CHAR002-01', owner: 'CHAR-002', type: 'rig', rig: 'COMPANION', variant: '01', src: null, desc: 'Спутница: облик, который видит Марк' },
+  { id: 'ASSET-CHAR002-02', owner: 'CHAR-002', type: 'sprite', src: 'assets/char002/true/full.png', desc: 'Истинный облик: глубоководный арахнид (docs/STORY.md §4); видят все, кроме Марка' },
 
   // ---- ENEMY-002: преследователь — графика ждёт утверждения ----
   { id: 'ASSET-ENEMY002-01', owner: 'ENEMY-002', type: 'sprite', src: null, desc: 'Преследователь: силуэт' },

@@ -895,8 +895,85 @@ AB.Render = (() => {
     return { P, action };
   }
 
+  // ---------- Истинный облик спутницы (ASSET-CHAR002-02): глубоководный арахнид ----------
+  // Пока нет картинки — процедурная заглушка: бледное полупрозрачное тело, восемь длинных
+  // членистых ног, хоботок, светящиеся нервы и «лицо» из светящихся точек.
+  function trueFormVisible(hero) {
+    const tf = AB.Story.fx.trueForm;
+    if (!tf || tf.char !== hero.id) return false;
+    const p = 1 - tf.t / tf.dur;
+    // мерцание: облики перебивают друг друга, в середине — дольше существо
+    return p > 0.12 && p < 0.88 ? Math.sin(time * 55) > -0.92 : Math.sin(time * 70) > 0.3;
+  }
+  function drawTrueForm(hero, pass) {
+    const x = sx(hero.x), b = sy(0), f = hero.facing;
+    const asset = AB.Assets.get('ASSET-CHAR002-02');
+    if (asset.status === 'ready' && asset.img) {
+      // картинка assets/char002/true/full.png: тело — на уровне груди человека, ноги — до пола
+      const h = 120, w = asset.img.width * (h / asset.img.height);
+      const jit = Math.sin(time * 47) * 2;
+      ctx.save(); ctx.translate(x + jit, b); ctx.scale(f, 1);
+      if (pass === 'body') {
+        ctx.fillStyle = 'rgba(0,0,0,.45)';
+        ctx.beginPath(); ctx.ellipse(0, 1, w * 0.45, 5, 0, 0, 7); ctx.fill();
+        ctx.drawImage(asset.img, -w / 2, -h, w, h);
+      } else if (pass === 'emissive') {
+        const hx = w * 0.29, hy = -h * 0.86;
+        const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, 26);
+        g.addColorStop(0, 'rgba(94,230,255,.55)'); g.addColorStop(1, 'rgba(94,230,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(hx - 26, hy - 26, 52, 52);
+      }
+      ctx.restore();
+      return;
+    }
+    ctx.save();
+    ctx.translate(x, b); ctx.scale(f, 1);
+    const bodyY = -96 + Math.sin(time * 9) * 2;
+    const tw = (i) => Math.sin(time * 13 + i * 1.7) * 0.06;
+    if (pass === 'body') {
+      ctx.fillStyle = 'rgba(0,0,0,.45)';
+      ctx.beginPath(); ctx.ellipse(0, 1, 120, 5, 0, 0, 7); ctx.fill();
+      // ноги: колено высоко над телом, кончик — игла на полу
+      const leg = (i, far) => {
+        const side = i < 4 ? 1 : -1, k = i % 4;
+        const rx = side * (14 + k * 7), tipX = side * (52 + k * 38) + (far ? -10 : 0);
+        const kneeX = rx + side * (26 + k * 9), kneeY = bodyY - 58 - (3 - k) * 10;
+        ctx.strokeStyle = far ? 'rgba(120,140,155,.75)' : 'rgba(205,220,230,.92)';
+        ctx.lineWidth = far ? 3 : 4.2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(rx, bodyY); ctx.lineTo(kneeX, kneeY + tw(i) * 60);
+        ctx.lineTo(tipX * 0.9, bodyY + 30); ctx.lineTo(tipX, 0); ctx.stroke();
+      };
+      for (let i = 0; i < 8; i++) leg(i, true);
+      // брюшко и головогрудь
+      ctx.fillStyle = 'rgba(190,210,222,.82)';
+      ctx.beginPath(); ctx.ellipse(-34, bodyY + 4, 30, 13, 0.18, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(2, bodyY - 2, 22, 15, -0.1, 0, 7); ctx.fill();
+      // голова с хоботком
+      ctx.beginPath(); ctx.ellipse(26, bodyY - 8, 12, 10, -0.3, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(190,210,222,.9)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(34, bodyY - 2); ctx.quadraticCurveTo(48, bodyY + 6 + Math.sin(time * 6) * 3, 54, bodyY + 18); ctx.stroke();
+      // щупальца-пальпы
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(30, bodyY + 2); ctx.quadraticCurveTo(42, bodyY + 22, 36, bodyY + 34); ctx.stroke();
+      for (let i = 0; i < 8; i++) if (i % 2 === 0) leg(i, false);
+      for (let i = 1; i < 8; i += 2) leg(i, false);
+    } else if (pass === 'emissive') {
+      // нервы и «лицо» из светящихся точек — тень облика, который видит Марк
+      ctx.strokeStyle = `rgba(94,230,255,${0.55 + Math.sin(time * 20) * 0.2})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(-58, bodyY + 4); ctx.quadraticCurveTo(-20, bodyY - 6, 22, bodyY - 8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-40, bodyY + 10); ctx.quadraticCurveTo(-8, bodyY + 6, 14, bodyY + 4); ctx.stroke();
+      ctx.fillStyle = 'rgba(160,245,255,.95)';
+      for (const [dx, dy] of [[22, -12], [30, -12], [26, -6], [24, -2], [28, -2]]) { ctx.beginPath(); ctx.arc(dx, bodyY + dy, 1.6, 0, 7); ctx.fill(); }
+      const g = ctx.createRadialGradient(26, bodyY - 8, 0, 26, bodyY - 8, 30);
+      g.addColorStop(0, 'rgba(94,230,255,.35)'); g.addColorStop(1, 'rgba(94,230,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(-4, bodyY - 38, 60, 60);
+    }
+    ctx.restore();
+  }
+
   function drawHero(hero, pass) {
     if (!hero || hero.hidden) return;
+    if (trueFormVisible(hero)) { drawTrueForm(hero, pass); return; }
     const asset = AB.Assets.get(hero.appearance);
     const { P, action } = heroPose(hero);
     const x = sx(hero.x + P.dx * hero.facing), b = sy(0);
@@ -2145,6 +2222,15 @@ AB.Render = (() => {
       rv.addColorStop(1, `rgba(150,0,0,${0.75 * red})`);
       ctx.fillStyle = rv;
       ctx.fillRect(0, 0, w, h);
+    }
+    // истинный облик: холодная вспышка и строки помех
+    const tf = AB.Story.fx.trueForm;
+    if (tf) {
+      const k = Math.sin(Math.min(1, 1 - tf.t / tf.dur) * Math.PI);
+      ctx.fillStyle = `rgba(120,220,255,${0.10 * k + (Math.sin(time * 60) > 0.6 ? 0.06 : 0)})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = `rgba(200,250,255,${0.18 * k})`;
+      for (let i = 0; i < 6; i++) { const y = ((time * 900 + i * 173) % h); ctx.fillRect(0, y, w, 2 * dpr); }
     }
     // затемнения: сюжетное и при переходе между помещениями
     const fade = Math.max(AB.Story.fx.fade, AB.Rooms.fade());
