@@ -244,7 +244,7 @@ AB.ROOMS.push(
     map: { x: 1160, y: 4, w: 200, h: 38 },
     connections: [{ door: 'west', to: 'ROOM-008', toDoor: 'east' }, { door: 'east', to: 'ROOM-006', toDoor: 'west' }],
     access: { type: 'open' },
-    items: [{ key: 'ammo-lab', item: 'ITEM-008', qty: 4, x: 1880 }],
+    items: [{ key: 'meds-lab', item: 'ITEM-005', qty: 1, x: 1880 }],
     containers: [], enemies: ['ENEMY-004', 'ENEMY-005'], equipment: [],
     events: ['EVENT-008'], state: 'infested', spawn: { x: 140 },
     doors: [
@@ -272,7 +272,7 @@ AB.ROOMS.push(
     access: { type: 'open' },
     items: [],
     containers: [
-      { key: 'gun-locker', x: 640, prop: 'cabinet', label: 'Шкаф с оружием', loot: [['ITEM-011', 1], ['ITEM-008', 6]] },
+      { key: 'gun-locker', x: 640, prop: 'cabinet', label: 'Шкаф с оружием', loot: [['ITEM-011', 1]] },
     ],
     enemies: [], equipment: [], events: [], state: 'sealed', spawn: { x: 140 },
     doors: [
@@ -292,7 +292,7 @@ AB.ROOMS.push(
     map: { x: 1480, y: -6, w: 200, h: 58 },
     connections: [{ door: 'west', to: 'ROOM-006', toDoor: 'east' }, { door: 'east', to: 'ROOM-010', toDoor: 'west' }],
     access: { type: 'open' },
-    items: [{ key: 'ammo-ls', item: 'ITEM-008', qty: 6, x: 420 }],
+    items: [{ key: 'meds-ls', item: 'ITEM-005', qty: 1, x: 420 }],
     containers: [], enemies: ['ENEMY-003'], equipment: [],
     events: ['EVENT-009'], state: 'flooded', spawn: { x: 140 },
     doors: [

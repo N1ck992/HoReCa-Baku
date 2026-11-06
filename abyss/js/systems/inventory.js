@@ -35,7 +35,7 @@ AB.Inventory = (() => {
     if (!def) return 0;
     // боеприпасы заряжаются прямо в оружие дальнего боя, если оно в руках
     const w = bag(charId)[WEAPON];
-    if (def.category === 'ammo' && w && AB.ID.get(w.item).weapon.ranged) {
+    if (def.category === 'ammo' && w && w.ammo != null && AB.ID.get(w.item).weapon.ranged) {
       const taken = Math.min(qty, AMMO_CAP - (w.ammo || 0));
       if (taken > 0) { w.ammo = (w.ammo || 0) + taken; AB.Bus.emit('inventory:changed', { charId, itemId, delta: taken }); }
       return taken;
@@ -45,7 +45,7 @@ AB.Inventory = (() => {
     if (!cur) {
       taken = Math.min(qty, def.stack);
       b[i] = { item: itemId, qty: taken };
-      if (def.weapon && def.weapon.ranged) b[i].ammo = 0;
+      if (def.weapon && def.weapon.ranged && !def.weapon.energy) b[i].ammo = 0;
     } else if (cur.item === itemId) {
       taken = Math.min(qty, def.stack - cur.qty);
       cur.qty += taken;
@@ -55,13 +55,13 @@ AB.Inventory = (() => {
       AB.Bus.emit('inventory:swapped', { charId, dropped: cur.item, qty: cur.qty, taken: itemId });
       taken = Math.min(qty, def.stack);
       b[i] = { item: itemId, qty: taken };
-      if (def.weapon && def.weapon.ranged) b[i].ammo = 0;
+      if (def.weapon && def.weapon.ranged && !def.weapon.energy) b[i].ammo = 0;
     }
     if (taken) {
       if (i === WEAPON) syncHands(charId);
       // взяли ружьё — гарпуны из рюкзака сразу уходят в магазин
       const pk = b[PACK];
-      if (i === WEAPON && def.weapon.ranged && pk && AB.ID.get(pk.item).category === 'ammo') {
+      if (i === WEAPON && def.weapon.ranged && b[WEAPON].ammo != null && pk && AB.ID.get(pk.item).category === 'ammo') {
         const load = Math.min(pk.qty, AMMO_CAP - (b[WEAPON].ammo || 0));
         b[WEAPON].ammo = (b[WEAPON].ammo || 0) + load;
         pk.qty -= load;
@@ -130,7 +130,58 @@ AB.Inventory = (() => {
     return true;
   }
 
+  // ---------- Энергетическое оружие: нагрев вместо боезапаса ----------
+  // heat 0…1; на 1 — перегрев, стрелять нельзя, пока не остынет до 0
+  function heat(charId) {
+    const w = bag(charId)[WEAPON];
+    const wd = w && AB.ID.get(w.item).weapon;
+    if (!wd || !wd.energy) return null;
+    return { heat: w.heat || 0, over: !!w.over };
+  }
+  function fire(charId) {
+    const w = bag(charId)[WEAPON];
+    const wd = w && AB.ID.get(w.item).weapon;
+    if (!wd || !wd.energy || w.over) return false;
+    w.heat = Math.min(1, (w.heat || 0) + wd.heatPerShot);
+    w.coolT = wd.coolDelay;
+    if (w.heat >= 0.999) { w.over = true; AB.Bus.emit('weapon:overheat', { charId }); }
+    return true;
+  }
+  function cool(dt) {
+    for (const [charId, b] of bags) {
+      const w = b[WEAPON];
+      const wd = w && AB.ID.get(w.item).weapon;
+      if (!wd || !wd.energy || !w.heat) continue;
+      if (w.coolT > 0) { w.coolT -= dt; continue; }
+      w.heat = Math.max(0, w.heat - wd.coolRate * dt * (w.over ? 1.2 : 1));
+      if (w.over && w.heat === 0) { w.over = false; AB.Bus.emit('weapon:cooled', { charId }); }
+    }
+  }
+
+  // ---------- Обмен между участниками группы ----------
+  // Слот целиком меняется местами (пустой — значит просто передать или взять).
+  function exchangeBlock(fromId, toId, i) {
+    const a = AB.Chars.get(fromId), c = AB.Chars.get(toId);
+    if (!a || !c || c.dead || a.dead) return 'Некому передать';
+    if (a.room !== c.room) return 'В другом помещении';
+    if (Math.abs(a.x - c.x) > 240) return 'Слишком далеко — подойдите ближе';
+    if (!bag(fromId)[i] && !bag(toId)[i]) return 'Нечего передавать';
+    return null;
+  }
+  function exchange(fromId, toId, i) {
+    if (exchangeBlock(fromId, toId, i)) return false;
+    const a = bag(fromId), c = bag(toId);
+    const given = a[i], taken = c[i];
+    a[i] = taken; c[i] = given;
+    if (i === WEAPON) { syncHands(fromId); syncHands(toId); }
+    AB.Bus.emit('inventory:changed', { charId: fromId, itemId: (taken || given).item, delta: 0 });
+    AB.Bus.emit('inventory:changed', { charId: toId, itemId: (given || taken).item, delta: 0 });
+    AB.Bus.emit('inventory:exchange', { fromId, toId, slot: i, given: given && given.item, taken: taken && taken.item });
+    return true;
+  }
+
   return {
+    heat, fire, cool, exchange, exchangeBlock,
     SLOTS, WEAPON, PACK, AMMO_CAP, add, remove, count, slot, use, useBlock, drop,
     ammo: (charId) => { const w = bag(charId)[WEAPON]; return w && w.ammo != null ? w.ammo : null; },
     spendAmmo: (charId) => { const w = bag(charId)[WEAPON]; if (!w || !w.ammo) return false; w.ammo--; return true; },

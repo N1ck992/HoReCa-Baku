@@ -25,11 +25,13 @@ AB.ITEMS = [
     desc: 'Обрезок трубы. Тяжёлый и надёжный. Можно взять в руки как оружие.' },
   { id: 'ITEM-010', name: 'Ключ-карта', short: 'КЛЮЧ', category: 'key', stack: 1, icon: 'ASSET-ITEM010-01', use: null,
     desc: 'Магнитная карта доступа. Открывает дверь в конце коридора.' },
-  { id: 'ITEM-008', name: 'Гарпуны', short: 'ГРП', category: 'ammo', stack: 18, icon: 'ASSET-ITEM008-01', use: null,
-    desc: 'Гарпуны для гарпунного ружья. Если ружьё в руках, заряжаются прямо в него.' },
-  { id: 'ITEM-011', name: 'Гарпунное ружьё', short: 'РУЖ', category: 'weapon', stack: 1, icon: 'ASSET-ITEM011-01', use: null,
-    weapon: { damage: 45, range: 720, cooldown: 0.75, hitAt: 0.08, ranged: true, ammoMax: 6, bash: 10 },
-    desc: 'Пневматическое ружьё исследовательского судна. Бьёт далеко и пробивает броню. Заряд — 6 гарпунов.' },
+  { id: 'ITEM-008', name: 'Боеприпасы', short: 'БП', category: 'ammo', stack: 60, icon: 'ASSET-ITEM008-01', use: null,
+    desc: 'Боеприпасы. Пока не используются: плазмомёту патроны не нужны.' },
+  // дополнение №26: вместо гарпунного ружья — наручный плазмомёт без боезапаса (ID тот же)
+  { id: 'ITEM-011', name: 'Наручный плазмомёт', short: 'ПЛЗ', category: 'weapon', stack: 1, icon: 'ASSET-ITEM011-01', use: null,
+    weapon: { damage: 40, range: 680, cooldown: 0.55, hitAt: 0.1, ranged: true, energy: true,
+      heatPerShot: 0.2, coolRate: 0.4, coolDelay: 0.6, bash: 10 },
+    desc: 'Плазменный излучатель на запястье, инструмент для резки корпуса. Боезапас не нужен, но после 5 выстрелов подряд перегревается и пару секунд остывает. Плазма пробивает броню.' },
 ];
 
 AB.ITEMS.forEach((i) => AB.ID.register(i.id, i));

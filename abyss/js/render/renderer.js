@@ -44,7 +44,14 @@ AB.Render = (() => {
       hurtFlash = 1; shake = Math.max(shake, 10);
     });
     AB.Bus.on('combat:swing', ({ landed }) => { if (!landed) shake = Math.max(shake, 1.5); });
-    AB.Bus.on('combat:shot', ({ fromX, toX }) => {
+    AB.Bus.on('combat:shot', ({ fromX, toX, landed, energy }) => {
+      if (energy) {
+        // плазменный сгусток летит к цели; при попадании — вспышка
+        const life = Math.max(0.08, Math.abs(toX - fromX) / 2200);
+        particles.push({ k: 'bolt', x: fromX, x0: fromX, x2: toX, y: -80, vx: 0, vy: 0, life, age: 0, s: 1, hit: landed });
+        shake = Math.max(shake, 1.5);
+        return;
+      }
       particles.push({ k: 'tracer', x: fromX, x2: toX, y: -78, vx: 0, vy: 0, life: 0.14, age: 0, s: 1 });
       shake = Math.max(shake, 2.5);
     });
@@ -955,7 +962,7 @@ AB.Render = (() => {
       ctx.restore();
       // ближняя рука (и оружие в ней)
       const hand = limb(3, shY + 3, P.shL, 21, -P.elL, 20, 8.5, mid);
-      if (hero.equipped) drawWeapon(hand, P.shL - P.elL + (P.pipe ?? 0.35), hero.equipped);
+      if (hero.equipped) drawWeapon(hand, P.shL - P.elL + (P.pipe ?? 0.35), hero.equipped, P.shL - P.elL, hero.id);
       ctx.restore();
       // ближняя нога
       limb(2, hipY, P.hipL, 27, -P.kneeL, 27, 10, mid);
@@ -1087,15 +1094,37 @@ AB.Render = (() => {
       const w = rigBone(fo.img, fo.spec, e.x, e.y, foreAng, fo.len);
       if (hero.equipped) {
         const hand = { fx: w.x + Math.sin(foreAng) * 4, fy: w.y + Math.cos(foreAng) * 4 };
-        drawWeapon(hand, foreAng + (P.pipe ?? 0.35), hero.equipped);
+        drawWeapon(hand, foreAng + (P.pipe ?? 0.35), hero.equipped, foreAng, hero.id);
       }
     }
     ctx.restore();
   }
 
   // ---------- Оружие в руке: труба (ASSET-ITEM009-01) или гарпунное ружьё (ASSET-ITEM011-01) ----------
-  function drawWeapon(hand, ang, itemId) {
+  function drawWeapon(hand, ang, itemId, foreAng, owner) {
     const wdef = itemId && AB.ID.get(itemId);
+    if (wdef && wdef.weapon && wdef.weapon.energy) {
+      // наручный плазмомёт: обруч на предплечье и излучатель у кисти, всегда вдоль руки
+      const a = foreAng ?? ang;
+      const ht = owner ? AB.Inventory.heat(owner) : null;
+      const h = ht ? ht.heat : 0;
+      ctx.save();
+      ctx.translate(hand.fx, hand.fy);
+      ctx.rotate(-a + Math.PI / 2);        // ось +x — от локтя к кисти
+      ctx.fillStyle = '#2b3036';
+      ctx.fillRect(-22, -5.5, 22, 11);     // корпус на предплечье
+      ctx.fillStyle = '#3d444c';
+      ctx.fillRect(-20, -6.5, 5, 13); ctx.fillRect(-9, -6.5, 5, 13);   // хомуты
+      ctx.fillStyle = '#1a1d21';
+      ctx.fillRect(0, -4, 7, 8);           // излучатель
+      // катушки светятся от нагрева: голубой → фиолетовый → оранжевый
+      const col = h < 0.5 ? [94, 230, 255] : h < 0.85 ? [180, 140, 255] : [255, 120, 60];
+      ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${0.55 + h * 0.45})`;
+      ctx.fillRect(-17, -2, 3, 4); ctx.fillRect(-12, -2, 3, 4); ctx.fillRect(-7, -2, 3, 4);
+      ctx.beginPath(); ctx.arc(7.5, 0, 2.6, 0, 7); ctx.fill();
+      ctx.restore();
+      return;
+    }
     if (wdef && wdef.weapon && wdef.weapon.ranged) {
       // ружьё: приклад у руки, ствол вдоль руки, гарпун торчит из дула
       ctx.save();
@@ -1809,6 +1838,23 @@ AB.Render = (() => {
       if (layer === 'back' && p.k === 'blood') {
         ctx.fillStyle = `rgba(90,10,10,${0.9 * a})`;
         ctx.fillRect(x, y, p.s, p.s);
+      }
+      if (layer === 'glow' && p.k === 'bolt') {
+        const t = Math.min(1, p.age / p.life);
+        const bx = sx(p.x0 + (p.x2 - p.x0) * t), dir = Math.sign(p.x2 - p.x0) || 1;
+        const tail = ctx.createLinearGradient(bx - dir * 46, 0, bx, 0);
+        tail.addColorStop(0, 'rgba(150,110,255,0)');
+        tail.addColorStop(1, 'rgba(170,140,255,.75)');
+        ctx.strokeStyle = tail; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(bx - dir * 46, y); ctx.lineTo(bx, y); ctx.stroke();
+        const g = ctx.createRadialGradient(bx, y, 0, bx, y, 16);
+        g.addColorStop(0, 'rgba(240,250,255,1)'); g.addColorStop(0.35, 'rgba(140,220,255,.85)'); g.addColorStop(1, 'rgba(120,90,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(bx - 16, y - 16, 32, 32);
+        if (t >= 0.85 && !p.done) {
+          p.done = true;
+          if (p.hit) for (let i = 0; i < 10; i++) particles.push({ k: 'spark', x: p.x2, y: p.y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 260, vy: -Math.random() * 160, life: 0.35, age: 0, s: 2 });
+        }
+        continue;
       }
       if (layer === 'glow' && p.k === 'tracer') {
         const g = ctx.createLinearGradient(sx(p.x), 0, sx(p.x2), 0);

@@ -66,7 +66,7 @@
     const chip = (s) => {
       if (!s) return '<u class="empty">—</u>';
       const d = AB.ID.get(s.item);
-      return `<u title="${d.name}">${d.short}${s.ammo != null ? ` ${s.ammo}` : s.qty > 1 ? ` ×${s.qty}` : ''}</u>`;
+      return `<u title="${d.name}" class="${s.over ? 'hot' : ''}">${d.short}${s.ammo != null ? ` ${s.ammo}` : s.qty > 1 ? ` ×${s.qty}` : ''}</u>`;
     };
     const html = list.length < 2 ? '' : list.map((c) => {
       const d = AB.ID.get(c.id), lead = AB.Party.isLeader(c.id);
@@ -81,12 +81,20 @@
 
   // ---------- Патроны дальнобойного оружия и полоса босса ----------
   function updateCombatHud() {
-    const a = AB.Inventory.ammo(L());
-    ui.ammo.hidden = a == null;
-    if (a != null) {
-      const txt = `Гарпуны: ${a}`;
+    // плазмомёт: шкала нагрева; старое оружие — счётчик зарядов
+    const ht = AB.Inventory.heat(L()), a = AB.Inventory.ammo(L());
+    ui.ammo.hidden = !ht && a == null;
+    if (ht) {
+      const html = ht.over ? '<span>ПЕРЕГРЕВ</span><i><b style="width:' + Math.round(ht.heat * 100) + '%"></b></i>'
+        : '<span>Плазма</span><i><b style="width:' + Math.round(ht.heat * 100) + '%"></b></i>';
+      if (ui.ammo.innerHTML !== html) ui.ammo.innerHTML = html;
+      ui.ammo.classList.toggle('low', ht.over);
+      ui.ammo.classList.add('heat');
+    } else if (a != null) {
+      const txt = `Заряды: ${a}`;
       if (ui.ammo.textContent !== txt) ui.ammo.textContent = txt;
       ui.ammo.classList.toggle('low', a === 0);
+      ui.ammo.classList.remove('heat');
     }
     const boss = AB.Enemies.inRoom(AB.Rooms.current())
       .find((s) => AB.ID.get(s.id).type === 'boss' && s.state !== 'DORMANT' && s.state !== 'DEAD');
@@ -117,7 +125,16 @@
         ${label}${face}${s.qty > 1 ? `<em>${s.qty}</em>` : ''}</button>`;
     }).join('');
     const s = slots[selected];
-    let detail = `<p class="muted">${selected === 0 ? 'Оружия нет. Подберите что-нибудь тяжёлое.' : 'Рюкзак пуст. В нём помещается одна вещь.'}</p>`;
+    // обмен с остальными в группе: тот же слот у каждого
+    const swaps = AB.Party.members().filter((m) => m.id !== L()).map((m) => {
+      const os = AB.Inventory.slot(m.id, selected);
+      if (!s && !os) return '';
+      const name = AB.ID.get(m.id).name;
+      const block = AB.Inventory.exchangeBlock(L(), m.id, selected);
+      const label = s && os ? `Обменяться ⇄ ${name}: ${itemName(os.item)}` : s ? `Отдать → ${name}` : `Взять ← ${name}: ${itemName(os.item)}`;
+      return `<button data-inv="give" data-to="${m.id}" ${block ? `disabled title="${block}"` : ''}>${label}</button>${block ? `<div class="muted">${block}</div>` : ''}`;
+    }).join('');
+    let detail = `<p class="muted">${selected === 0 ? 'Оружия нет. Подберите что-нибудь тяжёлое.' : 'Рюкзак пуст. В нём помещается одна вещь.'}</p>${swaps ? `<div class="inv-actions">${swaps}</div>` : ''}`;
     if (s) {
       const def = AB.ID.get(s.item);
       const block = AB.Inventory.useBlock(L(), selected);
@@ -127,8 +144,9 @@
         <div class="inv-actions">
           ${def.use ? `<button data-inv="use" ${block ? 'disabled' : ''}>Использовать</button>` : ''}
           <button data-inv="drop" class="ghost">Выбросить</button>
+          ${swaps}
         </div>
-        ${def.weapon ? `<div class="muted">В руках · урон ${def.weapon.damage} · удар: ${isTouch ? 'кнопка ⚔' : 'F, J, пробел или клик'}</div>` : ''}
+        ${def.weapon ? `<div class="muted">В руках · урон ${def.weapon.damage}${def.weapon.energy ? ' · без боезапаса, перегрев после 5 выстрелов' : ''} · ${def.weapon.ranged ? 'выстрел' : 'удар'}: ${isTouch ? 'кнопка ⚔' : 'F, J, пробел или клик'}</div>` : ''}
         ${!def.weapon && block ? `<div class="muted">${block}</div>` : ''}`;
     }
     $('#inv-grid').innerHTML = grid;
@@ -157,6 +175,7 @@
     const act = e.target.closest('[data-inv]');
     if (act && !act.disabled) {
       if (act.dataset.inv === 'use' && AB.Inventory.use(L(), selected)) toast('Медикаменты использованы', 'good');
+      if (act.dataset.inv === 'give') AB.Inventory.exchange(L(), act.dataset.to, selected);
       if (act.dataset.inv === 'drop') {
         const s = AB.Inventory.slot(L(), selected);
         if (s && AB.Inventory.drop(L(), selected)) toast(`Выброшено: ${itemName(s.item)}${s.qty > 1 ? ` ×${s.qty}` : ''}`, 'info');
@@ -349,7 +368,12 @@
     updateHp();
     if (!ui.inv.hidden) renderInventory();
   });
-  AB.Bus.on('combat:noammo', ({ charId }) => charId === L() && toast('Гарпунов нет — бьёте прикладом. Ищите гарпуны', 'info'));
+  AB.Bus.on('combat:noammo', ({ charId }) => charId === L() && toast('Зарядов нет — удар прикладом', 'info'));
+  AB.Bus.on('weapon:overheat', ({ charId }) => charId === L() && toast('Плазмомёт перегрет — пара секунд на остывание', 'info'));
+  AB.Bus.on('inventory:exchange', ({ fromId, toId, given, taken }) => {
+    const to = AB.ID.get(toId).name;
+    toast(given && taken ? `Обмен с ${to}: ${itemName(given)} ⇄ ${itemName(taken)}` : given ? `${to} получает: ${itemName(given)}` : `Взято у ${to}: ${itemName(taken)}`, 'good');
+  });
   AB.Bus.on('npc:talk', ({ healed }) => { if (healed) toast('Доктор Хейл перевязал раны', 'good'); });
   // ---------- Конец акта ----------
   AB.Bus.on('act:end', ({ act }) => {
@@ -396,7 +420,7 @@
       return;
     }
     if (kind === 'boss') {
-      ui.hint.innerHTML = `Колосс: броня держит удары трубы — стреляйте гарпунами (${isTouch ? '⚔' : '<kbd>F</kbd>'}) и держите дистанцию`;
+      ui.hint.innerHTML = `Колосс: броня держит удары трубы — стреляйте плазмой (${isTouch ? '⚔' : '<kbd>F</kbd>'}) и держите дистанцию`;
       ui.hint.classList.add('show');
       setTimeout(() => ui.hint.classList.remove('show'), 7000);
       return;

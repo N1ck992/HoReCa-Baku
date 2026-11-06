@@ -299,3 +299,11 @@ body.touch #prompt.no { border-color: rgba(255, 59, 47, .45); color: #ffb3aa; bo
 body.touch #prompt:active { background: rgba(94, 230, 255, .18); }
 body.touch #navbox { width: min(240px, 30vw); }
 body.touch #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+
+/* ---------- Нагрев плазмомёта ---------- */
+#hud-ammo.heat { display: flex; align-items: center; gap: 6px; }
+#hud-ammo.heat[hidden] { display: none; }
+#hud-ammo.heat i { display: block; width: 90px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+#hud-ammo.heat b { display: block; height: 100%; background: linear-gradient(90deg, #5ee6ff, #b48cff 60%, #ff6a3a); transition: width .1s; }
+#hud-ammo.heat.low span { color: #ff8a5a; animation: hp-low .5s infinite; }
+#party .pm u.hot { color: #ff8a5a; }

@@ -24,15 +24,17 @@ AB.Combat = (() => {
     if (!canAttack(charId, ai)) return false;
     const w = weaponOf(charId);
     if (!w) { AB.Bus.emit('combat:noweapon', { charId }); return false; }
-    // оружие дальнего боя без гарпунов — удар прикладом
-    const shot = w.weapon.ranged && AB.Inventory.spendAmmo(charId);
-    if (w.weapon.ranged && !shot) AB.Bus.emit('combat:noammo', { charId });
+    // плазма: выстрел, если не перегрет; иначе — удар корпусом излучателя.
+    // старое оружие с боезапасом: без зарядов — удар прикладом
+    const shot = w.weapon.ranged && (w.weapon.energy ? AB.Inventory.fire(charId) : AB.Inventory.spendAmmo(charId));
+    if (w.weapon.ranged && !shot) AB.Bus.emit(w.weapon.energy ? 'combat:overheated' : 'combat:noammo', { charId });
     swings.set(charId, { t: 0, weapon: w, hit: false, shot });
     AB.Chars.playAction(charId, 'attack');
     return true;
   }
 
   function update(dt) {
+    AB.Inventory.cool(dt);
     for (const [charId, sw] of swings) {
       sw.t += dt;
       const w = sw.weapon.weapon;
@@ -47,7 +49,7 @@ AB.Combat = (() => {
             .sort((a, b) => Math.abs(a.x - c.x) - Math.abs(b.x - c.x));
           const hit = targets[0];
           if (hit) landed = AB.Enemies.damage(hit.id, w.damage, c.x, 'ranged');
-          AB.Bus.emit('combat:shot', { charId, fromX: c.x + c.facing * 40, toX: hit ? hit.x : c.x + c.facing * w.range, landed });
+          AB.Bus.emit('combat:shot', { charId, fromX: c.x + c.facing * 40, toX: hit ? hit.x : c.x + c.facing * w.range, landed, energy: !!w.energy });
         } else {
           const dmg = w.ranged ? w.bash : w.damage, reach = w.ranged ? 60 : w.range;
           for (const e of AB.Enemies.inRoom(c.room)) {

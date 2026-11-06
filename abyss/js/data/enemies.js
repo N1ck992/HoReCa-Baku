@@ -77,7 +77,7 @@ AB.ENEMIES.push({
 const MUTANT = AB.ENEMIES.find((e) => e.id === 'ENEMY-001');
 AB.ENEMIES.push(
   { ...MUTANT, id: 'ENEMY-004', carry: null, spawn: { room: 'ROOM-007', x: 900, patrol: [700, 1150], requires: [] } },
-  { ...MUTANT, id: 'ENEMY-005', carry: 'ITEM-008', spawn: { room: 'ROOM-007', x: 1500, patrol: [1350, 1750], requires: [] } },
+  { ...MUTANT, id: 'ENEMY-005', carry: null, spawn: { room: 'ROOM-007', x: 1500, patrol: [1350, 1750], requires: [] } },
 );
 
 // ENEMY-003 — Колосс: огромный мутант в системе жизнеобеспечения (босс первого акта).
