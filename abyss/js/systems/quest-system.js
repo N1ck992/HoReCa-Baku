@@ -14,7 +14,7 @@ AB.Quests = (() => {
       return AB.Rooms.current() === o.done.room && c && c.room === o.done.room && !c.dead;
     }
     if (o.done.room) return AB.Rooms.visited().includes(o.done.room);
-    if (o.done.weapon) { const w = AB.Inventory.weapon('CHAR-001'); return !!w && w.item === o.done.weapon; }
+    if (o.done.weapon) return AB.Chars.all().some((c) => { const w = AB.Inventory.weapon(c.id); return !!w && w.item === o.done.weapon; });
     if (o.done.enemyDead) return AB.Enemies.isDead(o.done.enemyDead);
     if (o.done.equip) {
       const s = AB.Equip.state(o.done.equip);

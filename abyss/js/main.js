@@ -4,7 +4,8 @@
 
 (() => {
   const $ = (s) => document.querySelector(s);
-  const HERO = 'CHAR-001';
+  const MARK = 'CHAR-001';
+  const L = () => AB.Party.leader();   // кем сейчас управляет игрок (ведущий группы)
   const isTouch = matchMedia('(pointer: coarse)').matches;
 
   // ---------- Интерфейс ----------
@@ -26,7 +27,12 @@
     ammo: $('#hud-ammo'),
     boss: $('#bossbar'),
     actEnd: $('#act-end'),
+    party: $('#party'),
   };
+  ui.party.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-char]');
+    if (b && !AB.Party.isLeader(b.dataset.char)) switchLeader(b.dataset.char);
+  });
   let toastTimer = null;
 
   function toast(text, kind = 'bad') {
@@ -37,16 +43,44 @@
   }
 
   function updateHp() {
-    const h = AB.Chars.get(HERO);
+    const h = AB.Chars.get(L());
     if (!h) return;
-    const max = AB.ID.get(HERO).stats.maxHp;
+    const max = AB.ID.get(L()).stats.maxHp;
     ui.hp.innerHTML = `<i style="width:${(h.hp / max) * 100}%"></i><span>${Math.round(h.hp)} / ${max}</span>`;
     ui.hp.classList.toggle('low', h.hp / max < 0.35);
   }
 
+  // ---------- Группа: кто ведёт, здоровье, оружие и рюкзак каждого ----------
+  function switchLeader(id) {
+    const list = AB.Party.members();
+    if (list.length < 2) return;
+    const to = id || list[1].id;
+    const block = AB.Party.switchBlock(to);
+    if (block) { toast(`${AB.ID.get(to).name}: ${block.charAt(0).toLowerCase()}${block.slice(1)}`, 'info'); return; }
+    AB.Party.setLeader(to);
+  }
+  let lastParty = '';
+  function updateParty() {
+    const list = AB.Party.members();
+    const chip = (s) => {
+      if (!s) return '<u class="empty">—</u>';
+      const d = AB.ID.get(s.item);
+      return `<u title="${d.name}">${d.short}${s.ammo != null ? ` ${s.ammo}` : s.qty > 1 ? ` ×${s.qty}` : ''}</u>`;
+    };
+    const html = list.length < 2 ? '' : list.map((c) => {
+      const d = AB.ID.get(c.id), lead = AB.Party.isLeader(c.id);
+      return `<button class="pm ${lead ? 'lead' : ''}" data-char="${c.id}" aria-pressed="${lead}" title="${lead ? 'Ведёт группу' : `Передать управление (${isTouch ? '⇄' : 'Q'})`}">
+        <b>${lead ? '▸ ' : ''}${d.name}</b><i style="width:${Math.round((c.hp / d.stats.maxHp) * 100)}%"></i>
+        <span>${chip(AB.Inventory.weapon(c.id))}${chip(AB.Inventory.pack(c.id))}</span></button>`;
+    }).join('');
+    if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
+    ui.party.hidden = !html;
+    document.body.classList.toggle('has-party', !!html);
+  }
+
   // ---------- Патроны дальнобойного оружия и полоса босса ----------
   function updateCombatHud() {
-    const a = AB.Inventory.ammo(HERO);
+    const a = AB.Inventory.ammo(L());
     ui.ammo.hidden = a == null;
     if (a != null) {
       const txt = `Гарпуны: ${a}`;
@@ -69,7 +103,7 @@
   const SLOT_NAMES = ['Оружие', 'Рюкзак'];
 
   function renderInventory() {
-    const slots = AB.Inventory.slots(HERO);
+    const slots = AB.Inventory.slots(L());
     const grid = slots.map((s, i) => {
       const label = `<span class="slot-label">${SLOT_NAMES[i]}</span>`;
       if (!s) return `<button class="slot empty ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${SLOT_NAMES[i]}: пусто">${label}</button>`;
@@ -85,7 +119,7 @@
     let detail = `<p class="muted">${selected === 0 ? 'Оружия нет. Подберите что-нибудь тяжёлое.' : 'Рюкзак пуст. В нём помещается одна вещь.'}</p>`;
     if (s) {
       const def = AB.ID.get(s.item);
-      const block = AB.Inventory.useBlock(HERO, selected);
+      const block = AB.Inventory.useBlock(L(), selected);
       detail = `
         <h3>${def.name}${s.qty > 1 ? ` ×${s.qty}` : ''}</h3>
         <p>${def.desc}</p>
@@ -98,12 +132,12 @@
     }
     $('#inv-grid').innerHTML = grid;
     $('#inv-detail').innerHTML = detail;
-    $('#inv-owner').textContent = `${AB.ID.get(HERO).name} · одна вещь в рюкзаке, оружие отдельно`;
+    $('#inv-owner').textContent = `${AB.ID.get(L()).name} · одна вещь в рюкзаке, оружие отдельно`;
     updateHp();
   }
 
   function openInventory() {
-    const h = AB.Chars.get(HERO);
+    const h = AB.Chars.get(L());
     if (!h || !h.controllable || AB.Rooms.inTransition() || AB.Interact.isSearching()) return;
     ui.inv.hidden = false;
     AB.Input.lock();
@@ -121,10 +155,10 @@
     if (slot) { selected = Number(slot.dataset.slot); renderInventory(); return; }
     const act = e.target.closest('[data-inv]');
     if (act && !act.disabled) {
-      if (act.dataset.inv === 'use' && AB.Inventory.use(HERO, selected)) toast('Медикаменты использованы', 'good');
+      if (act.dataset.inv === 'use' && AB.Inventory.use(L(), selected)) toast('Медикаменты использованы', 'good');
       if (act.dataset.inv === 'drop') {
-        const s = AB.Inventory.slot(HERO, selected);
-        if (s && AB.Inventory.drop(HERO, selected)) toast(`Выброшено: ${itemName(s.item)}${s.qty > 1 ? ` ×${s.qty}` : ''}`, 'info');
+        const s = AB.Inventory.slot(L(), selected);
+        if (s && AB.Inventory.drop(L(), selected)) toast(`Выброшено: ${itemName(s.item)}${s.qty > 1 ? ` ×${s.qty}` : ''}`, 'info');
       }
       renderInventory();
       AB.Save.save();
@@ -143,7 +177,7 @@
   const mctx = $('#minimap').getContext('2d');
   function drawMinimap() {
     const r = AB.Rooms.room();
-    const hero = AB.Chars.get(HERO);
+    const hero = AB.Chars.get(L());
     if (!r || !hero) return;
     const cv = mctx.canvas, dpr = Math.min(2, devicePixelRatio || 1);
     const W = cv.clientWidth, H = cv.clientHeight;
@@ -185,7 +219,7 @@
   let lastNav = '';
   function updateNav() {
     const h = AB.Nav.hint();
-    const hero = AB.Chars.get(HERO);
+    const hero = AB.Chars.get(L());
     const show = h && hero && hero.controllable;
     const html = show ? `<b class="${h.kind}">${h.dir < 0 ? '◀' : '▶'}</b> ${h.text} · ${Math.round(h.dist / 10)} м` : '';
     if (html !== lastNav) { ui.nav.innerHTML = html; lastNav = html; }
@@ -195,7 +229,7 @@
   // ---------- Карта корабля ----------
   function openMap() {
     if (!ui.inv.hidden) closeInventory();
-    const h = AB.Chars.get(HERO);
+    const h = AB.Chars.get(L());
     if (!h || h.dead) return;
     ui.map.hidden = false;
     AB.Input.lock();
@@ -211,7 +245,7 @@
   function renderMap() {
     const visited = AB.Rooms.visited();
     const cur = AB.Rooms.current();
-    const hero = AB.Chars.get(HERO);
+    const hero = AB.Chars.get(L());
     const goal = AB.Nav.goal();
     const parts = [];
     const rooms = AB.ROOMS.filter((r) => r.map);
@@ -272,9 +306,9 @@
 
   let lastPrompt = '';
   function updatePrompt() {
-    const hero = AB.Chars.get(HERO);
+    const hero = AB.Chars.get(L());
     const p = hero && !AB.Rooms.inTransition() && ui.inv.hidden && (hero.controllable || AB.Interact.isSearching())
-      ? AB.Interact.prompt(HERO) : null;
+      ? AB.Interact.prompt(L()) : null;
     if (!p) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
     const key = isTouch ? '◉' : 'E';
     const html = p.progress !== undefined
@@ -287,8 +321,8 @@
   // ---------- События модулей ----------
   AB.Bus.on('room:enter', ({ roomId }) => { showRoom(roomId); AB.Save.save(); });
   AB.Bus.on('door:denied', ({ reason }) => toast(reason));
-  AB.Bus.on('item:pickup', ({ itemId, added, left }) => {
-    if (added) toast(`${AB.ID.get(itemId).weapon ? 'В руках' : 'В рюкзаке'}: ${itemName(itemId)}${added > 1 ? ` ×${added}` : ''}`, 'good');
+  AB.Bus.on('item:pickup', ({ charId, itemId, added, left }) => {
+    if (added) toast(`${charId !== MARK ? `${AB.ID.get(charId).name} · ` : ''}${AB.ID.get(itemId).weapon ? 'В руках' : 'В рюкзаке'}: ${itemName(itemId)}${added > 1 ? ` ×${added}` : ''}`, 'good');
     else toast('Не помещается');
     AB.Save.save();
   });
@@ -302,24 +336,29 @@
   AB.Bus.on('combat:noweapon', () => toast('Нечем драться: найдите что-нибудь тяжёлое', 'info'));
   AB.Bus.on('enemy:dead', ({ name }) => { toast(`${name} убит`, 'good'); setTimeout(() => AB.Save.save(), 1800); });
   AB.Bus.on('char:dead', ({ charId }) => {
-    if (charId !== HERO && charId !== 'CHAR-002') return;
+    if (charId !== MARK && charId !== 'CHAR-002') return;
     // гибель Марка или спутницы — конец: загрузка последнего сохранения
-    $('#death h2').textContent = charId === HERO ? 'Вы погибли' : 'Её больше нет';
-    if (charId !== HERO) { const h = AB.Chars.get(HERO); if (h) h.controllable = false; }
+    $('#death h2').textContent = charId === MARK ? 'Вы погибли' : 'Её больше нет';
+    const h = AB.Chars.get(L()); if (h) h.controllable = false;
     setTimeout(() => { ui.death.hidden = false; }, 1600);
   });
-  AB.Bus.on('combat:noammo', () => toast('Гарпунов нет — бьёте прикладом. Ищите гарпуны', 'info'));
+  AB.Bus.on('party:leader', ({ id }) => {
+    toast(`Ведёт группу: ${AB.ID.get(id).name}`, 'info');
+    updateHp();
+    if (!ui.inv.hidden) renderInventory();
+  });
+  AB.Bus.on('combat:noammo', ({ charId }) => charId === L() && toast('Гарпунов нет — бьёте прикладом. Ищите гарпуны', 'info'));
   AB.Bus.on('npc:talk', ({ healed }) => { if (healed) toast('Доктор Хейл перевязал раны', 'good'); });
   // ---------- Конец акта ----------
   AB.Bus.on('act:end', ({ act }) => {
-    const h = AB.Chars.get(HERO); if (h) h.controllable = false;
+    const h = AB.Chars.get(L()); if (h) h.controllable = false;
     AB.Save.save();
     ui.actEnd.querySelector('.act-no').textContent = `Конец ${act === 1 ? 'первого' : act} акта`;
     ui.actEnd.hidden = false;
   });
   $('#btn-act-continue').addEventListener('click', () => {
     ui.actEnd.hidden = true;
-    const h = AB.Chars.get(HERO); if (h) h.controllable = true;
+    const h = AB.Chars.get(L()); if (h) h.controllable = true;
   });
   $('#btn-act-new').addEventListener('click', () => { AB.Save.clear(); location.reload(); });
   AB.Bus.on('enemy:retreat', ({ id }) => { if (AB.ID.get(id).type === 'pursuer') toast('Он отступил в темноту', 'info'); });
@@ -334,7 +373,7 @@
   AB.Bus.on('inventory:swapped', ({ dropped, taken }) => {
     setTimeout(() => toast(`${itemName(taken)} в ${AB.ID.get(taken).weapon ? 'руках' : 'рюкзаке'} · на полу: ${itemName(dropped)}`, 'info'), 50);
   });
-  AB.Bus.on('transition:end', () => { const h = AB.Chars.get(HERO); if (h) h.controllable = true; });
+  AB.Bus.on('transition:end', () => { const h = AB.Chars.get(L()); if (h) h.controllable = true; });
   // после выхода из капсулы герой остаётся там, где закончилась анимация
   function finishWake(charId) {
     const h = AB.Chars.get(charId);
@@ -385,7 +424,7 @@
     const off = artOff();
     HERO_ART.forEach((id) => AB.Assets.setDisabled(id, off));
     $('#btn-hero-art').textContent = `Графика героя: ${off ? 'заглушка' : 'новая'}`;
-    const h = AB.Chars.get(HERO);
+    const h = AB.Chars.get(MARK);
     $('#btn-hero-suit').textContent = `Костюм: ${h && h.appearance === 'ASSET-CHAR001-02' ? 'повреждённый' : 'обычный'}`;
     $('#btn-hero-suit').disabled = off;
   }
@@ -394,8 +433,8 @@
     applyHeroArt();
   });
   $('#btn-hero-suit').addEventListener('click', () => {
-    const h = AB.Chars.get(HERO);
-    AB.Chars.setAppearance(HERO, h.appearance === 'ASSET-CHAR001-02' ? 'ASSET-CHAR001-01' : 'ASSET-CHAR001-02');
+    const h = AB.Chars.get(MARK);
+    AB.Chars.setAppearance(MARK, h.appearance === 'ASSET-CHAR001-02' ? 'ASSET-CHAR001-01' : 'ASSET-CHAR001-02');
     applyHeroArt();
     AB.Save.save();
   });
@@ -412,7 +451,7 @@
   let typeTimer = null;
   function showLine(l) {
     dlg.hidden = false;
-    dlg.classList.toggle('mark', l.speaker === HERO);
+    dlg.classList.toggle('mark', l.speaker === MARK);
     dlg.querySelector('.dlg-name').textContent = l.name;
     const txt = dlg.querySelector('.dlg-text');
     // печатаем текст по буквам
@@ -495,13 +534,14 @@
       AB.Quests.restore(save.quests);
       AB.Equip.restore(save.equipment);
       AB.World.restore(save.world);
-      const hero = AB.Chars.get(HERO);
+      AB.Party.restore(save.party);
+      const hero = AB.Chars.get(L());
       AB.Rooms.enter(save.rooms.current || 'ROOM-001', { x: hero ? hero.x : null });
       if (hero) hero.controllable = true;
       ui.title.remove();
     } else {
       const start = AB.ID.get('ROOM-001');
-      AB.Chars.spawn(HERO, { room: start.id, x: start.spawn.x });
+      AB.Chars.spawn(MARK, { room: start.id, x: start.spawn.x });
       AB.Rooms.setPropState('ROOM-001:cryopod-main', 'closed');
       AB.Rooms.enter('ROOM-001');
       AB.Story.trigger('new_game');
@@ -525,16 +565,18 @@
       last = now;
       AB.Story.update(dt);
       AB.World.update(dt);
-      { const h = AB.Chars.get(HERO); if (h && !AB.Rooms.inTransition()) AB.Story.zone(AB.Rooms.current(), h.x); }
-      if (skipRequested) { skipRequested = false; finishWake(HERO); }
+      { const h = AB.Chars.get(L()); if (h && !AB.Rooms.inTransition()) AB.Story.zone(AB.Rooms.current(), h.x); }
+      if (skipRequested) { skipRequested = false; finishWake(MARK); }
 
-      const hero = AB.Chars.get(HERO);
+      const hero = AB.Chars.get(L());
       if (hero && hero.controllable && !AB.Rooms.inTransition() && AB.Input.consumeAction()) {
-        AB.Interact.act(HERO);
+        AB.Interact.act(L());
       }
       if (hero && hero.controllable && !AB.Rooms.inTransition() && AB.Input.consumeAttack()) {
-        AB.Combat.attack(HERO);
+        AB.Combat.attack(L());
       }
+      if (AB.Input.consumeLead()) switchLeader();
+      AB.Party.update(dt);
       AB.Interact.update(dt);
       AB.Combat.update(dt);
       if (!AB.Rooms.inTransition()) AB.Enemies.update(dt);
@@ -549,6 +591,7 @@
       updateNav();
       updateQuest();
       updateCombatHud();
+      updateParty();
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

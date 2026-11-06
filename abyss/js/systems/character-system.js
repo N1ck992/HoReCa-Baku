@@ -28,6 +28,7 @@ AB.Chars = (() => {
       goal: null,       // { x, speed } — идти к точке (сюжетные сцены)
       follow: null,     // ID персонажа, за которым идёт
       flee: false,      // убегать от угрозы к дальней двери
+      engage: null,     // x, куда подойти для удара (ведомый в бою, PARTY SYSTEM)
     };
     live.set(charId, s);
     AB.Anim.play(charId, 'idle');
@@ -77,6 +78,10 @@ AB.Chars = (() => {
           }
           if (Math.abs(s.fleeX - s.x) > 10) s.goal = { x: s.fleeX, speed: def.stats.runSpeed, follow: false };
           else { s.goal = null; s.facing = Math.sign(threat.x - s.x) || s.facing; }  // ждёт у двери, открыть может только Марк
+        } else if (s.engage != null) {
+          // ведомый в бою: подходит на дистанцию удара или выстрела
+          if (Math.abs(s.engage - s.x) > 10) s.goal = { x: s.engage, speed: def.stats.runSpeed, follow: false };
+          else { s.goal = null; if (s.engageFace) s.facing = s.engageFace; }
         } else if (lead && lead.room === s.room) {
           const behind = lead.x - lead.facing * 85;
           const far = Math.abs(behind - s.x);
@@ -153,7 +158,7 @@ AB.Chars = (() => {
 
   // ведомые переходят в новое помещение вместе с ведущим
   AB.Bus.on('room:enter', ({ roomId }) => {
-    const hero = live.get('CHAR-001');
+    const hero = live.get(AB.Party.leader());
     if (!hero) return;
     for (const s of live.values()) {
       if (s.follow !== hero.id) continue;

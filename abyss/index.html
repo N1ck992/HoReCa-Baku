@@ -17,6 +17,7 @@
       <div id="hud-hp" aria-label="Здоровье"></div>
       <div id="hud-quest" aria-live="polite"></div>
       <div id="hud-ammo" hidden></div>
+      <div id="party" hidden aria-label="Группа: кто ведёт"></div>
     </div>
     <div class="hud-buttons">
       <button id="btn-map" class="hud-btn" title="Карта (M)">Карта</button>
@@ -53,6 +54,7 @@
     </div>
     <div class="pad">
       <button data-touch="run" aria-label="Бег">»</button>
+      <button data-touch="lead" class="lead-btn" aria-label="Передать управление">⇄</button>
       <button data-touch="attack" aria-label="Удар">⚔</button>
       <button data-touch="action" aria-label="Действие">◉</button>
     </div>
@@ -147,6 +149,7 @@
   <script src="js/systems/animation-manager.js"></script>
   <script src="js/systems/input.js"></script>
   <script src="js/systems/character-system.js"></script>
+  <script src="js/systems/party.js"></script>
   <script src="js/systems/room-system.js"></script>
   <script src="js/systems/story-events.js"></script>
   <script src="js/systems/inventory.js"></script>

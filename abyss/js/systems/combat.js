@@ -12,15 +12,16 @@ AB.Combat = (() => {
     return w ? AB.ID.get(w.item) : null;
   }
 
-  function canAttack(charId) {
+  function canAttack(charId, ai) {
     const c = AB.Chars.get(charId);
-    if (!c || c.dead || !c.controllable || swings.has(charId)) return false;
+    if (!c || c.dead || (!c.controllable && !ai) || swings.has(charId)) return false;
     const tr = AB.Anim.current(charId);
     return !(tr && ['hurt', 'death', 'wake'].includes(tr.action) && !tr.done);
   }
 
-  function attack(charId) {
-    if (!canAttack(charId)) return false;
+  // ai: true — бьёт ведомый сам (PARTY SYSTEM), без управления игроком
+  function attack(charId, { ai = false } = {}) {
+    if (!canAttack(charId, ai)) return false;
     const w = weaponOf(charId);
     if (!w) { AB.Bus.emit('combat:noweapon', { charId }); return false; }
     // оружие дальнего боя без гарпунов — удар прикладом

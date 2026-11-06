@@ -18,8 +18,8 @@ AB.Save = (() => {
   function save() {
     if (frozen) return false;
     // не сохраняем посреди боя и после гибели: загрузка вернёт к безопасной точке
-    const hero = AB.Chars.get('CHAR-001');
-    if (!hero || hero.dead || AB.Enemies.inCombat()) return false;
+    const hero = AB.Party.lead();
+    if (!hero || hero.dead || AB.Party.members().some((m) => m.dead) || AB.Enemies.inCombat()) return false;
     const data = {
       version: VERSION,
       savedAt: Date.now(),
@@ -31,6 +31,7 @@ AB.Save = (() => {
       quests: AB.Quests.serialize(),
       equipment: AB.Equip.serialize(),
       world: AB.World.serialize(),
+      party: AB.Party.serialize(),
     };
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }

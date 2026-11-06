@@ -56,7 +56,7 @@ AB.Rooms = (() => {
     }
     current = roomId;
     visited.add(roomId);
-    const hero = AB.Chars.get('CHAR-001');
+    const hero = AB.Party.lead();
     if (hero) {
       hero.room = roomId;
       if (x !== null) hero.x = x;
@@ -85,7 +85,7 @@ AB.Rooms = (() => {
 
   function canPass(door) {
     const opened = unlocked.has(`${current}:${door.key}`);
-    if (door.access.type === 'key' && !opened && !AB.Inventory.count('CHAR-001', door.access.item)) {
+    if (door.access.type === 'key' && !opened && !AB.Party.members().some((m) => m.room === current && AB.Inventory.count(m.id, door.access.item))) {
       return { ok: false, reason: door.access.reason || 'Нужен ключ' };
     }
     if (!door.to) return { ok: false, reason: door.access.reason || 'Проход закрыт' };

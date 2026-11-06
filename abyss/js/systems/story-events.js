@@ -13,7 +13,7 @@ AB.Story = (() => {
     lock_input: () => AB.Input.lock(),
     unlock_input: () => {
       AB.Input.unlock();
-      const hero = AB.Chars.get('CHAR-001');
+      const hero = AB.Party.lead();
       if (hero) hero.controllable = true;
     },
     fade: (s) => Object.assign(fx, { fadeFrom: s.from, fadeTo: s.to, fadeT: 0, fadeDur: s.duration || 0, fade: s.from }),

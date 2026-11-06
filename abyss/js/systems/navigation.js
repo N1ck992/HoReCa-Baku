@@ -59,7 +59,7 @@ AB.Nav = (() => {
 
   // Текст подсказки и направление для HUD
   function hint() {
-    const hero = AB.Chars.get('CHAR-001');
+    const hero = AB.Party.lead();
     // цель задания важнее исследования
     const qt = AB.Quests && AB.Quests.target();
     if (qt && hero) {

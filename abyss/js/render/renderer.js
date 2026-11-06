@@ -77,7 +77,7 @@ AB.Render = (() => {
 
   // ---------- Камера ----------
   function camTarget() {
-    const hero = AB.Chars.get('CHAR-001');
+    const hero = AB.Party.lead();
     const r = AB.Rooms.room();
     if (!hero || !r) return 0;
     const look = hero.facing * VW * 0.08;
@@ -316,8 +316,12 @@ AB.Render = (() => {
   }
 
   // ---------- Имя персонажа и вещь над головой ----------
+  // имена стоящих рядом не налезают друг на друга: следующее поднимается выше
+  let tagsDrawn = [];
   function nameTag(id, x, y) {
     if (showIds) return;
+    while (tagsDrawn.some((t) => Math.abs(t.x - x) < 64 && Math.abs(t.y - y) < 12)) y -= 14;
+    tagsDrawn.push({ x, y });
     const def = AB.ID.get(id);
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
@@ -325,8 +329,12 @@ AB.Render = (() => {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,.6)';
     ctx.fillText(def.name, x + 0.6, y + 0.6);
-    ctx.fillStyle = 'rgba(225,218,205,.85)';
+    const leads = AB.Party.isLeader(id) && AB.Party.members().length > 1;
+    ctx.fillStyle = leads ? 'rgba(130,236,255,.95)' : 'rgba(225,218,205,.85)';
     ctx.fillText(def.name, x, y);
+    if (leads) {
+      ctx.beginPath(); ctx.moveTo(x - 4, y - 15); ctx.lineTo(x + 4, y - 15); ctx.lineTo(x, y - 10); ctx.fill();
+    }
     // вещь, которую несёт персонаж (показывается по нажатию)
     const bub = bubbles.get(id);
     if (bub && bub.until > time) {
@@ -684,7 +692,7 @@ AB.Render = (() => {
 
   // ---------- Двери ----------
   function drawDoors(r) {
-    const hero = AB.Chars.get('CHAR-001');
+    const hero = AB.Party.lead();
     for (const d of r.doors) {
       const x = sx(d.x), b = sy(0);
       if (r.artDoors) {
@@ -1328,7 +1336,7 @@ AB.Render = (() => {
   // ---------- Указатель навигации ----------
   function drawNavMarker() {
     const h = AB.Nav.hint();
-    const hero = AB.Chars.get('CHAR-001');
+    const hero = AB.Party.lead();
     if (!h || !hero || !hero.controllable) return;
     const tx = sx(h.x), y = sy(-215);
     const a = 0.45 + Math.sin(time * 3) * 0.25;
@@ -1389,8 +1397,8 @@ AB.Render = (() => {
       if (AB.ID.get(e.id).humanoid) hole(sx(e.x), sy(-70), 140, 0.32 * U.clamp(e.alpha || 0, 0, 1));
     }
     // герой видит немного вокруг себя
-    const hero = AB.Chars.get('CHAR-001');
-    if (hero) hole(sx(hero.x), sy(-60), 190, 0.5);
+    // каждый в группе видит немного вокруг себя
+    for (const m of AB.Party.members()) if (m.room === r.id) hole(sx(m.x), sy(-60), 190, 0.5);
     // тревога: весь отсек вспыхивает красным
     const a = alarmPulse();
     if (a > 0) { L.fillStyle = `rgba(0,0,0,${0.12 * a})`; L.fillRect(-10, -10, VW + 20, VH + 20); }
@@ -1483,8 +1491,8 @@ AB.Render = (() => {
     AB.Enemies.inRoom(r.id).forEach((e) => drawEnemy(e, 'emissive'));
     drawNavMarker();
     ctx.globalCompositeOperation = 'source-over';
-    AB.Chars.all().filter((c) => c.id !== 'CHAR-001' && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'emissive'));
-    drawHero(AB.Chars.get('CHAR-001'), 'emissive');
+    AB.Chars.all().filter((c) => c.id !== AB.Party.leader() && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'emissive'));
+    drawHero(AB.Party.lead(), 'emissive');
   }
 
   // ---------- Предметы на полу (заглушки ASSET-ITEM*) ----------
@@ -1694,8 +1702,8 @@ AB.Render = (() => {
 
   // подсветка объекта, с которым сейчас можно взаимодействовать
   function drawTargetHighlight() {
-    const t = AB.Interact.target('CHAR-001');
-    const hero = AB.Chars.get('CHAR-001');
+    const t = AB.Interact.target(AB.Party.leader());
+    const hero = AB.Party.lead();
     if (!t || !hero || !hero.controllable || t.kind === 'door') return;
     if (t.kind === 'equip') {
       const e = t.ref, a = 0.3 + Math.sin(time * 4) * 0.12;
@@ -1863,8 +1871,8 @@ AB.Render = (() => {
     ctx.fillStyle = 'rgba(0,0,0,.08)';
     for (let y = 0; y < h; y += 3 * dpr) ctx.fillRect(0, y, w, dpr);
     // получение урона и низкое здоровье
-    const hero = AB.Chars.get('CHAR-001');
-    const low = hero ? 1 - hero.hp / AB.ID.get('CHAR-001').stats.maxHp : 0;
+    const hero = AB.Party.lead();
+    const low = hero ? 1 - hero.hp / AB.ID.get(hero.id).stats.maxHp : 0;
     const red = Math.max(hurtFlash, low > 0.65 ? (0.25 + Math.sin(time * 4) * 0.12) * (low - 0.4) : 0);
     if (red > 0.01) {
       const rv = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.7);
@@ -1893,6 +1901,7 @@ AB.Render = (() => {
 
   // ---------- Кадр ----------
   function frame(dt) {
+    tagsDrawn = [];
     time += dt;
     const r = AB.Rooms.room();
     if (!r) return;
@@ -1918,7 +1927,7 @@ AB.Render = (() => {
     ctx.drawImage(staticLayer.canvas, sx(0), 0, r.width, VH);
     drawDecals(r);
     drawFx('back');
-    const hero = AB.Chars.get('CHAR-001');
+    const hero = AB.Party.lead();
     if (hero && hero.inPod) drawHero(hero, 'body');   // за стеклом капсулы
     drawProps(r);
     drawDoors(r);
@@ -1926,8 +1935,8 @@ AB.Render = (() => {
     const enemies = AB.Enemies.inRoom(r.id);
     enemies.filter((e) => e.state === 'DEAD').forEach((e) => drawEnemy(e, 'body'));
     // остальные персонажи в этом помещении (спутница и др.)
-    AB.Chars.all().filter((c) => c.id !== 'CHAR-001' && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'body'));
-    if (hero && !hero.inPod) drawHero(hero, 'body');
+    AB.Chars.all().filter((c) => c.id !== AB.Party.leader() && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'body'));
+    if (hero && !hero.inPod) drawHero(hero, 'body');   // ведущий — поверх остальных
     enemies.filter((e) => e.state !== 'DEAD').forEach((e) => drawEnemy(e, 'body'));
     if (!AB.debugFullLight) drawLighting(r);   // отладка: AB.debugFullLight = true — без темноты
     drawEmissive(r);
@@ -1944,9 +1953,9 @@ AB.Render = (() => {
       const r = cv.getBoundingClientRect();
       const wx = (cx - r.left) * dpr / scale + cam.x, wy = (cy - r.top) * dpr / scale - FLOOR;
       const list = [];
-      const hero = AB.Chars.get('CHAR-001');
+      const hero = AB.Party.lead();
       if (hero && !hero.hidden) list.push({ id: hero.id, x: hero.x, w: 22, h: 126 });
-      for (const c of AB.Chars.all()) if (c.id !== 'CHAR-001' && c.room === AB.Rooms.current()) list.push({ id: c.id, x: c.x, w: 22, h: 120 });
+      for (const c of AB.Chars.all()) if (c.id !== hero.id && c.room === AB.Rooms.current()) list.push({ id: c.id, x: c.x, w: 22, h: 120 });
       for (const e of AB.Enemies.inRoom(AB.Rooms.current())) if (e.state !== 'DEAD') list.push({ id: e.id, x: e.x, w: 46, h: 90 });
       const hit = list.find((c) => Math.abs(wx - c.x) < c.w && wy < 4 && wy > -c.h);
       return hit ? hit.id : null;

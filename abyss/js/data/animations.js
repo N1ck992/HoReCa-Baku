@@ -34,6 +34,7 @@ AB.ANIMATIONS.push(
   { id: 'ANIM-CHAR002-04', owner: 'CHAR-002', action: 'hurt',     loop: false, sheet: null, desc: 'Получение урона', duration: 0.5 },
   { id: 'ANIM-CHAR002-05', owner: 'CHAR-002', action: 'idle',     loop: true,  sheet: null, desc: 'Ожидание' },
   { id: 'ANIM-CHAR002-06', owner: 'CHAR-002', action: 'death',    loop: false, sheet: null, desc: 'Гибель', duration: 1.4 },
+  { id: 'ANIM-CHAR002-07', owner: 'CHAR-002', action: 'attack',   loop: false, sheet: null, desc: 'Удар оружием', duration: 0.5 },
 );
 
 // CHAR-003: медик (процедурные заглушки)

@@ -46,6 +46,16 @@ AB.Enemies = (() => {
     return r.lights.some((l) => !l.source && Math.abs(l.x - hero.x) < def.light.litRadius);
   }
 
+  // цель — ближайший живой участник группы в этом помещении
+  function pickTarget(s) {
+    let best = null;
+    for (const m of AB.Party.members()) {
+      if (m.dead || m.room !== s.room) continue;
+      if (!best || Math.abs(m.x - s.x) < Math.abs(best.x - s.x)) best = m;
+    }
+    return best || AB.Party.lead();
+  }
+
   function perceive(s, def, hero, r) {
     if (!hero || hero.dead || hero.room !== s.room) return { sees: false, hears: false };
     const dx = hero.x - s.x, dist = Math.abs(dx);
@@ -94,8 +104,13 @@ AB.Enemies = (() => {
   }
 
   function updatePursuer(s, def, dt, r) {
-    const hero = AB.Chars.get('CHAR-001');
+    const hero = AB.Party.lead();
     const target = AB.Chars.get(def.target);
+    // кто может встать между ним и ней: любой из группы, кроме неё
+    const guard = (goal) => AB.Party.members()
+      .filter((m) => m.id !== def.target && !m.dead && m.room === s.room &&
+        Math.sign(m.x - s.x) === Math.sign(goal.x - s.x) && Math.abs(m.x - s.x) < Math.abs(goal.x - s.x))
+      .sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] || null;
     s.t += dt;
     s.cooldown = Math.max(0, s.cooldown - dt);
     s.flash = Math.max(0, s.flash - dt * 4);
@@ -113,11 +128,11 @@ AB.Enemies = (() => {
       case 'CHASE': {
         if (!target || target.dead || target.room !== s.room) { setP(s, 'RETREAT'); break; }
         // Марк встал между ним и спутницей — бьёт Марка
-        const blocked = hero && !hero.dead && Math.sign(hero.x - s.x) === Math.sign(target.x - s.x) &&
-          Math.abs(hero.x - s.x) < Math.abs(target.x - s.x) && Math.abs(hero.x - s.x) < def.attack.range;
-        const goalX = blocked ? hero.x : target.x;
+        const g = guard(target);
+        const blocked = g && Math.abs(g.x - s.x) < def.attack.range ? g : null;
+        const goalX = blocked ? blocked.x : target.x;
         const d = Math.abs(goalX - s.x);
-        if (d < def.attack.range && s.cooldown <= 0) { s.victim = blocked ? hero.id : target.id; setP(s, 'ATTACK'); break; }
+        if (d < def.attack.range && s.cooldown <= 0) { s.victim = blocked ? blocked.id : target.id; setP(s, 'ATTACK'); break; }
         move(s, Math.sign(goalX - s.x), d < def.attack.range ? 0 : def.speed.chase, dt, r);
         break;
       }
@@ -127,7 +142,7 @@ AB.Enemies = (() => {
         if (!s.hitDone && s.t >= def.attack.windup) {
           s.hitDone = true;
           if (v && !v.dead && Math.abs(v.x - s.x) < def.attack.range + 16) {
-            AB.Combat.damageChar(v.id, v.id === 'CHAR-001' ? def.shove : def.damage, s.x);
+            AB.Combat.damageChar(v.id, v.id === def.target ? def.damage : def.shove, s.x);
           }
         }
         if (s.t > def.attack.windup + 0.4) { s.cooldown = def.attack.cooldown; setP(s, 'CHASE'); }
@@ -157,11 +172,11 @@ AB.Enemies = (() => {
     const r = AB.Rooms.room();
     if (!r) return;
     spawnForRoom(r.id);
-    const hero = AB.Chars.get('CHAR-001');
     for (const s of [...live.values()]) {
       if (s.room !== r.id || s.state === 'DEAD') continue;
       const def = AB.ID.get(s.id);
       if (def.type === 'pursuer') { updatePursuer(s, def, dt, r); continue; }
+      const hero = pickTarget(s);
       s.t += dt;
       s.cooldown = Math.max(0, s.cooldown - dt);
       s.flash = Math.max(0, s.flash - dt * 4);

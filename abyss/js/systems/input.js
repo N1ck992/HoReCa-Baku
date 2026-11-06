@@ -8,6 +8,7 @@ AB.Input = (() => {
   let locked = false;
   let actionQueued = false;
   let attackQueued = false;
+  let leadQueued = false;
 
   const map = {
     left: ['ArrowLeft', 'KeyA'],
@@ -15,12 +16,14 @@ AB.Input = (() => {
     run: ['ShiftLeft', 'ShiftRight'],
     action: ['KeyE', 'Enter', 'ArrowUp', 'KeyW'],
     attack: ['KeyF', 'KeyJ', 'Space'],
+    lead: ['KeyQ'],
   };
 
   function init() {
     window.addEventListener('keydown', (e) => {
       if (map.action.includes(e.code) && !e.repeat) actionQueued = true;
       if (map.attack.includes(e.code) && !e.repeat) attackQueued = true;
+      if (map.lead.includes(e.code) && !e.repeat) leadQueued = true;
       if (Object.values(map).flat().includes(e.code)) e.preventDefault();
       keys.add(e.code);
     });
@@ -45,6 +48,7 @@ AB.Input = (() => {
         e.preventDefault();
         if (k === 'action') actionQueued = true;
         else if (k === 'attack') attackQueued = true;
+        else if (k === 'lead') leadQueued = true;
         else if (k === 'run') touch.run = !touch.run;
         else touch[k] = true;
         btn.classList.toggle('on', k === 'run' ? touch.run : true);
@@ -52,7 +56,7 @@ AB.Input = (() => {
       const up = (e) => {
         e.preventDefault();
         if (k === 'left' || k === 'right') { touch[k] = false; btn.classList.remove('on'); }
-        if (k === 'action' || k === 'attack') btn.classList.remove('on');
+        if (k === 'action' || k === 'attack' || k === 'lead') btn.classList.remove('on');
       };
       btn.addEventListener('pointerdown', down);
       btn.addEventListener('pointerup', up);
@@ -64,6 +68,7 @@ AB.Input = (() => {
   const held = (name) => map[name].some((c) => keys.has(c));
 
   return {
+    consumeLead() { const q = leadQueued; leadQueued = false; return q; },
     init,
     lock() { locked = true; },
     unlock() { locked = false; actionQueued = false; attackQueued = false; },

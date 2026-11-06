@@ -263,3 +263,17 @@ body.touch #btn-skip { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 .act-card .act-next { color: #9fe7ff; font: 12px var(--mono); letter-spacing: 1px; }
 .act-card button { font: 14px var(--mono); padding: 10px; border-radius: 6px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid var(--line); }
 .act-card button.danger { color: var(--red); border-color: rgba(255, 59, 47, .4); }
+
+/* ---------- Группа: ведущий и ведомые ---------- */
+#party { display: grid; gap: 4px; margin-top: 8px; width: 170px; pointer-events: auto; }
+#party[hidden] { display: none; }
+#party .pm { position: relative; display: grid; gap: 3px; padding: 5px 7px 6px; text-align: left; cursor: pointer; font: 11px var(--mono); color: var(--fg); background: rgba(10, 12, 14, .72); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+#party .pm.lead { border-color: rgba(94, 230, 255, .6); box-shadow: 0 0 10px rgba(94, 230, 255, .15); cursor: default; }
+#party .pm b { font: 600 12px var(--display); letter-spacing: 1px; color: #e6dccf; }
+#party .pm.lead b { color: #8eeeff; }
+#party .pm i { display: block; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #7a1a14, #c9372b); }
+#party .pm span { display: flex; gap: 4px; }
+#party .pm u { text-decoration: none; font-size: 9px; padding: 1px 4px; border-radius: 3px; background: rgba(255, 255, 255, .07); color: #cfe9ef; }
+#party .pm u.empty { color: var(--muted); }
+#touch .lead-btn { display: none; }
+body.has-party #touch .lead-btn { display: grid; }
