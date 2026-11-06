@@ -22,7 +22,7 @@ AB.Interact = (() => {
     for (const eq of AB.Equip.inRoom(r.id)) list.push({ kind: 'equip', x: eq.x, ref: eq, range: eq.w / 2 + 30 });
     for (const n of AB.Chars.all()) {
       const d = AB.ID.get(n.id);
-      if (n.id !== charId && n.room === r.id && d.npc && !n.follow && !n.dead) list.push({ kind: 'npc', x: n.x, ref: n });
+      if (n.id !== charId && n.room === r.id && d.npc && !n.follow && !n.dead && !n.down) list.push({ kind: 'npc', x: n.x, ref: n });
     }
     let best = null, bestScore = Infinity;
     for (const o of list) {

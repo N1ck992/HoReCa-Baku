@@ -26,6 +26,7 @@ AB.ASSET_MANIFEST = [
   // ---- Первый акт, развязка: графика — заглушки, ждут генерации ----
   { id: 'ASSET-CHAR003-01', owner: 'CHAR-003', type: 'sprite', src: null, desc: 'Доктор Хейл' },
   { id: 'ASSET-ENEMY003-01', owner: 'ENEMY-003', type: 'sprite', src: null, desc: 'Колосс' },
+  { id: 'ASSET-ITEM012-01', owner: 'ITEM-012', type: 'icon', src: null, desc: 'Дротиковый пистолет спутницы' },
   { id: 'ASSET-ITEM011-01', owner: 'ITEM-011', type: 'icon', src: 'assets/items/ITEM011-01.png', desc: 'Наручный плазмомёт (иконка и вид на руке; исходник assets/source/ITEM011-01.png)' },
   { id: 'ASSET-ROOM006-01', owner: 'ROOM-006', type: 'background', src: null, desc: 'Фон: оружейная' },
   { id: 'ASSET-ROOM007-01', owner: 'ROOM-007', type: 'background', src: null, desc: 'Фон: лаборатория' },

@@ -72,6 +72,7 @@ AB.CHARACTERS.push({
     run: 'ANIM-CHAR003-02',
     interact: 'ANIM-CHAR003-03',
     hurt: 'ANIM-CHAR003-04',
+    death: 'ANIM-CHAR003-06',
   },
 });
 

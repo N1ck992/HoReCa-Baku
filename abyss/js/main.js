@@ -148,7 +148,7 @@
           <button data-inv="drop" class="ghost">Выбросить</button>
           ${swaps}
         </div>
-        ${def.weapon ? `<div class="muted">В руках · урон ${def.weapon.damage}${def.weapon.energy ? ' · без боезапаса, перегрев после 5 выстрелов' : ''} · ${def.weapon.ranged ? 'выстрел' : 'удар'}: ${isTouch ? 'кнопка ⚔' : 'F, J, пробел или клик'}</div>` : ''}
+        ${def.weapon ? `<div class="muted">В руках · урон ${def.weapon.damage}${def.weapon.energy ? ' · без боезапаса, перегрев после 5 выстрелов' : ''}${def.weapon.aura ? ' · лечит союзников рядом' : ''}${def.weapon.infinite ? ' · без боезапаса' : ''} · ${def.weapon.ranged ? 'выстрел' : 'удар'}: ${isTouch ? 'кнопка ⚔' : 'F, J, пробел или клик'}</div>` : ''}
         ${!def.weapon && block ? `<div class="muted">${block}</div>` : ''}`;
     }
     $('#inv-grid').innerHTML = grid;
@@ -625,6 +625,8 @@
       AB.World.restore(save.world);
       AB.Party.restore(save.party);
       AB.Logs.restore(save.logs);
+      // старые сохранения: у спутницы должен быть её дротиковый пистолет
+      { const c = AB.Chars.get('CHAR-002'); if (c && !AB.Chars.all().some((m) => AB.Inventory.count(m.id, 'ITEM-012'))) AB.Inventory.add('CHAR-002', 'ITEM-012', 1, { swap: false }); }
       const hero = AB.Chars.get(L());
       AB.Rooms.enter(save.rooms.current || 'ROOM-001', { x: hero ? hero.x : null });
       if (hero) hero.controllable = true;

@@ -37,7 +37,7 @@ AB.Story = (() => {
       if (!a || !t) return;
       a.facing = Math.sign(t.x - a.x) || a.facing;
       AB.Bus.emit('combat:shot', { charId: s.from, fromX: a.x + a.facing * 30, toX: t.x, landed: true });
-      if (!running.skip) AB.Chars.playAction(s.to, 'hurt');
+      if (!running.skip) { AB.Chars.playAction(s.from, 'attack'); setTimeout(() => AB.Chars.playAction(s.to, 'hurt'), 120); }
     },
     // персонаж падает без сознания (on) и поднимается (off)
     down: (s) => {
@@ -54,7 +54,7 @@ AB.Story = (() => {
       if (!c) return;
       const got = AB.Inventory.add(s.char, s.item, s.qty || 1, { swap: false });
       if (!got) AB.Rooms.dropItem(c.room, s.item, s.qty || 1, c.x + c.facing * 30);
-      AB.Bus.emit('item:given', { charId: s.char, itemId: s.item, onFloor: !got });
+      if (!s.silent) AB.Bus.emit('item:given', { charId: s.char, itemId: s.item, onFloor: !got });
     },
     // уйти из помещения (за дверь) — персонаж больше не здесь
     leave: (s) => {
@@ -75,6 +75,7 @@ AB.Story = (() => {
       let x = s.x;
       if (s.near) { const o = AB.Chars.get(s.near); x = o.x + (c.x > o.x ? s.gap : -s.gap); }
       if (running.skip) { c.x = x; return; }
+      c.controllable = false;   // в сцене герой идёт сам; управление вернёт unlock_input
       c.goal = { x, speed: s.speed || 100, follow: false };
     },
     // ждать, пока персонаж дойдёт
@@ -94,7 +95,15 @@ AB.Story = (() => {
     // лампы сбоят
     flicker: (s) => { fx.flicker = s.duration; },
     // вспышка истинного облика (docs/STORY.md §4): на миг игрок видит то, что видят другие
-    true_form: (s) => { if (!running.skip) { fx.trueForm = { char: s.char, t: s.duration, dur: s.duration }; fx.flicker = Math.max(fx.flicker, s.duration); } },
+    // существо появляется в помещении между двумя персонажами — не на месте спутницы
+    true_form: (s) => {
+      if (running.skip) return;
+      const a = AB.Chars.get(s.between[0]), b = AB.Chars.get(s.between[1]);
+      const x = a && b ? (a.x + b.x) / 2 : (a || b || { x: 600 }).x;
+      const face = b && a ? Math.sign(b.x - a.x) || 1 : 1;
+      fx.trueForm = { x, facing: face, room: AB.Rooms.current(), t: s.duration, dur: s.duration };
+      fx.flicker = Math.max(fx.flicker, s.duration);
+    },
     // заслонки обзорного иллюминатора мостика
     window: (s) => { fx.window = s.open ? 0.001 : 0; },
     // за стеклом проплывает что-то огромное
@@ -182,7 +191,12 @@ AB.Story = (() => {
 
   // Триггеры от других систем
   AB.Bus.on('world:power', ({ on }) => { if (on) trigger('power_on'); });
-  AB.Bus.on('room:enter', ({ roomId }) => trigger(`enter:${roomId}`));
+  AB.Bus.on('room:enter', ({ roomId }) => {
+    // усыплённая врач очнётся и уйдёт, пока героев нет на мостике (ждёт Марка в медотсеке)
+    const doc = AB.Chars.get('CHAR-003');
+    if (doc && doc.down && doc.room && doc.room !== roomId) { doc.down = false; doc.room = null; doc.hidden = true; }
+    trigger(`enter:${roomId}`);
+  });
   AB.Bus.on('event:end', (id) => trigger(`after:${id}`));
   AB.Bus.on('equip:changed', ({ id }) => trigger(`equip:${id}`));
 

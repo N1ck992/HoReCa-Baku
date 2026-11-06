@@ -45,7 +45,7 @@ AB.Inventory = (() => {
     if (!cur) {
       taken = Math.min(qty, def.stack);
       b[i] = { item: itemId, qty: taken };
-      if (def.weapon && def.weapon.ranged && !def.weapon.energy) b[i].ammo = 0;
+      if (def.weapon && def.weapon.ranged && !def.weapon.energy && !def.weapon.infinite) b[i].ammo = 0;
     } else if (cur.item === itemId) {
       taken = Math.min(qty, def.stack - cur.qty);
       cur.qty += taken;
@@ -55,7 +55,7 @@ AB.Inventory = (() => {
       AB.Bus.emit('inventory:swapped', { charId, dropped: cur.item, qty: cur.qty, taken: itemId });
       taken = Math.min(qty, def.stack);
       b[i] = { item: itemId, qty: taken };
-      if (def.weapon && def.weapon.ranged && !def.weapon.energy) b[i].ammo = 0;
+      if (def.weapon && def.weapon.ranged && !def.weapon.energy && !def.weapon.infinite) b[i].ammo = 0;
     }
     if (taken) {
       if (i === WEAPON) syncHands(charId);

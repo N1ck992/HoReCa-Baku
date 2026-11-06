@@ -44,6 +44,7 @@ AB.ANIMATIONS.push(
   { id: 'ANIM-CHAR003-03', owner: 'CHAR-003', action: 'interact', loop: false, sheet: null, desc: 'Помощь, перевязка', duration: 0.9 },
   { id: 'ANIM-CHAR003-04', owner: 'CHAR-003', action: 'hurt',     loop: false, sheet: null, desc: 'Получение урона', duration: 0.5 },
   { id: 'ANIM-CHAR003-05', owner: 'CHAR-003', action: 'idle',     loop: true,  sheet: null, desc: 'Ожидание' },
+  { id: 'ANIM-CHAR003-06', owner: 'CHAR-003', action: 'death',    loop: false, sheet: null, desc: 'Падает (усыплена дротиком)', duration: 1.2 },
 );
 
 // ENEMY-002: преследователь (процедурные заглушки, движения как у человека)

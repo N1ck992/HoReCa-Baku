@@ -48,11 +48,12 @@ AB.EVENTS.push(
     once: true,
     steps: [
       { at: 0.0, action: 'lock_input' },
-      { at: 0.0, action: 'spawn', char: 'CHAR-002', room: 'ROOM-002', x: 980, facing: -1 },
-      { at: 1.4, action: 'walk_to', char: 'CHAR-002', near: 'CHAR-001', gap: 150, speed: 55 },
-      { at: 1.4, action: 'wait_arrive', char: 'CHAR-002' },
-      { at: 1.4, action: 'face', char: 'CHAR-001', target: 'CHAR-002' },
-      { at: 1.9, action: 'dialog', id: 'DIALOG-001' },
+      { at: 0.0, action: 'spawn', char: 'CHAR-002', room: 'ROOM-002', x: 440, facing: -1 },
+      { at: 0.0, action: 'give_item', char: 'CHAR-002', item: 'ITEM-012', qty: 1, silent: true },
+      { at: 0.3, action: 'walk_to', char: 'CHAR-002', near: 'CHAR-001', gap: 140, speed: 120 },
+      { at: 0.3, action: 'wait_arrive', char: 'CHAR-002' },
+      { at: 0.3, action: 'face', char: 'CHAR-001', target: 'CHAR-002' },
+      { at: 0.4, action: 'dialog', id: 'DIALOG-001' },
       { at: 1.9, action: 'follow', char: 'CHAR-002', leader: 'CHAR-001' },
       { at: 1.9, action: 'unlock_input' },
     ],
@@ -95,41 +96,39 @@ AB.EVENTS.push(
 // Колосс, шлюз и экзокостюм.
 AB.EVENTS.push(
   {
-    // канон (docs/STORY.md §5, §7): врач добра к Марку, но видит, кто рядом с ним, —
-    // предупреждает и стреляет в спутницу транквилизатором. Марк считает это нападением.
+    // дополнение №34: врач сразу видит существо — но не понимает, что это и где оно.
+    // Марк не видит ничего и заслоняет спутницу; спутница усыпляет врача дротиком.
     id: 'EVENT-006', name: 'Судовой врач', chapter: 1, room: 'ROOM-008',
     trigger: 'enter:ROOM-008', once: true,
     steps: [
       { at: 0.0, action: 'lock_input' },
-      { at: 0.0, action: 'spawn', char: 'CHAR-003', room: 'ROOM-008', x: 1150, facing: -1 },
-      { at: 0.9, action: 'walk_to', char: 'CHAR-003', near: 'CHAR-001', gap: 190, speed: 70 },
-      { at: 0.9, action: 'wait_arrive', char: 'CHAR-003' },
-      { at: 0.9, action: 'face', char: 'CHAR-001', target: 'CHAR-003' },
-      { at: 0.9, action: 'face', char: 'CHAR-002', target: 'CHAR-003' },
-      { at: 1.2, action: 'dialog', id: 'DIALOG-002' },
-      { at: 1.3, action: 'give_item', char: 'CHAR-001', item: 'ITEM-005', qty: 1 },
-      { at: 1.6, action: 'face', char: 'CHAR-003', target: 'CHAR-002' },
-      // врач смотрит на спутницу — и мы на миг видим то, что видит она
-      { at: 1.9, action: 'true_form', char: 'CHAR-002', duration: 0.9 },
-      { at: 3.1, action: 'dialog', id: 'DIALOG-007' },
-      { at: 3.3, action: 'true_form', char: 'CHAR-002', duration: 0.35 },
-      { at: 3.5, action: 'tranq', from: 'CHAR-003', to: 'CHAR-002' },
-      { at: 3.9, action: 'down', char: 'CHAR-002', on: true },
-      { at: 5.1, action: 'dialog', id: 'DIALOG-006' },
-      { at: 5.2, action: 'walk_to', char: 'CHAR-003', x: 1420, speed: 120 },
-      { at: 5.2, action: 'wait_arrive', char: 'CHAR-003' },
-      { at: 5.3, action: 'leave', char: 'CHAR-003' },
+      { at: 0.0, action: 'spawn', char: 'CHAR-003', room: 'ROOM-008', x: 620, facing: -1 },
+      { at: 0.2, action: 'walk_to', char: 'CHAR-003', near: 'CHAR-001', gap: 200, speed: 120 },
+      { at: 0.2, action: 'wait_arrive', char: 'CHAR-003' },
+      { at: 0.2, action: 'face', char: 'CHAR-001', target: 'CHAR-003' },
+      { at: 0.4, action: 'dialog', id: 'DIALOG-002' },
+      { at: 0.5, action: 'give_item', char: 'CHAR-001', item: 'ITEM-005', qty: 1 },
+      // свет гаснет, где-то в помещении — силуэт существа; кто это — непонятно
+      { at: 0.8, action: 'true_form', between: ['CHAR-002', 'CHAR-003'], duration: 1.6 },
+      { at: 2.6, action: 'dialog', id: 'DIALOG-007' },
+      // Марк встаёт между врачом и спутницей
+      { at: 2.7, action: 'walk_to', char: 'CHAR-001', near: 'CHAR-003', gap: 120, speed: 120 },
+      { at: 2.7, action: 'wait_arrive', char: 'CHAR-001' },
+      { at: 2.8, action: 'face', char: 'CHAR-001', target: 'CHAR-003' },
+      { at: 2.9, action: 'face', char: 'CHAR-002', target: 'CHAR-003' },
+      { at: 3.0, action: 'tranq', from: 'CHAR-002', to: 'CHAR-003' },
+      { at: 3.4, action: 'down', char: 'CHAR-003', on: true },
+      { at: 4.3, action: 'dialog', id: 'DIALOG-006' },
     ],
   },
   {
-    id: 'EVENT-007', name: 'Она очнулась', chapter: 1, room: 'ROOM-008',
+    id: 'EVENT-007', name: 'Дальше вдвоём', chapter: 1, room: 'ROOM-008',
     trigger: 'after:EVENT-006', once: true,
     steps: [
       { at: 0.0, action: 'lock_input' },
-      { at: 0.6, action: 'down', char: 'CHAR-002', on: false },
-      { at: 1.4, action: 'face', char: 'CHAR-001', target: 'CHAR-002' },
-      { at: 1.5, action: 'dialog', id: 'DIALOG-005' },
-      { at: 1.5, action: 'unlock_input' },
+      { at: 0.2, action: 'face', char: 'CHAR-001', target: 'CHAR-002' },
+      { at: 0.3, action: 'dialog', id: 'DIALOG-005' },
+      { at: 0.3, action: 'unlock_input' },
     ],
   },
   {

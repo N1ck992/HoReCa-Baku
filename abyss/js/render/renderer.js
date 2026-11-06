@@ -44,7 +44,8 @@ AB.Render = (() => {
       hurtFlash = 1; shake = Math.max(shake, 10);
     });
     AB.Bus.on('combat:swing', ({ landed }) => { if (!landed) shake = Math.max(shake, 1.5); });
-    AB.Bus.on('combat:shot', ({ fromX, toX, landed, energy }) => {
+    AB.Bus.on('combat:shot', ({ fromX, toX, landed, energy, dart }) => {
+      if (dart) { particles.push({ k: 'tracer', x: fromX, x2: toX, y: -80, vx: 0, vy: 0, life: 0.1, age: 0, s: 1, dart: true }); return; }
       if (energy) {
         // плазменный сгусток летит к цели; при попадании — вспышка
         const life = Math.max(0.08, Math.abs(toX - fromX) / 2200);
@@ -898,15 +899,12 @@ AB.Render = (() => {
   // ---------- Истинный облик спутницы (ASSET-CHAR002-02): глубоководный арахнид ----------
   // Пока нет картинки — процедурная заглушка: бледное полупрозрачное тело, восемь длинных
   // членистых ног, хоботок, светящиеся нервы и «лицо» из светящихся точек.
-  function trueFormVisible(hero) {
-    const tf = AB.Story.fx.trueForm;
-    if (!tf || tf.char !== hero.id) return false;
-    const p = 1 - tf.t / tf.dur;
-    // мерцание: облики перебивают друг друга, в середине — дольше существо
-    return p > 0.12 && p < 0.88 ? Math.sin(time * 55) > -0.92 : Math.sin(time * 70) > 0.3;
-  }
+  // существо из вспышки: стоит в помещении (fx.trueForm.x), полупрозрачное, мерцает
   function drawTrueForm(hero, pass) {
     const x = sx(hero.x), b = sy(0), f = hero.facing;
+    ctx.save();
+    const tf = AB.Story.fx.trueForm, p = tf ? 1 - tf.t / tf.dur : 0;
+    ctx.globalAlpha *= (0.78 + 0.22 * Math.sin(Math.min(1, p) * Math.PI)) * (Math.sin(time * 55) > -0.85 ? 1 : 0.15);
     const asset = AB.Assets.get('ASSET-CHAR002-02');
     if (asset.status === 'ready' && asset.img) {
       // картинка assets/char002/true/full.png: тело — на уровне груди человека, ноги — до пола
@@ -923,6 +921,7 @@ AB.Render = (() => {
         g.addColorStop(0, 'rgba(94,230,255,.55)'); g.addColorStop(1, 'rgba(94,230,255,0)');
         ctx.fillStyle = g; ctx.fillRect(hx - 26, hy - 26, 52, 52);
       }
+      ctx.restore();
       ctx.restore();
       return;
     }
@@ -969,11 +968,15 @@ AB.Render = (() => {
       ctx.fillStyle = g; ctx.fillRect(-4, bodyY - 38, 60, 60);
     }
     ctx.restore();
+    ctx.restore();
+  }
+  function trueFormHere(r) {
+    const tf = AB.Story.fx.trueForm;
+    return tf && tf.room === r.id ? { id: 'TRUE-FORM', x: tf.x, facing: tf.facing } : null;
   }
 
   function drawHero(hero, pass) {
     if (!hero || hero.hidden) return;
-    if (trueFormVisible(hero)) { drawTrueForm(hero, pass); return; }
     const asset = AB.Assets.get(hero.appearance);
     const { P, action } = heroPose(hero);
     const x = sx(hero.x + P.dx * hero.facing), b = sy(0);
@@ -1209,6 +1212,19 @@ AB.Render = (() => {
   // ---------- Оружие в руке: труба (ASSET-ITEM009-01) или гарпунное ружьё (ASSET-ITEM011-01) ----------
   function drawWeapon(hand, ang, itemId, foreAng, owner) {
     const wdef = itemId && AB.ID.get(itemId);
+    if (wdef && wdef.weapon && wdef.weapon.dart) {
+      // дротиковый пистолет: компактный корпус, зелёная капсула с препаратом
+      ctx.save();
+      ctx.translate(hand.fx, hand.fy);
+      ctx.rotate(-ang + Math.PI / 2);
+      ctx.fillStyle = '#23272b'; ctx.fillRect(-3, -3.5, 20, 7);      // корпус
+      ctx.fillStyle = '#1a1d20'; ctx.fillRect(0, 3.5, 5, 7);          // рукоять
+      ctx.fillStyle = '#3a4046'; ctx.fillRect(16, -1.8, 9, 3.6);     // ствол
+      ctx.fillStyle = owner && AB.Combat.auraActive(owner) ? '#7dffb0' : '#3fa070';
+      ctx.fillRect(4, -6.5, 8, 3);                                    // капсула
+      ctx.restore();
+      return;
+    }
     if (wdef && wdef.weapon && wdef.weapon.energy) {
       // наручный плазмомёт: обруч на предплечье и излучатель у кисти, всегда вдоль руки
       const a = foreAng ?? ang;
@@ -1753,6 +1769,22 @@ AB.Render = (() => {
     drawWindowView(r);
     drawTargetHighlight();
     drawLogs(r, 'emissive');
+    { const tf = trueFormHere(r); if (tf) drawTrueForm(tf, 'emissive'); }
+    // аура лечения дротикового пистолета: мягкое зелёное кольцо у ног
+    for (const c of AB.Party.members()) {
+      if (c.room !== r.id || c.hidden || !AB.Combat.hasAura(c.id)) continue;
+      const on = AB.Combat.auraActive(c.id), rad = AB.Combat.weaponOf(c.id).weapon.aura.radius;
+      const a = (on ? 0.22 : 0.07) + Math.sin(time * 3) * (on ? 0.06 : 0.02);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(110,255,170,${a})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(sx(c.x), sy(0) - 2, rad * 0.98, 9, 0, 0, 7); ctx.stroke();
+      if (on) for (let i = 0; i < 3; i++) {
+        const t = (time * 0.6 + i / 3) % 1;
+        ctx.fillStyle = `rgba(120,255,180,${0.45 * (1 - t)})`;
+        ctx.fillRect(sx(c.x) + Math.sin(i * 2.1 + time) * 14, sy(-20 - t * 90), 2, 2);
+      }
+      ctx.restore();
+    }
     AB.Enemies.inRoom(r.id).forEach((e) => drawEnemy(e, 'emissive'));
     drawNavMarker();
     ctx.globalCompositeOperation = 'source-over';
@@ -2138,8 +2170,8 @@ AB.Render = (() => {
       }
       if (layer === 'glow' && p.k === 'tracer') {
         const g = ctx.createLinearGradient(sx(p.x), 0, sx(p.x2), 0);
-        g.addColorStop(0, `rgba(200,240,255,${0.1 * a})`);
-        g.addColorStop(1, `rgba(220,250,255,${0.9 * a})`);
+        g.addColorStop(0, p.dart ? `rgba(120,255,170,${0.1 * a})` : `rgba(200,240,255,${0.1 * a})`);
+        g.addColorStop(1, p.dart ? `rgba(170,255,200,${0.9 * a})` : `rgba(220,250,255,${0.9 * a})`);
         ctx.strokeStyle = g;
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(sx(p.x), y); ctx.lineTo(sx(p.x2), y); ctx.stroke();
@@ -2227,6 +2259,8 @@ AB.Render = (() => {
     const tf = AB.Story.fx.trueForm;
     if (tf) {
       const k = Math.sin(Math.min(1, 1 - tf.t / tf.dur) * Math.PI);
+      ctx.fillStyle = `rgba(0,0,0,${0.5 * Math.min(1, k * 1.6)})`;   // свет почти гаснет
+      ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = `rgba(120,220,255,${0.10 * k + (Math.sin(time * 60) > 0.6 ? 0.06 : 0)})`;
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = `rgba(200,250,255,${0.18 * k})`;
@@ -2284,6 +2318,7 @@ AB.Render = (() => {
     drawDoors(r);
     drawItems(r);
     drawLogs(r, 'body');
+    { const tf = trueFormHere(r); if (tf) drawTrueForm(tf, 'body'); }
     const enemies = AB.Enemies.inRoom(r.id);
     enemies.filter((e) => e.state === 'DEAD').forEach((e) => drawEnemy(e, 'body'));
     // остальные персонажи в этом помещении (спутница и др.)

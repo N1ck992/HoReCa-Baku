@@ -93,7 +93,7 @@ AB.Party = (() => {
       if (!e) continue;
       const dx = e.x - m.x, dir = Math.sign(dx) || m.facing;
       const ht = AB.Inventory.heat(m.id);
-      const shoot = w.weapon.ranged && (ht ? !ht.over && ht.heat < 0.8 : AB.Inventory.ammo(m.id) > 0);
+      const shoot = w.weapon.ranged && (w.weapon.infinite || (ht ? !ht.over && ht.heat < 0.8 : AB.Inventory.ammo(m.id) > 0));
       const reach = shoot ? Math.min(w.weapon.range * 0.8, 480) : (w.weapon.ranged ? 55 : w.weapon.range);
       m.engageFace = dir;
       if (Math.abs(dx) > reach) {
