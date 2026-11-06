@@ -11,9 +11,9 @@ AB.ASSET_MANIFEST = [
   // Марк нарезан программой tools/rig_from_fullbody.py из одной фигуры в полный рост
   // (assets/source/CHAR001-01.png, разметка tools/rigs/MARK.json → js/data/rigs/MARK.js).
   // Откат на первую версию: rig: 'CHAR001' и parts из assets/char001/01|02 (см. git).
-  { id: 'ASSET-CHAR001-01', owner: 'CHAR-001', type: 'rig', rig: 'MARK2', variant: '01', src: null, desc: 'Основной внешний вид (лист деталей v3; откат — rig: \'MARK\')' },
+  { id: 'ASSET-CHAR001-01', owner: 'CHAR-001', type: 'rig', rig: 'MARK3', variant: '01', src: null, desc: 'Основной внешний вид (лист деталей v4; откат — rig: MARK2 или MARK)' },
   // Повреждённый костюм: пока та же картинка — ждём вариант 02 в той же позе.
-  { id: 'ASSET-CHAR001-02', owner: 'CHAR-001', type: 'rig', rig: 'MARK2', variant: '01', src: null, desc: 'Повреждённый костюм (временно как основной)' },
+  { id: 'ASSET-CHAR001-02', owner: 'CHAR-001', type: 'rig', rig: 'MARK3', variant: '01', src: null, desc: 'Повреждённый костюм (временно как основной)' },
 
   // ---- CHAR-002: спутница — графика ждёт утверждения внешности ----
   // спутница: из одной фигуры assets/source/CHAR002-01.png (разметка tools/rigs/COMPANION.json). Откат: type 'sprite', без rig.
