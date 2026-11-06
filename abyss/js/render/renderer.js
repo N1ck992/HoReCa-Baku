@@ -1111,6 +1111,19 @@ AB.Render = (() => {
       ctx.save();
       ctx.translate(hand.fx, hand.fy);
       ctx.rotate(-a + Math.PI / 2);        // ось +x — от локтя к кисти
+      const icon = AB.Assets.get(wdef.icon);
+      if (icon.status === 'ready') {
+        // картинка ASSET-ITEM011-01 вдоль предплечья, сопло у кисти
+        const L = 40, H = L * icon.img.height / icon.img.width;
+        ctx.drawImage(icon.img, -L + 12, -H / 2, L, H);
+        if (h > 0.5) {   // перегрев: сопло наливается оранжевым
+          const g = ctx.createRadialGradient(9, 0, 0, 9, 0, 9);
+          g.addColorStop(0, `rgba(255,140,60,${(h - 0.5) * 1.6})`); g.addColorStop(1, 'rgba(255,90,30,0)');
+          ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(0, -9, 18, 18);
+        }
+        ctx.restore();
+        return;
+      }
       ctx.fillStyle = '#2b3036';
       ctx.fillRect(-22, -5.5, 22, 11);     // корпус на предплечье
       ctx.fillStyle = '#3d444c';
@@ -1230,11 +1243,111 @@ AB.Render = (() => {
     ctx.restore();
   }
 
+  // ---------- Мутант-гуманоид из частей (ASSET-ENEMY001-01, скелет MUTANT) ----------
+  // Позы строятся от сгорбленной позы на исходной картинке: наклон торса, голова вперёд,
+  // согнутые руки и ноги. Ноги всегда стоят на полу (подстраивается высота таза).
+  const MUT_REST = { lean: 1.0, head: 0.4, shL: -0.45, elL: -1.2, shR: -0.1, elR: -1.05, hipL: 0.22, kneeL: 0.62, hipR: 0.08, kneeR: 0.55 };
+  function mutantPose(e, rig) {
+    const tr = AB.Anim.current(e.id);
+    const action = tr ? tr.action : 'idle';
+    const p = AB.Anim.progress(e.id);
+    const P = { ...MUT_REST, bob: 0, dx: 0, crouch: 0, breath: 0, chest: 0 };
+    const twitch = Math.sin(time * 9 + e.x) * Math.sin(time * 2.3);
+    if (action === 'walk' || action === 'run') {
+      const run = action === 'run';
+      const cyc = (e.stride / (run ? 105 : 70)) * Math.PI * 2;
+      const amp = run ? 0.5 : 0.32;
+      P.hipL += Math.sin(cyc) * amp;
+      P.hipR += Math.sin(cyc + Math.PI) * amp;
+      P.kneeL += Math.max(0, Math.cos(cyc)) * (run ? 1.0 : 0.55);
+      P.kneeR += Math.max(0, Math.cos(cyc + Math.PI)) * (run ? 1.0 : 0.55);
+      // руки болтаются в такт, при беге вытянуты вперёд, когтями к добыче
+      P.shL += -Math.sin(cyc) * amp * 0.7 + (run ? 0.55 : 0);
+      P.shR += -Math.sin(cyc + Math.PI) * amp * 0.7 + (run ? 0.45 : 0);
+      P.elL += run ? 0.35 : 0; P.elR += run ? 0.3 : 0;
+      P.bob = Math.abs(Math.cos(cyc)) * (run ? 5 : 2.5);
+      P.lean += run ? 0.18 : 0.05;
+      P.head += run ? -0.12 : 0;
+    } else if (action === 'alert') {
+      // заметил: выпрямляется и ревёт, задрав голову
+      const k = Math.sin(Math.min(1, p) * Math.PI);
+      P.lean -= 0.45 * k; P.head -= 0.55 * k;
+      P.shL += 0.9 * k; P.shR += 0.8 * k; P.elL += 0.5 * k; P.elR += 0.4 * k;
+      P.lean += twitch * 0.03;
+    } else if (action === 'attack') {
+      // замах когтями над головой → удар сверху вниз с рывком → возврат
+      const up = U.ease(U.clamp(p / 0.5, 0, 1)), hit = U.ease(U.clamp((p - 0.5) / 0.15, 0, 1)), back = U.ease(U.clamp((p - 0.7) / 0.3, 0, 1));
+      const k = 1 - back;
+      P.shL = U.lerp(MUT_REST.shL, U.lerp(2.5, 0.9, hit), k);
+      P.elL = U.lerp(MUT_REST.elL, U.lerp(-0.6, -0.15, hit), k);
+      P.shR = U.lerp(MUT_REST.shR, U.lerp(1.6, 0.6, hit), k);
+      P.lean = MUT_REST.lean + (-0.3 * up + 0.5 * hit) * k;
+      P.head = MUT_REST.head + (-0.35 * up + 0.2 * hit) * k;
+      P.hipR = MUT_REST.hipR + 0.35 * hit * k; P.kneeR = MUT_REST.kneeR + 0.3 * hit * k;
+    } else if (action === 'hurt') {
+      const k = Math.sin(Math.min(1, p) * Math.PI);
+      P.lean -= 0.4 * k; P.head -= 0.3 * k; P.shL -= 0.4 * k; P.shR -= 0.3 * k;
+    } else if (action === 'death') {
+      P.lean -= 0.3; P.shL -= 0.6; P.shR -= 0.4; P.head -= 0.3;
+    } else {
+      // ожидание: дышит и подёргивается
+      P.lean += Math.sin(time * 1.6 + e.x) * 0.04 + twitch * 0.02;
+      P.head += Math.sin(time * 0.9 + e.x) * 0.08;
+      P.shL += Math.sin(time * 1.6 + e.x) * 0.05; P.shR += Math.sin(time * 1.6 + e.x + 1) * 0.05;
+    }
+    // ступни на полу: нижняя лодыжка там же, где на исходной картинке
+    const B = rig.bones;
+    const ankleY = (hip, knee, side) => rig.hipY + Math.cos(hip) * B[`thigh_${side}`] + Math.cos(hip - knee) * B[`shin_${side}`];
+    const restAnkle = Math.max(ankleY(MUT_REST.hipL, MUT_REST.kneeL, 'near'), ankleY(MUT_REST.hipR, MUT_REST.kneeR, 'far'));
+    const ankle = Math.max(ankleY(P.hipL, P.kneeL, 'near'), ankleY(P.hipR, P.kneeR, 'far'));
+    P.crouch = restAnkle - ankle;
+    return { P, action };
+  }
+
+  function drawMutantRig(e, def, asset, pass) {
+    const rig = AB.RIGS[AB.ID.get(def.asset).rig];
+    const { P, action } = mutantPose(e, rig);
+    const x = sx(e.x), b = sy(0);
+    const fake = { id: e.id, facing: e.facing, appearance: def.asset, equipped: null };
+    if (pass === 'body') {
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      ctx.beginPath(); ctx.ellipse(x, b + 1, 38, 6, 0, 0, 7); ctx.fill();
+      ctx.save();
+      // наклон торса на исходной картинке уже учтён в MUT_REST: рисуем без поправки «прямого» героя
+      drawHeroRig(fake, P, action, asset, x, b);
+      ctx.restore();
+      if (e.flash > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255,220,200,${0.22 * e.flash})`;
+        ctx.beginPath(); ctx.ellipse(x + e.facing * 14, b - 62, 46, 40, 0, 0, 7); ctx.fill();
+        ctx.restore();
+      }
+      return;
+    }
+    if (pass === 'emissive') {
+      // глаза: на конце головы; горят ярче, когда он охотится
+      if (action !== 'death') {
+        const hipY = rig.hipY + P.bob * 0.5 + P.crouch, tA = Math.PI - P.lean, hA = tA - P.head;
+        const nx = Math.sin(tA) * rig.bones.torso, ny = hipY + Math.cos(tA) * rig.bones.torso;
+        const ex = x + e.facing * (nx + Math.sin(hA) * rig.bones.head * 1.05), ey = b + ny + Math.cos(hA) * rig.bones.head * 1.05 + 1;
+        const angry = ['ALERT', 'CHASE', 'ATTACK'].includes(e.state) ? 1 : 0.5;
+        const g = ctx.createRadialGradient(ex, ey, 0, ex, ey, 11);
+        g.addColorStop(0, `rgba(255,150,60,${0.85 * angry})`); g.addColorStop(1, 'rgba(255,80,20,0)');
+        ctx.fillStyle = g; ctx.fillRect(ex - 11, ey - 11, 22, 22);
+      }
+      const tr = AB.Anim.current(e.id);
+      idTag(ctx, `${def.asset} · ${tr ? tr.animId : ''} · ${e.state}`, x, b - 132);
+      if (e.state !== 'DEAD') nameTag(e.id, x, b - 124);
+    }
+  }
+
   function drawEnemy(e, pass) {
     const def = AB.ID.get(e.id);
     if (def.humanoid) { drawPursuer(e, def, pass); return; }
     if (e.state === 'DORMANT') return;           // спит в резервуаре — не видно
     const asset = AB.Assets.get(def.asset);
+    if (asset.status === 'ready' && asset.parts) { drawMutantRig(e, def, asset, pass); return; }
     const { Q, action } = enemyPose(e);
     const k = def.scale || 1;
     const x = sx(e.x + Q.dx * e.facing * k), b = sy(0);

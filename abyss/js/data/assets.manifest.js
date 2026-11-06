@@ -24,7 +24,7 @@ AB.ASSET_MANIFEST = [
   // ---- Первый акт, развязка: графика — заглушки, ждут генерации ----
   { id: 'ASSET-CHAR003-01', owner: 'CHAR-003', type: 'sprite', src: null, desc: 'Доктор Хейл' },
   { id: 'ASSET-ENEMY003-01', owner: 'ENEMY-003', type: 'sprite', src: null, desc: 'Колосс' },
-  { id: 'ASSET-ITEM011-01', owner: 'ITEM-011', type: 'icon', src: null, desc: 'Наручный плазмомёт' },
+  { id: 'ASSET-ITEM011-01', owner: 'ITEM-011', type: 'icon', src: 'assets/items/ITEM011-01.png', desc: 'Наручный плазмомёт (иконка и вид на руке; исходник assets/source/ITEM011-01.png)' },
   { id: 'ASSET-ROOM006-01', owner: 'ROOM-006', type: 'background', src: null, desc: 'Фон: оружейная' },
   { id: 'ASSET-ROOM007-01', owner: 'ROOM-007', type: 'background', src: null, desc: 'Фон: лаборатория' },
   { id: 'ASSET-ROOM009-01', owner: 'ROOM-009', type: 'background', src: null, desc: 'Фон: система жизнеобеспечения' },
@@ -72,7 +72,9 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ITEM010-01', owner: 'ITEM-010', type: 'icon', src: null, desc: 'Ключ-карта' },
 
   // ---- ENEMY-001: первый мутант ----
-  { id: 'ASSET-ENEMY001-01', owner: 'ENEMY-001', type: 'sprite', src: null, desc: 'Мутант: основной вид' },
+  // мутант: из одной фигуры assets/source/ENEMY001-01.png (разметка tools/rigs/MUTANT.json → js/data/rigs/MUTANT.js).
+  // Откат на процедурную заглушку: вернуть type: 'sprite' и убрать rig.
+  { id: 'ASSET-ENEMY001-01', owner: 'ENEMY-001', type: 'rig', rig: 'MUTANT', variant: '01', src: null, desc: 'Мутант: основной вид (гуманоид)' },
 
   // ---- Общие элементы ----
   { id: 'ASSET-SHARED-01', owner: null, type: 'prop', src: null, desc: 'Гермодверь' },
