@@ -83,6 +83,76 @@ The jumpsuit is torn and dirty: ripped sleeves and trouser legs, scorch marks, d
 stains, a cut on the forehead, grime on the face.
 ```
 
+## Спутница (`CHAR-002`) — два облика одного персонажа
+
+По канону (docs/STORY.md §4) Марк видит обычную девушку, а все остальные — её **истинный облик**.
+Это один персонаж с двумя внешними видами: `ASSET-CHAR002-01` (человек) и `ASSET-CHAR002-02` (существо).
+
+### Облик для Марка — `ASSET-CHAR002-01`
+
+Требования те же, что у Марка: 1024×2048, зелёный фон, строго сбоку лицом вправо, «поза для нарезки».
+Волосы **собраны** (тугой хвост или узел) — распущенные длинные волосы при анимации рвутся на части.
+Едва заметная странность: она **слишком опрятная** для корабля, где люди годами жили впроголодь.
+
+```
+Full body character, strict side profile facing right, orthographic, no perspective.
+A young woman in her late 20s, expedition crew member, slim athletic build, calm pale face,
+large dark eyes, dark hair pulled back into a tight low bun, no loose strands.
+Fitted grey-blue expedition jumpsuit of the same research ship as an engineer's uniform,
+dark padded shoulder and knee panels, thin utility belt, small mission patch on the near shoulder,
+soft dark boots. The clothes are strangely clean and intact, almost no dirt or wear.
+Pose for cut-out animation: standing upright, near arm slightly forward away from the body
+(about 15 degrees), elbow slightly bent, relaxed open hand, far arm slightly behind the back,
+legs in a half step — near leg slightly forward, far leg slightly back, lower legs not
+overlapping. The near arm does not cover the torso.
+Whole body visible from the top of the head to the soles, nothing cropped, character fills
+90% of the image height.
+Flat solid pure green background #00FF00, no floor, no shadow, no gradient.
+Even soft neutral front lighting, no colored lights, no rim light.
+Realistic, dark industrial sci-fi, Pandorum movie inspired, muted desaturated palette,
+high detail, no text, no watermark. Vertical image 1024x2048.
+```
+
+### Истинный облик — `ASSET-CHAR002-02` (глубоководный арахнид)
+
+Существо со дна чужого океана: что-то среднее между **морским пауком (пикногонидой)** и глубоководным
+кальмаром. Длинные тонкие членистые ноги, полупрозрачное бледное тело, сквозь которое видны
+светящиеся нервы. Ростом в холке — примерно по грудь человеку, размах ног — 2,5–3 человеческих роста.
+Деталь-намёк: светящиеся точки на «голове» складываются в подобие **человеческого лица** —
+тень того облика, который видит Марк.
+
+Картинка 1 — **вся фигура** (для стиля и сборки):
+
+```
+Full body alien deep-sea creature, strict side profile facing right, orthographic, no perspective.
+A giant sea spider like predator from an alien ocean floor: small elongated body made of a
+cephalothorax and a slender abdomen, eight very long thin jointed legs with needle-like tips,
+two shorter grasping front palps, a long proboscis-like mouth under the head.
+Pale translucent bluish-white skin, faint glowing cyan nerve lines visible under the skin,
+small cluster of bioluminescent dots on the head that faintly resembles a human face.
+Wet, slimy, elegant and horrifying at the same time.
+Pose for cut-out animation: standing on its legs, body raised to about human chest height,
+near legs fully visible and spread apart, far legs slightly behind and partly visible,
+legs do not cross each other or the body, all leg tips on the same ground line.
+Whole creature visible, nothing cropped, fills 90% of the image width.
+Flat solid pure green background #00FF00, no floor, no shadow, no water, no glow halo
+around the body. Even neutral lighting.
+Realistic dark sci-fi horror, Dead Space and deep-sea biology inspired, muted palette with
+cyan bioluminescent accents, high detail, no text. Horizontal image 2048x1024.
+```
+
+Картинка 2 — **детали по отдельности** (для анимации: одну ногу игра размножит на все восемь):
+
+```
+Creature parts sheet of the same alien sea spider, strict side view facing right, orthographic,
+each part separate with empty space between them on flat solid pure green background #00FF00:
+head with proboscis and glowing face-like dots; cephalothorax; abdomen;
+ONE leg split into three segments — upper leg, middle leg, lower leg with needle tip;
+one grasping palp. Joint ends rounded so parts overlap at joints.
+Even neutral lighting, no shadow, no text, same colors and translucent skin with cyan nerve lines.
+```
+
+
 ## Мутант `ENEMY-001` (`ASSET-ENEMY001-01`) — та же графика для `ENEMY-004`, `ENEMY-005`
 
 **Каким он должен быть (как в игре сейчас):** бывший член экипажа, которого «переделала» лаборатория.

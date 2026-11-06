@@ -17,6 +17,7 @@ AB.ASSET_MANIFEST = [
 
   // ---- CHAR-002: спутница — графика ждёт утверждения внешности ----
   { id: 'ASSET-CHAR002-01', owner: 'CHAR-002', type: 'sprite', src: null, desc: 'Спутница: основной вид' },
+  { id: 'ASSET-CHAR002-02', owner: 'CHAR-002', type: 'rig', src: null, desc: 'Истинный облик: глубоководный арахнид (docs/STORY.md §4); видят все, кроме Марка' },
 
   // ---- ENEMY-002: преследователь — графика ждёт утверждения ----
   { id: 'ASSET-ENEMY002-01', owner: 'ENEMY-002', type: 'sprite', src: null, desc: 'Преследователь: силуэт' },

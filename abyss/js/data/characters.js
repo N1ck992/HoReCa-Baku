@@ -38,7 +38,8 @@ AB.CHARACTERS.push({
   crew: false,
   stats: { maxHp: 80, speed: 120, runSpeed: 230 },
   skills: {},
-  appearances: ['ASSET-CHAR002-01'],
+  // 01 — облик, который видит Марк; 02 — истинный облик (тот же персонаж, GDD §2.3)
+  appearances: ['ASSET-CHAR002-01', 'ASSET-CHAR002-02'],
   // цвета силуэта-заглушки
   look: { dark: '#221c22', mid: '#3c3038', light: '#55464e', hair: '#1a1416', build: 0.92 },
   anims: {
