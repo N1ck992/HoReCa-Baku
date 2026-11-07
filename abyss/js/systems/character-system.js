@@ -162,7 +162,8 @@ AB.Chars = (() => {
   }
 
   // ведомые переходят в новое помещение вместе с ведущим
-  AB.Bus.on('room:enter', ({ roomId }) => {
+  AB.Bus.on('room:enter', ({ roomId, seamless }) => {
+    if (seamless) return;   // переход внутри сектора: каждый идёт сам
     const hero = live.get(AB.Party.leader());
     if (!hero) return;
     for (const s of live.values()) {

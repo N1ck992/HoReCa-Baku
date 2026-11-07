@@ -658,7 +658,7 @@
   function updateArenaHud() {
     const A = AB.Arena.get();
     ui.arena.hidden = !A;
-    ui.zoom.hidden = !A;
+    ui.zoom.hidden = !AB.Arena.seamless();
     document.body.classList.toggle('in-arena', !!A);
     if (!A) { lastArena = ''; if (doorMenu) closeDoorMenu(); return; }
     const html = `<b>${A.def.name}</b><span class="t ${A.left < 15 ? 'end' : ''}">${A.over ? 'Затихли' : mmss(A.left)}</span><span class="k">Убито: ${A.kills}</span>`
@@ -717,13 +717,13 @@
   AB.Bus.on('arena:door', () => { if (doorMenu) renderDoorMenu(); });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' && doorMenu) closeDoorMenu();
-    if (!AB.Arena.active()) return;
+    if (!AB.Arena.seamless()) return;
     if (e.code === 'Minus' || e.code === 'NumpadSubtract') AB.Render.zoom(-0.05);
     if (e.code === 'Equal' || e.code === 'NumpadAdd') AB.Render.zoom(0.05);
   });
   // отдаление камеры: колесо мыши или кнопки −/+
   $('#screen').addEventListener('wheel', (e) => {
-    if (!AB.Arena.active()) return;
+    if (!AB.Arena.seamless()) return;
     e.preventDefault();
     AB.Render.zoom(e.deltaY > 0 ? -0.04 : 0.04);
   }, { passive: false });
@@ -733,7 +733,6 @@
   });
   ui.zoom.addEventListener('pointerdown', (e) => e.stopPropagation());
 
-  AB.Bus.on('arena:room', ({ roomId }) => showRoom(roomId));
   AB.Bus.on('arena:start', ({ name, duration }) => toast(`${name}: продержитесь ${mmss(duration)}`, 'bad'));
   AB.Bus.on('arena:door', ({ state, name }) => { if (state === 'broken') toast(`Выбита дверь: ${name}`); });
   AB.Bus.on('arena:order', ({ id, order }) => {
@@ -839,10 +838,13 @@
       AB.Barks.update(dt);
       AB.Interact.update(dt);
       AB.Combat.update(dt);
-      if (!AB.Rooms.inTransition()) AB.Enemies.update(dt);
+      if (!AB.Rooms.inTransition()) {
+        if (AB.Arena.seamless()) for (const sg of AB.Arena.segments()) AB.Enemies.update(dt, sg.room);
+        else AB.Enemies.update(dt);
+      }
 
-      if (AB.Arena.active()) {
-        // боевая локация: двигаются все помещения сразу, двери — проходы между ними
+      if (AB.Arena.seamless() && !AB.Rooms.inTransition()) {
+        // сектор: живут все его помещения сразу, двери — проходы между ними
         AB.Arena.update(dt);
         for (const sg of AB.Arena.segments()) AB.Chars.update(dt, AB.Arena.bounds(sg.room), sg.room);
         AB.Arena.afterMove();

@@ -38,7 +38,7 @@ AB.Render = (() => {
     grainCv = makeGrain();
     resize();
     window.addEventListener('resize', resize);
-    AB.Bus.on('room:enter', () => { staticFor = null; particles.length = 0; snapCamera(); });
+    AB.Bus.on('room:enter', ({ seamless }) => { if (seamless) return; staticFor = null; particles.length = 0; snapCamera(); });
     AB.Bus.on('asset:ready', () => { staticFor = null; statics.clear(); });
     AB.Bus.on('arena:start', () => { arenaSnap = true; statics.clear(); });
     AB.Bus.on('enemy:hit', ({ id, x, from }) => { const e = AB.Enemies.get(id); fxRoom = e && e.room; bleed(x, -40, Math.sign(x - from) || 1, 18); shake = Math.max(shake, 5); fxRoom = null; });
@@ -840,7 +840,7 @@ AB.Render = (() => {
     const hero = AB.Party.lead();
     for (const d of r.doors) {
       const x = sx(d.x), b = sy(0);
-      const ad = AB.Arena.active() && AB.Arena.doorFor(r.id, d.key);
+      const ad = AB.Arena.seamless() && AB.Arena.doorFor(r.id, d.key);
       if (ad) { drawArenaDoor(r, d, ad, x, b, hero); continue; }
       if (r.artDoors) {
         // дверь нарисована на фоне: только индикатор доступа
@@ -949,8 +949,8 @@ AB.Render = (() => {
       ctx.fillStyle = 'rgba(230,190,60,.35)';
       for (const y of [b - 150, b - 95, b - 40]) for (let i = 0; i < 5; i++) ctx.fillRect(X - 48 + i * 21, y - 5, 9, 10);
     }
-    // прочность закрытой двери
-    if (!AB.Arena.passable(ad)) {
+    // прочность закрытой двери (в испытании)
+    if (AB.Arena.active() && !AB.Arena.passable(ad)) {
       const max = ad.state === 'fortified' ? ad.fortHp : ad.maxHp, f = U.clamp(ad.hp / max, 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(x - 40, b - 214, 80, 7);
       ctx.fillStyle = f > 0.5 ? (ad.state === 'fortified' ? '#e0b640' : '#7fd0e6') : f > 0.25 ? '#e08a40' : '#e04a3a';
@@ -1825,7 +1825,7 @@ AB.Render = (() => {
 
   // ---------- Указатель навигации ----------
   function drawNavMarker() {
-    if (AB.Arena.active()) return;   // в боевой локации выход не ищем
+    if (AB.Arena.active()) return;   // в испытании выход не ищем
     const h = AB.Nav.hint();
     const hero = AB.Party.lead();
     if (!h || !hero || !hero.controllable) return;
@@ -2010,7 +2010,7 @@ AB.Render = (() => {
     drawNavMarker();
     ctx.globalCompositeOperation = 'source-over';
     AB.Chars.all().filter((c) => c.id !== AB.Party.leader() && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'emissive'));
-    { const l = AB.Party.lead(); if (l && (l.room === r.id || !AB.Arena.active())) drawHero(l, 'emissive'); }
+    { const l = AB.Party.lead(); if (l && (l.room === r.id || !AB.Arena.seamless())) drawHero(l, 'emissive'); }
     drawBarks(r);
   }
 
@@ -2702,7 +2702,7 @@ AB.Render = (() => {
     time += dt;
     const r = AB.Rooms.room();
     if (!r) return;
-    if (AB.Arena.active()) {
+    if (AB.Arena.seamless()) {
       const swayY = Math.sin(time * 0.7) * 0.8 + (Math.random() - 0.5) * shake;
       const swayX = (Math.random() - 0.5) * shake;
       shake = Math.max(0, shake - dt * 30);
@@ -2764,7 +2764,7 @@ AB.Render = (() => {
     pick(cx, cy) {
       const r = cv.getBoundingClientRect();
       let wx = (cx - r.left) * dpr / scale + cam.x, wy = (cy - r.top) * dpr / scale - FLOOR;
-      if (AB.Arena.active()) {
+      if (AB.Arena.seamless()) {
         const s = AB.Arena.segments().find((q) => q.room === AB.Rooms.current());
         if (!s) return null;
         const T = segXform(s);
@@ -2794,7 +2794,7 @@ AB.Render = (() => {
     zoom: (dz) => (dz ? setZoom(ZOOM + dz) : ZOOM),
     // точка мира → экранные CSS-пиксели (для интерфейса и проверок)
     screenPos(x, y, room) {
-      const s = AB.Arena.active() && AB.Arena.segments().find((q) => q.room === (room || AB.Rooms.current()));
+      const s = AB.Arena.seamless() && AB.Arena.segments().find((q) => q.room === (room || AB.Rooms.current()));
       if (!s) return { x: (x - cam.x) * scale / dpr, y: (FLOOR + y) * scale / dpr, unit: scale / dpr };
       const T = segXform(s);
       return { x: ((x - T.camx) * T.S + T.ox) / dpr, y: ((FLOOR + y) * T.S + T.oy) / dpr, unit: T.S / dpr };

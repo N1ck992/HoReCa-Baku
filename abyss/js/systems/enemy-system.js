@@ -181,8 +181,9 @@ AB.Enemies = (() => {
     return null;
   }
 
-  function update(dt) {
-    const r = AB.Rooms.room();
+  // roomId — помещение сектора (там обновляются все помещения сразу); иначе текущее
+  function update(dt, roomId) {
+    const r = roomId ? AB.ID.get(roomId) : AB.Rooms.room();
     if (!r) return;
     spawnForRoom(r.id);
     for (const s of [...live.values()]) {

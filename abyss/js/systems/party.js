@@ -106,10 +106,10 @@ AB.Party = (() => {
       m.engage = null;
       if (quiet || m.dead || m.down || m.work || m.climb) continue;
       if (m.order && m.order.type === 'guard') continue;        // охраняет дверь — в общем бою не участвует
-      if (!AB.Arena.active() && m.room !== l.room) continue;
+      if (!AB.Arena.seamless() && m.room !== l.room) continue;
       if (AB.Enemies.threatFor(m.id, m.room)) continue;       // её цель — спастись, а не драться
       // «за мной», а ведущий в другом помещении: догоняет, отбиваясь только от тех, кто рядом
-      const catchUp = AB.Arena.active() && m.room !== l.room && (!m.order || m.order.type === 'follow');
+      const catchUp = AB.Arena.seamless() && m.room !== l.room && (!m.order || m.order.type === 'follow');
       const w = AB.Combat.weaponOf(m.id);
       if (!w) continue;
       const hold = m.order && m.order.type === 'hold';

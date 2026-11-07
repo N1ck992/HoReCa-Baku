@@ -11,7 +11,7 @@ AB.VERSION = '0.1.0';
 // Каждый игровой объект регистрируется здесь один раз под постоянным ID.
 // Повторная регистрация того же ID — ошибка (защита от дублей, GDD §2.3).
 AB.ID = (() => {
-  const PREFIXES = ['CHAR', 'ENEMY', 'ROOM', 'ITEM', 'EQUIP', 'QUEST', 'EVENT', 'ASSET', 'ANIM', 'DIALOG', 'LOG', 'ARENA', 'PERK'];   // LOG — находки (№31); ARENA — боевые локации, PERK — улучшения (№41)
+  const PREFIXES = ['CHAR', 'ENEMY', 'ROOM', 'ITEM', 'EQUIP', 'QUEST', 'EVENT', 'ASSET', 'ANIM', 'DIALOG', 'LOG', 'ARENA', 'PERK', 'SECTOR'];   // LOG — находки (№31); ARENA — испытания, PERK — улучшения (№41); SECTOR — секторы без загрузок (№43)
   const PATTERN = new RegExp(`^(${PREFIXES.join('|')})-[A-Z0-9]+(?:-[A-Z0-9]+)*$`);
   const table = new Map();
 
