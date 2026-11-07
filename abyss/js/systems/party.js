@@ -105,16 +105,16 @@ AB.Party = (() => {
       if (m === l) continue;
       m.engage = null;
       if (quiet || m.dead || m.down || m.work || m.climb) continue;
-      if (m.order && m.order.type === 'guard') continue;        // охраняет дверь — в общем бою не участвует
+      const guard = m.order && m.order.type === 'guard';        // охраняет дверь — в общем бою не участвует, только отбивается
       if (!AB.Arena.seamless() && m.room !== l.room) continue;
       if (AB.Enemies.threatFor(m.id, m.room)) continue;       // её цель — спастись, а не драться
       // «за мной», а ведущий в другом помещении: догоняет, отбиваясь только от тех, кто рядом
       const catchUp = AB.Arena.seamless() && m.room !== l.room && (!m.order || m.order.type === 'follow');
       const w = AB.Combat.weaponOf(m.id);
       if (!w) continue;
-      const hold = m.order && m.order.type === 'hold';
+      const hold = (m.order && m.order.type === 'hold') || guard;
       const foes = AB.Arena.foesFor(m)
-        .filter((e) => hostile(e) && (catchUp ? Math.abs(e.x - m.x) < 160 : hold ? Math.abs(e.x - m.x) < 560 : Math.abs(e.x - (l.room === m.room ? l.x : m.x)) < 520))
+        .filter((e) => hostile(e) && (catchUp || guard ? Math.abs(e.x - m.x) < (guard ? 220 : 160) : hold ? Math.abs(e.x - m.x) < 560 : Math.abs(e.x - (l.room === m.room ? l.x : m.x)) < 520))
         .sort((a, b) => Math.abs(a.x - m.x) - Math.abs(b.x - m.x));
       const e = foes[0];
       if (!e) continue;

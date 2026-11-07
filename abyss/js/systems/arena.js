@@ -356,8 +356,8 @@ AB.Arena = (() => {
       const dx = doorX(d, side), left = dx < seg(side).width / 2;
       room = side; x = dx + (left ? 46 : -46);
       if (c.room === side && Math.abs(c.x - x) < 14) {
-        c.waypoint = null; c.engage = null;
-        c.facing = left ? -1 : 1;
+        c.waypoint = null;
+        if (c.engage == null) c.facing = left ? -1 : 1;   // отбивается — смотрит на врага, иначе на дверь
         // task — разовое поручение (закрыть, открыть, снять укрепление), потом снова за ведущим;
         // без task — охрана: закрыть, укрепить и остаться у двери
         const T = o.task;
