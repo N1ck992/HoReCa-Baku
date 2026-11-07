@@ -11,7 +11,7 @@ AB.VERSION = '0.1.0';
 // Каждый игровой объект регистрируется здесь один раз под постоянным ID.
 // Повторная регистрация того же ID — ошибка (защита от дублей, GDD §2.3).
 AB.ID = (() => {
-  const PREFIXES = ['CHAR', 'ENEMY', 'ROOM', 'ITEM', 'EQUIP', 'QUEST', 'EVENT', 'ASSET', 'ANIM', 'DIALOG', 'LOG'];   // LOG — находки и записи экипажа (дополнение №31)
+  const PREFIXES = ['CHAR', 'ENEMY', 'ROOM', 'ITEM', 'EQUIP', 'QUEST', 'EVENT', 'ASSET', 'ANIM', 'DIALOG', 'LOG', 'ARENA', 'PERK'];   // LOG — находки (№31); ARENA — боевые локации, PERK — улучшения (№41)
   const PATTERN = new RegExp(`^(${PREFIXES.join('|')})-[A-Z0-9]+(?:-[A-Z0-9]+)*$`);
   const table = new Map();
 
@@ -31,8 +31,10 @@ AB.ID = (() => {
     return record;
   }
 
+  // Экземпляр (например мутант волны 'ENEMY-001~7') не регистрируется отдельно:
+  // его данные — данные исходного ID до знака «~».
   function get(id) {
-    const r = table.get(id);
+    const r = table.get(id) || (typeof id === 'string' && id.includes('~') ? table.get(id.split('~')[0]) : undefined);
     if (!r) console.warn(`[ID] Не найден: ${id}`);
     return r || null;
   }

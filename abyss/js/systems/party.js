@@ -29,7 +29,7 @@ AB.Party = (() => {
     if (c.down) return 'Без сознания';
     if (c.room !== l.room) return 'В другом помещении';
     if (AB.Story.isRunning() || AB.Dialog.isOpen()) return 'Сейчас идёт сцена';
-    if (AB.Rooms.inTransition() || AB.Interact.isSearching() || !l.controllable) return 'Сейчас нельзя';
+    if (AB.Rooms.inTransition() || AB.Interact.isSearching() || !l.controllable || c.climb || c.work) return 'Сейчас нельзя';
     if (AB.Enemies.threatFor(id, c.room)) return 'Ей нужно спастись';
     return null;
   }
@@ -86,7 +86,7 @@ AB.Party = (() => {
     const ht = AB.Inventory.heat(l.id);
     const shoot = w.weapon.ranged && (w.weapon.infinite || (ht ? !ht.over : AB.Inventory.ammo(l.id) > 0));
     const reach = shoot ? w.weapon.range * 0.85 : (w.weapon.ranged ? 58 : w.weapon.range + 8);
-    const foes = AB.Enemies.inRoom(l.room).filter((e) => hostile(e) && Math.abs(e.x - l.x) <= reach)
+    const foes = AB.Arena.foesFor(l).filter((e) => hostile(e) && Math.abs(e.x - l.x) <= reach)
       .sort((a, b) => Math.abs(a.x - l.x) - Math.abs(b.x - l.x));
     const e = foes[0];
     if (!e) return;
@@ -104,12 +104,17 @@ AB.Party = (() => {
     for (const m of members()) {
       if (m === l) continue;
       m.engage = null;
-      if (quiet || m.dead || m.down || m.room !== l.room) continue;
+      if (quiet || m.dead || m.down || m.work || m.climb) continue;
+      if (m.order && m.order.type === 'guard') continue;        // охраняет дверь — в общем бою не участвует
+      if (!AB.Arena.active() && m.room !== l.room) continue;
       if (AB.Enemies.threatFor(m.id, m.room)) continue;       // её цель — спастись, а не драться
+      // «за мной», а ведущий в другом помещении: догоняет, отбиваясь только от тех, кто рядом
+      const catchUp = AB.Arena.active() && m.room !== l.room && (!m.order || m.order.type === 'follow');
       const w = AB.Combat.weaponOf(m.id);
       if (!w) continue;
-      const foes = AB.Enemies.inRoom(m.room)
-        .filter((e) => hostile(e) && Math.abs(e.x - l.x) < 520)
+      const hold = m.order && m.order.type === 'hold';
+      const foes = AB.Arena.foesFor(m)
+        .filter((e) => hostile(e) && (catchUp ? Math.abs(e.x - m.x) < 160 : hold ? Math.abs(e.x - m.x) < 560 : Math.abs(e.x - (l.room === m.room ? l.x : m.x)) < 520))
         .sort((a, b) => Math.abs(a.x - m.x) - Math.abs(b.x - m.x));
       const e = foes[0];
       if (!e) continue;
@@ -119,6 +124,7 @@ AB.Party = (() => {
       const reach = shoot ? Math.min(w.weapon.range * 0.8, 480) : (w.weapon.ranged ? 55 : w.weapon.range);
       m.engageFace = dir;
       if (Math.abs(dx) > reach) {
+        if (hold) continue;                                    // стоит на посту: ближе не подходит
         m.engage = e.x - dir * reach * 0.7;
       } else {
         m.engage = m.x;

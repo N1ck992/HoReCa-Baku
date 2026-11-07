@@ -153,6 +153,8 @@ AB.Rooms = (() => {
     isSearched: (roomId, key) => searched.has(`${roomId}:${key}`),
     inTransition: () => !!transition,
     current: () => current,
+    // боевая локация: «текущее» помещение следует за ведущим без сюжетных событий входа
+    setCurrent(roomId) { current = roomId; visited.add(roomId); },
     visited: () => [...visited],
     setPropState: (key, st) => propState.set(key, { state: st, t: 0 }),
     propState: (key) => propState.get(key) || null,

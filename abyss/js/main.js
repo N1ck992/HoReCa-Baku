@@ -30,8 +30,11 @@
     party: $('#party'),
     reader: $('#reader'),
     journal: $('#journal'),
+    arena: $('#arena-hud'),
+    squad: $('#squad'),
+    perks: $('#perks'),
   };
-  ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); AB.Input.queueAction(); });
+  ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); if (e.target.closest('[data-alt]')) AB.Input.queueAlt(); else AB.Input.queueAction(); });
   ui.party.addEventListener('click', (e) => {
     const b = e.target.closest('[data-char]');
     if (b && !AB.Party.isLeader(b.dataset.char)) switchLeader(b.dataset.char);
@@ -355,7 +358,8 @@
     // на телефоне подсказка — это и есть кнопка действия
     const html = p.progress !== undefined
       ? `${p.label}<span class="bar"><i style="width:${Math.round(p.progress * 100)}%"></i></span>`
-      : isTouch ? p.label : `<kbd class="${p.ok ? '' : 'no'}">E</kbd> ${p.label}`;
+      : (isTouch ? p.label : `<kbd class="${p.ok ? '' : 'no'}">E</kbd> ${p.label}`)
+        + (p.alt ? ` <button class="alt" data-alt>${isTouch ? '' : '<kbd>R</kbd> '}${p.alt}</button>` : '');
     ui.prompt.classList.toggle('no', !p.ok);
     if (html !== lastPrompt) { ui.prompt.innerHTML = html; lastPrompt = html; }
     ui.prompt.classList.add('show');
@@ -431,7 +435,7 @@
   $('#btn-logs').addEventListener('click', () => (ui.journal.hidden ? openJournal() : closeJournal()));
 
   AB.Bus.on('combat:noweapon', () => toast('Нечем драться: найдите что-нибудь тяжёлое', 'info'));
-  AB.Bus.on('enemy:dead', ({ name }) => { toast(`${name} убит`, 'good'); setTimeout(() => AB.Save.save(), 1800); });
+  AB.Bus.on('enemy:dead', ({ id, name }) => { if (String(id).includes('~')) return; toast(`${name} убит`, 'good'); setTimeout(() => AB.Save.save(), 1800); });
   AB.Bus.on('char:dead', ({ charId }) => {
     if (charId !== MARK && charId !== 'CHAR-002') return;
     // гибель Марка или спутницы — конец: загрузка последнего сохранения
@@ -627,6 +631,83 @@
     return true;
   };
 
+  // ---------- Боевая локация: таймер, приказы отряду, выбор перка (дополнение №41) ----------
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  let lastArena = '', lastSquad = '', pickDoorFor = null;
+  const ORDER_NAME = { follow: 'за мной', hold: 'стоит на месте', guard: 'охраняет дверь' };
+  const DOOR_STATE = { open: 'открыта', closed: 'закрыта', fortified: 'укреплена', broken: 'выбита' };
+  function updateArenaHud() {
+    const A = AB.Arena.get();
+    ui.arena.hidden = !A;
+    ui.squad.hidden = !A || A.over || AB.Party.members().length < 2;
+    document.body.classList.toggle('in-arena', !!A);
+    if (!A) { lastArena = lastSquad = ''; pickDoorFor = null; return; }
+    const html = `<b>${A.def.name}</b><span class="t ${A.left < 15 ? 'end' : ''}">${A.over ? 'Затихли' : mmss(A.left)}</span><span class="k">Убито: ${A.kills}</span>`
+      + `<i style="width:${Math.round((1 - A.left / A.def.duration) * 100)}%"></i>`;
+    if (html !== lastArena) { ui.arena.innerHTML = html; lastArena = html; }
+    if (ui.squad.hidden) return;
+    // приказы: каждому ведомому — за мной / стоять / охранять выбранную дверь
+    const rows = AB.Party.members().filter((c) => !AB.Party.isLeader(c.id)).map((c) => {
+      const o = c.order || { type: 'follow' }, d = AB.ID.get(c.id);
+      const door = o.type === 'guard' && AB.Arena.doors().find((q) => q.key === o.door);
+      const now = c.work ? `${AB.Arena.ACTION_NAME[c.work.action].toLowerCase()}…` : door ? `охраняет: ${door.name}` : ORDER_NAME[o.type];
+      if (pickDoorFor === c.id) {
+        return `<div class="sq-row pick"><b>${d.name}: какую дверь?</b><div class="sq-btns">${AB.Arena.doors().map((q) =>
+          `<button data-guard="${c.id}" data-door="${q.key}" ${q.state === 'broken' ? 'disabled' : ''}>${q.name}<small>${DOOR_STATE[q.state]}</small></button>`).join('')}
+          <button data-cancel>Отмена</button></div></div>`;
+      }
+      return `<div class="sq-row"><b>${d.name}</b><span>${now}</span><div class="sq-btns">
+        <button data-order="follow" data-id="${c.id}" class="${o.type === 'follow' ? 'on' : ''}">За мной</button>
+        <button data-order="hold" data-id="${c.id}" class="${o.type === 'hold' ? 'on' : ''}">Стоять</button>
+        <button data-order="guard" data-id="${c.id}" class="${o.type === 'guard' ? 'on' : ''}">Дверь</button></div></div>`;
+    }).join('');
+    if (rows !== lastSquad) { ui.squad.innerHTML = rows; lastSquad = rows; }
+  }
+  ui.squad.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.cancel != null) { pickDoorFor = null; return; }
+    if (b.dataset.guard) {
+      AB.Arena.order(b.dataset.guard, { type: 'guard', door: b.dataset.door });
+      pickDoorFor = null; return;
+    }
+    const id = b.dataset.id, type = b.dataset.order;
+    if (type === 'guard') { pickDoorFor = id; return; }
+    AB.Arena.order(id, { type });
+  });
+  AB.Bus.on('arena:room', ({ roomId }) => showRoom(roomId));
+  AB.Bus.on('arena:start', ({ name, duration }) => toast(`${name}: продержитесь ${mmss(duration)}`, 'bad'));
+  AB.Bus.on('arena:door', ({ state, name }) => { if (state === 'broken') toast(`Выбита дверь: ${name}`); });
+  AB.Bus.on('arena:order', ({ id, order }) => {
+    const door = order.type === 'guard' && AB.Arena.doors().find((q) => q.key === order.door);
+    toast(`${AB.ID.get(id).name}: ${door ? `охранять «${door.name}»` : ORDER_NAME[order.type]}`, 'info');
+  });
+  // испытание пройдено: пауза и выбор одного из трёх перков
+  AB.Bus.on('arena:won', () => {
+    toast('Гнездо затихло', 'good');
+    setTimeout(showPerks, 1400);
+  });
+  function showPerks() {
+    const cards = AB.Perks.offer(3);
+    AB.Input.lock();
+    paused = true;
+    ui.perks.querySelector('.perk-list').innerHTML = cards.length
+      ? cards.map((p) => `<button class="perk" data-perk="${p.id}"><b>${p.name}</b><span>${p.desc}</span></button>`).join('')
+      : '<p class="muted">Список улучшений ещё не составлен — выбор появится, когда он будет готов.</p><button class="perk" data-perk="">Продолжить</button>';
+    ui.perks.hidden = false;
+  }
+  ui.perks.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-perk]');
+    if (!b) return;
+    if (b.dataset.perk) AB.Perks.choose(b.dataset.perk);
+    ui.perks.hidden = true;
+    paused = false;
+    AB.Input.unlock();
+    AB.Arena.exit();
+    if (b.dataset.perk) toast(`Улучшение: ${AB.ID.get(b.dataset.perk).name}`, 'good');
+  });
+  let paused = false;
+
   // ---------- Запуск ----------
   function boot() {
     AB.Assets.load();
@@ -647,6 +728,8 @@
       AB.Party.restore(save.party);
       AB.Logs.restore(save.logs);
       AB.Barks.restore(save.barks);
+      AB.Arena.restore(save.arena);
+      AB.Perks.restore(save.perks);
       // старые сохранения: у спутницы должен быть её дротиковый пистолет
       { const c = AB.Chars.get('CHAR-002'); if (c && !AB.Chars.all().some((m) => AB.Inventory.count(m.id, 'ITEM-012'))) AB.Inventory.add('CHAR-002', 'ITEM-012', 1, { swap: false }); }
       const hero = AB.Chars.get(L());
@@ -668,6 +751,8 @@
       if (q.start && q.start.event && AB.Story.isDone(q.start.event)) AB.Quests.start(q.id);
     }
     AB.Quests.check();
+    // загрузка во время испытания: оно начинается заново
+    if (AB.Arena.pending()) setTimeout(() => AB.Arena.start(AB.Arena.pending()), 1200);
     AB.Render.snapCamera();
     applyHeroArt();
     ui.ids.classList.toggle('on', AB.Render.idsShown());
@@ -677,9 +762,10 @@
     function loop(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      if (paused) { AB.Render.frame(0); requestAnimationFrame(loop); return; }
       AB.Story.update(dt);
       AB.World.update(dt);
-      { const h = AB.Chars.get(L()); if (h && !AB.Rooms.inTransition()) AB.Story.zone(AB.Rooms.current(), h.x); }
+      { const h = AB.Chars.get(L()); if (h && !AB.Rooms.inTransition() && !AB.Arena.active()) AB.Story.zone(AB.Rooms.current(), h.x); }
       if (skipRequested) { skipRequested = false; finishWake(MARK); }
 
       const hero = AB.Chars.get(L());
@@ -689,6 +775,7 @@
       if (hero && hero.controllable && !AB.Rooms.inTransition() && AB.Input.consumeAttack()) {
         AB.Combat.attack(L());
       }
+      if (AB.Input.consumeAlt() && hero && hero.controllable && !AB.Rooms.inTransition()) AB.Interact.actAlt(L());
       if (AB.Input.consumeLead()) switchLeader();
       AB.Party.update(dt);
       AB.Barks.update(dt);
@@ -696,7 +783,12 @@
       AB.Combat.update(dt);
       if (!AB.Rooms.inTransition()) AB.Enemies.update(dt);
 
-      AB.Chars.update(dt, AB.Rooms.bounds());
+      if (AB.Arena.active()) {
+        // боевая локация: двигаются все помещения сразу, двери — проходы между ними
+        AB.Arena.update(dt);
+        for (const sg of AB.Arena.segments()) AB.Chars.update(dt, AB.Arena.bounds(sg.room), sg.room);
+        AB.Arena.afterMove();
+      } else AB.Chars.update(dt, AB.Rooms.bounds());
       AB.Anim.update(dt);
       AB.Rooms.update(dt);
       AB.Rooms.tickProps(dt);
@@ -707,6 +799,7 @@
       updateQuest();
       updateCombatHud();
       updateParty();
+      updateArenaHud();
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

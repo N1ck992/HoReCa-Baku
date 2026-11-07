@@ -9,6 +9,7 @@ AB.Input = (() => {
   let actionQueued = false;
   let attackQueued = false;
   let leadQueued = false;
+  let altQueued = false;
   let stickX = 0;          // джойстик: −1…1
   const STICK_DEAD = 0.18, STICK_RUN = 0.62;
 
@@ -19,6 +20,7 @@ AB.Input = (() => {
     action: ['KeyE', 'Enter', 'ArrowUp', 'KeyW'],
     attack: ['KeyF', 'KeyJ', 'Space'],
     lead: ['KeyQ'],
+    alt: ['KeyR'],
   };
 
   function init() {
@@ -26,6 +28,7 @@ AB.Input = (() => {
       if (map.action.includes(e.code) && !e.repeat) actionQueued = true;
       if (map.attack.includes(e.code) && !e.repeat) attackQueued = true;
       if (map.lead.includes(e.code) && !e.repeat) leadQueued = true;
+      if (map.alt.includes(e.code) && !e.repeat) altQueued = true;
       if (Object.values(map).flat().includes(e.code)) e.preventDefault();
       keys.add(e.code);
     });
@@ -103,6 +106,8 @@ AB.Input = (() => {
 
   return {
     consumeLead() { const q = leadQueued; leadQueued = false; return q; },
+    consumeAlt() { const q = altQueued; altQueued = false; return q; },
+    queueAlt() { if (!locked) altQueued = true; },
     init,
     lock() { locked = true; },
     unlock() { locked = false; actionQueued = false; attackQueued = false; },

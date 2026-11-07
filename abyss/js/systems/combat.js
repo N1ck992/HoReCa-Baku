@@ -64,18 +64,18 @@ AB.Combat = (() => {
         let landed = false;
         if (sw.shot) {
           // гарпун: летит по прямой и попадает в первого противника на линии
-          const targets = AB.Enemies.inRoom(c.room)
+          const targets = AB.Arena.foesFor(c)
             .filter((e) => e.state !== 'DEAD' && e.state !== 'FADE' && (e.x - c.x) * c.facing > 0 && Math.abs(e.x - c.x) < w.range)
             .sort((a, b) => Math.abs(a.x - c.x) - Math.abs(b.x - c.x));
           const hit = targets[0];
-          if (hit) landed = AB.Enemies.damage(hit.id, w.damage, c.x, 'ranged');
+          if (hit) landed = AB.Enemies.damage(hit.id, w.damage * AB.Perks.mod('rangedDamage'), hit.ref ? hit.ref.x - (hit.x - c.x) : c.x, 'ranged');
           AB.Bus.emit('combat:shot', { charId, fromX: c.x + c.facing * 40, toX: hit ? hit.x : c.x + c.facing * w.range, landed, energy: !!w.energy, dart: !!w.dart });
         } else {
           const dmg = w.ranged ? w.bash : w.damage, reach = w.ranged ? 60 : w.range;
-          for (const e of AB.Enemies.inRoom(c.room)) {
+          for (const e of AB.Arena.foesFor(c)) {
             if (e.state === 'DEAD') continue;
             const dx = (e.x - c.x) * c.facing;
-            if (dx > -10 && dx < reach + 20) landed = AB.Enemies.damage(e.id, dmg, c.x, 'melee') || landed;
+            if (dx > -10 && dx < reach + 20) landed = AB.Enemies.damage(e.id, dmg, e.ref ? e.ref.x - (e.x - c.x) : c.x, 'melee') || landed;
           }
         }
         AB.Bus.emit('combat:swing', { charId, landed });

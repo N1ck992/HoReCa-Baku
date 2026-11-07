@@ -45,6 +45,7 @@ AB.Interact = (() => {
     if (work) return { label: `${AB.Equip.action(work.equip.id, work.charId).label}…`, ok: true, progress: work.t / work.time };
     const t = target(charId);
     if (!t) return null;
+    if (t.kind === 'door' && AB.Arena.active()) return arenaDoorPrompt(t);
     if (t.kind === 'door') {
       const pass = AB.Rooms.canPass(t.ref);
       const verb = t.ref.kind === 'hatch' ? 'Спуститься в люк' : t.ref.kind === 'ladder' ? 'Подняться по лестнице' : 'Открыть дверь';
@@ -70,6 +71,16 @@ AB.Interact = (() => {
     if (!c || !t) return false;
     c.facing = t.x >= c.x ? 1 : -1;
 
+    if (t.kind === 'door' && AB.Arena.active()) {
+      // боевая локация: двери и лестницы внутри неё — без загрузок
+      const r = AB.Rooms.room();
+      const ad = AB.Arena.doorFor(r.id, t.ref.key);
+      if (ad) return AB.Arena.startDoorWork(c, ad, AB.Arena.doorActions(ad).main);
+      const ld = AB.Arena.ladderFor(r.id, t.ref.key);
+      if (ld) { AB.Arena.climb(c, AB.Arena.ladderStep(r.id, ld)); if (AB.Party.isLeader(charId)) c.controllable = false; return true; }
+      AB.Bus.emit('door:denied', { roomId: r.id, door: t.ref.key, reason: 'Сейчас не уйти — надо продержаться' });
+      return true;
+    }
     if (t.kind === 'door') {
       c.reachLow = false;
       AB.Chars.playAction(charId, 'interact');
@@ -169,5 +180,24 @@ AB.Interact = (() => {
     AB.Bus.emit('container:looted', { label: container.label, found, full });
   }
 
-  return { target, prompt, act, update, isSearching: () => !!search || !!work };
+  // дверь боевой локации: основное действие (E) и дополнительное (R) — укрепить
+  function arenaDoorPrompt(t) {
+    const r = AB.Rooms.room();
+    const ad = AB.Arena.doorFor(r.id, t.ref.key);
+    if (ad) {
+      const a = AB.Arena.doorActions(ad);
+      const hp = ad.state === 'open' || ad.state === 'broken' ? '' : ` · прочность ${Math.ceil(ad.hp)}`;
+      return { label: (a.main ? AB.Arena.ACTION_NAME[a.main] : a.label) + hp, ok: !!a.main, alt: a.alt ? AB.Arena.ACTION_NAME[a.alt] : null };
+    }
+    if (AB.Arena.ladderFor(r.id, t.ref.key)) return { label: t.ref.kind === 'hatch' ? 'Спуститься по люку' : 'Подняться по лестнице', ok: true };
+    return { label: 'Сейчас не уйти — надо продержаться', ok: false };
+  }
+  function actAlt(charId) {
+    const c = AB.Chars.get(charId), t = target(charId);
+    if (!c || !t || t.kind !== 'door' || !AB.Arena.active()) return false;
+    const ad = AB.Arena.doorFor(AB.Rooms.current(), t.ref.key);
+    return !!ad && AB.Arena.startDoorWork(c, ad, AB.Arena.doorActions(ad).alt);
+  }
+
+  return { target, prompt, act, actAlt, update, isSearching: () => !!search || !!work };
 })();

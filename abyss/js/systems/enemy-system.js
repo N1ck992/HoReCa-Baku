@@ -30,6 +30,19 @@ AB.Enemies = (() => {
     }
   }
 
+  // экземпляр противника (мутант волны): ID вида 'ENEMY-001~7', данные — исходного ENEMY-001
+  function spawnInstance(id, roomId, x, { arena = false, facing = -1 } = {}) {
+    const def = AB.ID.get(id);
+    const s = {
+      id, room: roomId, x, facing, vx: 0, hp: def.hp, state: null, t: 0,
+      patrolDir: 1, goalX: x, lastSeenX: null, loseT: 0, cooldown: 0.6, hitDone: false,
+      retreated: true, stagger: 0, flash: 1, stride: 0, seenHero: true, arena,
+    };
+    live.set(id, s);
+    setState(s, 'CHASE');
+    return s;
+  }
+
   function setState(s, state) {
     if (s.state === state) return;
     s.state = state;
@@ -173,7 +186,7 @@ AB.Enemies = (() => {
     if (!r) return;
     spawnForRoom(r.id);
     for (const s of [...live.values()]) {
-      if (s.room !== r.id || s.state === 'DEAD') continue;
+      if (s.room !== r.id || s.state === 'DEAD' || s.arena) continue;   // волнами управляет боевая локация
       const def = AB.ID.get(s.id);
       if (def.type === 'pursuer') { updatePursuer(s, def, dt, r); continue; }
       const hero = pickTarget(s);
@@ -278,7 +291,7 @@ AB.Enemies = (() => {
     AB.Bus.emit('enemy:hit', { id, x: s.x, hp: s.hp, from: fromX });
     if (s.hp <= 0) {
       setState(s, 'DEAD');
-      dead.add(id);
+      if (!id.includes('~')) dead.add(id);   // экземпляры волн не запоминаются
       s.deadX = s.x;
       if (def.carry) AB.Rooms.dropItem(s.room, def.carry, AB.ID.get(def.carry).category === 'ammo' ? 3 : 1, s.x);
       AB.Bus.emit('enemy:dead', { id, name: def.name });
@@ -309,12 +322,13 @@ AB.Enemies = (() => {
   });
 
   return {
-    update, damage, inCombat, spawnAt, despawn, threatFor,
+    update, damage, inCombat, spawnAt, despawn, threatFor, spawnInstance,
+    remove: (id) => live.delete(id),
     setState(id, state) { const s = live.get(id); if (s && s.state !== 'DEAD') setState(s, state); },
     inRoom: (roomId) => [...live.values()].filter((s) => s.room === roomId),
     get: (id) => live.get(id) || null,
     isDead: (id) => dead.has(id),
-    serialize: () => ({ dead: [...dead], pos: [...live.values()].filter((s) => AB.ID.get(s.id).type !== 'pursuer').map((s) => [s.id, Math.round(s.x), s.hp]) }),
+    serialize: () => ({ dead: [...dead], pos: [...live.values()].filter((s) => AB.ID.get(s.id).type !== 'pursuer' && !s.id.includes('~')).map((s) => [s.id, Math.round(s.x), s.hp]) }),
     restore(d) {
       if (!d) return;
       (d.dead || []).forEach((id) => dead.add(id));

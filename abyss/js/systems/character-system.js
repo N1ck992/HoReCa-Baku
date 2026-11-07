@@ -47,11 +47,12 @@ AB.Chars = (() => {
   // Действие, которое нельзя прервать ходьбой (взаимодействие, урон, пробуждение)
   function busy(s) {
     const tr = AB.Anim.current(s.id);
-    return s.dead || s.down || (tr && ['interact', 'hurt', 'wake', 'attack', 'death'].includes(tr.action) && !tr.done);
+    return s.dead || s.down || s.climb || s.work || (tr && ['interact', 'hurt', 'wake', 'attack', 'death'].includes(tr.action) && !tr.done);
   }
 
-  function update(dt, bounds) {
-    const room = AB.Rooms.current();
+  // roomId — какое помещение обновлять (боевая локация обновляет все свои помещения)
+  function update(dt, bounds, roomId) {
+    const room = roomId || AB.Rooms.current();
     for (const s of live.values()) {
       if (s.room !== room) continue;           // персонажи в других помещениях стоят на месте
       const def = AB.ID.get(s.id);
@@ -82,6 +83,10 @@ AB.Chars = (() => {
           // ведомый в бою: подходит на дистанцию удара или выстрела
           if (Math.abs(s.engage - s.x) > 10) s.goal = { x: s.engage, speed: def.stats.runSpeed, follow: false };
           else { s.goal = null; if (s.engageFace) s.facing = s.engageFace; }
+        } else if (s.waypoint != null) {
+          // боевая локация: идти к двери/лестнице на пути к ведущему или к своему посту
+          if (Math.abs(s.waypoint - s.x) > 10) s.goal = { x: s.waypoint, speed: def.stats.runSpeed, follow: false };
+          else s.goal = null;
         } else if (lead && lead.room === s.room) {
           const behind = lead.x - lead.facing * 85;
           const far = Math.abs(behind - s.x);

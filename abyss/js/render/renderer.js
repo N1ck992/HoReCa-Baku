@@ -21,6 +21,9 @@ AB.Render = (() => {
   const bubbles = new Map();    // id персонажа → { item, until } — что он несёт
   let time = 0;
   const particles = [];
+  let fxRoom = null;            // в каком помещении появляются частицы (боевая локация: их несколько на экране)
+  let drawRoom = null;          // какое помещение сейчас рисуется
+  const pushFx = (p) => { p.room = p.room || fxRoom || AB.Rooms.current(); particles.push(p); };
   const decals = new Map();     // roomId -> пятна крови на полу
   let shake = 0;                // тряска камеры
   let hurtFlash = 0;            // красная вспышка при получении урона
@@ -35,25 +38,29 @@ AB.Render = (() => {
     resize();
     window.addEventListener('resize', resize);
     AB.Bus.on('room:enter', () => { staticFor = null; particles.length = 0; snapCamera(); });
-    AB.Bus.on('asset:ready', () => { staticFor = null; });
-    AB.Bus.on('enemy:hit', ({ x, from }) => { bleed(x, -40, Math.sign(x - from) || 1, 18); shake = Math.max(shake, 5); });
+    AB.Bus.on('asset:ready', () => { staticFor = null; statics.clear(); });
+    AB.Bus.on('arena:start', () => { arenaSnap = true; statics.clear(); });
+    AB.Bus.on('enemy:hit', ({ id, x, from }) => { const e = AB.Enemies.get(id); fxRoom = e && e.room; bleed(x, -40, Math.sign(x - from) || 1, 18); shake = Math.max(shake, 5); fxRoom = null; });
     AB.Bus.on('enemy:dead', () => { shake = Math.max(shake, 8); });
     AB.Bus.on('char:hit', ({ charId, from }) => {
       const c = AB.Chars.get(charId);
-      if (c) bleed(c.x, -70, Math.sign(c.x - from) || 1, 10);
+      if (c) { fxRoom = c.room; bleed(c.x, -70, Math.sign(c.x - from) || 1, 10); fxRoom = null; }
       hurtFlash = 1; shake = Math.max(shake, 10);
     });
     AB.Bus.on('combat:swing', ({ landed }) => { if (!landed) shake = Math.max(shake, 1.5); });
-    AB.Bus.on('combat:shot', ({ fromX, toX, landed, energy, dart }) => {
-      if (dart) { particles.push({ k: 'tracer', x: fromX, x2: toX, y: -80, vx: 0, vy: 0, life: 0.1, age: 0, s: 1, dart: true }); return; }
+    AB.Bus.on('combat:shot', ({ charId, fromX, toX, landed, energy, dart }) => {
+      { const c = AB.Chars.get(charId); fxRoom = c ? c.room : null; }
+      if (dart) { pushFx({ k: 'tracer', x: fromX, x2: toX, y: -80, vx: 0, vy: 0, life: 0.1, age: 0, s: 1, dart: true }); fxRoom = null; return; }
       if (energy) {
         // плазменный сгусток летит к цели; при попадании — вспышка
         const life = Math.max(0.08, Math.abs(toX - fromX) / 2200);
-        particles.push({ k: 'bolt', x: fromX, x0: fromX, x2: toX, y: -80, vx: 0, vy: 0, life, age: 0, s: 1, hit: landed });
+        pushFx({ k: 'bolt', x: fromX, x0: fromX, x2: toX, y: -80, vx: 0, vy: 0, life, age: 0, s: 1, hit: landed });
         shake = Math.max(shake, 1.5);
+        fxRoom = null;
         return;
       }
-      particles.push({ k: 'tracer', x: fromX, x2: toX, y: -78, vx: 0, vy: 0, life: 0.14, age: 0, s: 1 });
+      pushFx({ k: 'tracer', x: fromX, x2: toX, y: -78, vx: 0, vy: 0, life: 0.14, age: 0, s: 1 });
+      fxRoom = null;
       shake = Math.max(shake, 2.5);
     });
   }
@@ -833,6 +840,8 @@ AB.Render = (() => {
     const hero = AB.Party.lead();
     for (const d of r.doors) {
       const x = sx(d.x), b = sy(0);
+      const ad = AB.Arena.active() && AB.Arena.doorFor(r.id, d.key);
+      if (ad) { drawArenaDoor(r, d, ad, x, b, hero); continue; }
       if (r.artDoors) {
         // дверь нарисована на фоне: только индикатор доступа
         d._light = { x: x + (d.x < r.width / 2 ? 58 : -58), y: b - 150, locked: !AB.Rooms.canPass(d).ok, near: hero && Math.abs(hero.x - d.x) < 80 };
@@ -900,6 +909,62 @@ AB.Render = (() => {
       idTag(ctx, 'ASSET-SHARED-01', x, b - 206);
     }
   }
+
+  // дверь боевой локации: створки по её состоянию, доски укрепления, прочность
+  function drawArenaDoor(r, d, ad, x, b, hero) {
+    const k = `${r.id}:${d.key}`;
+    const want = AB.Arena.passable(ad) ? 1 : 0;
+    const cur = doorShut.has(k) ? doorShut.get(k) : want;
+    const open = cur + (want - cur) * 0.25;
+    doorShut.set(k, open);
+    const near = hero && hero.room === r.id && Math.abs(hero.x - d.x) < 80;
+    const jx = ad.shake > 0 ? (Math.random() - 0.5) * 6 : 0;
+    const X = x + jx;
+    if (!r.artDoors || open < 0.98) {
+      // проём и створки
+      if (!r.artDoors) { ctx.fillStyle = '#030304'; ctx.fillRect(X - 46, b - 190, 92, 190); }
+      const slide = open * 44;
+      ctx.fillStyle = ad.state === 'broken' ? '#1a1c1f' : '#262a2f';
+      if (ad.state === 'broken') {
+        // выбитая: перекошенные обломки створок
+        ctx.save(); ctx.translate(X - 30, b); ctx.rotate(-0.25); ctx.fillRect(-14, -150, 28, 150); ctx.restore();
+        ctx.save(); ctx.translate(X + 32, b); ctx.rotate(0.35); ctx.fillRect(-12, -120, 24, 120); ctx.restore();
+      } else {
+        ctx.fillRect(X - 46, b - 190, 46 - slide, 190);
+        ctx.fillRect(X + slide, b - 190, 46 - slide, 190);
+        ctx.fillStyle = 'rgba(200,160,40,.18)';
+        for (let i = 0; i < 6; i++) if (46 - slide > 8) {
+          ctx.fillRect(X - 40, b - 170 + i * 28, Math.max(0, 34 - slide), 6);
+          ctx.fillRect(X + slide + 6, b - 170 + i * 28, Math.max(0, 34 - slide), 6);
+        }
+      }
+      if (!r.artDoors) { ctx.strokeStyle = '#3a3f45'; ctx.lineWidth = 8; ctx.strokeRect(X - 50, b - 194, 100, 194); }
+    }
+    if (ad.state === 'fortified') {
+      // укрепление: стальные полосы крест-накрест
+      ctx.strokeStyle = '#6b5a2a'; ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.moveTo(X - 46, b - 170); ctx.lineTo(X + 46, b - 40); ctx.moveTo(X + 46, b - 170); ctx.lineTo(X - 46, b - 40); ctx.stroke();
+      ctx.fillStyle = '#4a4f55';
+      for (const y of [b - 150, b - 95, b - 40]) ctx.fillRect(X - 52, y - 6, 104, 12);
+      ctx.fillStyle = 'rgba(230,190,60,.35)';
+      for (const y of [b - 150, b - 95, b - 40]) for (let i = 0; i < 5; i++) ctx.fillRect(X - 48 + i * 21, y - 5, 9, 10);
+    }
+    // прочность закрытой двери
+    if (!AB.Arena.passable(ad)) {
+      const max = ad.state === 'fortified' ? ad.fortHp : ad.maxHp, f = U.clamp(ad.hp / max, 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(x - 40, b - 214, 80, 7);
+      ctx.fillStyle = f > 0.5 ? (ad.state === 'fortified' ? '#e0b640' : '#7fd0e6') : f > 0.25 ? '#e08a40' : '#e04a3a';
+      ctx.fillRect(x - 39, b - 213, 78 * f, 5);
+    }
+    // кто-то работает с дверью — полоса прогресса
+    for (const c of AB.Party.members()) {
+      if (!c.work || c.work.door !== ad.key || c.room !== r.id) continue;
+      ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(x - 40, b - 226, 80, 6);
+      ctx.fillStyle = '#5ee6ff'; ctx.fillRect(x - 39, b - 225, 78 * U.clamp(c.work.t / c.work.time, 0, 1), 4);
+    }
+    d._light = { x: x + (d.x < r.width / 2 ? 62 : -62), y: b - 120, locked: !AB.Arena.passable(ad), near };
+  }
+  const doorShut = new Map();
 
   // ---------- Герой: процедурная заглушка ASSET-CHAR001-01 ----------
   function limb(x1, y1, a1, l1, a2, l2, w, col) {
@@ -1730,7 +1795,7 @@ AB.Render = (() => {
   // ---------- Кровь ----------
   function bleed(x, y, dir, n) {
     for (let i = 0; i < n; i++) {
-      particles.push({ k: 'blood', x, y: y + (Math.random() - 0.5) * 20, vx: dir * (40 + Math.random() * 160), vy: -60 - Math.random() * 120, life: 1.2, age: 0, s: 1.5 + Math.random() * 2 });
+      pushFx({ k: 'blood', x, y: y + (Math.random() - 0.5) * 20, vx: dir * (40 + Math.random() * 160), vy: -60 - Math.random() * 120, life: 1.2, age: 0, s: 1.5 + Math.random() * 2 });
     }
   }
 
@@ -1743,6 +1808,7 @@ AB.Render = (() => {
 
   // ---------- Указатель навигации ----------
   function drawNavMarker() {
+    if (AB.Arena.active()) return;   // в боевой локации выход не ищем
     const h = AB.Nav.hint();
     const hero = AB.Party.lead();
     if (!h || !hero || !hero.controllable) return;
@@ -1765,13 +1831,21 @@ AB.Render = (() => {
   }
 
   // ---------- Свет ----------
-  function drawLighting(r) {
+  // преобразование «помещение → экран»: обычное или для помещения боевой локации
+  let segT = null;
+  function applyT(g) { if (segT) g.setTransform(segT.S, 0, 0, segT.S, segT.ox, segT.oy); else g.setTransform(scale, 0, 0, scale, 0, 0); }
+
+  function drawLighting(r) { lightBegin(); lightHoles(r); lightEnd(); lightGlow(r); }
+  function lightBegin() {
     const L = lctx;
     L.setTransform(1, 0, 0, 1, 0, 0);
     L.globalCompositeOperation = 'source-over';
     L.fillStyle = `rgba(2,3,5,${0.94 - AB.World.powerT() * 0.1})`;   // с питанием светлее
     L.fillRect(0, 0, lightCv.width, lightCv.height);
-    L.setTransform(scale, 0, 0, scale, 0, 0);
+  }
+  function lightHoles(r) {
+    const L = lctx;
+    applyT(L);
     L.globalCompositeOperation = 'destination-out';
 
     const hole = (x, y, rad, k) => {
@@ -1810,11 +1884,13 @@ AB.Render = (() => {
     // тревога: весь отсек вспыхивает красным
     const a = alarmPulse();
     if (a > 0) { L.fillStyle = `rgba(0,0,0,${0.12 * a})`; L.fillRect(-10, -10, VW + 20, VH + 20); }
-
+  }
+  function lightEnd() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(lightCv, 0, 0);
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-
+  }
+  function lightGlow(r) {
+    applyT(ctx);
     // цветное свечение (аддитивно)
     ctx.globalCompositeOperation = 'lighter';
     r.lights.forEach((l, i) => {
@@ -2262,24 +2338,26 @@ AB.Render = (() => {
 
   // ---------- Частицы ----------
   function spawnFx(r, dt) {
+    fxRoom = r.id;
     // пыль в воздухе
-    if (particles.filter((p) => p.k === 'dust').length < 60) {
-      particles.push({ k: 'dust', x: cam.x + Math.random() * VW, y: -Math.random() * r.height, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.3) * 4, life: 6 + Math.random() * 6, age: 0, s: 0.6 + Math.random() * 1.4 });
+    if (particles.filter((p) => p.k === 'dust' && p.room === r.id).length < 60) {
+      pushFx({ k: 'dust', x: cam.x + Math.random() * VW, y: -Math.random() * r.height, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.3) * 4, life: 6 + Math.random() * 6, age: 0, s: 0.6 + Math.random() * 1.4 });
     }
     for (const x of r.fx.steam) {
-      if (Math.random() < dt * 9) particles.push({ k: 'steam', x: x + (Math.random() - 0.5) * 10, y: -4, vx: (Math.random() - 0.5) * 10, vy: -25 - Math.random() * 25, life: 3 + Math.random() * 2, age: 0, s: 8 + Math.random() * 8 });
+      if (Math.random() < dt * 9) pushFx({ k: 'steam', x: x + (Math.random() - 0.5) * 10, y: -4, vx: (Math.random() - 0.5) * 10, vy: -25 - Math.random() * 25, life: 3 + Math.random() * 2, age: 0, s: 8 + Math.random() * 8 });
     }
     if (r.id === 'ROOM-003' && AB.Equip.state('EQUIP-002') !== 'done' && Math.random() < dt * 1.6) {
-      for (let i = 0; i < 10; i++) particles.push({ k: 'spark', x: 859 + Math.random() * 25, y: -25, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 90, life: 0.5 + Math.random() * 0.6, age: 0, s: 1.5 });
+      for (let i = 0; i < 10; i++) pushFx({ k: 'spark', x: 859 + Math.random() * 25, y: -25, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 90, life: 0.5 + Math.random() * 0.6, age: 0, s: 1.5 });
     }
     for (const x of r.fx.sparks) {
       if (Math.random() < dt * 1.2) {
-        for (let i = 0; i < 14; i++) particles.push({ k: 'spark', x, y: -320, vx: (Math.random() - 0.5) * 160, vy: -Math.random() * 80, life: 0.6 + Math.random() * 0.8, age: 0, s: 1.5 });
+        for (let i = 0; i < 14; i++) pushFx({ k: 'spark', x, y: -320, vx: (Math.random() - 0.5) * 160, vy: -Math.random() * 80, life: 0.6 + Math.random() * 0.8, age: 0, s: 1.5 });
       }
     }
     for (const x of r.fx.drips) {
-      if (Math.random() < dt * 0.6) particles.push({ k: 'drip', x: x + (Math.random() - 0.5) * 30, y: -r.height + 40, vx: 0, vy: 0, life: 3, age: 0, s: 1.6 });
+      if (Math.random() < dt * 0.6) pushFx({ k: 'drip', x: x + (Math.random() - 0.5) * 30, y: -r.height + 40, vx: 0, vy: 0, life: 3, age: 0, s: 1.6 });
     }
+    fxRoom = null;
   }
 
   function updateFx(dt) {
@@ -2287,9 +2365,10 @@ AB.Render = (() => {
       const p = particles[i];
       p.age += dt;
       if (p.age > p.life) { particles.splice(i, 1); continue; }
+      fxRoom = p.room;
       if (p.k === 'spark' || p.k === 'drip' || p.k === 'blood') p.vy += 420 * dt;
       if (p.k === 'blood' && p.y > 0) {
-        const r = AB.Rooms.current();
+        const r = p.room || AB.Rooms.current();
         if (!decals.has(r)) decals.set(r, []);
         const list = decals.get(r);
         if (list.length < 120) list.push({ x: p.x, s: 2 + Math.random() * 5 });
@@ -2302,7 +2381,7 @@ AB.Render = (() => {
       p.y += p.vy * dt;
       if ((p.k === 'spark' || p.k === 'drip') && p.y > 0) {
         if (p.k === 'drip') {
-          for (let j = 0; j < 3; j++) particles.push({ k: 'splash', x: p.x, y: -1, vx: (Math.random() - 0.5) * 50, vy: -30 - Math.random() * 30, life: 0.35, age: 0, s: 1 });
+          for (let j = 0; j < 3; j++) pushFx({ k: 'splash', x: p.x, y: -1, vx: (Math.random() - 0.5) * 50, vy: -30 - Math.random() * 30, life: 0.35, age: 0, s: 1 });
           particles.splice(i, 1);
           continue;
         }
@@ -2310,10 +2389,12 @@ AB.Render = (() => {
       }
       if (p.k === 'splash') p.vy += 300 * dt;
     }
+    fxRoom = null;
   }
 
   function drawFx(layer) {
     for (const p of particles) {
+      if (drawRoom && p.room !== drawRoom) continue;
       const a = 1 - p.age / p.life;
       const x = sx(p.x), y = sy(p.y);
       if (layer === 'back' && p.k === 'steam') {
@@ -2340,7 +2421,7 @@ AB.Render = (() => {
         ctx.fillStyle = g; ctx.fillRect(bx - 16, y - 16, 32, 32);
         if (t >= 0.85 && !p.done) {
           p.done = true;
-          if (p.hit) for (let i = 0; i < 10; i++) particles.push({ k: 'spark', x: p.x2, y: p.y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 260, vy: -Math.random() * 160, life: 0.35, age: 0, s: 2 });
+          if (p.hit) for (let i = 0; i < 10; i++) pushFx({ room: p.room, k: 'spark', x: p.x2, y: p.y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 260, vy: -Math.random() * 160, life: 0.35, age: 0, s: 2 });
         }
         continue;
       }
@@ -2460,12 +2541,149 @@ AB.Render = (() => {
     ctx.closePath();
   }
 
+  // ---------- Кадр боевой локации: несколько помещений и этажей сразу ----------
+  const ZOOM = 0.74;            // камера отъезжает, чтобы было видно соседние помещения и этаж
+  const camW = { x: 0, y: 0 };  // камера в координатах локации
+  const statics = new Map();    // кэш фона помещений локации
+  let arenaSnap = true;
+
+  function arenaCamTarget() {
+    const hero = AB.Party.lead(), segs = AB.Arena.segments();
+    const s = hero && segs.find((q) => q.room === hero.room);
+    if (!s) return { x: camW.x, y: camW.y };
+    const vw = VW / ZOOM, vh = VH / ZOOM;
+    const minX = Math.min(...segs.map((q) => q.x0)), maxX = Math.max(...segs.map((q) => q.x0 + q.width));
+    let tx = s.x0 + hero.x - vw / 2 + hero.facing * vw * 0.08;
+    tx = maxX - minX <= vw ? (minX + maxX - vw) / 2 : U.clamp(tx, minX, maxX - vw);
+    const floors = Math.max(...segs.map((q) => q.floor)) + 1;
+    const ty = U.clamp(s.floor * VH + VH / 2 - vh / 2 - 30, 0, Math.max(0, floors * VH - vh));
+    return { x: tx, y: ty };
+  }
+
+  // где помещение локации на экране; cam.x — в координатах этого помещения
+  function segXform(s, swayX = 0, swayY = 0) {
+    const S = scale * ZOOM;
+    return { S, ox: swayX * scale, oy: (swayY + (s.floor * VH - camW.y) * ZOOM) * scale, camx: camW.x - s.x0 };
+  }
+  function useSeg(s, swayX, swayY) {
+    segT = segXform(s, swayX, swayY);
+    cam.x = segT.camx;
+    applyT(ctx);
+    drawRoom = s.room;
+  }
+  // часть помещения, которая видна: до проёмов, ведущих в соседние помещения
+  function segClip(s) {
+    let a = -300, b = s.width + 300;
+    for (const d of AB.Arena.doors()) {
+      const x = d.room === s.room ? d.x : d.other && d.other.room === s.room ? d.other.x : null;
+      if (x == null || !d.other) continue;
+      if (x < s.width / 2) a = Math.max(a, x); else b = Math.min(b, x);
+    }
+    return { a, b };
+  }
+  // подъём или спуск по лестнице: персонаж плавно переходит на другой этаж
+  function withClimb(c, s, segs, t, draw) {
+    if (!c.climb) { draw(); return; }
+    const to = segs.find((q) => q.room === c.climb.to.room);
+    const k = U.clamp(c.climb.t / t, 0, 1);
+    ctx.save();
+    if (to) ctx.translate(((to.x0 + c.climb.to.x) - (s.x0 + c.x)) * k, (to.floor - s.floor) * VH * k);
+    draw();
+    ctx.restore();
+  }
+
+  function arenaFrame(dt, swayX, swayY) {
+    const segs = AB.Arena.segments();
+    const vw0 = VW;
+    const t = arenaCamTarget();
+    if (arenaSnap) { camW.x = t.x; camW.y = t.y; arenaSnap = false; }
+    camW.x = U.lerp(camW.x, t.x, 1 - Math.pow(0.0015, dt));
+    camW.y = U.lerp(camW.y, t.y, 1 - Math.pow(0.004, dt));
+    VW = vw0 / ZOOM;
+    const hero = AB.Party.lead();
+    const rooms = segs.map((s) => ({ s, r: AB.ID.get(s.room) }));
+    for (const { s, r } of rooms) {
+      if (!statics.has(r.id)) statics.set(r.id, buildStatic(r));
+      useSeg(s, 0, 0); spawnFx(r, dt);
+    }
+    updateFx(dt);
+    // фон, двери, предметы — каждое помещение до проёма в соседнее
+    for (const { s, r } of rooms) {
+      tagsDrawn = [];
+      useSeg(s, swayX, swayY);
+      const c = segClip(s);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(sx(c.a), 0, c.b - c.a, VH); ctx.clip();
+      ctx.drawImage(statics.get(r.id).canvas, sx(0), 0, r.width, VH);
+      drawDecals(r);
+      drawFx('back');
+      drawProps(r);
+      drawDoors(r);
+      drawItems(r);
+      drawLogs(r, 'body');
+      ctx.restore();
+    }
+    // персонажи и противники — без обрезки: на пороге видны целиком
+    for (const { s, r } of rooms) {
+      useSeg(s, swayX, swayY);
+      const enemies = AB.Enemies.inRoom(r.id);
+      enemies.filter((e) => e.state === 'DEAD').forEach((e) => drawEnemy(e, 'body'));
+      AB.Chars.all().filter((c) => c !== hero && c.room === r.id && !c.hidden).forEach((c) => withClimb(c, s, segs, 0.6, () => drawHero(c, 'body')));
+      if (hero && hero.room === r.id) withClimb(hero, s, segs, 0.6, () => drawHero(hero, 'body'));
+      enemies.filter((e) => e.state !== 'DEAD').forEach((e) => withClimb(e, s, segs, 0.8, () => drawEnemy(e, 'body')));
+      if (hero && hero.room === r.id) { drawTargetHighlight(); }
+    }
+    // темнота: одна на всю локацию, свет каждого помещения — в его границах
+    if (!AB.debugFullLight) {
+      lightBegin();
+      for (const { s, r } of rooms) {
+        useSeg(s, 0, 0);
+        const c = segClip(s);
+        applyT(lctx);
+        lctx.save(); lctx.beginPath(); lctx.rect(sx(c.a), 0, c.b - c.a, VH); lctx.clip();
+        lightHoles(r);
+        lctx.restore();
+      }
+      lightEnd();
+      for (const { s, r } of rooms) {
+        useSeg(s, 0, 0);
+        const c = segClip(s);
+        ctx.save(); ctx.beginPath(); ctx.rect(sx(c.a), 0, c.b - c.a, VH); ctx.clip();
+        lightGlow(r);
+        ctx.restore();
+      }
+    }
+    for (const { s, r } of rooms) {
+      useSeg(s, swayX, swayY);
+      drawEmissive(r);
+      drawFx('glow');
+    }
+    VW = vw0;
+    segT = null; drawRoom = null;
+    const hs = hero && segs.find((q) => q.room === hero.room);
+    cam.x = hs ? camW.x - hs.x0 : cam.x;
+    drawPost();
+  }
+
   // ---------- Кадр ----------
   function frame(dt) {
     tagsDrawn = [];
     time += dt;
     const r = AB.Rooms.room();
     if (!r) return;
+    if (AB.Arena.active()) {
+      const swayY = Math.sin(time * 0.7) * 0.8 + (Math.random() - 0.5) * shake;
+      const swayX = (Math.random() - 0.5) * shake;
+      shake = Math.max(0, shake - dt * 30);
+      hurtFlash = Math.max(0, hurtFlash - dt * 2.2);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      arenaFrame(dt, swayX, swayY);
+      return;
+    }
+    arenaSnap = true;
+    drawRoom = r.id;
     if (staticFor !== r.id) { staticLayer = buildStatic(r); staticFor = r.id; }
 
     // плавное следование камеры + лёгкое «дыхание» кадра
@@ -2514,7 +2732,13 @@ AB.Render = (() => {
     // экранная точка (CSS px) → персонаж под ней, если есть
     pick(cx, cy) {
       const r = cv.getBoundingClientRect();
-      const wx = (cx - r.left) * dpr / scale + cam.x, wy = (cy - r.top) * dpr / scale - FLOOR;
+      let wx = (cx - r.left) * dpr / scale + cam.x, wy = (cy - r.top) * dpr / scale - FLOOR;
+      if (AB.Arena.active()) {
+        const s = AB.Arena.segments().find((q) => q.room === AB.Rooms.current());
+        if (!s) return null;
+        const T = segXform(s);
+        wx = ((cx - r.left) * dpr - T.ox) / T.S + T.camx; wy = ((cy - r.top) * dpr - T.oy) / T.S - FLOOR;
+      }
       const list = [];
       const hero = AB.Party.lead();
       if (hero && !hero.hidden) list.push({ id: hero.id, x: hero.x, w: 22, h: 126 });
@@ -2524,7 +2748,12 @@ AB.Render = (() => {
       return hit ? hit.id : null;
     },
     // точка мира → экранные CSS-пиксели (для интерфейса и проверок)
-    screenPos: (x, y) => ({ x: (x - cam.x) * scale / dpr, y: (FLOOR + y) * scale / dpr, unit: scale / dpr }),
+    screenPos(x, y, room) {
+      const s = AB.Arena.active() && AB.Arena.segments().find((q) => q.room === (room || AB.Rooms.current()));
+      if (!s) return { x: (x - cam.x) * scale / dpr, y: (FLOOR + y) * scale / dpr, unit: scale / dpr };
+      const T = segXform(s);
+      return { x: ((x - T.camx) * T.S + T.ox) / dpr, y: ((FLOOR + y) * T.S + T.oy) / dpr, unit: T.S / dpr };
+    },
     toggleIds() { showIds = !showIds; return showIds; },
     idsShown: () => showIds,
   };

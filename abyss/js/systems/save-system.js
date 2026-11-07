@@ -20,6 +20,7 @@ AB.Save = (() => {
     // не сохраняем посреди боя и после гибели: загрузка вернёт к безопасной точке
     const hero = AB.Party.lead();
     if (!hero || hero.dead || AB.Party.members().some((m) => m.dead) || AB.Enemies.inCombat()) return false;
+    if (AB.Arena.active()) return false;            // посреди боевой локации не сохраняем
     const data = {
       version: VERSION,
       savedAt: Date.now(),
@@ -33,6 +34,8 @@ AB.Save = (() => {
       world: AB.World.serialize(),
       logs: AB.Logs.serialize(),
       barks: AB.Barks.serialize(),
+      arena: AB.Arena.serialize(),
+      perks: AB.Perks.serialize(),
       party: AB.Party.serialize(),
     };
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
