@@ -860,6 +860,7 @@ AB.Render = (() => {
         ctx.fillStyle = 'rgba(200,160,40,.4)'; for (let i = 0; i < 4; i++) ctx.fillRect(8 + i * 20, -3.5, 10, 3);
         ctx.restore();
         d._light = { x: x + 58, y: b - 14, locked, near };
+        drawJam(r, d, x, b);
         continue;
       }
       if (d.kind === 'ladder') {
@@ -872,6 +873,7 @@ AB.Render = (() => {
         ctx.fillStyle = '#030304'; ctx.fillRect(x - 30, top - 2, 60, 8);
         ctx.fillStyle = '#2b3036'; ctx.fillRect(x - 34, top + 4, 68, 4);
         d._light = { x: x + 30, y: top + 24, locked, near };
+        drawJam(r, d, x, top + 6);
         continue;
       }
       // своя картинка двери (внешний люк шлюза)
@@ -965,6 +967,27 @@ AB.Render = (() => {
     d._light = { x: x + (d.x < r.width / 2 ? 62 : -62), y: b - 120, locked: !AB.Arena.passable(ad), near };
   }
   const doorShut = new Map();
+
+  // заклинивший люк испытания: аварийные полосы, искры, этапы починки
+  function drawJam(r, d, x, y) {
+    if (!AB.Arena.active()) return;
+    const l = AB.Arena.ladderFor(r.id, d.key);
+    if (!l || l.key !== AB.Arena.jammed()) return;
+    const rp = AB.Arena.repair();
+    ctx.save();
+    ctx.fillStyle = 'rgba(20,16,10,.85)'; ctx.fillRect(x - 40, y - 8, 80, 14);
+    ctx.fillStyle = 'rgba(230,180,40,.85)';
+    for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.moveTo(x - 40 + i * 14, y + 6); ctx.lineTo(x - 33 + i * 14, y - 8); ctx.lineTo(x - 27 + i * 14, y - 8); ctx.lineTo(x - 34 + i * 14, y + 6); ctx.fill(); }
+    // этапы: ●●○
+    for (let i = 0; i < rp.stages; i++) {
+      ctx.fillStyle = i < rp.stage ? '#e0b640' : 'rgba(0,0,0,.7)';
+      ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x - (rp.stages - 1) * 9 + i * 18, y - 22, 5, 0, 7); ctx.fill(); ctx.stroke();
+    }
+    if (rp.prog > 0) { ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(x - 30, y - 36, 60, 5); ctx.fillStyle = '#ffe08a'; ctx.fillRect(x - 29, y - 35, 58 * rp.prog, 3); }
+    ctx.restore();
+    if (Math.random() < 0.08) for (let i = 0; i < 4; i++) pushFx({ room: r.id, k: 'spark', x: x + (Math.random() - 0.5) * 60, y: y - FLOOR + 0, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 80, life: 0.4, age: 0, s: 1.5 });
+  }
 
   // ---------- Герой: процедурная заглушка ASSET-CHAR001-01 ----------
   function limb(x1, y1, a1, l1, a2, l2, w, col) {
@@ -1828,6 +1851,7 @@ AB.Render = (() => {
     if (AB.Arena.active()) return;   // в испытании выход не ищем
     const h = AB.Nav.hint();
     const hero = AB.Party.lead();
+    if (hero && drawRoom && drawRoom !== hero.room) return;   // в секторе — только в помещении ведущего
     if (!h || !hero || !hero.controllable) return;
     const tx = sx(h.x), y = sy(-215);
     const a = 0.45 + Math.sin(time * 3) * 0.25;
@@ -2560,7 +2584,7 @@ AB.Render = (() => {
 
   // ---------- Кадр боевой локации: несколько помещений и этажей сразу ----------
   // камера отъезжает, чтобы было видно соседние помещения и этаж; отдаление меняет игрок (колесо, −/+)
-  const ZMIN = 0.5, ZMAX = 1;
+  const ZMIN = 0.34, ZMAX = 1;   // 0,34 — видно три палубы сразу
   let ZOOM = 0.74;
   try { const z = parseFloat(localStorage.getItem('abyss_zoom')); if (z >= ZMIN && z <= ZMAX) ZOOM = z; } catch (e) { /* хранилище недоступно */ }
   function setZoom(z) {
@@ -2694,6 +2718,31 @@ AB.Render = (() => {
     const hs = hero && segs.find((q) => q.room === hero.room);
     cam.x = hs ? camW.x - hs.x0 : cam.x;
     drawPost();
+    drawEdgeMarks(segs);
+  }
+
+  // кто за краем экрана: красные метки — противники, голубые — свои (откуда идут, куда бежать)
+  function drawEdgeMarks(segs) {
+    const W = cv.width, H = cv.height, pad = 14 * dpr;
+    const list = [];
+    for (const m of AB.Party.members()) if (!AB.Party.isLeader(m.id)) list.push({ c: m, ally: true });
+    if (AB.Arena.active()) for (const s of segs) for (const e of AB.Enemies.inRoom(s.room)) if (e.state !== 'DEAD') list.push({ c: e, ally: false });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const { c, ally } of list) {
+      const s = segs.find((q) => q.room === c.room);
+      if (!s) continue;
+      const T = segXform(s);
+      const px = (c.x - T.camx) * T.S + T.ox, py = (FLOOR - 60) * T.S + T.oy;
+      if (px > 0 && px < W && py > 0 && py < H) continue;
+      const ex = U.clamp(px, pad, W - pad), ey = U.clamp(py, pad + 40 * dpr, H - pad);
+      const ang = Math.atan2(py - ey, px - ex);
+      ctx.save();
+      ctx.translate(ex, ey); ctx.rotate(ang);
+      ctx.fillStyle = ally ? 'rgba(94,230,255,.85)' : `rgba(255,70,50,${0.55 + Math.sin(time * 6) * 0.25})`;
+      const k = dpr * (ally ? 1.1 : 0.9);
+      ctx.beginPath(); ctx.moveTo(9 * k, 0); ctx.lineTo(-6 * k, -7 * k); ctx.lineTo(-6 * k, 7 * k); ctx.fill();
+      ctx.restore();
+    }
   }
 
   // ---------- Кадр ----------
@@ -2788,6 +2837,8 @@ AB.Render = (() => {
         if (y > 6 || y < -200) continue;
         const d = AB.Arena.doors().find((q) => (q.room === s.room && Math.abs(q.x - x) < 56) || (q.other && q.other.room === s.room && Math.abs(q.other.x - x) < 56));
         if (d) return { door: d, room: s.room };
+        const l = AB.Arena.ladders().find((q) => q.key === AB.Arena.jammed() && ((q.top.room === s.room && Math.abs(q.top.x - x) < 56) || (q.bottom.room === s.room && Math.abs(q.bottom.x - x) < 56)));
+        if (l) return { door: l, room: s.room, ladder: true };
       }
       return null;
     },

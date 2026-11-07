@@ -642,7 +642,7 @@
   AB.Input.onScreenTap = (cx, cy) => {
     if (doorMenu) { closeDoorMenu(); return true; }
     const dp = AB.Render.pickDoor(cx, cy);
-    if (dp) { openDoorMenu(dp.door.key, dp.room); return true; }
+    if (dp) { openDoorMenu(dp.door.key, dp.room, !!dp.ladder); return true; }
     const id = AB.Render.pick(cx, cy);
     if (!id) return false;
     AB.Render.showCarry(id, AB.Chars.carried(id));
@@ -652,7 +652,7 @@
   // ---------- Боевая локация: таймер, приказы отряду, выбор перка (дополнение №41) ----------
   const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
   let lastArena = '';
-  const ORDER_NAME = { follow: 'за мной', hold: 'стоит на месте', guard: 'охраняет дверь' };
+  const ORDER_NAME = { follow: 'за мной', hold: 'стоит на месте', guard: 'охраняет дверь', repair: 'чинит люк' };
   const DOOR_STATE = { open: 'открыта', closed: 'закрыта', fortified: 'укреплена', broken: 'выбита' };
   const TASK_NAME = { close: 'закрыть', open: 'открыть', unfortify: 'снять укрепление' };
   function updateArenaHud() {
@@ -661,25 +661,41 @@
     ui.zoom.hidden = !AB.Arena.seamless();
     document.body.classList.toggle('in-arena', !!A);
     if (!A) { lastArena = ''; if (doorMenu) closeDoorMenu(); return; }
-    const html = `<b>${A.def.name}</b><span class="t ${A.left < 15 ? 'end' : ''}">${A.over ? 'Затихли' : mmss(A.left)}</span><span class="k">Убито: ${A.kills}</span>`
-      + `<i style="width:${Math.round((1 - A.left / A.def.duration) * 100)}%"></i>`;
+    // время держимся · люк: этапы починки · опыт до следующего улучшения
+    const rp = AB.Arena.repair(), P = AB.Progress;
+    const pips = Array.from({ length: rp.stages }, (_, i) => `<u class="${i < rp.stage ? 'ok' : i === rp.stage ? 'cur' : ''}">${i === rp.stage && !A.over ? `<s style="width:${Math.round(rp.prog * 100)}%"></s>` : ''}</u>`).join('');
+    const html = `<b>${A.def.name}</b><span class="t">${A.over ? 'Люк починен' : mmss(A.t)}</span>`
+      + `<span class="rp" title="Починка люка">Люк ${pips}</span><span class="k">Убито: ${A.kills}</span>`
+      + `<span class="xp" title="Опыт: ${P.xp()} из ${P.need()}">Ур. ${P.level()} <em><i style="width:${Math.round((P.xp() / P.need()) * 100)}%"></i></em></span>`;
     if (html !== lastArena) { ui.arena.innerHTML = html; lastArena = html; }
     if (doorMenu) placeDoorMenu();
   }
 
   // ---------- Меню двери: нажать на дверь → кому что сделать ----------
   let doorMenu = null;   // { key, room }
-  function openDoorMenu(key, room) {
-    doorMenu = { key, room };
+  function openDoorMenu(key, room, ladder = false) {
+    doorMenu = { key, room, ladder };
     renderDoorMenu();
     ui.doorMenu.hidden = false;
     placeDoorMenu();
   }
   function closeDoorMenu() { doorMenu = null; ui.doorMenu.hidden = true; }
   function renderDoorMenu() {
+    const helpers = AB.Party.members().filter((c) => !AB.Party.isLeader(c.id) && !c.dead && !c.down);
+    if (doorMenu.ladder) {
+      // заклинивший люк: кому чинить
+      const rp = AB.Arena.repair();
+      if (!rp || AB.Arena.jammed() !== doorMenu.key) { closeDoorMenu(); return; }
+      const rows = helpers.map((c) => {
+        const here = c.order && c.order.type === 'repair';
+        return `<div class="dm-row"><b>${AB.ID.get(c.id).name}</b><div>${here ? `<button data-who="${c.id}" data-act="follow">Снять — за мной</button>` : `<button data-who="${c.id}" data-act="repair">Чинить люк</button>`}</div></div>`;
+      }).join('');
+      ui.doorMenu.innerHTML = `<div class="dm-head"><b>Люк на склад</b><span>заклинило · этап ${rp.stage + 1} из ${rp.stages}</span><button class="dm-x" data-close aria-label="Закрыть">×</button></div>`
+        + (rows || `<p class="muted">Поручить некому — подойдите и ${isTouch ? 'нажмите подсказку' : 'нажмите E'}.</p>`);
+      return;
+    }
     const d = AB.Arena.doors().find((q) => q.key === doorMenu.key);
     if (!d) { closeDoorMenu(); return; }
-    const helpers = AB.Party.members().filter((c) => !AB.Party.isLeader(c.id) && !c.dead && !c.down);
     const max = d.state === 'fortified' ? d.fortHp : d.maxHp;
     const acts = d.state === 'broken' ? [] : d.state === 'open' ? ['guard', 'close'] : d.state === 'closed' ? ['guard', 'open'] : ['guard', 'unfortify', 'open'];
     const rows = helpers.map((c) => {
@@ -694,9 +710,16 @@
         : rows || `<p class="muted">Поручить некому — ${isTouch ? 'подойдите и нажмите подсказку' : 'подойдите: E — закрыть/открыть, R — укрепить'}.</p>`);
   }
   function placeDoorMenu() {
-    const d = AB.Arena.doors().find((q) => q.key === doorMenu.key);
-    if (!d) return;
-    const x = d.room === doorMenu.room ? d.x : d.other.x;
+    let x;
+    if (doorMenu.ladder) {
+      const l = AB.Arena.ladders().find((q) => q.key === doorMenu.key);
+      if (!l) return;
+      x = l.top.room === doorMenu.room ? l.top.x : l.bottom.x;
+    } else {
+      const d = AB.Arena.doors().find((q) => q.key === doorMenu.key);
+      if (!d) return;
+      x = d.room === doorMenu.room ? d.x : d.other.x;
+    }
     const p = AB.Render.screenPos(x, -200, doorMenu.room);
     const w = ui.doorMenu.offsetWidth, h = ui.doorMenu.offsetHeight;
     ui.doorMenu.style.left = `${Math.round(clampN(p.x - w / 2, 8, innerWidth - w - 8))}px`;
@@ -710,6 +733,7 @@
     if (b.dataset.close != null) { closeDoorMenu(); return; }
     const id = b.dataset.who, a = b.dataset.act;
     if (a === 'follow') AB.Arena.order(id, { type: 'follow' });
+    else if (a === 'repair') AB.Arena.order(id, { type: 'repair' });
     else if (a === 'guard') AB.Arena.order(id, { type: 'guard', door: doorMenu.key });
     else AB.Arena.order(id, { type: 'guard', door: doorMenu.key, task: a });
     closeDoorMenu();
@@ -733,35 +757,42 @@
   });
   ui.zoom.addEventListener('pointerdown', (e) => e.stopPropagation());
 
-  AB.Bus.on('arena:start', ({ name, duration }) => toast(`${name}: продержитесь ${mmss(duration)}`, 'bad'));
-  AB.Bus.on('arena:door', ({ state, name }) => { if (state === 'broken') toast(`Выбита дверь: ${name}`); });
+  AB.Bus.on('arena:start', ({ name, stages }) => toast(`${name}: люк наверх заклинило — почините (${stages} этапа). Твари лезут из коридоров!`, 'bad'));
+  AB.Bus.on('arena:door', ({ state, name }) => { if (state === 'broken') toast(`Выбита дверь: ${name}`); if (doorMenu) renderDoorMenu(); });
+  AB.Bus.on('arena:repair', ({ stage, stages }) => { toast(stage < stages ? `Люк: этап ${stage} из ${stages} готов` : 'Люк починен!', 'good'); if (doorMenu) renderDoorMenu(); });
   AB.Bus.on('arena:order', ({ id, order }) => {
     const door = order.type === 'guard' && AB.Arena.doors().find((q) => q.key === order.door);
     toast(`${AB.ID.get(id).name}: ${door ? (order.task ? `${TASK_NAME[order.task]} — «${door.name}»` : `укрепить и охранять «${door.name}»`) : ORDER_NAME[order.type]}`, 'info');
   });
-  // испытание пройдено: пауза и выбор одного из трёх перков
+  // испытание пройдено: люк починен — снова исследование
   AB.Bus.on('arena:won', () => {
-    toast('Гнездо затихло', 'good');
-    setTimeout(showPerks, 1400);
+    toast('Люк починен — гнездо затихло', 'good');
+    setTimeout(() => AB.Arena.exit(), 1500);
   });
+  // новый уровень: пауза и выбор одного из трёх улучшений
+  AB.Bus.on('progress:level', () => setTimeout(showPerks, 300));
   function showPerks() {
+    if (paused || AB.Progress.unspent() <= 0) return;
     const cards = AB.Perks.offer(3);
     AB.Input.lock();
     paused = true;
+    ui.perks.querySelector('h2').textContent = `Уровень ${AB.Progress.level() - AB.Progress.unspent() + 1}: улучшение`;
+    ui.perks.querySelector('.act-no').textContent = 'Новый уровень';
     ui.perks.querySelector('.perk-list').innerHTML = cards.length
       ? cards.map((p) => `<button class="perk" data-perk="${p.id}"><b>${p.name}</b><span>${p.desc}</span></button>`).join('')
-      : '<p class="muted">Список улучшений ещё не составлен — выбор появится, когда он будет готов.</p><button class="perk" data-perk="">Продолжить</button>';
+      : '<p class="muted">Список улучшений пуст.</p><button class="perk" data-perk="">Продолжить</button>';
     ui.perks.hidden = false;
   }
   ui.perks.addEventListener('click', (e) => {
     const b = e.target.closest('[data-perk]');
     if (!b) return;
     if (b.dataset.perk) AB.Perks.choose(b.dataset.perk);
+    AB.Progress.spend();
     ui.perks.hidden = true;
     paused = false;
     AB.Input.unlock();
-    AB.Arena.exit();
     if (b.dataset.perk) toast(`Улучшение: ${AB.ID.get(b.dataset.perk).name}`, 'good');
+    if (AB.Progress.unspent() > 0) setTimeout(showPerks, 400);   // набралось сразу на несколько уровней
   });
   let paused = false;
 
@@ -787,6 +818,7 @@
       AB.Barks.restore(save.barks);
       AB.Arena.restore(save.arena);
       AB.Perks.restore(save.perks);
+      AB.Progress.restore(save.progress);
       // старые сохранения: у спутницы должен быть её дротиковый пистолет
       { const c = AB.Chars.get('CHAR-002'); if (c && !AB.Chars.all().some((m) => AB.Inventory.count(m.id, 'ITEM-012'))) AB.Inventory.add('CHAR-002', 'ITEM-012', 1, { swap: false }); }
       const hero = AB.Chars.get(L());
@@ -810,6 +842,7 @@
     AB.Quests.check();
     // загрузка во время испытания: оно начинается заново
     if (AB.Arena.pending()) setTimeout(() => AB.Arena.start(AB.Arena.pending()), 1200);
+    if (AB.Progress.unspent() > 0) setTimeout(showPerks, 1500);
     AB.Render.snapCamera();
     applyHeroArt();
     ui.ids.classList.toggle('on', AB.Render.idsShown());

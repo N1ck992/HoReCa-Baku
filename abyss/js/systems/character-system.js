@@ -100,6 +100,7 @@ AB.Chars = (() => {
           else { target = Math.sign(dx) * s.goal.speed; s.facing = Math.sign(dx); }
         }
       }
+      target *= AB.Perks.mod('moveSpeed');
       // плавный разгон и торможение
       const accel = target === 0 ? 900 : 700;
       if (s.vx < target) s.vx = Math.min(target, s.vx + accel * dt);

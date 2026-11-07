@@ -105,7 +105,7 @@ AB.Party = (() => {
       if (m === l) continue;
       m.engage = null;
       if (quiet || m.dead || m.down || m.work || m.climb) continue;
-      const guard = m.order && m.order.type === 'guard';        // охраняет дверь — в общем бою не участвует, только отбивается
+      const guard = m.order && (m.order.type === 'guard' || m.order.type === 'repair');   // у двери или люка: в общем бою не участвует, только отбивается
       if (!AB.Arena.seamless() && m.room !== l.room) continue;
       if (AB.Enemies.threatFor(m.id, m.room)) continue;       // её цель — спастись, а не драться
       // «за мной», а ведущий в другом помещении: догоняет, отбиваясь только от тех, кто рядом

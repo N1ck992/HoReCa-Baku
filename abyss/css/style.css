@@ -386,3 +386,12 @@ body.touch #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 .perk span { color: var(--muted); line-height: 1.45; }
 .perk-list p + .perk { min-height: 0; text-align: center; grid-column: 1 / -1; justify-self: center; }
 body.in-arena #navbox { display: none; }
+#arena-hud .rp { display: inline-flex; gap: 3px; align-items: center; font: 11px var(--mono); color: var(--muted); }
+#arena-hud .rp u { position: relative; display: inline-block; width: 16px; height: 8px; border: 1px solid rgba(255, 200, 80, .5); background: rgba(0, 0, 0, .5); overflow: hidden; text-decoration: none; }
+#arena-hud .rp u.ok { background: #e0b640; }
+#arena-hud .rp u.cur { border-color: #ffe08a; }
+#arena-hud .rp s { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255, 224, 138, .7); text-decoration: none; }
+#arena-hud .xp { display: inline-flex; gap: 4px; align-items: center; font: 11px var(--mono); color: #bfefff; }
+#arena-hud .xp em { display: inline-block; width: 46px; height: 5px; background: rgba(0, 0, 0, .6); border: 1px solid rgba(94, 230, 255, .4); }
+#arena-hud .xp em i { position: static; display: block; height: 100%; background: #5ee6ff; }
+@media (max-width: 640px) { #arena-hud { flex-wrap: wrap; row-gap: 2px; max-width: calc(100vw - 150px); } #arena-hud .k { display: none; } }

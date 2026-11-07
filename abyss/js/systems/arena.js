@@ -7,8 +7,9 @@
 //   • переход через открытую дверь между помещениями сектора;
 //   • лестницы и люки между этажами (подъём/спуск без загрузки);
 //   • двери: открыть, закрыть; в испытании — укрепить, снять укрепление, прочность.
-// Испытание (ARENA-*) идёт внутри сектора: таймер, волны противников,
-// приказы отряду (за мной, стоять, охранять дверь), затем — выбор перка.
+// Испытание (ARENA-*) идёт внутри сектора: заклинивший люк чинят в несколько
+// этапов, противники приходят волнами из открытых коридоров, приказы отряду
+// (за мной, стоять, охранять дверь, чинить люк), опыт за испытание (№44).
 // =====================================================================
 
 AB.Arena = (() => {
@@ -67,10 +68,11 @@ AB.Arena = (() => {
     pending = id;
     AB.Save.save();             // точка сохранения перед боем: загрузка вернёт к началу испытания
     const R = sector(def.sector);
-    A = { id, def, R, t: 0, left: def.duration, kills: 0, over: false, nextSpawn: def.waves.first, foes: new Set() };
+    A = { id, def, R, t: 0, kills: 0, over: false, nextSpawn: def.waves.first, foes: new Set(),
+      jammed: def.goal.ladder, repair: { stage: 0, prog: 0 } };   // люк, через который пришли, заклинило
     for (const d of R.doors) {
-      if (!d.other) { d.state = 'closed'; d.hp = d.maxHp; }
-      else if (d.state === 'closed') d.hp = d.maxHp;
+      if (!d.other) { d.state = 'closed'; d.hp = doorMax(d); }
+      else if (d.state === 'closed') d.hp = doorMax(d);
       d.queue = 0; d.hitT = 0;
     }
     // противники, уже бывшие в этих помещениях, тоже подчиняются испытанию
@@ -78,7 +80,7 @@ AB.Arena = (() => {
       if (e.state !== 'DEAD' && !AB.ID.get(e.id).immortal) { e.arena = true; A.foes.add(e.id); AB.Enemies.setState(e.id, 'CHASE'); }
     }
     for (const m of AB.Party.members()) m.order = m.order || { type: 'follow' };
-    AB.Bus.emit('arena:start', { id, name: def.name, duration: def.duration });
+    AB.Bus.emit('arena:start', { id, name: def.name, stages: def.goal.stages });
     return true;
   }
 
@@ -88,6 +90,8 @@ AB.Arena = (() => {
     // гнездо затихает: оставшиеся твари гибнут
     for (const id of A.foes) { const e = AB.Enemies.get(id); if (e && e.state !== 'DEAD') AB.Enemies.damage(id, 9999, e.x + 1); }
     for (const d of A.R.doors) d.queue = 0;
+    A.jammed = null;
+    for (const m of AB.Chars.all()) if (m.work && m.work.repair) m.work = null;
     done.add(A.id);
     pending = null;
     AB.Bus.emit('arena:won', { id: A.id, kills: A.kills });
@@ -100,6 +104,7 @@ AB.Arena = (() => {
     for (const m of AB.Chars.all()) { m.work = null; m.order = null; }
     // двери из сектора снова ведут дальше; выбитые проходы так и остаются выбитыми
     for (const d of A.R.doors) if (!d.other) { d.state = 'closed'; d.hp = d.maxHp; }
+    for (const c of AB.Party.members()) { c.climb = null; c.waypoint = null; }
     const lead = AB.Party.lead();
     A = null;
     if (lead) lead.controllable = true;
@@ -159,6 +164,7 @@ AB.Arena = (() => {
       const out = [];
       for (const d of doorsIn(room)) if (d.other && (forFoe ? !locked(d) : passable(d))) out.push({ kind: 'door', d, x: doorX(d, room), to: d.room === room ? d.other.room : d.room });
       for (const l of R.ladders) {
+        if (A && l.key === A.jammed) continue;   // заклинивший люк не пройти
         if (l.top.room === room) out.push({ kind: 'ladder', l, x: l.top.x, to: l.bottom.room, exit: l.bottom });
         if (l.bottom.room === room) out.push({ kind: 'ladder', l, x: l.bottom.x, to: l.top.room, exit: l.top });
       }
@@ -209,11 +215,12 @@ AB.Arena = (() => {
     AB.Chars.playAction(c.id, 'interact');
     return true;
   }
+  const doorMax = (d) => d.maxHp * AB.Perks.mod('doorHp');
   function applyDoor(d, action) {
-    if (action === 'close' && d.state === 'open') { d.state = 'closed'; d.hp = d.maxHp; }
+    if (action === 'close' && d.state === 'open') { d.state = 'closed'; d.hp = doorMax(d); }
     else if (action === 'open' && d.state === 'closed') { d.state = 'open'; }
-    else if (action === 'fortify' && d.state === 'closed') { d.state = 'fortified'; d.hp = d.fortHp; }
-    else if (action === 'unfortify' && d.state === 'fortified') { d.state = 'closed'; d.hp = Math.min(d.hp, d.maxHp); }
+    else if (action === 'fortify' && d.state === 'closed') { d.state = 'fortified'; d.hp = d.fortHp * AB.Perks.mod('doorHp'); }
+    else if (action === 'unfortify' && d.state === 'fortified') { d.state = 'closed'; d.hp = Math.min(d.hp, doorMax(d)); }
     AB.Bus.emit('arena:door', { key: d.key, state: d.state, name: d.name });
   }
   function hitDoor(d, dmg) {
@@ -221,6 +228,34 @@ AB.Arena = (() => {
     d.hp -= dmg; d.shake = 0.3;
     if (d.hp <= 0) { d.hp = 0; d.state = 'broken'; AB.Bus.emit('arena:door', { key: d.key, state: 'broken', name: d.name }); }
   }
+
+  // ---------- Починка заклинившего люка ----------
+  const jammedLadder = () => A && A.jammed && A.R.ladders.find((l) => l.key === A.jammed);
+  function startRepair(c) {
+    if (!jammedLadder() || c.work) return false;
+    c.work = { repair: A.jammed, t: 0 };
+    c.goal = null; c.vx = 0;
+    if (AB.Party.isLeader(c.id)) c.controllable = false;
+    AB.Chars.playAction(c.id, 'interact');
+    return true;
+  }
+  function repairTick(c, dt) {
+    const g = A.def.goal;
+    A.repair.prog += dt / (g.stageTime * AB.Perks.mod('repairTime'));
+    if (A.repair.prog < 1) return;
+    // этап готов: каждый — отдельное долгое действие
+    A.repair.prog = 0;
+    A.repair.stage++;
+    for (const m of AB.Chars.all()) if (m.work && m.work.repair) { m.work = null; if (AB.Party.isLeader(m.id)) m.controllable = true; }
+    AB.Progress.add(A.def.xp.stage);
+    AB.Bus.emit('arena:repair', { stage: A.repair.stage, stages: g.stages });
+    if (A.repair.stage >= g.stages) finish();
+  }
+  // получил удар — работа прерывается (сделанное за этап сохраняется)
+  AB.Bus.on('char:hit', ({ charId }) => {
+    const c = AB.Chars.get(charId);
+    if (c && c.work && c.work.repair) { c.work = null; if (AB.Party.isLeader(charId)) c.controllable = true; }
+  });
 
   // ---------- Приказы отряду (в испытании) ----------
   function order(charId, o) {
@@ -255,7 +290,8 @@ AB.Arena = (() => {
       } else if (d.hitT <= 0) { d.hitT = 1.2; hitDoor(d, AB.ID.get(A.def.enemy).damage * Math.min(3, d.queue) * 0.6); }
     }
     if (A.nextSpawn > 0) return;
-    const p = U.clamp(A.t / A.def.duration, 0, 1), w = A.def.waves;
+    const w = A.def.waves;
+    const p = U.clamp(A.t / w.ramp + A.repair.stage * w.stagePressure, 0, 1);
     A.nextSpawn = U.lerp(w.interval[0], w.interval[1], p);
     const batch = Math.round(U.lerp(w.batch[0], w.batch[1], p));
     const queued = A.R.doors.reduce((a, d) => a + d.queue, 0);
@@ -334,6 +370,12 @@ AB.Arena = (() => {
       if (c.climb.t > 0.6) { c.room = c.climb.to.room; c.x = c.climb.to.x + 40; c.climb = null; c.goal = null; if (AB.Party.isLeader(c.id)) c.controllable = true; }
       return;
     }
+    if (c.work && c.work.repair) {
+      // ведущий может бросить работу, просто пойдя прочь
+      if (AB.Party.isLeader(c.id) && AB.Input.axis()) { c.work = null; c.controllable = true; return; }
+      repairTick(c, dt);
+      return;
+    }
     if (c.work) {
       c.work.t += dt;
       if (c.work.t >= c.work.time) {
@@ -348,6 +390,16 @@ AB.Arena = (() => {
     const lead = AB.Party.lead(), o = (A && c.order) || { type: 'follow' };
     let room = lead.room, x = null;
     if (o.type === 'hold') { room = o.room; x = o.x; }
+    if (o.type === 'repair') {
+      const l = jammedLadder();
+      if (!l) { c.order = { type: 'follow' }; return; }
+      room = l.bottom.room; x = l.bottom.x - 34;
+      if (c.room === room && Math.abs(c.x - x) < 16) {
+        c.waypoint = null;
+        if (c.engage == null) { c.facing = 1; startRepair(c); }
+        return;
+      }
+    }
     if (o.type === 'guard') {
       const d = A.R.doors.find((q) => q.key === o.door);
       if (!d) { c.order = { type: 'follow' }; return; }
@@ -387,10 +439,7 @@ AB.Arena = (() => {
     const R = cur();
     if (!R) return;
     if (A) {
-      if (!A.over) {
-        A.t += dt; A.left = Math.max(0, A.def.duration - A.t);
-        if (A.left <= 0) finish();
-      }
+      if (!A.over) A.t += dt;
       spawnTick(dt);
       for (const id of [...A.foes]) { const e = AB.Enemies.get(id); if (e) foeTick(e, dt); else A.foes.delete(id); }
     }
@@ -430,7 +479,7 @@ AB.Arena = (() => {
     return out;
   }
 
-  AB.Bus.on('enemy:dead', ({ id }) => { if (A && A.foes.has(id)) A.kills++; });
+  AB.Bus.on('enemy:dead', ({ id }) => { if (A && !A.over && A.foes.has(id)) { A.kills++; AB.Progress.add(A.def.xp.kill); } });   // затихшие после победы опыта не дают
   AB.Bus.on('item:pickup', ({ itemId, added }) => {
     for (const def of AB.ARENAS) {
       if (done.has(def.id) || A || !added || def.start.pickup !== itemId || AB.Rooms.current() !== def.start.room) continue;
@@ -440,7 +489,9 @@ AB.Arena = (() => {
 
   return {
     seamless, active, start, finish, exit, update, afterMove, bounds, foesFor, order, climb, ladderStep,
-    doorFor, ladderFor, doorActions, startDoorWork, ACTION_NAME, passable, locked,
+    doorFor, ladderFor, doorActions, startDoorWork, ACTION_NAME, passable, locked, startRepair,
+    jammed: () => (A ? A.jammed : null), repair: () => (A ? { ...A.repair, stages: A.def.goal.stages } : null),
+    ladders: () => { const R = cur(); return R ? R.ladders : []; },
     get: () => A, segments: () => { const R = cur(); return R ? R.segs : []; }, worldX, floorOf,
     doors: liveDoors,
     sectorOf: (room) => roomSector.get(room) || null,

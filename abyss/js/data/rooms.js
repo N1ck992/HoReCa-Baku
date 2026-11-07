@@ -383,12 +383,17 @@ AB.ROOMS.push({
 AB.ROOMS.push({
   id: 'ROOM-013', name: 'Гидропоника', desc: 'Продовольственный отсек: баки с водорослями светятся в темноте.',
   width: 1900, height: 330, background: 'ASSET-ROOM013-01', theme: 'hydroponics',
-  connections: [{ door: 'up', to: 'ROOM-005', toDoor: 'hatch' }],
+  connections: [{ door: 'up', to: 'ROOM-005', toDoor: 'hatch' }, { door: 'west', to: 'ROOM-014', toDoor: 'east' }, { door: 'hatch', to: 'ROOM-015', toDoor: 'up' }],
   access: { type: 'open' },
   map: { x: 760, y: 80, w: 240, h: 22 },
   items: [{ key: 'wires', item: 'ITEM-003', qty: 1, x: 260 }],
   containers: [], enemies: ['ENEMY-007'], equipment: ['EQUIP-009'], events: [], state: 'flooded', spawn: { x: 1700 },
-  doors: [{ key: 'up', kind: 'ladder', x: 1790, to: 'ROOM-005', access: { type: 'open' } }],
+  doors: [
+    { key: 'up', kind: 'ladder', x: 1790, to: 'ROOM-005', access: { type: 'open' } },
+    // нижняя палуба (дополнение №44): техкоридор слева, люк вниз в насосную
+    { key: 'west', x: 70, to: 'ROOM-014', access: { type: 'open' } },
+    { key: 'hatch', kind: 'hatch', x: 1450, to: 'ROOM-015', access: { type: 'open' } },
+  ],
   props: [
     { kind: 'algaetank', x: 480 }, { kind: 'algaetank', x: 760, broken: true },
     { kind: 'algaefarm', x: 1040, equip: 'EQUIP-009' },
@@ -400,6 +405,69 @@ AB.ROOMS.push({
     { x: 1440, y: -200, color: [90, 230, 130], radius: 300, flicker: 0.04, source: true },
   ],
   fx: { steam: [1200], sparks: [], drips: [600, 1500] },
+});
+
+
+// ---------------------------------------------------------------------
+// Нижняя палуба вокруг гидропоники (дополнение №44, черновик — названия и вид
+// поправит автор). Всё — сектор SECTOR-001, без загрузок. Кольцо для бегства:
+// гидропоника → техкоридор Б → люк вниз → резервуарный зал → насосная → лестница наверх.
+// ---------------------------------------------------------------------
+AB.ROOMS.push({
+  id: 'ROOM-014', name: 'Технический коридор Б', desc: 'Длинный служебный коридор вдоль гидропоники. В конце — разорванная вентиляция.',
+  width: 1400, height: 230, background: 'ASSET-ROOM014-01', theme: 'tunnel',
+  connections: [{ door: 'east', to: 'ROOM-013', toDoor: 'west' }, { door: 'hatch', to: 'ROOM-016', toDoor: 'up' }],
+  access: { type: 'open' },
+  map: { x: 590, y: 80, w: 160, h: 22 },
+  items: [], containers: [], enemies: [], equipment: [], events: [], state: 'dark', spawn: { x: 1200 },
+  doors: [
+    { key: 'east', x: 1330, to: 'ROOM-013', access: { type: 'open' } },
+    { key: 'hatch', kind: 'hatch', x: 250, to: 'ROOM-016', access: { type: 'open' } },
+  ],
+  props: [],
+  lights: [
+    { x: 520, y: -200, color: [255, 40, 30], radius: 240, flicker: 0.4 },
+    { x: 1050, y: -200, color: [255, 40, 30], radius: 240, flicker: 0.15 },
+  ],
+  fx: { steam: [130], sparks: [], drips: [700] },
+});
+
+AB.ROOMS.push({
+  id: 'ROOM-015', name: 'Насосная', desc: 'Насосы подачи воды к бакам гидропоники. Тесно, шумно, пол в воде.',
+  width: 1300, height: 300, background: 'ASSET-ROOM015-01', theme: 'tunnel',
+  connections: [{ door: 'up', to: 'ROOM-013', toDoor: 'hatch' }, { door: 'west', to: 'ROOM-016', toDoor: 'east' }],
+  access: { type: 'open' },
+  map: { x: 820, y: 108, w: 160, h: 20 },
+  items: [], containers: [], enemies: [], equipment: [], events: [], state: 'flooded', spawn: { x: 1000 },
+  doors: [
+    { key: 'up', kind: 'ladder', x: 1100, to: 'ROOM-013', access: { type: 'open' } },
+    { key: 'west', x: 70, to: 'ROOM-016', access: { type: 'open' } },
+  ],
+  props: [],
+  lights: [
+    { x: 400, y: -240, color: [255, 120, 40], radius: 260, flicker: 0.25 },
+    { x: 950, y: -240, color: [255, 40, 30], radius: 240, flicker: 0.1 },
+  ],
+  fx: { steam: [620], sparks: [300], drips: [500, 1150] },
+});
+
+AB.ROOMS.push({
+  id: 'ROOM-016', name: 'Резервуарный зал', desc: 'Затопленный зал с резервуарами питательного раствора. Здесь гнездо.',
+  width: 1700, height: 320, background: 'ASSET-ROOM016-01', theme: 'tunnel',
+  connections: [{ door: 'up', to: 'ROOM-014', toDoor: 'hatch' }, { door: 'east', to: 'ROOM-015', toDoor: 'west' }],
+  access: { type: 'open' },
+  map: { x: 600, y: 108, w: 210, h: 20 },
+  items: [], containers: [], enemies: [], equipment: [], events: [], state: 'flooded', spawn: { x: 400 },
+  doors: [
+    { key: 'up', kind: 'ladder', x: 200, to: 'ROOM-014', access: { type: 'open' } },
+    { key: 'east', x: 1630, to: 'ROOM-015', access: { type: 'open' } },
+  ],
+  props: [],
+  lights: [
+    { x: 600, y: -260, color: [90, 230, 130], radius: 300, flicker: 0.1, source: true },
+    { x: 1250, y: -260, color: [255, 40, 30], radius: 260, flicker: 0.3 },
+  ],
+  fx: { steam: [900], sparks: [], drips: [350, 800, 1400] },
 });
 
 AB.ROOMS.forEach((r) => AB.ID.register(r.id, r));

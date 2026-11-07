@@ -45,7 +45,7 @@ AB.Combat = (() => {
       for (const m of members) {
         if (m.dead || m.room !== c.room || Math.abs(m.x - c.x) > au.radius) continue;
         const max = AB.ID.get(m.id).stats.maxHp;
-        if (m.hp < max) { m.hp = Math.min(max, m.hp + au.heal * dt); any = true; AB.Bus.emit('char:hp', { charId: m.id, hp: m.hp, delta: 0 }); }
+        if (m.hp < max) { m.hp = Math.min(max, m.hp + au.heal * AB.Perks.mod('auraHeal') * dt); any = true; AB.Bus.emit('char:hp', { charId: m.id, hp: m.hp, delta: 0 }); }
       }
       if (any && !(healing.get(c.id) > 0)) AB.Bus.emit('aura:heal', { charId: c.id });
       healing.set(c.id, any ? 0.4 : Math.max(0, (healing.get(c.id) || 0) - dt));
@@ -53,7 +53,7 @@ AB.Combat = (() => {
   }
 
   function update(dt) {
-    AB.Inventory.cool(dt);
+    AB.Inventory.cool(dt * AB.Perks.mod('plasmaCool'));
     auras(dt);
     for (const [charId, sw] of swings) {
       sw.t += dt;
@@ -71,7 +71,7 @@ AB.Combat = (() => {
           if (hit) landed = AB.Enemies.damage(hit.id, w.damage * AB.Perks.mod('rangedDamage'), hit.ref ? hit.ref.x - (hit.x - c.x) : c.x, 'ranged');
           AB.Bus.emit('combat:shot', { charId, fromX: c.x + c.facing * 40, toX: hit ? hit.x : c.x + c.facing * w.range, landed, energy: !!w.energy, dart: !!w.dart });
         } else {
-          const dmg = w.ranged ? w.bash : w.damage, reach = w.ranged ? 60 : w.range;
+          const dmg = (w.ranged ? w.bash : w.damage) * AB.Perks.mod('meleeDamage'), reach = w.ranged ? 60 : w.range;
           for (const e of AB.Arena.foesFor(c)) {
             if (e.state === 'DEAD') continue;
             const dx = (e.x - c.x) * c.facing;

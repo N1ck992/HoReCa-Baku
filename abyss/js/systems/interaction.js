@@ -81,6 +81,7 @@ AB.Interact = (() => {
         return AB.Arena.startDoorWork(c, ad, a.main);
       }
       const ld = AB.Arena.ladderFor(r.id, t.ref.key);
+      if (ld && ld.key === AB.Arena.jammed()) return AB.Arena.startRepair(c);   // заклинило — чинить
       if (ld) { AB.Arena.climb(c, AB.Arena.ladderStep(r.id, ld)); if (AB.Party.isLeader(charId)) c.controllable = false; return true; }
       if (AB.Arena.active()) { AB.Bus.emit('door:denied', { roomId: r.id, door: t.ref.key, reason: 'Сейчас не уйти — надо продержаться' }); return true; }
     }
@@ -192,7 +193,12 @@ AB.Interact = (() => {
       const hp = !AB.Arena.active() || ad.state === 'open' || ad.state === 'broken' ? '' : ` · прочность ${Math.ceil(ad.hp)}`;
       return { label: (a.main ? AB.Arena.ACTION_NAME[a.main] : a.label) + hp, ok: !!a.main, alt: a.alt ? AB.Arena.ACTION_NAME[a.alt] : null };
     }
-    if (AB.Arena.ladderFor(r.id, t.ref.key)) return { label: t.ref.kind === 'hatch' ? 'Спуститься по люку' : 'Подняться по лестнице', ok: true };
+    const ld = AB.Arena.ladderFor(r.id, t.ref.key);
+    if (ld && ld.key === AB.Arena.jammed()) {
+      const rp = AB.Arena.repair();
+      return { label: `Чинить люк — этап ${rp.stage + 1} из ${rp.stages}`, ok: true, progress: rp.prog > 0 ? rp.prog : undefined };
+    }
+    if (ld) return { label: t.ref.kind === 'hatch' ? 'Спуститься по люку' : 'Подняться по лестнице', ok: true };
     return AB.Arena.active() ? { label: 'Сейчас не уйти — надо продержаться', ok: false } : null;
   }
   function actAlt(charId) {
