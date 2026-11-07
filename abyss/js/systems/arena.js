@@ -320,8 +320,15 @@ AB.Arena = (() => {
       if (c.room === side && Math.abs(c.x - x) < 14) {
         c.waypoint = null; c.engage = null;
         c.facing = left ? -1 : 1;
-        const want = d.state === 'open' ? 'close' : d.state === 'closed' ? 'fortify' : null;
+        // task — разовое поручение (закрыть, открыть, снять укрепление), потом снова за ведущим;
+        // без task — охрана: закрыть, укрепить и остаться у двери
+        const T = o.task;
+        const want = !T ? (d.state === 'open' ? 'close' : d.state === 'closed' ? 'fortify' : null)
+          : T === 'close' ? (d.state === 'open' ? 'close' : null)
+          : T === 'open' ? (d.state === 'fortified' ? 'unfortify' : d.state === 'closed' ? 'open' : null)
+          : T === 'unfortify' ? (d.state === 'fortified' ? 'unfortify' : null) : null;
         if (want) startDoorWork(c, d, want);
+        else if (T) c.order = { type: 'follow' };
         return;
       }
     }

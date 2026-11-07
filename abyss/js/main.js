@@ -31,11 +31,14 @@
     reader: $('#reader'),
     journal: $('#journal'),
     arena: $('#arena-hud'),
-    squad: $('#squad'),
+    doorMenu: $('#door-menu'),
+    zoom: $('#zoom'),
     perks: $('#perks'),
   };
   ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); if (e.target.closest('[data-alt]')) AB.Input.queueAlt(); else AB.Input.queueAction(); });
   ui.party.addEventListener('click', (e) => {
+    const ord = e.target.closest('[data-ord]');
+    if (ord) { AB.Arena.order(ord.closest('[data-char]').dataset.char, { type: ord.dataset.ord }); return; }
     const b = e.target.closest('[data-char]');
     if (b && !AB.Party.isLeader(b.dataset.char)) switchLeader(b.dataset.char);
   });
@@ -66,6 +69,18 @@
     AB.Party.setLeader(to);
   }
   let lastParty = '';
+  // в боевой локации на карточке ведомого — его приказ; нажатие: «за мной» ⇄ «стоять»
+  function ordTag(c, lead) {
+    if (lead || !AB.Arena.active()) return '';
+    const o = c.order || { type: 'follow' };
+    if (o.type === 'guard') {
+      const d = AB.Arena.doors().find((q) => q.key === o.door);
+      return ` <em class="ord guard" data-ord="follow" title="Снять с двери — за мной">${o.task ? '⚙' : '⛨'} ${d ? d.key : ''}</em>`;
+    }
+    return o.type === 'hold'
+      ? ' <em class="ord hold" data-ord="follow" title="Стоит на месте. Нажмите — за мной">▣ стоит</em>'
+      : ' <em class="ord" data-ord="hold" title="Идёт за ведущим. Нажмите — стоять здесь">» за мной</em>';
+  }
   function updateParty() {
     const list = AB.Party.members();
     const chip = (s) => {
@@ -76,7 +91,7 @@
     const html = list.length < 2 ? '' : list.map((c) => {
       const d = AB.ID.get(c.id), lead = AB.Party.isLeader(c.id);
       return `<button class="pm ${lead ? 'lead' : ''}" data-char="${c.id}" aria-pressed="${lead}" title="${lead ? 'Ведёт группу' : `Передать управление (${isTouch ? 'нажмите' : 'Q'})`}">
-        <b>${d.name}</b><span>${chip(AB.Inventory.weapon(c.id))}${AB.Inventory.packs(c.id).map(chip).join('')}</span>
+        <b>${d.name}${ordTag(c, lead)}</b><span>${chip(AB.Inventory.weapon(c.id))}${AB.Inventory.packs(c.id).map(chip).join('')}</span>
         <i style="width:${Math.round((c.hp / d.stats.maxHp) * 100)}%"></i></button>`;
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
@@ -625,6 +640,9 @@
 
   // ---------- Нажатие на персонажа: что он несёт ----------
   AB.Input.onScreenTap = (cx, cy) => {
+    if (doorMenu) { closeDoorMenu(); return true; }
+    const dp = AB.Render.pickDoor(cx, cy);
+    if (dp) { openDoorMenu(dp.door.key, dp.room); return true; }
     const id = AB.Render.pick(cx, cy);
     if (!id) return false;
     AB.Render.showCarry(id, AB.Chars.carried(id));
@@ -633,54 +651,94 @@
 
   // ---------- Боевая локация: таймер, приказы отряду, выбор перка (дополнение №41) ----------
   const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-  let lastArena = '', lastSquad = '', pickDoorFor = null;
+  let lastArena = '';
   const ORDER_NAME = { follow: 'за мной', hold: 'стоит на месте', guard: 'охраняет дверь' };
   const DOOR_STATE = { open: 'открыта', closed: 'закрыта', fortified: 'укреплена', broken: 'выбита' };
+  const TASK_NAME = { close: 'закрыть', open: 'открыть', unfortify: 'снять укрепление' };
   function updateArenaHud() {
     const A = AB.Arena.get();
     ui.arena.hidden = !A;
-    ui.squad.hidden = !A || A.over || AB.Party.members().length < 2;
+    ui.zoom.hidden = !A;
     document.body.classList.toggle('in-arena', !!A);
-    if (!A) { lastArena = lastSquad = ''; pickDoorFor = null; return; }
+    if (!A) { lastArena = ''; if (doorMenu) closeDoorMenu(); return; }
     const html = `<b>${A.def.name}</b><span class="t ${A.left < 15 ? 'end' : ''}">${A.over ? 'Затихли' : mmss(A.left)}</span><span class="k">Убито: ${A.kills}</span>`
       + `<i style="width:${Math.round((1 - A.left / A.def.duration) * 100)}%"></i>`;
     if (html !== lastArena) { ui.arena.innerHTML = html; lastArena = html; }
-    if (ui.squad.hidden) return;
-    // приказы: каждому ведомому — за мной / стоять / охранять выбранную дверь
-    const rows = AB.Party.members().filter((c) => !AB.Party.isLeader(c.id)).map((c) => {
-      const o = c.order || { type: 'follow' }, d = AB.ID.get(c.id);
-      const door = o.type === 'guard' && AB.Arena.doors().find((q) => q.key === o.door);
-      const now = c.work ? `${AB.Arena.ACTION_NAME[c.work.action].toLowerCase()}…` : door ? `охраняет: ${door.name}` : ORDER_NAME[o.type];
-      if (pickDoorFor === c.id) {
-        return `<div class="sq-row pick"><b>${d.name}: какую дверь?</b><div class="sq-btns">${AB.Arena.doors().map((q) =>
-          `<button data-guard="${c.id}" data-door="${q.key}" ${q.state === 'broken' ? 'disabled' : ''}>${q.name}<small>${DOOR_STATE[q.state]}</small></button>`).join('')}
-          <button data-cancel>Отмена</button></div></div>`;
-      }
-      return `<div class="sq-row"><b>${d.name}</b><span>${now}</span><div class="sq-btns">
-        <button data-order="follow" data-id="${c.id}" class="${o.type === 'follow' ? 'on' : ''}">За мной</button>
-        <button data-order="hold" data-id="${c.id}" class="${o.type === 'hold' ? 'on' : ''}">Стоять</button>
-        <button data-order="guard" data-id="${c.id}" class="${o.type === 'guard' ? 'on' : ''}">Дверь</button></div></div>`;
-    }).join('');
-    if (rows !== lastSquad) { ui.squad.innerHTML = rows; lastSquad = rows; }
+    if (doorMenu) placeDoorMenu();
   }
-  ui.squad.addEventListener('click', (e) => {
+
+  // ---------- Меню двери: нажать на дверь → кому что сделать ----------
+  let doorMenu = null;   // { key, room }
+  function openDoorMenu(key, room) {
+    doorMenu = { key, room };
+    renderDoorMenu();
+    ui.doorMenu.hidden = false;
+    placeDoorMenu();
+  }
+  function closeDoorMenu() { doorMenu = null; ui.doorMenu.hidden = true; }
+  function renderDoorMenu() {
+    const d = AB.Arena.doors().find((q) => q.key === doorMenu.key);
+    if (!d) { closeDoorMenu(); return; }
+    const helpers = AB.Party.members().filter((c) => !AB.Party.isLeader(c.id) && !c.dead && !c.down);
+    const max = d.state === 'fortified' ? d.fortHp : d.maxHp;
+    const acts = d.state === 'broken' ? [] : d.state === 'open' ? ['guard', 'close'] : d.state === 'closed' ? ['guard', 'open'] : ['guard', 'unfortify', 'open'];
+    const rows = helpers.map((c) => {
+      const o = c.order || {};
+      const here = o.type === 'guard' && o.door === d.key;
+      const btns = acts.map((a) => `<button data-who="${c.id}" data-act="${a}" class="${here && !o.task && a === 'guard' ? 'on' : ''}">${a === 'guard' ? (d.state === 'fortified' ? 'Охранять' : 'Укрепить и охранять') : TASK_NAME[a]}</button>`).join('')
+        + (here ? `<button data-who="${c.id}" data-act="follow">Снять — за мной</button>` : '');
+      return `<div class="dm-row"><b>${AB.ID.get(c.id).name}</b><div>${btns}</div></div>`;
+    }).join('');
+    ui.doorMenu.innerHTML = `<div class="dm-head"><b>${d.name}</b><span>${DOOR_STATE[d.state]}${AB.Arena.passable(d) ? '' : ` · ${Math.ceil(d.hp)}/${max}`}</span><button class="dm-x" data-close aria-label="Закрыть">×</button></div>`
+      + (d.state === 'broken' ? '<p class="muted">Выбитую дверь уже не закрыть.</p>'
+        : rows || `<p class="muted">Поручить некому — ${isTouch ? 'подойдите и нажмите подсказку' : 'подойдите: E — закрыть/открыть, R — укрепить'}.</p>`);
+  }
+  function placeDoorMenu() {
+    const d = AB.Arena.doors().find((q) => q.key === doorMenu.key);
+    if (!d) return;
+    const x = d.room === doorMenu.room ? d.x : d.other.x;
+    const p = AB.Render.screenPos(x, -200, doorMenu.room);
+    const w = ui.doorMenu.offsetWidth, h = ui.doorMenu.offsetHeight;
+    ui.doorMenu.style.left = `${Math.round(clampN(p.x - w / 2, 8, innerWidth - w - 8))}px`;
+    ui.doorMenu.style.top = `${Math.round(clampN(p.y - h - 6, 60, innerHeight - h - 8))}px`;
+  }
+  const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
+  ui.doorMenu.addEventListener('pointerdown', (e) => e.stopPropagation());
+  ui.doorMenu.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.cancel != null) { pickDoorFor = null; return; }
-    if (b.dataset.guard) {
-      AB.Arena.order(b.dataset.guard, { type: 'guard', door: b.dataset.door });
-      pickDoorFor = null; return;
-    }
-    const id = b.dataset.id, type = b.dataset.order;
-    if (type === 'guard') { pickDoorFor = id; return; }
-    AB.Arena.order(id, { type });
+    if (b.dataset.close != null) { closeDoorMenu(); return; }
+    const id = b.dataset.who, a = b.dataset.act;
+    if (a === 'follow') AB.Arena.order(id, { type: 'follow' });
+    else if (a === 'guard') AB.Arena.order(id, { type: 'guard', door: doorMenu.key });
+    else AB.Arena.order(id, { type: 'guard', door: doorMenu.key, task: a });
+    closeDoorMenu();
   });
+  AB.Bus.on('arena:door', () => { if (doorMenu) renderDoorMenu(); });
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && doorMenu) closeDoorMenu();
+    if (!AB.Arena.active()) return;
+    if (e.code === 'Minus' || e.code === 'NumpadSubtract') AB.Render.zoom(-0.05);
+    if (e.code === 'Equal' || e.code === 'NumpadAdd') AB.Render.zoom(0.05);
+  });
+  // отдаление камеры: колесо мыши или кнопки −/+
+  $('#screen').addEventListener('wheel', (e) => {
+    if (!AB.Arena.active()) return;
+    e.preventDefault();
+    AB.Render.zoom(e.deltaY > 0 ? -0.04 : 0.04);
+  }, { passive: false });
+  ui.zoom.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-z]');
+    if (b) AB.Render.zoom(parseFloat(b.dataset.z));
+  });
+  ui.zoom.addEventListener('pointerdown', (e) => e.stopPropagation());
+
   AB.Bus.on('arena:room', ({ roomId }) => showRoom(roomId));
   AB.Bus.on('arena:start', ({ name, duration }) => toast(`${name}: продержитесь ${mmss(duration)}`, 'bad'));
   AB.Bus.on('arena:door', ({ state, name }) => { if (state === 'broken') toast(`Выбита дверь: ${name}`); });
   AB.Bus.on('arena:order', ({ id, order }) => {
     const door = order.type === 'guard' && AB.Arena.doors().find((q) => q.key === order.door);
-    toast(`${AB.ID.get(id).name}: ${door ? `охранять «${door.name}»` : ORDER_NAME[order.type]}`, 'info');
+    toast(`${AB.ID.get(id).name}: ${door ? (order.task ? `${TASK_NAME[order.task]} — «${door.name}»` : `укрепить и охранять «${door.name}»`) : ORDER_NAME[order.type]}`, 'info');
   });
   // испытание пройдено: пауза и выбор одного из трёх перков
   AB.Bus.on('arena:won', () => {

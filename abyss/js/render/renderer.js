@@ -13,6 +13,7 @@ AB.Render = (() => {
   const U = AB.util;
 
   let cv, ctx, lightCv, lctx, grainCv;
+  const LK = 0.5;               // разрешение слоя темноты относительно экрана
   let dpr = 1, scale = 1, VW = 800;
   const cam = { x: 0, sway: 0 };
   let staticLayer = null;       // кэш неподвижного фона текущего помещения
@@ -70,8 +71,9 @@ AB.Render = (() => {
     const w = cv.clientWidth, h = cv.clientHeight;
     cv.width = Math.round(w * dpr);
     cv.height = Math.round(h * dpr);
-    lightCv.width = cv.width;
-    lightCv.height = cv.height;
+    // темнота — мягкие градиенты: в половину разрешения не заметно, а рисуется в 4 раза быстрее
+    lightCv.width = Math.ceil(cv.width * LK);
+    lightCv.height = Math.ceil(cv.height * LK);
     scale = cv.height / VH;
     VW = cv.width / scale;
   }
@@ -447,9 +449,7 @@ AB.Render = (() => {
       if (asset.status === 'ready') {
         const h = p.h || asset.img.height / 4, w = asset.img.width * (h / asset.img.height);
         const x = sx(p.x), b = sy(p.y || 0);
-        if (p.dim) { ctx.save(); ctx.filter = 'brightness(0.42) saturate(0.35)'; }
-        ctx.drawImage(asset.img, x - w / 2, b - h, w, h);
-        if (p.dim) ctx.restore();
+        ctx.drawImage(p.dim ? tinted(asset.img, 'brightness(0.42) saturate(0.35)') : asset.img, x - w / 2, b - h, w, h);
         p._visor = p.visor ? { x: x + p.visor[0], y: b + p.visor[1] } : null;
         continue;
       }
@@ -1306,13 +1306,30 @@ AB.Render = (() => {
     return { W, H, px, py, imgAng: Math.atan2(vx, vy), s: len / Math.hypot(vx, vy), sx: spec.scaleX || 1 };
   }
 
+  // затемнённая копия картинки — один раз, а не фильтром в каждом кадре (ctx.filter очень медленный)
+  const tintCache = new WeakMap();
+  function tinted(img, filter) {
+    let m = tintCache.get(img);
+    if (!m) { m = new Map(); tintCache.set(img, m); }
+    let c = m.get(filter);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d');
+      g.filter = filter;
+      g.drawImage(img, 0, 0);
+      m.set(filter, c);
+    }
+    return c;
+  }
+
   function rigBone(img, spec, x1, y1, ang, len, darken) {
     const g = rigGeom(img, spec, len);
     ctx.save();
     ctx.translate(x1, y1);
     ctx.rotate(g.imgAng - ang);
     ctx.scale(g.s * g.sx, g.s);
-    if (darken) ctx.filter = `brightness(${darken})`;
+    if (darken) img = tinted(img, `brightness(${darken})`);
     if (spec.flipX) {
       ctx.scale(-1, 1);
       ctx.drawImage(img, -(g.W - g.px), -g.py);
@@ -1833,7 +1850,7 @@ AB.Render = (() => {
   // ---------- Свет ----------
   // преобразование «помещение → экран»: обычное или для помещения боевой локации
   let segT = null;
-  function applyT(g) { if (segT) g.setTransform(segT.S, 0, 0, segT.S, segT.ox, segT.oy); else g.setTransform(scale, 0, 0, scale, 0, 0); }
+  function applyT(g, k = 1) { if (segT) g.setTransform(segT.S * k, 0, 0, segT.S * k, segT.ox * k, segT.oy * k); else g.setTransform(scale * k, 0, 0, scale * k, 0, 0); }
 
   function drawLighting(r) { lightBegin(); lightHoles(r); lightEnd(); lightGlow(r); }
   function lightBegin() {
@@ -1845,7 +1862,7 @@ AB.Render = (() => {
   }
   function lightHoles(r) {
     const L = lctx;
-    applyT(L);
+    applyT(L, LK);
     L.globalCompositeOperation = 'destination-out';
 
     const hole = (x, y, rad, k) => {
@@ -1887,7 +1904,7 @@ AB.Render = (() => {
   }
   function lightEnd() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(lightCv, 0, 0);
+    ctx.drawImage(lightCv, 0, 0, cv.width, cv.height);
   }
   function lightGlow(r) {
     applyT(ctx);
@@ -1993,7 +2010,7 @@ AB.Render = (() => {
     drawNavMarker();
     ctx.globalCompositeOperation = 'source-over';
     AB.Chars.all().filter((c) => c.id !== AB.Party.leader() && c.room === r.id && !c.hidden).forEach((c) => drawHero(c, 'emissive'));
-    drawHero(AB.Party.lead(), 'emissive');
+    { const l = AB.Party.lead(); if (l && (l.room === r.id || !AB.Arena.active())) drawHero(l, 'emissive'); }
     drawBarks(r);
   }
 
@@ -2542,7 +2559,16 @@ AB.Render = (() => {
   }
 
   // ---------- Кадр боевой локации: несколько помещений и этажей сразу ----------
-  const ZOOM = 0.74;            // камера отъезжает, чтобы было видно соседние помещения и этаж
+  // камера отъезжает, чтобы было видно соседние помещения и этаж; отдаление меняет игрок (колесо, −/+)
+  const ZMIN = 0.5, ZMAX = 1;
+  let ZOOM = 0.74;
+  try { const z = parseFloat(localStorage.getItem('abyss_zoom')); if (z >= ZMIN && z <= ZMAX) ZOOM = z; } catch (e) { /* хранилище недоступно */ }
+  function setZoom(z) {
+    ZOOM = U.clamp(Math.round(z * 100) / 100, ZMIN, ZMAX);
+    try { localStorage.setItem('abyss_zoom', String(ZOOM)); } catch (e) { /* хранилище недоступно */ }
+    return ZOOM;
+  }
+  let look = 0;                 // плавный взгляд вперёд: не дёргается при развороте
   const camW = { x: 0, y: 0 };  // камера в координатах локации
   const statics = new Map();    // кэш фона помещений локации
   let arenaSnap = true;
@@ -2553,7 +2579,7 @@ AB.Render = (() => {
     if (!s) return { x: camW.x, y: camW.y };
     const vw = VW / ZOOM, vh = VH / ZOOM;
     const minX = Math.min(...segs.map((q) => q.x0)), maxX = Math.max(...segs.map((q) => q.x0 + q.width));
-    let tx = s.x0 + hero.x - vw / 2 + hero.facing * vw * 0.08;
+    let tx = s.x0 + hero.x - vw / 2 + look * vw * 0.06;
     tx = maxX - minX <= vw ? (minX + maxX - vw) / 2 : U.clamp(tx, minX, maxX - vw);
     const floors = Math.max(...segs.map((q) => q.floor)) + 1;
     const ty = U.clamp(s.floor * VH + VH / 2 - vh / 2 - 30, 0, Math.max(0, floors * VH - vh));
@@ -2593,15 +2619,20 @@ AB.Render = (() => {
   }
 
   function arenaFrame(dt, swayX, swayY) {
+    const hero = AB.Party.lead();
     const segs = AB.Arena.segments();
     const vw0 = VW;
     const t = arenaCamTarget();
+    if (hero) look = U.lerp(look, hero.facing, 1 - Math.pow(0.25, dt));
     if (arenaSnap) { camW.x = t.x; camW.y = t.y; arenaSnap = false; }
-    camW.x = U.lerp(camW.x, t.x, 1 - Math.pow(0.0015, dt));
-    camW.y = U.lerp(camW.y, t.y, 1 - Math.pow(0.004, dt));
+    // мягкое следование: при беге и переходах камера не рвётся
+    camW.x = U.lerp(camW.x, t.x, 1 - Math.pow(0.02, dt));
+    camW.y = U.lerp(camW.y, t.y, 1 - Math.pow(0.03, dt));
     VW = vw0 / ZOOM;
-    const hero = AB.Party.lead();
-    const rooms = segs.map((s) => ({ s, r: AB.ID.get(s.room) }));
+    // рисуются только помещения, которые попадают в кадр
+    const vw = VW, vh = VH / ZOOM;
+    const rooms = segs.filter((s) => s.x0 < camW.x + vw + 60 && s.x0 + s.width > camW.x - 60 &&
+      s.floor * VH < camW.y + vh && (s.floor + 1) * VH > camW.y).map((s) => ({ s, r: AB.ID.get(s.room) }));
     for (const { s, r } of rooms) {
       if (!statics.has(r.id)) statics.set(r.id, buildStatic(r));
       useSeg(s, 0, 0); spawnFx(r, dt);
@@ -2639,7 +2670,7 @@ AB.Render = (() => {
       for (const { s, r } of rooms) {
         useSeg(s, 0, 0);
         const c = segClip(s);
-        applyT(lctx);
+        applyT(lctx, LK);
         lctx.save(); lctx.beginPath(); lctx.rect(sx(c.a), 0, c.b - c.a, VH); lctx.clip();
         lightHoles(r);
         lctx.restore();
@@ -2747,6 +2778,20 @@ AB.Render = (() => {
       const hit = list.find((c) => Math.abs(wx - c.x) < c.w && wy < 4 && wy > -c.h);
       return hit ? hit.id : null;
     },
+    // боевая локация: дверь под точкой экрана (CSS px) — для меню двери
+    pickDoor(cx, cy) {
+      if (!AB.Arena.active()) return null;
+      const rc = cv.getBoundingClientRect();
+      for (const s of AB.Arena.segments()) {
+        const T = segXform(s);
+        const x = ((cx - rc.left) * dpr - T.ox) / T.S + T.camx, y = ((cy - rc.top) * dpr - T.oy) / T.S - FLOOR;
+        if (y > 6 || y < -200) continue;
+        const d = AB.Arena.doors().find((q) => (q.room === s.room && Math.abs(q.x - x) < 56) || (q.other && q.other.room === s.room && Math.abs(q.other.x - x) < 56));
+        if (d) return { door: d, room: s.room };
+      }
+      return null;
+    },
+    zoom: (dz) => (dz ? setZoom(ZOOM + dz) : ZOOM),
     // точка мира → экранные CSS-пиксели (для интерфейса и проверок)
     screenPos(x, y, room) {
       const s = AB.Arena.active() && AB.Arena.segments().find((q) => q.room === (room || AB.Rooms.current()));
