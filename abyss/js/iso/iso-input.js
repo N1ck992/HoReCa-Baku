@@ -22,6 +22,7 @@ AB.IsoInput = (() => {
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyQ' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) AB.IsoParty.cycle(); return; }
       if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat) { AB.IsoInteract.actNearest(); return; }
+      if ((e.code === 'KeyF' || e.code === 'Space') && !e.repeat) { e.preventDefault(); AB.IsoCombat.attackNearest(); return; }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') AB.IsoRender.zoom(-0.1);
       if (e.code === 'Equal' || e.code === 'NumpadAdd') AB.IsoRender.zoom(0.1);
       if (Object.values(MAP).flat().includes(e.code)) e.preventDefault();
@@ -42,14 +43,16 @@ AB.IsoInput = (() => {
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: AB.IsoRender.zoom() };
         return;
       }
-      // нажали на объект — подойти и сделать; иначе — идти, удерживая — идти за указателем
-      if (AB.IsoInteract.click(e.clientX, e.clientY)) return;
+      // нажали на противника — атаковать; на объект — подойти и сделать; иначе — идти
+      const foe = enemyAt(e.clientX, e.clientY);
+      if (foe) { AB.IsoCombat.setTarget(foe); return; }
+      if (AB.IsoInteract.click(e.clientX, e.clientY)) { AB.IsoCombat.setTarget(null); return; }
       hold = e.pointerId;
       moveTo(e.clientX, e.clientY);
       holdT = 0.15;
     });
     canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerType === 'mouse') canvas.style.cursor = AB.IsoInteract.hoverAt(e.clientX, e.clientY) ? 'pointer' : 'crosshair';
+      if (e.pointerType === 'mouse') { hoverFoe = enemyAt(e.clientX, e.clientY); canvas.style.cursor = hoverFoe ? 'pointer' : AB.IsoInteract.hoverAt(e.clientX, e.clientY) ? 'pointer' : 'crosshair'; }
       if (!pointers.has(e.pointerId)) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && pointers.size >= 2) {
@@ -67,7 +70,19 @@ AB.IsoInput = (() => {
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); AB.IsoRender.zoom(e.deltaY > 0 ? -0.1 : 0.1); }, { passive: false });
   }
 
+  let hoverFoe = null;
+  // противник под указателем (по фигуре, не только по ногам)
+  function enemyAt(cx, cy) {
+    let best = null, bd = 34;
+    for (const e of AB.IsoEnemies.alive()) {
+      const p = AB.IsoRender.screenOf(e.x, e.y), z = AB.IsoRender.zoom();
+      const d = Math.min(Math.hypot(p.x - cx, p.y - cy), Math.hypot(p.x - cx, p.y - 30 * z - cy), Math.hypot(p.x - cx, p.y - 55 * z - cy));
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
   function moveTo(cx, cy) {
+    AB.IsoCombat.setTarget(null);
     const w = AB.IsoRender.pick(cx, cy);
     AB.IsoParty.goTo(w.x, w.y);
   }
@@ -92,5 +107,5 @@ AB.IsoInput = (() => {
     return { x: a.x, y: a.y, walk: keys.has('ShiftLeft') || keys.has('ShiftRight') };
   }
 
-  return { init, update };
+  return { init, update, hoverFoe: () => hoverFoe };
 })();

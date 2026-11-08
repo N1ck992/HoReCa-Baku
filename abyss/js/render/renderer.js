@@ -2821,8 +2821,22 @@ AB.Render = (() => {
     }
   }
 
+  // Противник (составная фигура по скелету или заглушка) в точке чужого холста — для изометрии.
+  // e — { id, state, facing, stride, flash, t }; рисует тем же кодом, что и вид сбоку.
+  function drawEnemyFigure(target, e, px, py, k = 1) {
+    const savedCtx = ctx, savedCam = cam.x;
+    ctx = target;
+    cam.x = e.x;
+    ctx.save();
+    ctx.translate(px, py); ctx.scale(k, k); ctx.translate(0, -FLOOR);
+    try { drawEnemy(e, 'body'); } finally {
+      ctx.restore();
+      ctx = savedCtx; cam.x = savedCam;
+    }
+  }
+
   return {
-    init, frame, snapCamera, drawFigure,
+    init, frame, snapCamera, drawFigure, drawEnemyFigure,
     tick(dt) { time += dt; },         // время анимаций (дыхание) — для сцен без frame()
     showCarry(id, item) { bubbles.set(id, { item, until: time + 2.5 }); },
     // экранная точка (CSS px) → персонаж под ней, если есть

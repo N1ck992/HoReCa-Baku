@@ -29,6 +29,15 @@
   AB.Bus.on('equip:shared', ({ from, itemId }) => toast(`${itemName(itemId)} — из рюкзака: ${AB.ID.get(from).name}`, 'info'));
   AB.Bus.on('door:denied', ({ reason }) => toast(reason, 'info'));
   AB.Bus.on('iso:door', ({ state, name }) => toast(`${name}: ${state === 'open' ? 'открыта' : 'закрыта'}`, 'info'));
+  AB.Bus.on('combat:noweapon', () => toast('Нечем драться: найдите что-нибудь тяжёлое', 'info'));
+  AB.Bus.on('weapon:overheat', () => toast('Плазмомёт перегрет — пара секунд на остывание', 'info'));
+  AB.Bus.on('enemy:dead', ({ name }) => toast(`${name} убит`, 'good'));
+  // гибель Марка или Миры — конец, как в основной игре; остальные — отряд идёт дальше
+  AB.Bus.on('char:dead', ({ charId }) => {
+    if (charId !== 'CHAR-001' && charId !== 'CHAR-002') { toast(`${AB.ID.get(charId).name} погибла`); return; }
+    $('#iso-death h2').textContent = charId === 'CHAR-001' ? 'Вы погибли' : 'Её больше нет';
+    setTimeout(() => { $('#iso-death').hidden = false; }, 1400);
+  });
 
   // подсказка действия; на телефоне она же — кнопка
   function updatePrompt() {
@@ -54,7 +63,10 @@
       const d = AB.ID.get(m.id), lead = i === AB.IsoParty.leaderIndex();
       // оружие и два места в рюкзаке — из инвентаря основной игры
       const chip = (sl) => (sl ? `<u title="${itemName(sl.item)}">${AB.ID.get(sl.item).short}${sl.qty > 1 ? `×${sl.qty}` : ''}</u>` : '<u class="empty">—</u>');
-      return `<button class="pm ${lead ? 'lead' : ''}" data-i="${i}" aria-pressed="${lead}" title="${lead ? 'Ведёт отряд' : 'Передать управление (Q)'}"><b>${d.name}</b><span>${chip(AB.Inventory.weapon(m.id))}${AB.Inventory.packs(m.id).map(chip).join('')}</span></button>`;
+      const c = AB.Chars.get(m.id), hp = c ? Math.max(0, c.hp / d.stats.maxHp) : 1, dead = c && c.dead;
+      const ht = AB.Inventory.heat(m.id);
+      return `<button class="pm ${lead ? 'lead' : ''} ${dead ? 'dead' : ''}" data-i="${i}" aria-pressed="${lead}" title="${dead ? 'Погиб' : lead ? 'Ведёт отряд' : 'Передать управление (Q)'}"><b>${d.name}</b><span>${chip(AB.Inventory.weapon(m.id))}${AB.Inventory.packs(m.id).map(chip).join('')}</span>`
+        + `<i class="hp" style="width:${Math.round(hp * 100)}%"></i>${ht ? `<i class="heat ${ht.over ? 'over' : ''}" style="width:${Math.round(ht.heat * 100)}%"></i>` : ''}</button>`;
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
   }
@@ -76,6 +88,7 @@
       if (b) AB.IsoRender.zoom(parseFloat(b.dataset.z));
     });
     $('#iso-ids').addEventListener('click', () => { AB.isoShowIds = !AB.isoShowIds; });
+    $('#iso-restart').addEventListener('click', () => location.reload());
     for (const el of [ui.party, ui.zoom]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); AB.IsoInteract.actNearest(); });
 
@@ -87,6 +100,8 @@
       AB.IsoParty.update(dt, AB.IsoInteract.working() ? { x: input.x, y: input.y, walk: input.walk } : input);
       AB.IsoBridge.sync();
       AB.IsoInteract.update(dt, input);
+      AB.IsoEnemies.update(dt);
+      AB.IsoCombat.update(dt, input);
       AB.Anim.update(dt);
       AB.IsoRender.frame(dt);
       updateHud();

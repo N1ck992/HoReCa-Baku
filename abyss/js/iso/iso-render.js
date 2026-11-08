@@ -200,6 +200,7 @@ AB.IsoRender = (() => {
       if (visible(c.x, c.y)) list.push({ d: x + y + 1, k: 'p', x, y, p });
     }
     for (const m of party) list.push({ d: m.x + m.y + 0.01, k: 'c', m });
+    for (const e of AB.IsoEnemies.all()) { const c = toScreen(e.x, e.y); if (visible(c.x, c.y)) list.push({ d: e.x + e.y + 0.005, k: 'e', e }); }
     // двери сектора (створки), выходы в стене, предметы на полу
     for (const dr of AB.IsoInteract.doors()) if (dr.anim > 0.03) for (const [x, y] of dr.tiles) list.push({ d: x + y + 1, k: 'd', x, y, dr });
     for (const e of AB.IsoWorld.layout().exits || []) if (!e.floor) {
@@ -237,11 +238,15 @@ AB.IsoRender = (() => {
         block(o.x, o.y, WALL_H, EXIT_LOOK, a, { l: true, r: true });
         exitLamp(o.e, o.x, o.y);
       } else if (o.k === 'i') drawItem(o.t);
+      else if (o.k === 'e') drawEnemy(o.e);
       else drawMember(o.m, o.m === l);
     }
 
+    updateFx(dt);
+    drawFx();
     lighting(sc, party);
     for (const m of party) nameTag(m, m === l);
+    for (const e of AB.IsoEnemies.all()) enemyBar(e);
   }
 
   let hl = new Set();
@@ -310,8 +315,75 @@ AB.IsoRender = (() => {
     ctx.fillText(p.asset || p.kind, c.x, c.y - look.h - 6);
   }
 
+  // противник: составная фигура мутанта тем же кодом, что вид сбоку; цель — красное кольцо
+  const ENEMY_K = 0.62;
+  function drawEnemy(e) {
+    const p = toScreen(e.x, e.y);
+    const tgt = AB.IsoCombat.target() === e.id, hov = AB.IsoInput.hoverFoe() === e;
+    if ((tgt || hov) && e.state !== 'DEAD') {
+      ctx.strokeStyle = `rgba(255,70,50,${0.55 + Math.sin(time * 6) * 0.2})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 24, 12, 0, 0, 7); ctx.stroke();
+    }
+    if (AB.Render && AB.Render.drawEnemyFigure) AB.Render.drawEnemyFigure(ctx, e, p.x, p.y, ENEMY_K);
+  }
+  // полоса здоровья: у раненых, у цели и под указателем
+  function enemyBar(e) {
+    if (e.state === 'DEAD') return;
+    const d = AB.ID.get(e.id), tgt = AB.IsoCombat.target() === e.id, hov = AB.IsoInput.hoverFoe() === e;
+    if (e.hp >= d.hp && !tgt && !hov) return;
+    const p = toScreen(e.x, e.y), f = Math.max(0, e.hp / d.hp);
+    ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 22, p.y - 84, 44, 5);
+    ctx.fillStyle = f > 0.3 ? '#c0392b' : '#ff6a3a'; ctx.fillRect(p.x - 21, p.y - 83, 42 * f, 3);
+    if (tgt || hov) { ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffb38a'; ctx.fillText(d.name, p.x, p.y - 90); }
+  }
+
+  // ---------- Частицы: кровь, следы выстрелов, искры ----------
+  const fx = [];
+  AB.Bus.on('iso:enemyHit', ({ x, y }) => { for (let i = 0; i < 14; i++) fx.push({ k: 'blood', x, y, z: 0.9, vx: (Math.random() - 0.5) * 2.4, vy: (Math.random() - 0.5) * 2.4, vz: 1 + Math.random() * 2, life: 0.9, age: 0 }); });
+  AB.Bus.on('iso:charHit', ({ x, y }) => { for (let i = 0; i < 8; i++) fx.push({ k: 'blood', x, y, z: 1.1, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, vz: 1 + Math.random() * 1.5, life: 0.8, age: 0 }); });
+  AB.Bus.on('iso:shot', ({ from, to, landed, energy, dart }) => {
+    fx.push({ k: energy ? 'bolt' : 'tracer', x: from.x, y: from.y, x2: to.x, y2: to.y, life: energy ? Math.max(0.1, Math.hypot(to.x - from.x, to.y - from.y) / 40) : 0.14, age: 0, dart, landed });
+  });
+  const decals = [];
+  function updateFx(dt) {
+    for (let i = fx.length - 1; i >= 0; i--) {
+      const f = fx[i];
+      f.age += dt;
+      if (f.k === 'blood') {
+        f.x += f.vx * dt; f.y += f.vy * dt; f.vz -= 9 * dt; f.z += f.vz * dt;
+        if (f.z <= 0) { if (decals.length < 160) decals.push({ x: f.x, y: f.y, r: 2 + Math.random() * 4 }); fx.splice(i, 1); continue; }
+      }
+      if (f.age > f.life) fx.splice(i, 1);
+    }
+  }
+  function drawFx() {
+    for (const d of decals) { const p = toScreen(d.x, d.y); ctx.fillStyle = 'rgba(60,8,8,.7)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, d.r, d.r * 0.5, 0, 0, 7); ctx.fill(); }
+    for (const f of fx) {
+      const a = 1 - f.age / f.life;
+      if (f.k === 'blood') { const p = toScreen(f.x, f.y); ctx.fillStyle = `rgba(120,12,12,${a})`; ctx.fillRect(p.x - 1.5, p.y - f.z * 40 - 1.5, 3, 3); continue; }
+      const a0 = toScreen(f.x, f.y), b0 = toScreen(f.x2, f.y2), h = 48;
+      if (f.k === 'tracer') {
+        ctx.strokeStyle = f.dart ? `rgba(150,255,190,${0.9 * a})` : `rgba(220,250,255,${0.9 * a})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(a0.x, a0.y - h); ctx.lineTo(b0.x, b0.y - h); ctx.stroke();
+      } else {
+        const t = Math.min(1, f.age / f.life), x = a0.x + (b0.x - a0.x) * t, y = a0.y - h + (b0.y - a0.y) * t;
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(x, y, 0, x, y, 14);
+        g.addColorStop(0, 'rgba(240,250,255,1)'); g.addColorStop(0.4, 'rgba(140,220,255,.8)'); g.addColorStop(1, 'rgba(120,90,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(x - 14, y - 14, 28, 28);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+
   function drawMember(m, isLead) {
     const p = toScreen(m.x, m.y);
+    // аура лечения дротикового пистолета: мягкое зелёное кольцо
+    if (AB.IsoCombat.hasAura(m.id) && !(AB.Chars.get(m.id) || {}).dead) {
+      const on = AB.IsoCombat.auraActive(m.id), r = AB.IsoCombat.weaponOf(m.id).weapon.aura.radius / 50;
+      ctx.strokeStyle = `rgba(110,255,170,${on ? 0.28 : 0.08})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, r * TW / 2 * 1.41, r * TH / 2 * 1.41, 0, 0, 7); ctx.stroke();
+    }
     if (isLead) {
       ctx.strokeStyle = `rgba(94,230,255,${0.45 + Math.sin(time * 4) * 0.15})`; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 10, 0, 0, 7); ctx.stroke();

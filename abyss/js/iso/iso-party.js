@@ -45,8 +45,9 @@ AB.IsoParty = (() => {
   }
   function stop() { const l = lead(); l.path = null; l.goal = null; }
 
+  const isDead = (m) => { const c = AB.Chars.get(m.id); return !!(c && c.dead); };
   function setLeader(i) {
-    if (i < 0 || i >= members.length || i === leader) return false;
+    if (i < 0 || i >= members.length || i === leader || isDead(members[i])) return false;
     const old = lead();
     old.path = null; old.goal = null;
     leader = i;
@@ -55,7 +56,10 @@ AB.IsoParty = (() => {
     AB.Bus.emit('iso:party', { leader: l.id, prev: old.id });
     return true;
   }
-  const cycle = () => setLeader((leader + 1) % members.length);
+  function cycle() {
+    for (let k = 1; k < members.length; k++) if (setLeader((leader + k) % members.length)) return true;
+    return false;
+  }
 
   // шаг вдоль пути; возвращает пройденное расстояние
   function walkPath(m, dt, speed) {
@@ -89,7 +93,9 @@ AB.IsoParty = (() => {
 
   function update(dt, input) {
     if (!members.length) return;
+    if (isDead(lead())) cycle();                   // ведущий погиб — управление следующему живому
     const l = lead();
+    if (isDead(l)) return;
     let went = 0;
     // ведущий: клавиши (направление уже в мировых координатах) или путь к точке
     if (input && (input.x || input.y)) {
@@ -110,7 +116,12 @@ AB.IsoParty = (() => {
     let k = 0;
     for (let i = 0; i < members.length; i++) {
       if (i === leader) continue;
-      const m = members[i], slot = slotFor(k++);
+      const m = members[i];
+      if (isDead(m)) continue;
+      // в бою: стоит и бьёт (hold) или подходит к противнику; иначе — место в строю
+      const slot = m.engage ? { x: m.engage.x, y: m.engage.y } : slotFor(k);
+      k++;
+      if (m.engage && m.engage.hold) { m.path = null; animate(m, separate(m, dt), dt); continue; }
       const dist = Math.hypot(slot.x - m.x, slot.y - m.y);
       m.replanT -= dt;
       if (dist > 0.4 && (!m.path || m.replanT <= 0)) {
@@ -150,6 +161,9 @@ AB.IsoParty = (() => {
     m.stride += went * PX_PER_TILE;
     const sxDir = m.hx - m.hy;   // экранное направление по горизонтали
     if (Math.abs(sxDir) > 0.05 && m.moving) m.facing = sxDir > 0 ? 1 : -1;
+    // удар, получение урона, гибель — не перебивать ходьбой
+    const tr = AB.Anim.current(m.id);
+    if ((AB.IsoCombat && AB.IsoCombat.isSwinging(m.id)) || (tr && ['hurt', 'death', 'interact'].includes(tr.action) && !tr.done) || isDead(m)) return;
     const action = !m.moving ? 'idle' : m.run ? 'run' : 'walk';
     if (m.action !== action) { m.action = action; AB.Anim.play(m.id, action); }
   }

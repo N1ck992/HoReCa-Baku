@@ -19,6 +19,17 @@ body { font: 13px/1.4 var(--mono); user-select: none; -webkit-user-select: none;
 #iso-party .pm span { display: flex; gap: 2px; }
 #iso-party .pm u { text-decoration: none; padding: 0 3px; border: 1px solid var(--line); border-radius: 3px; font-size: 9px; color: #e8dcc4; }
 #iso-party .pm u.empty { color: var(--muted); }
+#iso-party .pm { position: relative; padding-bottom: 7px; }
+#iso-party .pm i { position: absolute; left: 0; bottom: 0; height: 3px; background: #c0392b; border-radius: 0 0 0 4px; }
+#iso-party .pm i.heat { bottom: 3px; height: 2px; background: #8a7cff; }
+#iso-party .pm i.heat.over { background: #ff6a3a; }
+#iso-party .pm.dead { opacity: .45; cursor: default; }
+#iso-death { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgba(20, 0, 0, .72); }
+#iso-death[hidden] { display: none; }
+#iso-death .death-card { max-width: 340px; display: grid; gap: 10px; padding: 22px; text-align: center; background: #0b0606; border: 1px solid rgba(255, 59, 47, .35); border-radius: 10px; }
+#iso-death h2 { margin: 0; font: 700 28px var(--display); letter-spacing: 5px; text-transform: uppercase; color: #ff5a4a; }
+#iso-death p { margin: 0; color: var(--muted); }
+#iso-death button { font: 14px var(--mono); padding: 10px; border-radius: 6px; cursor: pointer; background: #16181b; color: var(--fg); border: 1px solid var(--line); }
 
 #iso-prompt { position: fixed; z-index: 3; left: 50%; bottom: calc(46px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 8px); opacity: 0; transition: opacity .15s, transform .15s; padding: 7px 14px; font: 13px var(--mono); color: var(--fg); background: rgba(8, 10, 12, .82); border: 1px solid rgba(94, 230, 255, .35); border-radius: 6px; pointer-events: none; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
 #iso-prompt.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; cursor: pointer; }

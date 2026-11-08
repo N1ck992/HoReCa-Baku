@@ -24,7 +24,8 @@
   </div>
   <div id="iso-prompt" role="button" aria-live="polite"></div>
   <div id="iso-toast" aria-live="polite"></div>
-  <div id="iso-help">Нажмите на пол — идти · на дверь, предмет, оборудование — подойти и сделать · E — действие рядом · WASD · Shift — шагом · Q — следующий · колесо — масштаб</div>
+  <div id="iso-death" hidden role="dialog" aria-label="Гибель"><div class="death-card"><h2>Вы погибли</h2><p>Тестовая сцена начнётся заново.</p><button id="iso-restart">Начать заново</button></div></div>
+  <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · WASD · Shift — шагом · Q — следующий · колесо — масштаб</div>
 
   <!-- Ядро и данные — те же, что у основной игры -->
   <script src="js/core/ids.js"></script>
@@ -68,6 +69,8 @@
   <script src="js/iso/iso-party.js"></script>
   <script src="js/iso/iso-bridge.js"></script>
   <script src="js/iso/iso-interact.js"></script>
+  <script src="js/iso/iso-enemies.js"></script>
+  <script src="js/iso/iso-combat.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>
