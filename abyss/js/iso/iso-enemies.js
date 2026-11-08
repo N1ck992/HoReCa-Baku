@@ -13,22 +13,28 @@ AB.IsoEnemies = (() => {
   const list = new Map();             // ID (или экземпляр ENEMY-001~n) → состояние
   const dead = new Set();
 
-  function spawn(id, x, y) {
+  const sectorNow = () => (AB.IsoGame ? AB.IsoGame.sector() : null);
+  // story — появление в сюжетной сцене (преследователь): стоит и смотрит, в бою не участвует
+  function spawn(id, x, y, { story = false, state = null, facing = 1 } = {}) {
     const def = AB.ID.get(id);
-    if (!def || def.immortal || dead.has(id)) return null;   // преследователь — сюжетный, не переносится
+    if (!def || (def.immortal && !story) || dead.has(id)) return null;
+    if (list.has(id)) list.delete(id);
     const e = {
+      sector: sectorNow(), story, alpha: 1,
       id, x, y, hx: 1, hy: 0, homeX: x, homeY: y,
-      hp: def.hp, state: def.behavior.start || 'PATROL', t: 0,
+      hp: def.hp, state: (def.behavior && def.behavior.start) || 'PATROL', t: 0,
       facing: 1, stride: 0, flash: 0, stagger: 0, knockX: 0, knockY: 0, cooldown: 0,
       target: null, path: null, replanT: 0, loseT: 0, wander: null, retreated: false, hitDone: false,
     };
+    if (story) { e.state = state || 'WATCH'; e.facing = facing; }
     list.set(id, e);
     AB.Anim.play(id, 'idle');
     return e;
   }
 
   const def = (e) => AB.ID.get(e.id);
-  const alive = () => [...list.values()].filter((e) => e.state !== 'DEAD');
+  const here = () => [...list.values()].filter((e) => e.sector === sectorNow());
+  const alive = () => here().filter((e) => e.state !== 'DEAD' && !e.story);
   const sees = (e, m) => W().clear(e.x, e.y, m.x, m.y, 0.05);
 
   function setState(e, s) {
@@ -80,6 +86,7 @@ AB.IsoEnemies = (() => {
   }
 
   function tick(e, dt) {
+    if (e.story) { e.t += dt; return; }   // сюжетное появление — без поведения
     const d = def(e);
     e.t += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.flash = Math.max(0, e.flash - dt * 4);
     if (e.state === 'DEAD') return;
@@ -167,10 +174,22 @@ AB.IsoEnemies = (() => {
     return true;
   }
 
-  function update(dt) { for (const e of list.values()) tick(e, dt); }
+  function update(dt) { for (const e of here()) tick(e, dt); }
+  // противники сектора — при первом заходе в него (по данным помещений и местам планировки)
+  const spawned = new Set();
+  function spawnSector(sectorId, layout, extra = []) {
+    if (spawned.has(sectorId)) return;
+    spawned.add(sectorId);
+    for (const a of layout.areas) for (const id of AB.ID.get(a.room).enemies || []) {
+      const p = layout.enemyPos && layout.enemyPos[id];
+      if (p && !list.has(id)) spawn(id, p.x, p.y);
+    }
+    for (const t of extra) spawn(t.id, t.x, t.y);
+  }
 
   return {
-    spawn, update, damage, alive, get: (id) => list.get(id), all: () => [...list.values()],
+    spawn, update, damage, alive, spawnSector, get: (id) => list.get(id), all: here,
+    despawn: (id) => list.delete(id),
     isDead: (id) => dead.has(id) || (list.has(id) && list.get(id).state === 'DEAD'),
   };
 })();

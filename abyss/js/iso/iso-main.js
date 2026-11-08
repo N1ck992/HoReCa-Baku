@@ -1,13 +1,15 @@
 // =====================================================================
-// ISO MAIN (этап 1 изометрии, дополнение №45). Точка входа тестовой
-// изометрической сцены (iso.html): мир, отряд, камера, управление, интерфейс.
+// ISO MAIN (дополнения №45–49). Точка входа изометрического прохождения
+// бункера (iso.html): игровой цикл и интерфейс — помещение и задание
+// слева вверху, герои справа внизу (нажатие — окно героя), подсказка
+// действия, сообщения, диалоги, «Пропустить сцену», «Начать сначала».
 // Старая игра (index.html, вид сбоку) не меняется и работает как раньше.
 // =====================================================================
 
 (() => {
   const $ = (s) => document.querySelector(s);
-  const SECTOR = 'SECTOR-001';
-  const ui = { room: $('#iso-room'), party: $('#iso-party'), zoom: $('#iso-zoom'), prompt: $('#iso-prompt'), toast: $('#iso-toast') };
+  const ui = { room: $('#iso-room'), quest: $('#iso-quest'), party: $('#iso-party'), zoom: $('#iso-zoom'), prompt: $('#iso-prompt'), toast: $('#iso-toast'),
+    dialog: $('#iso-dialog'), skip: $('#iso-skip') };
   const isTouch = matchMedia('(pointer: coarse)').matches;
   let lastParty = '', lastRoom = '', lastPrompt = '', toastT = null;
 
@@ -20,7 +22,7 @@
   const itemName = (id) => AB.ID.get(id).name;
   // сообщения тех же систем, что в основной игре
   AB.Bus.on('item:pickup', ({ charId, by, itemId, added }) => {
-    if (added) toast(`${charId !== by ? `${AB.ID.get(charId).name} несёт · ` : ''}${AB.ID.get(itemId).weapon ? 'В руках' : 'В рюкзаке'}: ${itemName(itemId)}`, 'good');
+    if (added) toast(`${AB.ID.get(itemId).weapon && AB.Inventory.weapon(charId) && AB.Inventory.weapon(charId).item === itemId ? `В руках у ${AB.ID.get(charId).name}` : 'В инвентаре'}: ${itemName(itemId)}`, 'good');
     else toast('Не помещается');
   });
   AB.Bus.on('equip:blocked', ({ text }) => toast(text, 'info'));
@@ -47,6 +49,7 @@
   // подсказка действия; на телефоне она же — кнопка
   function updatePrompt() {
     const p = AB.IsoInteract.prompt();
+    document.body.classList.toggle('quiet', !!p || AB.Dialog.isOpen());   // подсказка или диалог — без строки помощи
     if (!p) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
     const html = p.progress !== undefined
       ? `${p.label}<span class="bar"><i style="width:${Math.round(p.progress * 100)}%"></i></span>`
@@ -66,35 +69,57 @@
     }
     const html = AB.IsoParty.members().map((m, i) => {
       const d = AB.ID.get(m.id), lead = i === AB.IsoParty.leaderIndex();
-      // оружие и два места в рюкзаке — из инвентаря основной игры
-      const chip = (sl) => (sl ? `<u title="${itemName(sl.item)}">${AB.ID.get(sl.item).short}${sl.qty > 1 ? `×${sl.qty}` : ''}</u>` : '<u class="empty">—</u>');
+      // на карточке — оружие в руках; подробно — в окне героя (нажатие на карточку)
+      const chip = (sl) => (sl ? `<u title="${itemName(sl.item)}">${AB.ID.get(sl.item).short}</u>` : '<u class="empty">—</u>');
       const c = AB.Chars.get(m.id), hp = c ? Math.max(0, c.hp / d.stats.maxHp) : 1, dead = c && c.dead;
       const ht = AB.Inventory.heat(m.id);
-      return `<button class="pm ${lead ? 'lead' : ''} ${dead ? 'dead' : ''}" data-i="${i}" aria-pressed="${lead}" title="${dead ? 'Погиб' : lead ? 'Ведёт отряд' : 'Передать управление (Q)'}"><b>${d.name}</b><span>${chip(AB.Inventory.weapon(m.id))}${AB.Inventory.packs(m.id).map(chip).join('')}</span>`
+      return `<button class="pm ${lead ? 'lead' : ''} ${dead ? 'dead' : ''}" data-i="${i}" aria-pressed="${lead}" title="${d.name}: снаряжение и здоровье${lead ? ' · ведёт отряд' : ' · Q — передать управление'}"><b>${d.name}</b><span>${chip(AB.Inventory.weapon(m.id))}</span>`
         + `<i class="hp" style="width:${Math.round(hp * 100)}%"></i>${ht ? `<i class="heat ${ht.over ? 'over' : ''}" style="width:${Math.round(ht.heat * 100)}%"></i>` : ''}</button>`;
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
+    // задание: текущие цели из системы заданий основной игры
+    const q = AB.Quests.current();
+    const qh = q ? `<b>${q.name}</b>${q.objectives.map((o) => `<div class="${o.ok ? 'ok' : ''}">${o.text}</div>`).join('')}` : '';
+    if (qh !== lastQuest) { ui.quest.innerHTML = qh; lastQuest = qh; }
+    ui.skip.hidden = !AB.IsoStory.isRunning();
   }
+  let lastQuest = '';
+
+  // диалоги — та же система (AB.Dialog), реплики из данных
+  AB.Bus.on('dialog:line', (l) => {
+    ui.dialog.hidden = false;
+    ui.dialog.innerHTML = `<b>${l.name}</b><p>${l.text}</p><span class="muted">${isTouch ? 'Коснитесь' : 'E, пробел или нажатие'} — ${l.last ? 'закрыть' : 'дальше'}</span>`;
+  });
+  AB.Bus.on('dialog:end', () => { ui.dialog.hidden = true; });
+  AB.Bus.on('quest:start', ({ name }) => toast(`Новое задание: ${name}`, 'info'));
+  AB.Bus.on('quest:done', ({ name }) => toast(`Задание выполнено: ${name}`, 'good'));
+  AB.Bus.on('world:power', ({ on }) => { if (on) setTimeout(() => toast('Питание корабля восстановлено', 'good'), 1200); });
+  AB.Bus.on('container:looted', ({ label, found, full }) => toast(found.length ? `${label}: ${found.map(([id, n]) => `${itemName(id)} ×${n}`).join(', ')}${full ? ' · остальное — рядом на полу' : ''}` : `${label}: инвентарь полон — находки рядом на полу`, 'good'));
+  AB.Bus.on('container:empty', ({ label }) => toast(`${label}: пусто`, 'info'));
+  AB.Bus.on('iso:travel', ({ sector }) => toast(AB.IsoGame.sectorName(sector), 'info'));
 
   function boot() {
     AB.Assets.load();
-    AB.IsoWorld.build(SECTOR);
-    AB.IsoParty.init(AB.ISO_LAYOUTS[SECTOR].party);
-    AB.IsoBridge.setup(AB.ISO_LAYOUTS[SECTOR]);          // старые системы: персонажи, инвентарь, оборудование
-    AB.IsoInteract.init(AB.ISO_LAYOUTS[SECTOR]);
-    AB.IsoInventory.init();
     AB.IsoRender.init($('#iso'));
+    AB.Quests.init();
+    AB.IsoGame.start();                                   // пробуждение в криоотсеке (или тестовая сцена)
+    AB.IsoInventory.init();
     AB.IsoInput.init($('#iso'));
     ui.party.addEventListener('click', (e) => {
       const b = e.target.closest('[data-i]');
-      if (b) AB.IsoParty.setLeader(Number(b.dataset.i));
+      if (b) AB.IsoInventory.openHero(AB.IsoParty.members()[Number(b.dataset.i)].id);
     });
+    ui.dialog.addEventListener('pointerdown', (e) => { e.stopPropagation(); AB.Dialog.next(); });
+    ui.skip.addEventListener('click', () => AB.IsoStory.skip());
+    for (const el of [ui.skip, $('#iso-restart')]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     ui.zoom.addEventListener('click', (e) => {
       const b = e.target.closest('[data-z]');
       if (b) AB.IsoRender.zoom(parseFloat(b.dataset.z));
     });
     $('#iso-ids').addEventListener('click', () => { AB.isoShowIds = !AB.isoShowIds; });
-    $('#iso-restart').addEventListener('click', () => location.reload());
+    $('#iso-restart').addEventListener('click', () => AB.IsoGame.restart());
+    $('#iso-restart-top').addEventListener('click', () => AB.IsoGame.restart());
+    $('#iso-restart-top').addEventListener('pointerdown', (e) => e.stopPropagation());
     for (const el of [ui.party, ui.zoom]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); AB.IsoInteract.actNearest(); });
 
@@ -102,12 +127,17 @@
     function loop(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      const input = AB.IsoInput.update(dt);
-      AB.IsoParty.update(dt, AB.IsoInteract.working() ? { x: input.x, y: input.y, walk: input.walk } : input);
+      // сцена, диалог или переход — управление у сцены
+      const busy = AB.IsoStory.locked() || AB.IsoGame.busy();
+      const raw = AB.IsoInput.update(dt), input = busy ? { x: 0, y: 0, walk: false } : raw;
+      AB.IsoStory.update(dt);
+      AB.IsoGame.update(dt);
+      AB.IsoParty.update(dt, input);
       AB.IsoBridge.sync();
       AB.IsoInteract.update(dt, input);
       AB.IsoEnemies.update(dt);
-      AB.IsoCombat.update(dt, input);
+      if (!busy) AB.IsoCombat.update(dt, input);
+      if (Math.random() < 0.1) AB.Quests.check();
       AB.Anim.update(dt);
       AB.IsoRender.frame(dt);
       updateHud();

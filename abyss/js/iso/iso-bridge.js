@@ -8,36 +8,29 @@
 // =====================================================================
 
 AB.IsoBridge = (() => {
-  const storyDone = new Set();
-  // заглушки систем, которых в изометрии пока нет (не подменяют настоящие, если те загружены)
-  if (!AB.Story) AB.Story = { isDone: (id) => storyDone.has(id), isRunning: () => false, fx: {}, trigger() {}, zone() {} };
+  // заглушки систем, которых в изометрии нет (сюжет — AB.IsoStory, он задаёт AB.Story сам)
   // противники — изометрические (AB.IsoEnemies); старый интерфейс «погиб ли» для оборудования
   if (!AB.Enemies) AB.Enemies = { isDead: (id) => !!(AB.IsoEnemies && AB.IsoEnemies.isDead(id)), inRoom: () => [], inCombat: () => false, threatFor: () => null };
   if (!AB.Dialog) AB.Dialog = { isOpen: () => false };
 
   let lastRoom = null;
 
-  // персонажи отряда — в реестре старой системы (инвентарь, навыки, здоровье — там)
-  function setup(layout) {
-    const st = layout.testState || {};
-    (st.story || []).forEach((id) => storyDone.add(id));
-    AB.Equip.restore(st.equipment || []);
-    if (st.power) AB.World.setPower(true);
+  // персонажи отряда — в реестре старой системы (здоровье, навыки, оружие в руках — там)
+  // st — состояние тестовой сцены (iso.html?scene=test), в прохождении — нет
+  function setup(party, st) {
     if (!AB.Combat && AB.IsoCombat) AB.Combat = AB.IsoCombat;   // фигура с оружием спрашивает про ауру и перегрев
-    for (const [id, item] of st.weapons || []) AB.Inventory.add(id, item, 1, { swap: false });
-    // противники помещений сектора и тестовые
-    for (const a of layout.areas) for (const id of AB.ID.get(a.room).enemies || []) {
-      const p = layout.enemyPos && layout.enemyPos[id];
-      if (p && !AB.IsoEnemies.get(id)) AB.IsoEnemies.spawn(id, p.x, p.y);
+    if (st) {
+      (st.story || []).forEach((id) => AB.IsoStory.markDone(id));
+      AB.Equip.restore(st.equipment || []);
+      if (st.power) AB.World.setPower(true);
     }
-    for (const t of layout.testEnemies || []) AB.IsoEnemies.spawn(t.id, t.x, t.y);
-    const lead = layout.party[0].id;
-    for (const p of layout.party.slice(0, AB.IsoParty.MAX)) {
+    const lead = party[0].id;
+    for (const p of party.slice(0, AB.IsoParty.MAX)) {
       const c = AB.Chars.spawn(p.id, { room: AB.IsoWorld.room(p.x, p.y), x: 0 });
       c.follow = p.id === lead ? null : lead;
       c.controllable = p.id === lead;
     }
-    sync();
+    if (st) for (const [id, item] of st.weapons || []) AB.Inventory.add(id, item, 1, { swap: false });
   }
 
   // после движения: в каком помещении каждый (инвентарь считает «рядом» по помещению)
@@ -57,11 +50,15 @@ AB.IsoBridge = (() => {
     }
     const l = AB.IsoParty.lead();
     const room = l && AB.IsoWorld.room(l.x, l.y);
-    if (room && room !== lastRoom) { AB.Rooms.setCurrent(room); lastRoom = room; }
+    if (room && room !== lastRoom) {
+      // вошли в помещение: задания и сюжет узнают об этом так же, как в основной игре
+      AB.Rooms.setCurrent(room); lastRoom = room;
+      AB.Bus.emit('room:enter', { roomId: room, iso: true });
+    }
   }
 
   // смена управляемого — и в старом реестре отряда
   AB.Bus.on('iso:party', ({ leader }) => { if (AB.Party.leader() !== leader) AB.Party.setLeader(leader, { force: true }); });
 
-  return { setup, sync, storyDone: (id) => storyDone.has(id) };
+  return { setup, sync };
 })();

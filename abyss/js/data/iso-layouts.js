@@ -14,13 +14,18 @@
 //          Закрыта — не пройти; заперта, пока заперта дверь помещения (rooms.js).
 // exits  — двери из сектора (rooms.js: room + door): переход в другой сектор.
 // items  — где лежат предметы помещений: 'ROOM-ID:key' из rooms.js → клетка.
-// у предмета-обстановки equip — оборудование (EQUIP-ID), с ним работают рядом.
+// у предмета-обстановки equip — оборудование (EQUIP-ID), с ним работают рядом;
+//          container — тайник помещения (rooms.js: containers), его обыскивают.
+// links  — люки и лестницы внутри сектора: переход между двумя точками (затемнение).
+// exits.to — куда ведёт выход: { sector, x, y }; без to — сектор ещё не перенесён.
+// Предмет без места в items ставится по его x из rooms.js вдоль помещения.
+// party/testState/testEnemies — только для тестовой сцены (iso.html?scene=test).
 // Планировка — тестовая: положение помещений условное, сюжет не меняется.
 // =====================================================================
 
 AB.ISO_LAYOUTS = {
   'SECTOR-001': {
-    name: 'Жилая палуба и гидропоника — изометрия (тест)',
+    name: 'Жилая палуба и гидропоника',
     areas: [
       { room: 'ROOM-002', x: 2, y: 2, w: 20, h: 11 },     // жилой сектор
       { room: 'ROOM-002', x: 22, y: 6, w: 5, h: 3 },      // проход к складу
@@ -77,9 +82,9 @@ AB.ISO_LAYOUTS = {
       { key: 'D', tiles: [[29, 27], [29, 28], [29, 29], [29, 30]], axis: 'x' },   // гидропоника ↔ техкоридор Б
     ],
     exits: [
-      { room: 'ROOM-002', door: 'west', x: 2, y: 7, wall: 'w' },     // в генераторную
-      { room: 'ROOM-005', door: 'east', x: 48, y: 9, wall: 'e' },    // к мостику
-      { room: 'ROOM-002', door: 'hatch', x: 20, y: 11, floor: true }, // люк в технический тоннель
+      { room: 'ROOM-002', door: 'west', x: 2, y: 7, wall: 'w', to: { sector: 'SECTOR-002', x: 58.5, y: 7.5 } },        // в генераторную
+      { room: 'ROOM-005', door: 'east', x: 48, y: 9, wall: 'e' },                                                       // к мостику — следующий сектор
+      { room: 'ROOM-002', door: 'hatch', x: 20, y: 11, floor: true, to: { sector: 'SECTOR-002', x: 47.5, y: 17.5 } },  // люк в технический тоннель
     ],
     items: {
       'ROOM-005:fuel': { x: 42.5, y: 8.5 },
@@ -106,4 +111,63 @@ AB.ISO_LAYOUTS = {
       { id: 'CHAR-003', x: 12.5, y: 10.5 },
     ],
   },
+  // Сектор начала сюжета (дополнение №49): криоотсек, коридор, генераторная и технический
+  // тоннель под коридором. Только для изометрии — в основной игре это отдельные помещения.
+  'SECTOR-002': {
+    name: 'Криоотсек и коридор',
+    areas: [
+      { room: 'ROOM-001', x: 2, y: 2, w: 14, h: 9 },      // криоотсек
+      { room: 'ROOM-001', x: 16, y: 5, w: 2, h: 3 },      // проход в коридор
+      { room: 'ROOM-011', x: 18, y: 4, w: 30, h: 4 },     // коридор
+      { room: 'ROOM-011', x: 48, y: 5, w: 1, h: 2 },      // дверь генераторной
+      { room: 'ROOM-003', x: 49, y: 2, w: 12, h: 10 },    // генераторная
+      { room: 'ROOM-012', x: 20, y: 16, w: 30, h: 3 },    // технический тоннель (под коридором)
+    ],
+    props: [
+      { kind: 'cryopod', x: 3, y: 3, w: 2, h: 2, main: true, prop: 'cryopod-main', asset: 'ASSET-ROOM001-02' },
+      { kind: 'cryopod', x: 6, y: 3, w: 2, h: 2, asset: 'ASSET-ROOM001-02' },
+      { kind: 'cryopod', x: 9, y: 3, w: 2, h: 2, asset: 'ASSET-ROOM001-02' },
+      { kind: 'console', x: 12, y: 2, w: 1, h: 1, asset: 'ASSET-ROOM001-04' },
+      { kind: 'medbed', x: 11, y: 7, w: 2, h: 1, asset: 'ASSET-ROOM001-03' },
+      { kind: 'locker', x: 14, y: 3, w: 1, h: 2, asset: 'ASSET-ROOM001-05', container: 'cabinet' },
+      { kind: 'pipe', x: 26, y: 4, w: 1, h: 1 }, { kind: 'crate', x: 40, y: 7, w: 2, h: 1 },
+      { kind: 'panel', x: 50, y: 2, w: 1, h: 1, equip: 'EQUIP-001', asset: 'ASSET-ROOM003-03' },
+      { kind: 'cable', x: 54, y: 2, w: 2, h: 1, equip: 'EQUIP-002', asset: 'ASSET-ROOM003-04' },
+      { kind: 'generator', x: 54, y: 5, w: 4, h: 3, equip: 'EQUIP-003', asset: 'ASSET-ROOM003-02' },
+      { kind: 'console', x: 59, y: 3, w: 1, h: 2, equip: 'EQUIP-004', asset: 'ASSET-ROOM003-05' },
+      { kind: 'fueltank', x: 51, y: 9, w: 2, h: 2, equip: 'EQUIP-010' },
+      { kind: 'pipe', x: 30, y: 16, w: 1, h: 1 }, { kind: 'pipe', x: 42, y: 18, w: 1, h: 1 },
+    ],
+    doors: [
+      // коридор → генераторная: кодовый замок (код знает Мира — EVENT-003)
+      { key: 'G', tiles: [[48, 5], [48, 6]], axis: 'x', name: 'Дверь генераторной', room: 'ROOM-011', roomDoor: 'east', state: 'closed' },
+    ],
+    links: [
+      { key: 'T', name: 'Люк в технический тоннель', a: { room: 'ROOM-011', door: 'hatch', x: 32, y: 6 }, b: { room: 'ROOM-012', door: 'up-west', x: 21, y: 17 } },
+    ],
+    exits: [
+      { room: 'ROOM-003', door: 'east', x: 60, y: 7, wall: 'e', to: { sector: 'SECTOR-001', x: 3.5, y: 7.5 } },        // в жилой сектор (питание)
+      { room: 'ROOM-012', door: 'up-east', x: 48, y: 17, floor: true, to: { sector: 'SECTOR-001', x: 19.5, y: 10.5 } }, // лестница в жилой сектор
+    ],
+    items: {
+      'ROOM-011:pipe': { x: 24.5, y: 6.5 },
+      'ROOM-011:fuse-lamp': { x: 29.5, y: 5.5 },
+    },
+    enemyPos: { 'ENEMY-001': { x: 38.5, y: 5.5 }, 'ENEMY-006': { x: 40.5, y: 17.5 } },
+    lights: [
+      { x: 4, y: 6, color: [120, 200, 255], radius: 6 },
+      { x: 11, y: 5, color: [255, 60, 40], radius: 6 },
+      { x: 24, y: 6, color: [255, 60, 40], radius: 5 },
+      { x: 36, y: 6, color: [255, 60, 40], radius: 5 },
+      { x: 55, y: 6, color: [255, 160, 70], radius: 8 },
+      { x: 28, y: 17, color: [255, 60, 40], radius: 5 },
+      { x: 42, y: 17, color: [255, 60, 40], radius: 5 },
+    ],
+  },
 };
+
+// Начало нового прохождения: Марк в главной капсуле криоотсека (EVENT-001)
+AB.ISO_START = { sector: 'SECTOR-002', party: [{ id: 'CHAR-001', x: 4.0, y: 5.6 }] };
+
+// Сектор только изометрии — в общем реестре ID (секторы основной игры — js/data/sectors.js)
+AB.ID.register('SECTOR-002', { id: 'SECTOR-002', name: AB.ISO_LAYOUTS['SECTOR-002'].name, iso: true, doors: [] });

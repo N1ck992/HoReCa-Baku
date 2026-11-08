@@ -12,9 +12,10 @@ AB.IsoParty = (() => {
   const W = () => AB.IsoWorld;
   let members = [];
   let leader = 0;
+  let npcs = [];                         // персонажи сцены, ещё не в отряде (Мира до встречи)
 
-  function init(list) {
-    members = list.slice(0, MAX).map((p) => {
+  function make(p) {
+    {
       const def = AB.ID.get(p.id);
       return {
         id: p.id, x: p.x, y: p.y, hx: 1, hy: 0,          // hx/hy — куда смотрит (направление в мире)
@@ -22,7 +23,11 @@ AB.IsoParty = (() => {
         facing: 1, stride: 0, equipped: null, hidden: false,
         path: null, goal: null, replanT: 0, moving: false, speed: 0, run: true,
       };
-    });
+    }
+  }
+  function init(list) {
+    members = list.slice(0, MAX).map(make);
+    npcs = [];
     leader = 0;
     for (const m of members) {
       // стоит в стене или в предмете — на ближайшее свободное место
@@ -107,8 +112,9 @@ AB.IsoParty = (() => {
       l.hx = input.x; l.hy = input.y;
       l.run = !input.walk;
     } else if (l.path) {
-      l.run = !(input && input.walk);
-      went = walkPath(l, dt, speedOf(l, l.run));
+      l.run = l.scripted ? false : !(input && input.walk);
+      went = walkPath(l, dt, l.scripted || speedOf(l, l.run));
+      if (!l.path) l.scripted = null;
     }
     animate(l, went, dt);
 
@@ -163,13 +169,63 @@ AB.IsoParty = (() => {
     if (Math.abs(sxDir) > 0.05 && m.moving) m.facing = sxDir > 0 ? 1 : -1;
     // удар, получение урона, гибель — не перебивать ходьбой
     const tr = AB.Anim.current(m.id);
+    // разовая анимация (пробуждение, действие) закончилась — снова обычное состояние
+    if (tr && tr.done && ['wake', 'interact', 'hurt', 'attack'].includes(tr.action)) m.action = null;
     if ((AB.IsoCombat && AB.IsoCombat.isSwinging(m.id)) || (tr && ['hurt', 'death', 'interact'].includes(tr.action) && !tr.done) || isDead(m)) return;
     const action = !m.moving ? 'idle' : m.run ? 'run' : 'walk';
     if (m.action !== action) { m.action = action; AB.Anim.play(m.id, action); }
   }
 
+  // ---------- для сюжетных сцен ----------
+  const find = (id) => members.find((m) => m.id === id) || npcs.find((m) => m.id === id);
+  function addNpc(id, x, y) {
+    if (find(id)) return find(id);
+    const m = make({ id, x, y });
+    if (!W().free(m.x, m.y)) { const n = W().nearestFree(m.x, m.y); if (n) { m.x = n.x + 0.5; m.y = n.y + 0.5; } }
+    npcs.push(m);
+    AB.Anim.play(id, 'idle');
+    return m;
+  }
+  // присоединился к отряду (сюжетное «следует за Марком»)
+  function join(id) {
+    const i = npcs.findIndex((m) => m.id === id);
+    if (i < 0 || members.length >= MAX) return false;
+    const m = npcs.splice(i, 1)[0];
+    m.path = null; m.goal = null;
+    members.push(m);
+    AB.Bus.emit('iso:party', { leader: lead().id, joined: id });
+    return true;
+  }
+  // сцена ведёт персонажа к точке
+  function walkTo(id, x, y, speed) {
+    const m = find(id);
+    if (!m) return false;
+    m.path = W().path(m.x, m.y, x, y);
+    m.goal = m.path ? m.path[m.path.length - 1] : null;
+    m.scripted = speed || 1.8;
+    return !!m.path;
+  }
+  // переход в другой сектор или по люку: весь отряд — вокруг точки
+  function placeAll(x, y) {
+    const pts = [[0, 0], [-0.9, 0.6], [-0.9, -0.6], [-1.8, 0], [0.8, 0.8]];
+    members.forEach((m, i) => {
+      const [dx, dy] = pts[i % pts.length];
+      let px = x + dx, py = y + dy;
+      if (!W().free(px, py)) { const n = W().nearestFree(px, py, 3); if (n) { px = n.x + 0.5; py = n.y + 0.5; } else { px = x; py = y; } }
+      m.x = px; m.y = py; m.path = null; m.goal = null; m.engage = null;
+    });
+  }
+  function npcTick(dt) {
+    for (const m of npcs) {
+      const went = m.path ? walkPath(m, dt, m.scripted || 1.8) : 0;
+      if (!m.path) m.goal = null;
+      animate(m, went, dt);
+    }
+  }
+
   return {
-    MAX, init, update, goTo, stop, setLeader, cycle, lead,
+    MAX, init, update, addNpc, join, walkTo, placeAll, npcTick, find,
+    npcs: () => npcs, goTo, stop, setLeader, cycle, lead,
     leaderIndex: () => leader, members: () => members,
   };
 })();

@@ -20,7 +20,10 @@ AB.IsoInput = (() => {
 
   function init(canvas) {
     window.addEventListener('keydown', (e) => {
-      if (AB.IsoInventory && AB.IsoInventory.isOpen()) return;          // окно инвентаря — клавиши его
+      // диалог: E, пробел, Enter — следующая реплика; во время сцены остальное не работает
+      if (AB.Dialog.isOpen()) { if (['KeyE', 'Space', 'Enter'].includes(e.code) && !e.repeat) { e.preventDefault(); AB.Dialog.next(); } return; }
+      if (AB.IsoStory.locked() || AB.IsoGame.busy()) return;
+      if (AB.IsoInventory && (AB.IsoInventory.isOpen() || AB.IsoInventory.heroOpen())) return;   // открыто окно — клавиши его
       if (e.code === 'KeyQ') { e.preventDefault(); if (!e.repeat) AB.IsoParty.cycle(); return; }
       if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat) { AB.IsoInteract.actNearest(); return; }
       if ((e.code === 'KeyF' || e.code === 'Space') && !e.repeat) { e.preventDefault(); AB.IsoCombat.attackNearest(); return; }
@@ -35,6 +38,8 @@ AB.IsoInput = (() => {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (AB.Dialog.isOpen()) { AB.Dialog.next(); return; }
+      if (AB.IsoStory.locked() || AB.IsoGame.busy()) return;
       canvas.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 2) {
@@ -104,7 +109,7 @@ AB.IsoInput = (() => {
       holdT -= dt;
       if (holdT <= 0) { const p = pointers.get(hold); moveTo(p.x, p.y); holdT = 0.2; }
     }
-    if (AB.IsoInventory && AB.IsoInventory.isOpen()) return { x: 0, y: 0, walk: false };   // открыт инвентарь — стоит
+    if (AB.IsoInventory && (AB.IsoInventory.isOpen() || AB.IsoInventory.heroOpen())) return { x: 0, y: 0, walk: false };   // открыт инвентарь — стоит
     const a = axis();
     return { x: a.x, y: a.y, walk: keys.has('ShiftLeft') || keys.has('ShiftRight') };
   }

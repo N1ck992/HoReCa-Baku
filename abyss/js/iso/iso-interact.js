@@ -18,12 +18,18 @@ AB.IsoInteract = (() => {
   let work = null;                    // идущая работа с оборудованием
   let hover = null;
 
-  function init(lay) {
-    layout = lay;
-    const sector = AB.ID.get('SECTOR-001');
+  const saved = new Map();             // сектор → состояние его дверей (сектор покинули и вернулись)
+  let sectorId = null;
+  function init(lay, sid = 'SECTOR-001') {
+    if (sectorId) saved.set(sectorId, new Map([...doors.values()].map((d) => [d.key, d.state])));
+    layout = lay; sectorId = sid;
+    doors.clear(); dropPos.clear(); intent = null; work = null; hover = null;
+    const sector = AB.ID.get(sid), keep = saved.get(sid);
     for (const d of lay.doors || []) {
-      const def = sector.doors.find((q) => q.key === d.key);
-      const door = { key: d.key, def, tiles: d.tiles, axis: d.axis, state: def.state || 'open', anim: def.state === 'closed' ? 1 : 0 };
+      // описание двери: в планировке (сектор только изометрии) или в sectors.js
+      const def = d.room ? d : sector.doors.find((q) => q.key === d.key);
+      const state = (keep && keep.get(d.key)) || def.state || 'open';
+      const door = { key: d.key, def, tiles: d.tiles, axis: d.axis, state, anim: state === 'closed' ? 1 : 0 };
       doors.set(d.key, door);
       W().setDoor(d.tiles, door.state !== 'open' || locked(door));
     }
@@ -40,6 +46,7 @@ AB.IsoInteract = (() => {
   function itemPos(room, it) {
     const k = `${room}:${it.key}`;
     if (layout.items && layout.items[k]) return layout.items[k];
+    if (!it.key.startsWith('drop') && !dropPos.has(k)) dropPos.set(k, alongRoom(room, it.x));
     if (!dropPos.has(k)) {
       // брошенный предмет: рядом с ведущим, на свободной клетке
       const l = AB.IsoParty.lead(), used = new Set([...dropPos.values()].map((p) => `${Math.floor(p.x)},${Math.floor(p.y)}`));
@@ -55,6 +62,15 @@ AB.IsoInteract = (() => {
     return dropPos.get(k);
   }
 
+  // место в помещении по x вида сбоку: вдоль самой большой части помещения
+  function alongRoom(room, x) {
+    const a = layout.areas.filter((q) => q.room === room).sort((p, q) => q.w * q.h - p.w * p.h)[0];
+    const r = AB.ID.get(room), t = Math.max(0.05, Math.min(0.95, (x || 0) / (r.width || 1000)));
+    const px = a.w >= a.h ? a.x + t * a.w : a.x + a.w / 2, py = a.w >= a.h ? a.y + a.h / 2 : a.y + t * a.h;
+    const n = W().nearestFree(px, py, 4);
+    return n ? { x: n.x + 0.5, y: n.y + 0.5 } : { x: px, y: py };
+  }
+
   function targets() {
     const out = [];
     for (const room of rooms()) for (const it of AB.Rooms.worldItems(room)) {
@@ -64,10 +80,18 @@ AB.IsoInteract = (() => {
     for (const p of W().props()) if (p.equip) {
       out.push({ kind: 'equip', id: `equip:${p.equip}`, x: p.x + p.w / 2, y: p.y + p.h / 2, rect: p, ref: AB.ID.get(p.equip), name: AB.ID.get(p.equip).name });
     }
+    for (const p of W().props()) if (p.container) {
+      const room = W().room(p.x + 0.5, p.y + 0.5), def = ((AB.ID.get(room) || {}).containers || []).find((c) => c.key === p.container);
+      if (def) out.push({ kind: 'container', id: `box:${room}:${def.key}`, x: p.x + p.w / 2, y: p.y + p.h / 2, rect: p, room, ref: def, name: def.label });
+    }
     for (const d of doors.values()) { const c = doorCenter(d); out.push({ kind: 'door', id: `door:${d.key}`, x: c.x, y: c.y, ref: d, name: d.def.name }); }
+    for (const l of layout.links || []) for (const [end, other] of [[l.a, l.b], [l.b, l.a]]) {
+      const rd = roomDoor(end.room, end.door);
+      out.push({ kind: 'link', id: `link:${l.key}:${end.room}`, x: end.x + 0.5, y: end.y + 0.5, ref: { link: l, end, other, rd }, name: rd && rd.kind === 'ladder' ? 'Подняться по лестнице' : 'Спуститься в люк' });
+    }
     for (const e of layout.exits || []) {
       const rd = roomDoor(e.room, e.door), to = rd && AB.ID.get(rd.to);
-      out.push({ kind: 'exit', id: `exit:${e.room}:${e.door}`, x: e.x + 0.5, y: e.y + 0.5, ref: e, rd, name: rd && rd.kind === 'hatch' ? `Люк: ${to ? to.name : rd.to}` : `Дверь: ${to ? to.name : rd.to}` });
+      out.push({ kind: 'exit', id: `exit:${e.room}:${e.door}`, x: e.x + 0.5, y: e.y + 0.5, ref: e, rd, name: `${rd && rd.kind === 'hatch' ? 'Люк' : rd && rd.kind === 'ladder' ? 'Лестница' : 'Дверь'}: ${to ? to.name : rd.to}` });
     }
     return out;
   }
@@ -101,10 +125,20 @@ AB.IsoInteract = (() => {
       if (locked(d)) return { label: `${d.def.name}: ${access(d.def.room, d.def.roomDoor).reason.toLowerCase()}`, ok: false };
       return { label: d.state === 'open' ? 'Закрыть дверь' : 'Открыть дверь', ok: true };
     }
+    if (t.kind === 'container') {
+      const empty = AB.Rooms.isSearched(t.room, t.ref.key);
+      return { label: empty ? `${t.name}: пусто` : `Обыскать: ${t.name}`, ok: !empty };
+    }
+    if (t.kind === 'link') {
+      const a = t.ref.rd ? AB.Rooms.canPass(t.ref.rd) : { ok: true };
+      return { label: a.ok ? t.name : `${t.name}: ${a.reason.charAt(0).toLowerCase()}${a.reason.slice(1)}`, ok: a.ok };
+    }
     const a = access(t.ref.room, t.ref.door);
-    return { label: a.ok ? `${t.name} — переход в другой сектор` : `${t.name}: ${a.reason.toLowerCase()}`, ok: a.ok };
+    const dest = t.ref.to ? AB.IsoGame.sectorName(t.ref.to.sector) : null;
+    return { label: !a.ok ? `${t.name}: ${a.reason.toLowerCase()}` : dest ? `${t.name} → ${dest}` : `${t.name} — сектор ещё не перенесён`, ok: a.ok };
   }
   function prompt() {
+    if (work && work.t.kind === 'container') return { label: `Обыск: ${work.t.name}…`, ok: true, progress: work.p / work.time };
     if (work) { return { label: `${AB.Equip.action(work.t.ref.id, AB.IsoParty.lead().id).label}…`, ok: true, progress: work.p / work.time }; }
     const t = nearest();
     return t ? { ...label(t), id: t.id } : null;
@@ -131,10 +165,36 @@ AB.IsoInteract = (() => {
       return true;
     }
     if (t.kind === 'door') return toggleDoor(t.ref);
-    // выход из сектора: правила доступа — старые; сам переход появится вместе с другими секторами
+    if (t.kind === 'container') {
+      if (AB.Rooms.isSearched(t.room, t.ref.key)) { AB.Bus.emit('container:empty', { label: t.name }); return true; }
+      AB.IsoParty.stop(); work = { t, p: 0, time: 1.2, x: l.x, y: l.y };
+      return true;
+    }
+    if (t.kind === 'link') {
+      const a = t.ref.rd ? AB.Rooms.canPass(t.ref.rd) : { ok: true };
+      if (!a.ok) { AB.Bus.emit('door:denied', { reason: a.reason }); return true; }
+      AB.IsoGame.travel(null, t.ref.other.x + 0.5, t.ref.other.y + 0.5);
+      return true;
+    }
+    // выход из сектора: правила доступа — старые; переход — в другой сектор
     const a = access(t.ref.room, t.ref.door);
-    AB.Bus.emit('door:denied', { reason: a.ok ? `${t.name}: другой сектор — переход будет перенесён на следующих этапах` : a.reason });
+    if (!a.ok) { AB.Bus.emit('door:denied', { reason: a.reason }); return true; }
+    if (!t.ref.to) { AB.Bus.emit('door:denied', { reason: `${t.name}: этот сектор ещё не перенесён` }); return true; }
+    AB.IsoGame.travel(t.ref.to.sector, t.ref.to.x, t.ref.to.y);
     return true;
+  }
+
+  // обыск: находки — в общий инвентарь; что не поместилось — на пол рядом
+  function loot(t) {
+    const found = [];
+    let full = false;
+    for (const [item, qty] of t.ref.loot || []) {
+      const got = AB.Inventory.addShared(AB.IsoParty.lead().id, item, qty).taken;
+      if (got) found.push([item, got]);
+      if (got < qty) { full = true; AB.Rooms.dropItem(t.room, item, qty - got, 0); }
+    }
+    AB.Rooms.markSearched(t.room, t.ref.key);
+    AB.Bus.emit('container:looted', { label: t.name, found, full });
   }
 
   function toggleDoor(d) {
@@ -164,7 +224,7 @@ AB.IsoInteract = (() => {
     let best = null, bd = 34;
     for (const t of targets()) {
       const p = S(t.x, t.y);
-      const lift = t.kind === 'door' || t.kind === 'equip' || (t.kind === 'exit' && !t.ref.floor) ? 30 : 6;   // у высоких объектов — по их середине
+      const lift = t.kind === 'door' || t.kind === 'equip' || t.kind === 'container' || (t.kind === 'exit' && !t.ref.floor) ? 30 : 6;   // у высоких объектов — по их середине
       const d = Math.min(Math.hypot(p.x - cx, p.y - cy), Math.hypot(p.x - cx, p.y - lift - cy));
       if (d < bd) { bd = d; best = t; }
     }
@@ -209,7 +269,10 @@ AB.IsoInteract = (() => {
       if ((input && (input.x || input.y)) || l.path || Math.hypot(l.x - work.x, l.y - work.y) > 0.3) { work = null; }
       else {
         work.p += dt;
-        if (work.p >= work.time) { const t = work.t; work = null; AB.Equip.apply(t.ref.id, l.id); }
+        if (work.p >= work.time) {
+          const t = work.t; work = null;
+          if (t.kind === 'container') loot(t); else AB.Equip.apply(t.ref.id, l.id);
+        }
       }
     }
     if (input && (input.x || input.y)) intent = null;
@@ -222,7 +285,7 @@ AB.IsoInteract = (() => {
   }
 
   return {
-    REACH, init, update, targets, nearest, prompt, act, click, hoverAt, label,
+    REACH, init, update, targets, alongRoom, nearest, prompt, act, click, hoverAt, label,
     actNearest() { const t = nearest(); return t ? act(t) : false; },
     doors: () => [...doors.values()], locked, hovered: () => hover, working: () => work, intent: () => intent,
   };

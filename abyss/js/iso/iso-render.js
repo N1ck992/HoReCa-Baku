@@ -37,10 +37,18 @@ AB.IsoRender = (() => {
     pump: { h: 46, top: '#55504a', l: '#3b3732', r: '#312e2a' },
     reservoir: { h: 66, top: '#2a4f52', l: '#1c383a', r: '#173032', glow: [80, 200, 190] },
     cabindoor: { h: 84, top: '#3d3a33', l: '#4d473c', r: '#3a362e' },
+    cryopod: { h: 40, top: '#3c5560', l: '#2a3a42', r: '#223038' },
+    console: { h: 52, top: '#2d3640', l: '#38424c', r: '#2a323a' },
+    medbed: { h: 22, top: '#4a4f55', l: '#33373c', r: '#2a2e33' },
+    panel: { h: 70, top: '#3a3f45', l: '#4b4f52', r: '#3a3d40' },
+    cable: { h: 26, top: '#3c3630', l: '#2e2925', r: '#26221e' },
+    generator: { h: 64, top: '#4a4438', l: '#3a3428', r: '#2f2a20' },
+    fueltank: { h: 48, top: '#5a3a2a', l: '#46301f', r: '#3a2818' },
   };
   const ROOM_TINT = {
     'ROOM-002': [52, 48, 50], 'ROOM-005': [56, 54, 50], 'ROOM-013': [40, 56, 48],
     'ROOM-014': [48, 46, 46], 'ROOM-015': [50, 48, 44], 'ROOM-016': [38, 50, 52],
+    'ROOM-001': [42, 50, 58], 'ROOM-011': [50, 46, 44], 'ROOM-003': [54, 50, 42], 'ROOM-012': [36, 44, 46],
   };
 
   function init(canvas) {
@@ -169,6 +177,8 @@ AB.IsoRender = (() => {
     cam.x = U.lerp(cam.x, t.x, 1 - Math.pow(0.002, dt));
     cam.y = U.lerp(cam.y, t.y, 1 - Math.pow(0.002, dt));
     const sc = S();
+    const fx = AB.IsoStory ? AB.IsoStory.fx : {};
+    if (fx.shake > 0) { cam.x += (Math.random() - 0.5) * fx.shakePower * 6; cam.y += (Math.random() - 0.5) * fx.shakePower * 6; }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#030305';
@@ -200,6 +210,7 @@ AB.IsoRender = (() => {
       if (visible(c.x, c.y)) list.push({ d: x + y + 1, k: 'p', x, y, p });
     }
     for (const m of party) list.push({ d: m.x + m.y + 0.01, k: 'c', m });
+    for (const m of AB.IsoParty.npcs()) list.push({ d: m.x + m.y + 0.01, k: 'c', m, npc: true });
     for (const e of AB.IsoEnemies.all()) { const c = toScreen(e.x, e.y); if (visible(c.x, c.y)) list.push({ d: e.x + e.y + 0.005, k: 'e', e }); }
     // двери сектора (створки), выходы в стене, предметы на полу
     for (const dr of AB.IsoInteract.doors()) if (dr.anim > 0.03) for (const [x, y] of dr.tiles) list.push({ d: x + y + 1, k: 'd', x, y, dr });
@@ -224,7 +235,8 @@ AB.IsoRender = (() => {
         const a = alphaFor(`p${o.x},${o.y}`, hid, dt);
         const inside = (xx, yy) => xx >= o.p.x && yy >= o.p.y && xx < o.p.x + o.p.w && yy < o.p.y + o.p.h;
         block(o.x, o.y, look.h, look, a, { l: !inside(o.x, o.y + 1), r: !inside(o.x + 1, o.y) });
-        if (o.p.equip && hl.has(`equip:${o.p.equip}`)) outlineTop(o.x, o.y, look.h);
+        if ((o.p.equip && hl.has(`equip:${o.p.equip}`)) || (o.p.container && [...hl].some((h) => h && h.startsWith('box:') && h.endsWith(`:${o.p.container}`)))) outlineTop(o.x, o.y, look.h);
+        if (o.p.kind === 'cryopod') podGlass(o.x, o.y, look.h, o.p);
         // подпись заглушки: ID картинки или вид предмета — на первой клетке предмета
         if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) propTag(o.p, look);
       } else if (o.k === 'd') {
@@ -239,13 +251,15 @@ AB.IsoRender = (() => {
         exitLamp(o.e, o.x, o.y);
       } else if (o.k === 'i') drawItem(o.t);
       else if (o.k === 'e') drawEnemy(o.e);
-      else drawMember(o.m, o.m === l);
+      else drawMember(o.m, o.m === l && !o.npc);
     }
 
     updateFx(dt);
     drawFx();
     lighting(sc, party);
-    for (const m of party) nameTag(m, m === l);
+    for (const m of party) if (!m.hidden) nameTag(m, m === l);
+    for (const m of AB.IsoParty.npcs()) nameTag(m, false);
+    overlays(fx);
     for (const e of AB.IsoEnemies.all()) enemyBar(e);
   }
 
@@ -270,6 +284,14 @@ AB.IsoRender = (() => {
       ctx.strokeStyle = 'rgba(200,160,40,.35)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       if (hl.has(`door:${dr.key}`)) { ctx.strokeStyle = `rgba(94,230,255,${0.5 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+    for (const lk of AB.IsoWorld.layout().links || []) for (const end of [lk.a, lk.b]) {
+      const c = toScreen(end.x + 0.5, end.y + 0.5);
+      ctx.save(); ctx.translate(c.x, c.y); ctx.scale(1, 0.5);
+      ctx.fillStyle = '#050507'; ctx.fillRect(-18, -18, 36, 36);
+      ctx.strokeStyle = 'rgba(200,160,40,.5)'; ctx.lineWidth = 3; ctx.strokeRect(-20, -20, 40, 40);
+      ctx.restore();
+      if (hl.has(`link:${lk.key}:${end.room}`)) { ctx.strokeStyle = `rgba(94,230,255,${0.5 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 13, 0, 0, 7); ctx.stroke(); }
     }
     for (const e of AB.IsoWorld.layout().exits || []) {
       const id = `exit:${e.room}:${e.door}`, c = toScreen(e.x + 0.5, e.y + 0.5);
@@ -305,6 +327,32 @@ AB.IsoRender = (() => {
     ctx.font = '600 9px "Oswald", sans-serif'; ctx.textAlign = 'center';
     ctx.fillStyle = on ? '#ffe6a8' : 'rgba(255,230,170,.75)';
     ctx.fillText(on ? def.name : def.short || def.name, p.x, p.y - 16);
+  }
+
+  // крышка капсулы: светится, пока внутри спит Марк; открывается в сцене пробуждения
+  function podGlass(x, y, hgt, p) {
+    const st = p.prop && AB.IsoStory && AB.IsoStory.fx.props[p.prop];
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    const a = st === 'closed' ? 0.45 : st === 'opening' ? 0.25 + Math.sin(time * 8) * 0.1 : 0.12;
+    ctx.fillStyle = `rgba(120,210,255,${a})`;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt - 1); ctx.lineTo(e.x, e.y - hgt - 1); ctx.lineTo(s.x, s.y - hgt - 1); ctx.lineTo(w.x, w.y - hgt - 1); ctx.closePath(); ctx.fill();
+  }
+  // экранные эффекты сцен: затемнение, тревога, мерцание света, помехи на пульте
+  function overlays(fx) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const W = cv.width, H = cv.height;
+    if (fx.alarm) { ctx.fillStyle = `rgba(160,10,10,${0.08 + Math.sin(time * 3.2) * 0.06})`; ctx.fillRect(0, 0, W, H); }
+    if (fx.flicker > 0) {
+      const r = Math.sin(time * 47) + Math.sin(time * 23);
+      ctx.fillStyle = `rgba(0,0,0,${r > 0.6 ? 0.05 : r > -0.4 ? 0.45 : 0.8})`; ctx.fillRect(0, 0, W, H);
+    }
+    if (fx.ghost > 0) {
+      ctx.fillStyle = `rgba(120,220,255,${0.06 + (Math.sin(time * 60) > 0.5 ? 0.06 : 0)})`; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(200,250,255,.15)';
+      for (let i = 0; i < 5; i++) { const y = (time * 700 + i * 157) % H; ctx.fillRect(0, y, W, 2 * dpr); }
+    }
+    const f = Math.max(fx.fade || 0, AB.IsoGame ? AB.IsoGame.fade() : 0);
+    if (f > 0) { ctx.fillStyle = `rgba(0,0,0,${f})`; ctx.fillRect(0, 0, W, H); }
   }
 
   function propTag(p, look) {
@@ -412,7 +460,7 @@ AB.IsoRender = (() => {
     const L = lctx, k = 0.5;
     L.setTransform(1, 0, 0, 1, 0, 0);
     L.globalCompositeOperation = 'source-over';
-    L.fillStyle = 'rgba(3,4,7,.72)';
+    L.fillStyle = `rgba(3,4,7,${AB.World && AB.World.hasPower() ? 0.5 : 0.72})`;   // с питанием светлее
     L.fillRect(0, 0, lightCv.width, lightCv.height);
     L.setTransform(sc * k, 0, 0, sc * k, (cv.width / 2 - cam.x * sc) * k, (cv.height / 2 - cam.y * sc) * k);
     L.globalCompositeOperation = 'destination-out';

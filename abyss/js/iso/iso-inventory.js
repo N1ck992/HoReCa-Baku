@@ -1,77 +1,65 @@
 // =====================================================================
-// ISO INVENTORY (этап 4 изометрии, дополнение №48). Окно инвентаря в
-// изометрической сцене. Правила — система основной игры без изменений
-// (AB.Inventory): у каждого оружие и два места в рюкзаке, рюкзаки отряда
-// общие; использовать (лечение), выбросить, отдать / взять / обменяться
-// слотом с тем, кто рядом. Открыть — I, Tab или кнопка «Вещи»; Esc — закрыть.
-// Пока окно открыто, мир идёт дальше (как в Diablo), но герой стоит.
+// ISO INVENTORY (дополнения №48–49). Два окна:
+//   • «Вещи» (I, Tab) — общий инвентарь профиля: 12 ячеек (AB.IsoStash).
+//     Использовать на выбранном герое, дать оружие в руки, выбросить.
+//   • Окно героя — нажатие на карточку героя внизу справа: здоровье,
+//     надето (оружие в руках, одежда — текущий облик), «Вести отряд».
+// Лечение, оружие и их числа — из данных предметов, как в основной игре.
 // =====================================================================
 
 AB.IsoInventory = (() => {
   const $ = (s) => document.querySelector(s);
-  const SLOT_NAMES = ['Оружие', 'Рюкзак', 'Рюкзак'];
   const isTouch = matchMedia('(pointer: coarse)').matches;
-  let ui = null, selected = 1, lastHtml = '';
-  const L = () => AB.IsoParty.lead().id;
+  let ui = null, selected = 0, hero = null, lastHtml = '';
   const itemName = (id) => AB.ID.get(id).name;
+  const S = () => AB.IsoStash;
 
   function init() {
-    ui = { box: $('#iso-inv'), grid: $('#iso-inv-grid'), detail: $('#iso-inv-detail'), owner: $('#iso-inv-owner') };
-    ui.box.addEventListener('pointerdown', (e) => e.stopPropagation());
+    ui = { box: $('#iso-inv'), grid: $('#iso-inv-grid'), detail: $('#iso-inv-detail'), owner: $('#iso-inv-owner'), hero: $('#iso-hero'), heroBody: $('#iso-hero-body') };
+    for (const el of [ui.box, ui.hero]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     ui.box.addEventListener('click', onClick);
+    ui.hero.addEventListener('click', onHeroClick);
     $('#iso-inv-btn').addEventListener('click', toggle);
     $('#iso-inv-btn').addEventListener('pointerdown', (e) => e.stopPropagation());
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); toggle(); }
-      if (e.code === 'Escape') close();
+      if (e.code === 'Escape') { close(); closeHero(); }
     });
-    // что изменилось в рюкзаках — перерисовать открытое окно
-    for (const ev of ['inventory:changed', 'inventory:exchange', 'item:pickup', 'item:used', 'char:hp', 'iso:party']) AB.Bus.on(ev, () => { if (isOpen()) render(); });
+    for (const ev of ['inventory:changed', 'inventory:exchange', 'item:pickup', 'item:used', 'char:hp', 'iso:party', 'char:dead']) AB.Bus.on(ev, () => { if (isOpen()) render(); if (heroOpen()) renderHero(); });
   }
 
   const isOpen = () => ui && !ui.box.hidden;
-  function open() {
-    const c = AB.Chars.get(L());
-    if (!c || c.dead) return;
-    ui.box.hidden = false; AB.IsoParty.stop(); render();
-  }
+  const heroOpen = () => ui && !ui.hero.hidden;
+  function open() { closeHero(); ui.box.hidden = false; AB.IsoParty.stop(); render(); }
   function close() { if (ui) ui.box.hidden = true; }
   function toggle() { isOpen() ? close() : open(); }
 
+  // ---------- Общий инвентарь ----------
   function render() {
-    const lead = L(), slots = AB.Inventory.slots(lead);
-    const grid = slots.map((s, i) => {
-      const label = `<span class="slot-label">${SLOT_NAMES[i]}</span>`;
-      if (!s) return `<button class="slot empty ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${SLOT_NAMES[i]}: пусто">${label}</button>`;
+    const cells = S().cells();
+    const grid = cells.map((s, i) => {
+      if (!s) return `<button class="slot empty ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="Пусто"></button>`;
       const def = AB.ID.get(s.item), icon = AB.Assets.get(def.icon);
       const face = icon.status === 'ready' ? `<img src="${AB.ID.get(def.icon).src}" alt="">` : `<b>${def.short}</b>`;
-      return `<button class="slot cat-${def.category} ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${SLOT_NAMES[i]}: ${def.name}${s.qty > 1 ? `, ${s.qty} шт.` : ''}">${label}${face}${s.qty > 1 ? `<em>${s.qty}</em>` : ''}</button>`;
+      return `<button class="slot cat-${def.category} ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${def.name}${s.qty > 1 ? `, ${s.qty} шт.` : ''}">${face}${s.qty > 1 ? `<em>${s.qty}</em>` : ''}</button>`;
     }).join('');
-    const s = slots[selected];
-    // обмен с остальными в отряде: тот же слот у каждого
-    const swaps = AB.IsoParty.members().filter((m) => m.id !== lead).map((m) => {
-      const os = AB.Inventory.slot(m.id, selected);
-      if (!s && !os) return '';
-      const name = AB.ID.get(m.id).name, block = AB.Inventory.exchangeBlock(lead, m.id, selected);
-      const label = s && os ? `Обменяться ⇄ ${name}: ${itemName(os.item)}` : s ? `Отдать → ${name}` : `Взять ← ${name}: ${itemName(os.item)}`;
-      return `<button data-inv="give" data-to="${m.id}" ${block ? `disabled title="${block}"` : ''}>${label}</button>${block ? `<div class="muted">${name}: ${block.charAt(0).toLowerCase()}${block.slice(1)}</div>` : ''}`;
-    }).join('');
-    let detail = `<p class="muted">${selected === 0 ? 'Оружия нет. Подберите что-нибудь тяжёлое.' : 'Свободное место в рюкзаке. Вещи в рюкзаках общие: оборудование возьмёт нужную у любого из отряда рядом.'}</p>${swaps ? `<div class="inv-actions">${swaps}</div>` : ''}`;
+    const s = cells[selected];
+    const alive = AB.IsoParty.members().filter((m) => !(AB.Chars.get(m.id) || {}).dead);
+    let detail = '<p class="muted">Пустая ячейка. Всё найденное в бункере ложится сюда — в общий инвентарь отряда. У героев — только то, что надето: оружие и одежда (нажмите на героя внизу справа).</p>';
     if (s) {
-      const def = AB.ID.get(s.item), block = AB.Inventory.useBlock(lead, selected);
+      const def = AB.ID.get(s.item);
+      let acts = '';
+      if (def.weapon) acts = alive.map((m) => `<button data-inv="equip" data-to="${m.id}">В руки: ${AB.ID.get(m.id).name}${AB.Inventory.weapon(m.id) ? ` (⇄ ${AB.ID.get(AB.Inventory.weapon(m.id).item).short})` : ''}</button>`).join('');
+      else if (def.use) acts = alive.map((m) => { const b = S().useBlock(selected, m.id); return `<button data-inv="use" data-to="${m.id}" ${b ? `disabled title="${b}"` : ''}>Использовать: ${AB.ID.get(m.id).name}${b ? ` — ${b.toLowerCase()}` : ''}</button>`; }).join('');
       detail = `<h3>${def.name}${s.qty > 1 ? ` ×${s.qty}` : ''}</h3><p>${def.desc}</p>
-        <div class="inv-actions">
-          ${def.use ? `<button data-inv="use" ${block ? 'disabled' : ''}>Использовать</button>` : ''}
-          <button data-inv="drop" class="ghost">Выбросить</button>
-          ${swaps}
-        </div>
-        ${def.weapon ? `<div class="muted">В руках · урон ${def.weapon.damage}${def.weapon.energy ? ' · без боезапаса, перегрев после 5 выстрелов' : ''}${def.weapon.aura ? ' · лечит союзников рядом' : ''}${def.weapon.infinite ? ' · без боезапаса' : ''} · ${def.weapon.ranged ? 'выстрел' : 'удар'}: ${isTouch ? 'коснитесь противника' : 'нажмите на противника или F'}</div>` : ''}
-        ${!def.weapon && block ? `<div class="muted">${block}</div>` : ''}`;
+        <div class="inv-actions">${acts}<button data-inv="drop" class="ghost">Выбросить</button></div>
+        ${def.weapon ? `<div class="muted">Урон ${def.weapon.damage}${def.weapon.energy ? ' · без боезапаса, перегрев после 5 выстрелов' : ''}${def.weapon.aura ? ' · лечит союзников рядом' : ''}${def.weapon.infinite ? ' · без боезапаса' : ''} · ${def.weapon.ranged ? 'выстрел' : 'удар'}</div>` : ''}
+        ${!def.weapon && !def.use ? '<div class="muted">Понадобится для ремонта: оборудование возьмёт её отсюда само.</div>' : ''}`;
     }
-    const c = AB.Chars.get(lead), max = AB.ID.get(lead).stats.maxHp;
     const html = grid + '|' + detail;
     if (html !== lastHtml) { ui.grid.innerHTML = grid; ui.detail.innerHTML = detail; lastHtml = html; }
-    ui.owner.textContent = `${AB.ID.get(lead).name} · здоровье ${Math.round(c.hp)} / ${max} · оружие и две вещи в рюкзаке · рюкзаки отряда общие`;
+    const used = cells.filter(Boolean).length;
+    ui.owner.textContent = `Общий инвентарь отряда · занято ${used} из ${S().SIZE} · на это прохождение`;
   }
 
   function onClick(e) {
@@ -79,15 +67,52 @@ AB.IsoInventory = (() => {
     if (slot) { selected = Number(slot.dataset.slot); render(); return; }
     const act = e.target.closest('[data-inv]');
     if (act && !act.disabled) {
-      const lead = L(), s = AB.Inventory.slot(lead, selected);
-      if (act.dataset.inv === 'use' && s && AB.Inventory.use(lead, selected)) AB.Bus.emit('iso:toast', { text: `Использовано: ${itemName(s.item)}`, kind: 'good' });
-      if (act.dataset.inv === 'give') AB.Inventory.exchange(lead, act.dataset.to, selected);
-      if (act.dataset.inv === 'drop' && s && AB.Inventory.drop(lead, selected)) AB.Bus.emit('iso:toast', { text: `Выброшено: ${itemName(s.item)}${s.qty > 1 ? ` ×${s.qty}` : ''}`, kind: 'info' });
+      const s = S().slot(selected);
+      if (act.dataset.inv === 'use' && s && S().use(selected, act.dataset.to)) AB.Bus.emit('iso:toast', { text: `${AB.ID.get(act.dataset.to).name}: ${itemName(s.item)}`, kind: 'good' });
+      if (act.dataset.inv === 'equip' && s) S().equip(selected, act.dataset.to);
+      if (act.dataset.inv === 'drop' && s) {
+        const d = S().drop(selected), l = AB.IsoParty.lead(), room = AB.IsoWorld.room(l.x, l.y);
+        AB.Rooms.dropItem(room, d.item, d.qty, 0);
+        AB.Bus.emit('iso:toast', { text: `Выброшено: ${itemName(d.item)}${d.qty > 1 ? ` ×${d.qty}` : ''}`, kind: 'info' });
+      }
       render();
       return;
     }
     if (e.target === ui.box || e.target.closest('[data-inv-close]')) close();
   }
 
-  return { init, open, close, toggle, isOpen, render, select: (i) => { selected = i; if (isOpen()) render(); } };
+  // ---------- Окно героя ----------
+  function openHero(id) { close(); hero = id; ui.hero.hidden = false; renderHero(); }
+  function closeHero() { if (ui) ui.hero.hidden = true; hero = null; }
+  function renderHero() {
+    const id = hero, d = AB.ID.get(id), c = AB.Chars.get(id), m = AB.IsoParty.find(id);
+    if (!d || !c) { closeHero(); return; }
+    const w = AB.Inventory.weapon(id), wd = w && AB.ID.get(w.item);
+    const lead = AB.IsoParty.lead().id === id;
+    const skills = Object.keys(d.skills || {}).map((k) => ({ repair: 'инженер — чинит оборудование' }[k] || k)).join(', ');
+    ui.heroBody.innerHTML = `
+      <div class="inv-head"><div><h2>${d.name}</h2><div class="muted">${c.dead ? 'Погиб' : `здоровье ${Math.round(c.hp)} / ${d.stats.maxHp}`}${skills ? ` · ${skills}` : ''}</div></div>
+        <button class="inv-x" data-hero-close aria-label="Закрыть">✕</button></div>
+      <div class="hero-hp"><i style="width:${Math.round(Math.max(0, c.hp / d.stats.maxHp) * 100)}%"></i></div>
+      <div class="hero-gear">
+        <div class="gear"><span class="slot-label">Оружие</span><div class="slot ${wd ? '' : 'empty'}">${wd ? `<b>${wd.short}</b>` : ''}</div>
+          <div class="gear-text">${wd ? `<b>${wd.name}</b><span>урон ${wd.weapon.damage}${wd.weapon.aura ? ' · лечит рядом' : ''}${wd.weapon.energy ? ' · перегрев' : ''}</span>` : '<span class="muted">Руки пусты</span>'}
+          ${wd ? '<button data-hero="unequip">Убрать в инвентарь</button>' : ''}</div></div>
+        <div class="gear"><span class="slot-label">Одежда</span><div class="slot"><b>⌂</b></div>
+          <div class="gear-text"><b>Текущий облик</b><span class="muted">${m ? m.appearance : ''} · одежды-вещей пока нет</span></div></div>
+      </div>
+      <div class="inv-actions">${lead ? '<span class="muted">Ведёт отряд</span>' : `<button data-hero="lead" ${c.dead ? 'disabled' : ''}>Вести отряд</button>`}</div>`;
+  }
+  function onHeroClick(e) {
+    const b = e.target.closest('[data-hero]');
+    if (b && !b.disabled) {
+      if (b.dataset.hero === 'unequip' && !S().unequip(hero)) AB.Bus.emit('iso:toast', { text: 'В общем инвентаре нет места', kind: 'info' });
+      if (b.dataset.hero === 'lead') { const i = AB.IsoParty.members().findIndex((m) => m.id === hero); AB.IsoParty.setLeader(i); }
+      renderHero();
+      return;
+    }
+    if (e.target === ui.hero || e.target.closest('[data-hero-close]')) closeHero();
+  }
+
+  return { init, open, close, toggle, isOpen, render, openHero, closeHero, heroOpen, select: (i) => { selected = i; if (isOpen()) render(); } };
 })();
