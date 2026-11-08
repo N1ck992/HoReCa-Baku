@@ -6,7 +6,7 @@
 // =====================================================================
 
 AB.IsoWorld = (() => {
-  const FLOOR = 1, WALL = 2, PROP = 3;
+  const FLOOR = 1, WALL = 2, PROP = 3, DOOR = 4;   // DOOR — закрытая дверь на месте пола
   let W = 0, H = 0, cells = null, roomOf = null, layout = null;
   let props = [];
 
@@ -125,7 +125,9 @@ AB.IsoWorld = (() => {
   }
 
   return {
-    FLOOR, WALL, PROP, build, free, move, path, nearestFree, clear, walkable,
+    FLOOR, WALL, PROP, DOOR, build,
+    // дверь закрылась/открылась: клетки створки становятся непроходимыми или снова полом
+    setDoor(tiles, closed) { for (const [x, y] of tiles) if (inside(x, y) && (cells[idx(x, y)] === FLOOR || cells[idx(x, y)] === DOOR)) cells[idx(x, y)] = closed ? DOOR : FLOOR; }, free, move, path, nearestFree, clear, walkable,
     cell, room: (x, y) => (inside(Math.floor(x), Math.floor(y)) ? roomOf[idx(Math.floor(x), Math.floor(y))] : null),
     size: () => ({ w: W, h: H }), props: () => props, layout: () => layout,
   };

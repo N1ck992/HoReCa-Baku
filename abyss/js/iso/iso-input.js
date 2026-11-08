@@ -4,6 +4,7 @@
 //     удерживать — идёт за указателем;
 //   • WASD и стрелки — направления экрана, пересчитанные в изометрию;
 //   • Shift — шагом (по умолчанию бег, как в Diablo);
+//   • нажать на дверь, предмет, оборудование — подойти и сделать; E — с ближайшим;
 //   • Q или Tab — следующий персонаж отряда; колесо, −/+ и щипок — масштаб.
 // Своё, отдельное от старого AB.Input (у вида сбоку другая схема).
 // =====================================================================
@@ -20,6 +21,7 @@ AB.IsoInput = (() => {
   function init(canvas) {
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyQ' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) AB.IsoParty.cycle(); return; }
+      if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat) { AB.IsoInteract.actNearest(); return; }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') AB.IsoRender.zoom(-0.1);
       if (e.code === 'Equal' || e.code === 'NumpadAdd') AB.IsoRender.zoom(0.1);
       if (Object.values(MAP).flat().includes(e.code)) e.preventDefault();
@@ -40,11 +42,14 @@ AB.IsoInput = (() => {
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: AB.IsoRender.zoom() };
         return;
       }
+      // нажали на объект — подойти и сделать; иначе — идти, удерживая — идти за указателем
+      if (AB.IsoInteract.click(e.clientX, e.clientY)) return;
       hold = e.pointerId;
       moveTo(e.clientX, e.clientY);
       holdT = 0.15;
     });
     canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse') canvas.style.cursor = AB.IsoInteract.hoverAt(e.clientX, e.clientY) ? 'pointer' : 'crosshair';
       if (!pointers.has(e.pointerId)) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && pointers.size >= 2) {

@@ -22,7 +22,9 @@
     <button id="iso-ids" title="Показать или скрыть ID заглушек">ID</button>
     <a id="iso-back" href="index.html" title="Вернуться к игре (вид сбоку)">Вид сбоку</a>
   </div>
-  <div id="iso-help">Нажмите на пол — идти · WASD / стрелки · Shift — шагом · Q — следующий в отряде · колесо — масштаб</div>
+  <div id="iso-prompt" role="button" aria-live="polite"></div>
+  <div id="iso-toast" aria-live="polite"></div>
+  <div id="iso-help">Нажмите на пол — идти · на дверь, предмет, оборудование — подойти и сделать · E — действие рядом · WASD · Shift — шагом · Q — следующий · колесо — масштаб</div>
 
   <!-- Ядро и данные — те же, что у основной игры -->
   <script src="js/core/ids.js"></script>
@@ -51,13 +53,21 @@
   <script src="js/data/rigs/COMPANION.js"></script>
   <script src="js/data/rigs.js"></script>
   <script src="js/data/iso-layouts.js"></script>
-  <!-- Из старых систем: ресурсы, анимации, отрисовка составных персонажей -->
+  <!-- Из старых систем: ресурсы, анимации, персонажи и отряд, инвентарь, оборудование,
+       состояние помещений (предметы, доступ к дверям), отрисовка составных персонажей -->
   <script src="js/systems/asset-manager.js"></script>
   <script src="js/systems/animation-manager.js"></script>
+  <script src="js/systems/character-system.js"></script>
+  <script src="js/systems/party.js"></script>
+  <script src="js/systems/room-system.js"></script>
+  <script src="js/systems/inventory.js"></script>
+  <script src="js/systems/equipment-system.js"></script>
   <script src="js/render/renderer.js"></script>
   <!-- Изометрическая сцена -->
   <script src="js/iso/iso-world.js"></script>
   <script src="js/iso/iso-party.js"></script>
+  <script src="js/iso/iso-bridge.js"></script>
+  <script src="js/iso/iso-interact.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>

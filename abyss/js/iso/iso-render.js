@@ -36,6 +36,7 @@ AB.IsoRender = (() => {
     pipe: { h: 76, top: '#5a5550', l: '#3d3935', r: '#33302c' },
     pump: { h: 46, top: '#55504a', l: '#3b3732', r: '#312e2a' },
     reservoir: { h: 66, top: '#2a4f52', l: '#1c383a', r: '#173032', glow: [80, 200, 190] },
+    cabindoor: { h: 84, top: '#3d3a33', l: '#4d473c', r: '#3a362e' },
   };
   const ROOM_TINT = {
     'ROOM-002': [52, 48, 50], 'ROOM-005': [56, 54, 50], 'ROOM-013': [40, 56, 48],
@@ -88,7 +89,7 @@ AB.IsoRender = (() => {
     };
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const k = AB.IsoWorld.cell(x, y);
-      if (k !== AB.IsoWorld.FLOOR && k !== AB.IsoWorld.PROP) continue;
+      if (k !== AB.IsoWorld.FLOOR && k !== AB.IsoWorld.PROP && k !== AB.IsoWorld.DOOR) continue;
       const t = ROOM_TINT[AB.IsoWorld.room(x + 0.5, y + 0.5)] || [48, 48, 48];
       const v = (rng() - 0.5) * 6;
       g.fillStyle = `rgb(${t[0] + v | 0},${t[1] + v | 0},${t[2] + v | 0})`;
@@ -135,6 +136,8 @@ AB.IsoRender = (() => {
     ctx.globalAlpha = 1;
   }
   const WALL_LOOK = { top: '#23262b', l: '#3a3f47', r: '#2c3036', edge: 'rgba(255,255,255,.04)' };
+  const DOOR_LOOK = { top: '#4a4434', l: '#5a5240', r: '#463f30', edge: 'rgba(230,190,60,.35)' };
+  const EXIT_LOOK = { top: '#2a2f36', l: '#454c55', r: '#363c44', edge: 'rgba(94,230,255,.25)' };
 
   // закрывает ли блок кого-то из отряда (он ближе к камере и перекрывает фигуру на экране)
   function occludes(x, y, hgt, party) {
@@ -175,6 +178,7 @@ AB.IsoRender = (() => {
 
     // пол
     ctx.drawImage(floorCv, -floorOX, -TH / 2);
+    drawFloorMarks();
     drawMarker();
 
     // видимая область в клетках (с запасом на высоту стен)
@@ -186,7 +190,7 @@ AB.IsoRender = (() => {
     const { w, h } = AB.IsoWorld.size();
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const k = AB.IsoWorld.cell(x, y);
-      if (k !== AB.IsoWorld.WALL) continue;
+      if (k !== AB.IsoWorld.WALL || exitWall(x, y)) continue;
       const c = toScreen(x + 0.5, y + 0.5);
       if (!visible(c.x, c.y)) continue;
       list.push({ d: x + y + 1, k: 'w', x, y });
@@ -196,6 +200,15 @@ AB.IsoRender = (() => {
       if (visible(c.x, c.y)) list.push({ d: x + y + 1, k: 'p', x, y, p });
     }
     for (const m of party) list.push({ d: m.x + m.y + 0.01, k: 'c', m });
+    // двери сектора (створки), выходы в стене, предметы на полу
+    for (const dr of AB.IsoInteract.doors()) if (dr.anim > 0.03) for (const [x, y] of dr.tiles) list.push({ d: x + y + 1, k: 'd', x, y, dr });
+    for (const e of AB.IsoWorld.layout().exits || []) if (!e.floor) {
+      const wx = e.x + (e.wall === 'w' ? -1 : e.wall === 'e' ? 1 : 0), wy = e.y + (e.wall === 'n' ? -1 : e.wall === 's' ? 1 : 0);
+      list.push({ d: wx + wy + 1.001, k: 'x', x: wx, y: wy, e });
+    }
+    const near = AB.IsoInteract.nearest(), hov = AB.IsoInteract.hovered();
+    hl = new Set([near && near.id, hov && hov.id]);
+    for (const t of AB.IsoInteract.targets()) if (t.kind === 'item') list.push({ d: t.x + t.y, k: 'i', t });
     list.sort((a, b) => a.d - b.d);
 
     for (const o of list) {
@@ -210,13 +223,83 @@ AB.IsoRender = (() => {
         const a = alphaFor(`p${o.x},${o.y}`, hid, dt);
         const inside = (xx, yy) => xx >= o.p.x && yy >= o.p.y && xx < o.p.x + o.p.w && yy < o.p.y + o.p.h;
         block(o.x, o.y, look.h, look, a, { l: !inside(o.x, o.y + 1), r: !inside(o.x + 1, o.y) });
+        if (o.p.equip && hl.has(`equip:${o.p.equip}`)) outlineTop(o.x, o.y, look.h);
         // подпись заглушки: ID картинки или вид предмета — на первой клетке предмета
         if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) propTag(o.p, look);
-      } else drawMember(o.m, o.m === l);
+      } else if (o.k === 'd') {
+        const hid = occludes(o.x, o.y, 74, party);
+        const a = alphaFor(`d${o.x},${o.y}`, hid, dt);
+        const dr = o.dr, along = (xx, yy) => dr.tiles.some(([tx, ty]) => tx === xx && ty === yy);
+        block(o.x, o.y, 74 * o.dr.anim, DOOR_LOOK, a, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
+        if (o.x === dr.tiles[dr.tiles.length - 1][0] && o.y === dr.tiles[dr.tiles.length - 1][1]) doorLamp(dr);
+      } else if (o.k === 'x') {
+        const a = alphaFor(`w${o.x},${o.y}`, occludes(o.x, o.y, WALL_H, party), dt);
+        block(o.x, o.y, WALL_H, EXIT_LOOK, a, { l: true, r: true });
+        exitLamp(o.e, o.x, o.y);
+      } else if (o.k === 'i') drawItem(o.t);
+      else drawMember(o.m, o.m === l);
     }
 
     lighting(sc, party);
     for (const m of party) nameTag(m, m === l);
+  }
+
+  let hl = new Set();
+  function exitWall(x, y) {
+    for (const e of AB.IsoWorld.layout().exits || []) {
+      if (e.floor) continue;
+      const wx = e.x + (e.wall === 'w' ? -1 : e.wall === 'e' ? 1 : 0), wy = e.y + (e.wall === 'n' ? -1 : e.wall === 's' ? 1 : 0);
+      if (wx === x && wy === y) return true;
+    }
+    return false;
+  }
+  function outlineTop(x, y, hgt) {
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    ctx.strokeStyle = `rgba(94,230,255,${0.55 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.stroke();
+  }
+  // порог открытой двери, люки в полу, подсветка выходов
+  function drawFloorMarks() {
+    for (const dr of AB.IsoInteract.doors()) for (const [x, y] of dr.tiles) {
+      const a = toScreen(x + (dr.axis === 'x' ? 0.4 : 0), y + (dr.axis === 'x' ? 0 : 0.4)), b = toScreen(x + (dr.axis === 'x' ? 0.4 : 1), y + (dr.axis === 'x' ? 1 : 0.4));
+      ctx.strokeStyle = 'rgba(200,160,40,.35)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      if (hl.has(`door:${dr.key}`)) { ctx.strokeStyle = `rgba(94,230,255,${0.5 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+    for (const e of AB.IsoWorld.layout().exits || []) {
+      const id = `exit:${e.room}:${e.door}`, c = toScreen(e.x + 0.5, e.y + 0.5);
+      if (e.floor) {
+        // люк в полу: тёмный проём с рамой
+        ctx.save(); ctx.translate(c.x, c.y); ctx.scale(1, 0.5);
+        ctx.fillStyle = '#050507'; ctx.fillRect(-18, -18, 36, 36);
+        ctx.strokeStyle = 'rgba(200,160,40,.5)'; ctx.lineWidth = 3; ctx.strokeRect(-20, -20, 40, 40);
+        ctx.restore();
+      }
+      if (hl.has(id)) { ctx.strokeStyle = `rgba(94,230,255,${0.5 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 13, 0, 0, 7); ctx.stroke(); }
+    }
+  }
+  function doorLamp(dr) {
+    const [x, y] = dr.tiles[0], p = toScreen(x + 0.5, y + 0.5), lockd = AB.IsoInteract.locked(dr);
+    ctx.fillStyle = lockd ? 'rgba(255,70,50,.9)' : dr.state === 'open' ? 'rgba(90,230,130,.9)' : 'rgba(255,200,80,.9)';
+    ctx.beginPath(); ctx.arc(p.x, p.y - 74 * dr.anim - 6, 2.5, 0, 7); ctx.fill();
+  }
+  function exitLamp(e, x, y) {
+    const rd = (AB.ID.get(e.room).doors || []).find((q) => q.key === e.door), ok = rd && AB.Rooms.canPass(rd).ok;
+    const p = toScreen(x + 0.5, y + 0.5);
+    ctx.fillStyle = ok ? 'rgba(90,230,130,.9)' : 'rgba(255,70,50,.9)';
+    ctx.beginPath(); ctx.arc(p.x, p.y - WALL_H - 6, 3, 0, 7); ctx.fill();
+  }
+  // предмет на полу: ящичек со свечением и подписью (заглушка — короткое имя предмета)
+  function drawItem(t) {
+    const p = toScreen(t.x, t.y), def = AB.ID.get(t.ref.item), on = hl.has(t.id);
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 18);
+    g.addColorStop(0, `rgba(255,214,120,${on ? 0.35 : 0.18 + Math.sin(time * 3) * 0.06})`); g.addColorStop(1, 'rgba(255,214,120,0)');
+    ctx.fillStyle = g; ctx.fillRect(p.x - 18, p.y - 18, 36, 36);
+    ctx.fillStyle = '#6a5a3a'; ctx.fillRect(p.x - 7, p.y - 9, 14, 8);
+    ctx.fillStyle = '#8a7650'; ctx.fillRect(p.x - 7, p.y - 11, 14, 3);
+    ctx.font = '600 9px "Oswald", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = on ? '#ffe6a8' : 'rgba(255,230,170,.75)';
+    ctx.fillText(on ? def.name : def.short || def.name, p.x, p.y - 16);
   }
 
   function propTag(p, look) {
