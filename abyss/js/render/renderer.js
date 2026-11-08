@@ -2806,8 +2806,24 @@ AB.Render = (() => {
     drawPost();
   }
 
+  // Составной персонаж (части тела по скелету или заглушка) в произвольной точке чужого холста —
+  // для изометрической сцены (js/iso/). c — { id, appearance, facing, stride, equipped, hidden };
+  // (px, py) — точка под ногами; k — масштаб. Рисует тем же кодом, что и вид сбоку.
+  function drawFigure(target, c, px, py, k = 1) {
+    const savedCtx = ctx, savedCam = cam.x;
+    ctx = target;
+    cam.x = c.x;                      // sx(c.x) = 0: фигура рисуется у начала координат
+    ctx.save();
+    ctx.translate(px, py); ctx.scale(k, k); ctx.translate(0, -FLOOR);
+    try { drawHero(c, 'body'); } finally {
+      ctx.restore();
+      ctx = savedCtx; cam.x = savedCam;
+    }
+  }
+
   return {
-    init, frame, snapCamera,
+    init, frame, snapCamera, drawFigure,
+    tick(dt) { time += dt; },         // время анимаций (дыхание) — для сцен без frame()
     showCarry(id, item) { bubbles.set(id, { item, until: time + 2.5 }); },
     // экранная точка (CSS px) → персонаж под ней, если есть
     pick(cx, cy) {

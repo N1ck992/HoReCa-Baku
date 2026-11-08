@@ -1,0 +1,297 @@
+// =====================================================================
+// ISO RENDER (этап 1 изометрии, дополнение №45). Изометрическая проекция
+// 2:1 в духе Diablo II: клетка 64×32 пикселя, стены и предметы — объёмные
+// 2D-блоки, персонажи — существующие составные фигуры (AB.Render.drawFigure).
+// Сетка на экран не выводится. Камера держит ведущего в центре,
+// приближение/отдаление, подстройка под размер экрана и плотность пикселей.
+// Стены и предметы, закрывающие отряд, становятся полупрозрачными.
+// =====================================================================
+
+AB.IsoRender = (() => {
+  const TW = 64, TH = 32, WALL_H = 86;
+  const ZMIN = 0.45, ZMAX = 2.2;
+  const FIG_K = 0.62;                 // масштаб фигур вида сбоку в изометрии
+  const U = AB.util;
+  let cv, ctx, lightCv, lctx, floorCv = null, floorOX = 0;
+  let dpr = 1, vw = 0, vh = 0;
+  const cam = { x: 0, y: 0, z: 1 };
+  let time = 0, snap = true;
+  const fade = new Map();             // ключ блока → текущая непрозрачность
+  let marker = null;                  // куда идёт ведущий
+
+  try { const z = parseFloat(localStorage.getItem('abyss_iso_zoom')); if (z >= ZMIN && z <= ZMAX) cam.z = z; } catch (e) { /* хранилище недоступно */ }
+
+  // мир (клетки) → экран (пиксели мира, до камеры)
+  const toScreen = (x, y) => ({ x: (x - y) * TW / 2, y: (x + y) * TH / 2 });
+  const toWorld = (sx, sy) => ({ x: sy / TH + sx / TW, y: sy / TH - sx / TW });
+
+  const PROP_LOOK = {
+    bunk: { h: 30, top: '#3b4048', l: '#2a2e35', r: '#22262c' },
+    locker: { h: 70, top: '#4a525c', l: '#343a42', r: '#2b3037' },
+    table: { h: 24, top: '#47423a', l: '#332f29', r: '#29261f' },
+    crate: { h: 40, top: '#5a4a32', l: '#433722', r: '#382e1c' },
+    shelf: { h: 64, top: '#44494f', l: '#30343a', r: '#272b30' },
+    algaetank: { h: 58, top: '#2f6b4a', l: '#1e4a33', r: '#173c29', glow: [90, 230, 130] },
+    algaefarm: { h: 34, top: '#3e5a44', l: '#2a3f2f', r: '#223427', glow: [120, 255, 160] },
+    pipe: { h: 76, top: '#5a5550', l: '#3d3935', r: '#33302c' },
+    pump: { h: 46, top: '#55504a', l: '#3b3732', r: '#312e2a' },
+    reservoir: { h: 66, top: '#2a4f52', l: '#1c383a', r: '#173032', glow: [80, 200, 190] },
+  };
+  const ROOM_TINT = {
+    'ROOM-002': [52, 48, 50], 'ROOM-005': [56, 54, 50], 'ROOM-013': [40, 56, 48],
+    'ROOM-014': [48, 46, 46], 'ROOM-015': [50, 48, 44], 'ROOM-016': [38, 50, 52],
+  };
+
+  function init(canvas) {
+    cv = canvas; ctx = cv.getContext('2d');
+    lightCv = document.createElement('canvas'); lctx = lightCv.getContext('2d');
+    resize();
+    window.addEventListener('resize', resize);
+    AB.Bus.on('iso:world', () => { floorCv = null; snap = true; });
+  }
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    vw = cv.clientWidth; vh = cv.clientHeight;
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+    lightCv.width = Math.ceil(cv.width / 2); lightCv.height = Math.ceil(cv.height / 2);
+  }
+  // на маленьких экранах чуть крупнее не надо — видно больше; на больших — ровно
+  const baseScale = () => dpr * U.clamp(Math.min(vw, vh) / 620, 0.62, 1.15);
+  const S = () => baseScale() * cam.z;
+
+  // экран (CSS-пиксели) → мир (клетки)
+  function pick(cx, cy) {
+    const r = cv.getBoundingClientRect();
+    const px = (cx - r.left) * dpr, py = (cy - r.top) * dpr;
+    return toWorld((px - cv.width / 2) / S() + cam.x, (py - cv.height / 2) / S() + cam.y);
+  }
+  // мир → экран (CSS-пиксели), для интерфейса и проверок
+  function screenOf(x, y) {
+    const p = toScreen(x, y);
+    return { x: ((p.x - cam.x) * S() + cv.width / 2) / dpr, y: ((p.y - cam.y) * S() + cv.height / 2) / dpr };
+  }
+
+  // ---------- Пол: один раз в отдельный холст (сетки не видно) ----------
+  function buildFloor() {
+    const { w, h } = AB.IsoWorld.size();
+    floorOX = h * TW / 2 + TW;
+    const c = document.createElement('canvas');
+    c.width = (w + h) * TW / 2 + TW * 2; c.height = (w + h) * TH / 2 + TH * 2;
+    const g = c.getContext('2d');
+    const rng = U.rng(17);
+    const diamond = (x, y, grow) => {
+      const p = toScreen(x, y), cx = p.x + floorOX, cy = p.y + TH / 2;
+      g.beginPath();
+      g.moveTo(cx, cy - TH / 2 - grow); g.lineTo(cx + TW / 2 + grow * 2, cy); g.lineTo(cx, cy + TH / 2 + grow); g.lineTo(cx - TW / 2 - grow * 2, cy);
+      g.closePath();
+      return { cx, cy };
+    };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = AB.IsoWorld.cell(x, y);
+      if (k !== AB.IsoWorld.FLOOR && k !== AB.IsoWorld.PROP) continue;
+      const t = ROOM_TINT[AB.IsoWorld.room(x + 0.5, y + 0.5)] || [48, 48, 48];
+      const v = (rng() - 0.5) * 6;
+      g.fillStyle = `rgb(${t[0] + v | 0},${t[1] + v | 0},${t[2] + v | 0})`;
+      diamond(x, y, 0.6); g.fill();
+    }
+    // грязь, пятна, потёртости — крупнее клетки, чтобы сетка не читалась
+    for (let i = 0; i < w * h * 0.35; i++) {
+      const x = rng() * w, y = rng() * h;
+      if (AB.IsoWorld.cell(Math.floor(x), Math.floor(y)) !== AB.IsoWorld.FLOOR) continue;
+      const p = toScreen(x, y), cx = p.x + floorOX, cy = p.y, r = 8 + rng() * 40;
+      const gr = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+      const dark = rng() < 0.7;
+      gr.addColorStop(0, dark ? `rgba(0,0,0,${0.08 + rng() * 0.12})` : `rgba(255,240,220,${0.03 + rng() * 0.04})`);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.save(); g.translate(cx, cy); g.scale(1, 0.5); g.translate(-cx, -cy);
+      g.fillRect(cx - r, cy - r, r * 2, r * 2); g.restore();
+    }
+    // редкие швы палубных плит — длинными линиями, не по клеткам
+    g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 1;
+    for (let i = 0; i < w * h * 0.04; i++) {
+      const x = Math.floor(rng() * w), y = Math.floor(rng() * h), along = rng() < 0.5, len = 2 + Math.floor(rng() * 4);
+      if (AB.IsoWorld.cell(x, y) !== AB.IsoWorld.FLOOR) continue;
+      const a = toScreen(x, y), b = toScreen(x + (along ? len : 0), y + (along ? 0 : len));
+      g.beginPath(); g.moveTo(a.x + floorOX, a.y); g.lineTo(b.x + floorOX, b.y); g.stroke();
+    }
+    floorCv = c;
+  }
+
+  // ---------- Блоки: стена или часть предмета ----------
+  function block(x, y, hgt, look, alpha, faces) {
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    ctx.globalAlpha = alpha;
+    if (faces.l) {   // юго-западная грань
+      ctx.fillStyle = look.l;
+      ctx.beginPath(); ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.fill();
+    }
+    if (faces.r) {   // юго-восточная грань
+      ctx.fillStyle = look.r;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = look.top;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.fill();
+    if (look.edge) { ctx.strokeStyle = look.edge; ctx.lineWidth = 1; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  const WALL_LOOK = { top: '#23262b', l: '#3a3f47', r: '#2c3036', edge: 'rgba(255,255,255,.04)' };
+
+  // закрывает ли блок кого-то из отряда (он ближе к камере и перекрывает фигуру на экране)
+  function occludes(x, y, hgt, party) {
+    const c = toScreen(x + 0.5, y + 0.5);
+    for (const m of party) {
+      if (x + y + 1 <= m.x + m.y) continue;
+      const p = toScreen(m.x, m.y);
+      if (Math.abs(c.x - p.x) < TW * 0.9 && c.y + TH / 2 > p.y - 96 && c.y - hgt - TH / 2 < p.y) return true;
+    }
+    return false;
+  }
+  function alphaFor(key, hidden, dt) {
+    const cur = fade.has(key) ? fade.get(key) : 1;
+    const want = hidden ? 0.22 : 1;
+    const v = cur + (want - cur) * Math.min(1, dt * 9);
+    if (Math.abs(v - 1) < 0.01) fade.delete(key); else fade.set(key, v);
+    return v;
+  }
+
+  // ---------- Кадр ----------
+  function frame(dt) {
+    time += dt;
+    if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
+    if (!floorCv) buildFloor();
+    const party = AB.IsoParty.members(), l = AB.IsoParty.lead();
+    if (!l) return;
+    const t = toScreen(l.x, l.y - 0.4);
+    if (snap) { cam.x = t.x; cam.y = t.y; snap = false; }
+    cam.x = U.lerp(cam.x, t.x, 1 - Math.pow(0.002, dt));
+    cam.y = U.lerp(cam.y, t.y, 1 - Math.pow(0.002, dt));
+    const sc = S();
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#030305';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc);
+    ctx.imageSmoothingEnabled = true;
+
+    // пол
+    ctx.drawImage(floorCv, -floorOX, -TH / 2);
+    drawMarker();
+
+    // видимая область в клетках (с запасом на высоту стен)
+    const hw = cv.width / 2 / sc + TW * 2, hh = cv.height / 2 / sc + WALL_H + TH * 2;
+    const visible = (sx, sy) => Math.abs(sx - cam.x) < hw && sy - cam.y < hh && cam.y - sy < hh + WALL_H;
+
+    // всё объёмное — по глубине (x + y): дальнее раньше
+    const list = [];
+    const { w, h } = AB.IsoWorld.size();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = AB.IsoWorld.cell(x, y);
+      if (k !== AB.IsoWorld.WALL) continue;
+      const c = toScreen(x + 0.5, y + 0.5);
+      if (!visible(c.x, c.y)) continue;
+      list.push({ d: x + y + 1, k: 'w', x, y });
+    }
+    for (const p of AB.IsoWorld.props()) for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) {
+      const c = toScreen(x + 0.5, y + 0.5);
+      if (visible(c.x, c.y)) list.push({ d: x + y + 1, k: 'p', x, y, p });
+    }
+    for (const m of party) list.push({ d: m.x + m.y + 0.01, k: 'c', m });
+    list.sort((a, b) => a.d - b.d);
+
+    for (const o of list) {
+      if (o.k === 'w') {
+        const hid = occludes(o.x, o.y, WALL_H, party);
+        const a = alphaFor(`w${o.x},${o.y}`, hid, dt);
+        const W = AB.IsoWorld;
+        block(o.x, o.y, WALL_H, WALL_LOOK, a, { l: W.cell(o.x, o.y + 1) !== W.WALL, r: W.cell(o.x + 1, o.y) !== W.WALL });
+      } else if (o.k === 'p') {
+        const look = PROP_LOOK[o.p.kind] || PROP_LOOK.crate;
+        const hid = occludes(o.x, o.y, look.h, party);
+        const a = alphaFor(`p${o.x},${o.y}`, hid, dt);
+        const inside = (xx, yy) => xx >= o.p.x && yy >= o.p.y && xx < o.p.x + o.p.w && yy < o.p.y + o.p.h;
+        block(o.x, o.y, look.h, look, a, { l: !inside(o.x, o.y + 1), r: !inside(o.x + 1, o.y) });
+        // подпись заглушки: ID картинки или вид предмета — на первой клетке предмета
+        if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) propTag(o.p, look);
+      } else drawMember(o.m, o.m === l);
+    }
+
+    lighting(sc, party);
+    for (const m of party) nameTag(m, m === l);
+  }
+
+  function propTag(p, look) {
+    if (!AB.isoShowIds) return;
+    const c = toScreen(p.x + p.w / 2, p.y + p.h / 2);
+    ctx.font = '8px "Share Tech Mono", monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(200,210,220,.55)';
+    ctx.fillText(p.asset || p.kind, c.x, c.y - look.h - 6);
+  }
+
+  function drawMember(m, isLead) {
+    const p = toScreen(m.x, m.y);
+    if (isLead) {
+      ctx.strokeStyle = `rgba(94,230,255,${0.45 + Math.sin(time * 4) * 0.15})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 10, 0, 0, 7); ctx.stroke();
+    }
+    if (AB.Render && AB.Render.drawFigure) AB.Render.drawFigure(ctx, m, p.x, p.y, FIG_K);
+  }
+
+  function nameTag(m, isLead) {
+    const p = toScreen(m.x, m.y);
+    ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = isLead ? '#bfefff' : 'rgba(217,207,194,.85)';
+    ctx.fillText(AB.ID.get(m.id).name, p.x, p.y - 96);
+  }
+
+  function drawMarker() {
+    const l = AB.IsoParty.lead();
+    if (!l.goal) { marker = null; return; }
+    marker = l.goal;
+    const p = toScreen(marker.x, marker.y), a = 0.5 + Math.sin(time * 6) * 0.25;
+    ctx.strokeStyle = `rgba(94,230,255,${a})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, 12 + Math.sin(time * 6) * 2, 6, 0, 0, 7); ctx.stroke();
+  }
+
+  // свет: темнота с «дырами» у ламп и у отряда, сверху — цветное свечение
+  function lighting(sc, party) {
+    const L = lctx, k = 0.5;
+    L.setTransform(1, 0, 0, 1, 0, 0);
+    L.globalCompositeOperation = 'source-over';
+    L.fillStyle = 'rgba(3,4,7,.72)';
+    L.fillRect(0, 0, lightCv.width, lightCv.height);
+    L.setTransform(sc * k, 0, 0, sc * k, (cv.width / 2 - cam.x * sc) * k, (cv.height / 2 - cam.y * sc) * k);
+    L.globalCompositeOperation = 'destination-out';
+    const hole = (x, y, r, a) => {
+      const p = toScreen(x, y);
+      L.save(); L.translate(p.x, p.y); L.scale(1, 0.62);
+      const g = L.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(0.6, `rgba(0,0,0,${a * 0.45})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      L.fillStyle = g; L.fillRect(-r, -r, r * 2, r * 2); L.restore();
+    };
+    const lights = AB.IsoWorld.layout().lights;
+    for (const li of lights) hole(li.x, li.y, li.radius * TW * 0.6, 0.9);
+    for (const m of party) hole(m.x, m.y - 0.6, 6 * TW * 0.6, 0.85);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(lightCv, 0, 0, cv.width, cv.height);
+    // цветное свечение ламп
+    ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const li of lights) {
+      const p = toScreen(li.x, li.y), r = li.radius * TW * 0.5, [cr, cg, cb] = li.color;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, 0.6);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0, `rgba(${cr},${cg},${cb},.16)`); g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+      ctx.fillStyle = g; ctx.fillRect(-r, -r, r * 2, r * 2); ctx.restore();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  return {
+    TW, TH, init, frame, pick, screenOf, toScreen, toWorld,
+    zoom(dz) { if (dz) { cam.z = U.clamp(Math.round((cam.z + dz) * 100) / 100, ZMIN, ZMAX); try { localStorage.setItem('abyss_iso_zoom', String(cam.z)); } catch (e) { /* хранилище недоступно */ } } return cam.z; },
+    setZoom(z) { cam.z = U.clamp(z, ZMIN, ZMAX); return cam.z; },
+    camera: () => ({ ...cam }),
+    fadeOf: (key) => (fade.has(key) ? fade.get(key) : 1),
+    snap() { snap = true; },
+  };
+})();

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <title>PROJECT ABYSS — изометрия</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oswald:wght@500;700&display=swap">
+  <link rel="stylesheet" href="css/iso.css">
+</head>
+<body>
+  <!-- Этап 1 перехода на изометрию (дополнение №45): тестовая сцена.
+       Старая игра (вид сбоку) — index.html, не меняется. -->
+  <canvas id="iso" aria-label="Изометрическая игровая сцена"></canvas>
+
+  <div id="iso-hud">
+    <div id="iso-room" aria-live="polite"></div>
+    <div id="iso-party" aria-label="Отряд: кто ведёт"></div>
+  </div>
+  <div id="iso-tools">
+    <div id="iso-zoom" aria-label="Камера"><button data-z="-0.15" title="Отдалить (−, колесо, щипок)">−</button><button data-z="0.15" title="Приблизить (+, колесо, щипок)">+</button></div>
+    <button id="iso-ids" title="Показать или скрыть ID заглушек">ID</button>
+    <a id="iso-back" href="index.html" title="Вернуться к игре (вид сбоку)">Вид сбоку</a>
+  </div>
+  <div id="iso-help">Нажмите на пол — идти · WASD / стрелки · Shift — шагом · Q — следующий в отряде · колесо — масштаб</div>
+
+  <!-- Ядро и данные — те же, что у основной игры -->
+  <script src="js/core/ids.js"></script>
+  <script src="js/data/assets.manifest.js"></script>
+  <script src="js/data/animations.js"></script>
+  <script src="js/data/characters.js"></script>
+  <script src="js/data/rooms.js"></script>
+  <script src="js/data/events.js"></script>
+  <script src="js/data/items.js"></script>
+  <script src="js/data/enemies.js"></script>
+  <script src="js/data/dialogs.js"></script>
+  <script src="js/data/equipment.js"></script>
+  <script src="js/data/quests.js"></script>
+  <script src="js/data/logs.js"></script>
+  <script src="js/data/sectors.js"></script>
+  <script src="js/data/arenas.js"></script>
+  <script src="js/data/perks.js"></script>
+  <script src="js/data/barks/CHAR-001.js"></script>
+  <script src="js/data/barks/CHAR-002.js"></script>
+  <script src="js/data/barks/CHAR-003.js"></script>
+  <script src="js/data/barks/ENEMY-002.js"></script>
+  <script src="js/data/rigs/MARK.js"></script>
+  <script src="js/data/rigs/MARK2.js"></script>
+  <script src="js/data/rigs/MARK3.js"></script>
+  <script src="js/data/rigs/MUTANT.js"></script>
+  <script src="js/data/rigs/COMPANION.js"></script>
+  <script src="js/data/rigs.js"></script>
+  <script src="js/data/iso-layouts.js"></script>
+  <!-- Из старых систем: ресурсы, анимации, отрисовка составных персонажей -->
+  <script src="js/systems/asset-manager.js"></script>
+  <script src="js/systems/animation-manager.js"></script>
+  <script src="js/render/renderer.js"></script>
+  <!-- Изометрическая сцена -->
+  <script src="js/iso/iso-world.js"></script>
+  <script src="js/iso/iso-party.js"></script>
+  <script src="js/iso/iso-render.js"></script>
+  <script src="js/iso/iso-input.js"></script>
+  <script src="js/iso/iso-main.js"></script>
+</body>
+</html>
