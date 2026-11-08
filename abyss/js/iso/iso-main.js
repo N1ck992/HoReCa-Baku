@@ -28,6 +28,11 @@
   AB.Bus.on('equip:changed', ({ text }) => toast(text, 'good'));
   AB.Bus.on('equip:shared', ({ from, itemId }) => toast(`${itemName(itemId)} — из рюкзака: ${AB.ID.get(from).name}`, 'info'));
   AB.Bus.on('door:denied', ({ reason }) => toast(reason, 'info'));
+  AB.Bus.on('iso:toast', ({ text, kind }) => toast(text, kind));
+  AB.Bus.on('inventory:exchange', ({ toId, given, taken }) => {
+    const to = AB.ID.get(toId).name;
+    toast(given && taken ? `Обмен с ${to}: ${itemName(given)} ⇄ ${itemName(taken)}` : given ? `${to} получает: ${itemName(given)}` : `Взято у ${to}: ${itemName(taken)}`, 'good');
+  });
   AB.Bus.on('iso:door', ({ state, name }) => toast(`${name}: ${state === 'open' ? 'открыта' : 'закрыта'}`, 'info'));
   AB.Bus.on('combat:noweapon', () => toast('Нечем драться: найдите что-нибудь тяжёлое', 'info'));
   AB.Bus.on('weapon:overheat', () => toast('Плазмомёт перегрет — пара секунд на остывание', 'info'));
@@ -77,6 +82,7 @@
     AB.IsoParty.init(AB.ISO_LAYOUTS[SECTOR].party);
     AB.IsoBridge.setup(AB.ISO_LAYOUTS[SECTOR]);          // старые системы: персонажи, инвентарь, оборудование
     AB.IsoInteract.init(AB.ISO_LAYOUTS[SECTOR]);
+    AB.IsoInventory.init();
     AB.IsoRender.init($('#iso'));
     AB.IsoInput.init($('#iso'));
     ui.party.addEventListener('click', (e) => {

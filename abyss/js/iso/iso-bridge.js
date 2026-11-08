@@ -48,6 +48,13 @@ AB.IsoBridge = (() => {
       const w = AB.Inventory.weapon(m.id);
       m.equipped = w ? w.item : null;              // оружие в руках фигуры
     }
+    // обмен вещами в старой системе меряет расстояние по горизонтали вида сбоку:
+    // подставляем настоящее расстояние до ведущего на карте (в тех же единицах: 50 на клетку)
+    const ld = AB.IsoParty.lead();
+    for (const m of AB.IsoParty.members()) {
+      const c = AB.Chars.get(m.id);
+      if (c && ld) c.x = Math.hypot(m.x - ld.x, m.y - ld.y) * 50;
+    }
     const l = AB.IsoParty.lead();
     const room = l && AB.IsoWorld.room(l.x, l.y);
     if (room && room !== lastRoom) { AB.Rooms.setCurrent(room); lastRoom = room; }

@@ -5,7 +5,7 @@
 //   • WASD и стрелки — направления экрана, пересчитанные в изометрию;
 //   • Shift — шагом (по умолчанию бег, как в Diablo);
 //   • нажать на дверь, предмет, оборудование — подойти и сделать; E — с ближайшим;
-//   • Q или Tab — следующий персонаж отряда; колесо, −/+ и щипок — масштаб.
+//   • Q — следующий персонаж отряда; I или Tab — инвентарь; колесо, −/+ и щипок — масштаб.
 // Своё, отдельное от старого AB.Input (у вида сбоку другая схема).
 // =====================================================================
 
@@ -20,7 +20,8 @@ AB.IsoInput = (() => {
 
   function init(canvas) {
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyQ' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) AB.IsoParty.cycle(); return; }
+      if (AB.IsoInventory && AB.IsoInventory.isOpen()) return;          // окно инвентаря — клавиши его
+      if (e.code === 'KeyQ') { e.preventDefault(); if (!e.repeat) AB.IsoParty.cycle(); return; }
       if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat) { AB.IsoInteract.actNearest(); return; }
       if ((e.code === 'KeyF' || e.code === 'Space') && !e.repeat) { e.preventDefault(); AB.IsoCombat.attackNearest(); return; }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') AB.IsoRender.zoom(-0.1);
@@ -103,6 +104,7 @@ AB.IsoInput = (() => {
       holdT -= dt;
       if (holdT <= 0) { const p = pointers.get(hold); moveTo(p.x, p.y); holdT = 0.2; }
     }
+    if (AB.IsoInventory && AB.IsoInventory.isOpen()) return { x: 0, y: 0, walk: false };   // открыт инвентарь — стоит
     const a = axis();
     return { x: a.x, y: a.y, walk: keys.has('ShiftLeft') || keys.has('ShiftRight') };
   }

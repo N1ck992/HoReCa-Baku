@@ -4,6 +4,7 @@
   --mono: "Share Tech Mono", ui-monospace, Menlo, monospace;
   --display: "Oswald", "Arial Narrow", Impact, sans-serif;
 }
+*, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }
 body { font: 13px/1.4 var(--mono); user-select: none; -webkit-user-select: none; touch-action: none; }
 #iso { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; cursor: crosshair; }
@@ -56,4 +57,31 @@ body { font: 13px/1.4 var(--mono); user-select: none; -webkit-user-select: none;
   #iso-party .pm { padding: 6px 10px; }
   #iso-help { font-size: 10px; }
 }
-@media (max-width: 560px) { #iso-room b { font-size: 15px; } #iso-help { display: none; } }
+@media (max-width: 560px) { #iso-room b { font-size: 15px; } #iso-help { display: none; } #iso-hud { top: calc(56px + env(safe-area-inset-top, 0px)); } #iso-toast { top: auto; bottom: calc(104px + env(safe-area-inset-bottom, 0px)); } }
+
+/* ---------- Инвентарь (этап 4) — как в основной игре ---------- */
+#iso-inv { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(0, 0, 0, .62); padding: 16px; }
+#iso-inv[hidden] { display: none; }
+.inv-card { width: 100%; max-width: 640px; max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 14px; padding: 18px; background: #0b0c0e; border: 1px solid var(--line); border-radius: 10px; }
+.inv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.inv-head h2 { margin: 0; font: 700 20px var(--display); letter-spacing: 3px; text-transform: uppercase; }
+.inv-x { min-width: 34px; height: 30px; font: 14px var(--mono); color: var(--fg); background: rgba(10, 12, 14, .65); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+.inv-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
+#iso-inv-grid { display: grid; grid-template-columns: repeat(3, 84px); gap: 8px; }
+.slot-label { position: absolute; left: 0; right: 0; top: 3px; font-size: 9px; color: var(--muted); text-align: center; letter-spacing: .5px; }
+.slot { position: relative; width: 84px; height: 84px; padding: 10px 0 0; border-radius: 6px; border: 1px solid var(--line); background: #111316; color: var(--fg); cursor: pointer; display: grid; place-content: center; gap: 2px; font-family: var(--mono); }
+.slot.empty { background: #0a0b0d; }
+.slot.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(94, 230, 255, .35) inset; }
+.slot b { font-size: 15px; letter-spacing: 1px; }
+.slot em { position: absolute; right: 4px; bottom: 2px; font-style: normal; font-size: 11px; color: var(--cyan); }
+.slot img { width: 44px; height: 44px; object-fit: contain; }
+.slot.cat-medical b { color: #e8c6c0; }
+#iso-inv-detail { display: grid; gap: 8px; align-content: start; min-width: 0; }
+#iso-inv-detail h3 { margin: 0; font: 500 18px var(--display); letter-spacing: 1px; }
+#iso-inv-detail p { margin: 0; }
+.muted { color: var(--muted); font-size: 12px; }
+.inv-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.inv-actions button { font: 13px var(--mono); padding: 8px 12px; border-radius: 6px; cursor: pointer; background: #16181b; color: var(--fg); border: 1px solid rgba(94, 230, 255, .4); }
+.inv-actions button.ghost { border-color: var(--line); color: var(--muted); }
+.inv-actions button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 560px) { .inv-body { grid-template-columns: 1fr; } #iso-inv-grid { grid-template-columns: repeat(3, 76px); } .slot { width: 76px; height: 76px; } }
