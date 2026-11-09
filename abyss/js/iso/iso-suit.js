@@ -56,8 +56,78 @@ AB.IsoSuit = (() => {
     }
   }
 
+  // ---------- №62: костюм по картинке, нарезанной на части (js/data/rigs/EXOSUIT_ART.js) ----------
+  const imgs = {};
+  let artReady = false;
+  function loadArt() {
+    const A = AB.RIGS.EXOSUIT_ART;
+    if (!A || Object.keys(imgs).length) return;
+    let n = 0;
+    for (const [name, part] of Object.entries(A.parts)) {
+      const im = new Image();
+      im.onload = () => { if (++n === Object.keys(A.parts).length) artReady = true; };
+      im.src = part.file;
+      imgs[name] = im;
+    }
+  }
+  loadArt();
+  function drawArt(g, pose, x, y, k) {
+    const A = AB.RIGS.EXOSUIT_ART, J = A.joints, P = A.parts;
+    const s = k * (R().height / A.heightPx);                      // экранных px на px исходника
+    const sw = Math.sin(pose.phase), amp = pose.moving ? 1 : 0;
+    const bob = (amp * Math.abs(sw) * 2.5 + (pose.moving ? 0 : Math.sin(pose.t * 2) * 0.8)) * (A.heightPx / R().height);
+    const atk = pose.attack >= 0 ? Math.sin(pose.attack * Math.PI) : 0;
+    const lean = 0.03 + atk * 0.12 - pose.hurt * 0.1;
+    const piv = (p, a) => { g.translate(p[0], p[1]); g.rotate(a); g.translate(-p[0], -p[1]); };
+    const put = (name, dark) => {
+      const im = imgs[name], p = P[name];
+      if (!im || !im.complete) return;
+      if (dark) g.filter = 'brightness(0.72)';
+      g.drawImage(im, p.x, p.y, p.w, p.h);
+      if (dark) g.filter = 'none';
+    };
+    g.save();
+    g.translate(x, y); g.scale(s * pose.facing, s); g.translate(-J.hip[0], -A.soleY);
+    if (pose.dead) { piv([J.hip[0], A.soleY], -1.35); g.globalAlpha = 0.85; }
+    // тень
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(J.hip[0] + 40, A.soleY, 300, 60, 0, 0, 7); g.fill();
+    // ноги: тяжёлый шаг (бедро качается, колено сгибается при переносе)
+    const leg = (side, sgn) => {
+      g.save();
+      g.translate(0, -bob * 0.3);
+      const th = -sgn * sw * 0.32 * amp, kn = amp * Math.max(0, -sgn * Math.cos(pose.phase)) * 0.55;
+      piv(J[`hip_${side}`], th);
+      put(`thigh_${side}`, side === 'far');
+      piv(J[`knee_${side}`], kn);
+      put(`shin_${side}`, side === 'far');
+      g.restore();
+    };
+    leg('far', -1);
+    // корпус наклоняется целиком; кулак — вращается в локте
+    g.save();
+    g.translate(0, -bob);
+    piv([J.hip[0], J.hip[1]], lean);
+    put('body');
+    g.restore();
+    leg('near', 1);
+    g.save();
+    g.translate(0, -bob);
+    piv([J.hip[0], J.hip[1]], lean);
+    const fa = -atk * 1.0 + (amp ? sw * 0.12 : 0);
+    piv(J.elbow, fa);
+    put('forearm_near');
+    g.restore();
+    if (pose.hurt) {
+      const rg = g.createRadialGradient(J.hip[0], J.hip[1] - 300, 40, J.hip[0], J.hip[1] - 300, 700);
+      rg.addColorStop(0, 'rgba(255,80,60,.3)'); rg.addColorStop(1, 'rgba(255,80,60,0)');
+      g.fillStyle = rg; g.fillRect(J.hip[0] - 700, J.hip[1] - 1000, 1400, 1400);
+    }
+    g.restore();
+  }
+
   // нарисовать костюм: (x, y) — точка на полу под ним, k — масштаб единиц
   function draw(g, pose, x, y, k = 1) {
+    if (artReady) { drawArt(g, pose, x, y, k); return; }
     const r = R(), B = r.bones, C = r.colors;
     g.save(); g.translate(x, y); g.scale(k * pose.facing, k);
     if (pose.dead) { g.rotate(-1.35); g.translate(-20, -8); g.globalAlpha = 0.85; }
