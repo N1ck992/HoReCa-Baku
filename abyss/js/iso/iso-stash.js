@@ -69,7 +69,7 @@ AB.IsoStash = (() => {
   function equip(i, charId) {
     const s = cells[i];
     if (!s || !AB.ID.get(s.item).weapon) return false;
-    const held = AB.Inventory.weapon(charId);
+    const h = AB.Inventory.weapon(charId), held = h && { item: h.item, qty: h.qty || 1 };   // копия: remove обнуляет ячейку
     if (held) AB.Inventory.remove(charId, held.item, held.qty);
     cells[i] = held ? { item: held.item, qty: held.qty } : null;
     AB.Inventory.add(charId, s.item, 1, { swap: false });
@@ -78,7 +78,7 @@ AB.IsoStash = (() => {
   }
   // оружие из рук — в общий инвентарь
   function unequip(charId) {
-    const held = AB.Inventory.weapon(charId);
+    const h = AB.Inventory.weapon(charId), held = h && { item: h.item, qty: h.qty || 1 };
     if (!held || room(held.item) < 1) return false;
     AB.Inventory.remove(charId, held.item, held.qty);
     add(held.item, 1);

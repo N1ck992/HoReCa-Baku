@@ -143,7 +143,8 @@ AB.IsoEnemies = (() => {
       return;
     }
     const seen = perceive(e);
-    if (seen) { e.target = seen.id; e.loseT = 0; } else e.loseT += dt;
+    if (seen) { e.target = seen.id; e.loseT = 0; } else e.loseT = e.nest ? 0 : e.loseT + dt;   // гнездо (№57) знает, где отряд
+    if (e.nest && !e.target) e.target = 'CHAR-001';
     const tg = e.target && AB.IsoParty.members().find((m) => m.id === e.target);
     const tgc = tg && AB.Chars.get(tg.id);
     if (tg && (!tgc || tgc.dead)) e.target = null;
@@ -170,10 +171,26 @@ AB.IsoEnemies = (() => {
         const dist = Math.hypot(tg.x - e.x, tg.y - e.y);
         if (dist <= d.attack.range / T + 0.25 && e.cooldown <= 0 && sees(e, tg)) { e.hx = tg.x - e.x; e.hy = tg.y - e.y; setState(e, 'ATTACK'); break; }
         run = true;
+        // №57: путь к цели перекрыт закрытой дверью — ломать её
+        if (e.nest) {
+          e.blockT = (e.blockT || 0) - dt;
+          if (e.blockT <= 0) { e.blockT = 0.5; e.blocked = !W().path(e.x, e.y, tg.x, tg.y); }
+          const b = e.blocked && AB.IsoNest.breach(e);
+          if (b) {
+            if (Math.hypot(b.x - e.x, b.y - e.y) < 0.6 && e.cooldown <= 0) { e.door = b.key; e.hx = (b.x < e.x ? -1 : 1); e.hy = 0; setState(e, 'ATTACK'); break; }
+            went = stepTo(e, b.x, b.y, d.speed.chase / T, dt);
+            break;
+          }
+        }
         went = dist > d.attack.range / T * 0.8 ? stepTo(e, tg.x, tg.y, d.speed.chase / T, dt) : 0;
         break;
       }
       case 'ATTACK':
+        if (e.door) {
+          if (!e.hitDone && e.t >= d.attack.windup) { e.hitDone = true; AB.IsoNest.hitDoor(e.door, d.damage); AB.Bus.emit('iso:enemyStrike', { id: e.id, door: e.door }); }
+          if (e.t > 1.0) { e.cooldown = d.attack.cooldown; e.door = null; e.blockT = 0; setState(e, 'CHASE'); }
+          break;
+        }
         if (!e.hitDone && e.t >= d.attack.windup) {
           e.hitDone = true;
           if (tg && Math.hypot(tg.x - e.x, tg.y - e.y) <= d.attack.range / T + 0.45) AB.IsoCombat.damageChar(tg.id, d.damage, e);
@@ -211,6 +228,7 @@ AB.IsoEnemies = (() => {
     }
     if (e.state === 'DORMANT') return false;
     if (d.armor && d.armor[kind] != null) amount = Math.round(amount * d.armor[kind]);
+    if (AB.IsoBoss) amount = Math.max(from ? 1 : 0, Math.round(amount * AB.IsoBoss.mod(e, from)));   // №57: Колосса берут только пушки
     e.hp = Math.max(0, e.hp - amount);
     e.flash = 1;
     AB.Bus.emit('iso:enemyHit', { id, x: e.x, y: e.y, amount, hp: e.hp });

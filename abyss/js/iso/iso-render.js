@@ -230,6 +230,10 @@ AB.IsoRender = (() => {
     const near = AB.IsoInteract.nearest(), hov = AB.IsoInteract.hovered();
     hl = new Set([near && near.id, hov && hov.id]);
     for (const t of AB.IsoInteract.targets()) if (t.kind === 'item') list.push({ d: t.x + t.y, k: 'i', t });
+    // №57: турели оружейной и пушки в зале Колосса
+    const lay0 = AB.IsoWorld.layout(), ns0 = AB.IsoNest.state(), bs0 = AB.IsoBoss.state();
+    if (lay0.nest && lay0.nest.turrets) lay0.nest.turrets.forEach((g, i) => list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!ns0 && i < ns0.turrets, big: false }));
+    if (lay0.boss) lay0.boss.cannons.forEach((g, i) => list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!bs0 && bs0.on[i], big: true }));
     list.sort((a, b) => a.d - b.d);
 
     for (const o of list) {
@@ -259,6 +263,7 @@ AB.IsoRender = (() => {
         block(o.x, o.y, WALL_H, EXIT_LOOK, a, { l: true, r: true });
         exitLamp(o.e, o.x, o.y);
       } else if (o.k === 'i') drawItem(o.t);
+      else if (o.k === 'g') drawGun(o.g, o.on, o.big);
       else if (o.k === 'e') drawEnemy(o.e);
       else drawMember(o.m, o.m === l && !o.npc);
     }
@@ -270,8 +275,47 @@ AB.IsoRender = (() => {
     for (const m of party) if (!m.hidden) nameTag(m, m === l);
     for (const m of AB.IsoParty.npcs()) if (!m.hidden) nameTag(m, false);
     beacons();
+    defenseMarks();
     overlays(fx);
     for (const e of AB.IsoEnemies.all()) enemyBar(e);
+  }
+
+  // №57: турель / пушка — тумба со стволом; включена — светится и смотрит на ближайшего врага
+  function drawGun(g, on, big) {
+    const c = toScreen(g.x + 0.5, g.y + 0.5), h = big ? 34 : 22;
+    block(g.x, g.y, h, { h, top: on ? '#4a5a52' : '#3a3f44', l: '#2e3338', r: '#25292d' }, 1, { l: true, r: true });
+    let ang = -0.6;
+    const foe = AB.IsoEnemies.alive().sort((a, b) => Math.hypot(a.x - g.x, a.y - g.y) - Math.hypot(b.x - g.x, b.y - g.y))[0];
+    if (on && foe) { const f = toScreen(foe.x, foe.y); ang = Math.atan2(f.y - (c.y - h), f.x - c.x); }
+    ctx.save(); ctx.translate(c.x, c.y - h - 4); ctx.rotate(ang);
+    ctx.fillStyle = on ? '#9adbb0' : '#5a6066'; ctx.fillRect(0, -3, big ? 30 : 20, big ? 7 : 5);
+    ctx.restore();
+    ctx.fillStyle = on ? 'rgba(120,255,170,.95)' : 'rgba(255,90,60,.8)';
+    ctx.beginPath(); ctx.arc(c.x, c.y - h - 4, big ? 6 : 4, 0, 7); ctx.fill();
+  }
+  // приёмник биоматериала на полу: кольцо с подписью
+  function drawPad(p, text, col) {
+    const c = toScreen(p.x, p.y), a = 0.5 + Math.sin(time * 4) * 0.25;
+    ctx.strokeStyle = `rgba(${col},${a})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, 22, 11, 0, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, 12, 6, 0, 0, 7); ctx.stroke();
+    ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(${col},.95)`;
+    ctx.fillText(text, c.x, c.y + 24);
+  }
+  function defenseMarks() {
+    const L = AB.IsoWorld.layout(), ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
+    if (ns && !ns.over && L.nest) drawPad(L.nest.pad, `Приёмник · био ${AB.IsoStash.count('ITEM-007')} → Мире`, '120,255,170');
+    if (bs && L.boss) L.boss.cannons.forEach((c, i) => { if (!bs.on[i]) drawPad(c.pad, `Пушка ${bs.bank[i]}/${L.boss.cost}`, '255,200,90'); });
+    // прочность дверей лаборатории
+    for (const d of AB.IsoInteract.doors()) {
+      if (!d.barricade || !ns) continue;
+      const [x, y] = d.tiles[0], p = toScreen(x + 0.5, y + 0.5), w = 34, f = d.hp / d.max;
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(p.x - w / 2, p.y - 92, w, 5);
+      ctx.fillStyle = d.state === 'broken' ? '#444' : f > 0.5 ? '#e0b640' : f > 0.25 ? '#ff8a3a' : '#ff3b2f';
+      ctx.fillRect(p.x - w / 2, p.y - 92, w * f, 5);
+      if (d.hitT) { ctx.fillStyle = 'rgba(255,80,40,.5)'; ctx.fillRect(p.x - w / 2, p.y - 92, w, 5); }
+      if (d.state === 'broken') { ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ff6a4a'; ctx.fillText('ВЫБИТА', p.x, p.y - 96); }
+    }
   }
 
   // Метки того, с чем можно что-то сделать (№55): поверх темноты — чтобы не пройти мимо.

@@ -22,7 +22,9 @@ AB.IsoOverworld = (() => {
 
   const inside = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) <= D().radius;
   const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
-  const px = (q, r) => ({ x: size * SQ3 * (q + r / 2), y: size * 1.5 * r });
+  // №58: карта под углом — дно сжато по вертикали (камера смотрит наискосок), у камней — объём
+  const TILT = 0.6, STEP = 0.75;        // наклон; секунд на клетку (тяжёлый шаг, медленнее прежнего)
+  const px = (q, r) => ({ x: size * SQ3 * (q + r / 2), y: size * 1.5 * r * TILT });
   const siteAt = (q, r) => D().sites.find((s) => s.q === q && s.r === r) || null;
   const passable = (q, r) => { const c = cells.get(key(q, r)); return !!c && c.kind !== 'rock' && c.kind !== 'trench'; };
 
@@ -154,7 +156,7 @@ AB.IsoOverworld = (() => {
   }
   function pick(cx, cy) {
     const rc = cv.getBoundingClientRect();
-    const x = ((cx - rc.left) * dpr - cv.width / 2 + cam.x) / size, y = ((cy - rc.top) * dpr - cv.height / 2 + cam.y) / size;
+    const x = ((cx - rc.left) * dpr - cv.width / 2 + cam.x) / size, y = ((cy - rc.top) * dpr - cv.height / 2 + cam.y) / size / TILT;
     // пиксель → осевые координаты, округление по кубу
     let q = (SQ3 / 3) * x - y / 3, r = (2 / 3) * y, s = -q - r;
     let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
@@ -167,13 +169,13 @@ AB.IsoOverworld = (() => {
   function loop(now) {
     if (!open_) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
-    // шаг экзокостюма: тяжёлый, ~0,45 с на клетку
+    // шаг экзокостюма: тяжёлый, STEP секунд на клетку
     if (!anim && path.length) { anim = { from: { ...pos }, to: path.shift(), t: 0 }; }
     if (anim) {
-      suitStride += dt / 0.45 * 78;                                   // шаг костюма: одна клетка — один шаг
+      suitStride += dt / STEP * 78;                                   // шаг костюма: одна клетка — один шаг
       const a0 = px(anim.from.q, anim.from.r), a1 = px(anim.to.q, anim.to.r);
       if (Math.abs(a1.x - a0.x) > 1) suitFace = a1.x > a0.x ? 1 : -1;
-      anim.t += dt / 0.45;
+      anim.t += dt / STEP;
       if (anim.t >= 1) { pos = anim.to; anim = null; reveal(); }
     }
     const cur = anim ? lerpPos(anim.from, anim.to, anim.t) : px(pos.q, pos.r);
@@ -184,15 +186,28 @@ AB.IsoOverworld = (() => {
   }
   const lerpPos = (a, b, t) => { const p = px(a.q, a.r), q = px(b.q, b.r); return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }; };
 
-  const COLOR = { silt: '#16242a', rock: '#0b0f12', trench: '#020406', crystal: '#2a1f3a' };
-  function hex(x, y, s) { g.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); g.lineTo(x + s * Math.cos(a), y + s * Math.sin(a)); } g.closePath(); }
+  const COLOR = { silt: '#1d3038', rock: '#2a3238', trench: '#020406', crystal: '#2a1f3a' };
+  const hv = (x, y, s, i) => { const a = Math.PI / 180 * (60 * i - 30); return { x: x + s * Math.cos(a), y: y + s * Math.sin(a) * TILT }; };
+  function hex(x, y, s) { g.beginPath(); for (let i = 0; i < 6; i++) { const v = hv(x, y, s, i); g.lineTo(v.x, v.y); } g.closePath(); }
+  // боковые грани ближней к камере стороны (вершины 0,1,2 — правая, нижняя, левая)
+  function sides(x, y, s, h, col) {
+    for (const [a, b, shade] of [[0, 1, 0.75], [1, 2, 0.55], [2, 3, 0.65]]) {
+      const v1 = hv(x, y, s, a), v2 = hv(x, y, s, b);
+      g.beginPath(); g.moveTo(v1.x, v1.y); g.lineTo(v2.x, v2.y); g.lineTo(v2.x, v2.y + h); g.lineTo(v1.x, v1.y + h); g.closePath();
+      g.fillStyle = col; g.fill(); g.fillStyle = `rgba(0,0,0,${1 - shade})`; g.fill();
+    }
+  }
+  const LIFT = { rock: 0.42, crystal: 0.12, silt: 0.06, trench: -0.18 };   // высота клетки в долях size
   function draw(cur) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#010305'; g.fillRect(0, 0, cv.width, cv.height);
     g.setTransform(1, 0, 0, 1, cv.width / 2 - cam.x, cv.height / 2 - cam.y);
-    for (const c of cells.values()) {
-      if (!c.seen) continue;
-      const p = px(c.q, c.r), near = dist(c, pos) <= viewR();
+    // дальние ряды — раньше (камера смотрит сверху-спереди)
+    const order = [...cells.values()].filter((c) => c.seen).sort((a, b) => a.r - b.r || a.q - b.q);
+    for (const c of order) {
+      const p0 = px(c.q, c.r), near = dist(c, pos) <= viewR(), lift = LIFT[c.kind] * size;
+      const p = { x: p0.x, y: p0.y - Math.max(0, lift) };
+      if (lift > 0) sides(p.x, p.y, size * 0.97, lift + size * 0.06, c.kind === 'rock' ? '#1c2328' : '#1a2a30');
       hex(p.x, p.y, size * 0.97);
       g.fillStyle = COLOR[c.kind]; g.fill();
       if (c.kind === 'crystal') { g.fillStyle = `rgba(170,110,255,${0.12 + Math.sin(time * 2 + c.q) * 0.06})`; g.fill(); }
@@ -222,7 +237,7 @@ AB.IsoOverworld = (() => {
     } else {
       // №56: экзокостюм — та же фигура из частей, что в изометрии; занимает одну клетку
       const pose = { facing: suitFace, phase: suitStride / 78 * Math.PI * 2, moving: !!anim, attack: -1, hurt: 0, dead: false, t: time };
-      AB.IsoSuit.draw(g, pose, cur.x, cur.y + size * 0.55, (size * 1.35) / AB.RIGS.EXOSUIT.height);
+      AB.IsoSuit.draw(g, pose, cur.x, cur.y + size * 0.2, (size * 1.3) / AB.RIGS.EXOSUIT.height);
     }
     // свет нашлемных фонарей
     const lg = g.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, size * 3.2);

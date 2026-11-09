@@ -188,7 +188,7 @@ AB.IsoCombat = (() => {
       }
       if (!best) continue;
       const see = W().clear(m.x, m.y, best.x, best.y, 0.05);
-      if (m.repair) { if (bd <= Math.min(reach, 2.4) && see) { m.engage = null; attack(m, best); } continue; }   // чинит — только отбивается
+      if (m.repair) { m.engage = null; continue; }   // №57: взламывает замок — не стреляет (лечит аурой)
       if (bd <= reach * (canShoot(m.id, w) ? 0.8 : 0.9) && see) { m.engage = { x: m.x, y: m.y, hold: true }; attack(m, best); }
       else m.engage = { x: best.x, y: best.y };
     }

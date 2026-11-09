@@ -82,19 +82,33 @@
     if (qh !== lastQuest) { ui.quest.innerHTML = qh; lastQuest = qh; }
     ui.skip.hidden = !AB.IsoStory.isRunning();
     // испытание «Гнездо»: время, этапы прохода, убито, уровень и опыт
-    const ns = AB.IsoNest.state();
-    $('#iso-nest').hidden = !ns;
+    // оборона оружейной и бой с Колоссом (№57): полоса сверху
+    const ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
+    $('#iso-nest').hidden = !ns && !bs;
+    let nh = '';
     if (ns) {
-      const g = AB.ID.get('ARENA-001').goal, P = AB.Progress;
-      const pips = Array.from({ length: g.stages }, (_, i) => `<u class="${i < ns.stage ? 'ok' : i === ns.stage ? 'cur' : ''}">${i === ns.stage && !ns.over ? `<s style="width:${Math.round(ns.prog * 100)}%"></s>` : ''}</u>`).join('');
-      const nh = `<b>Гнездо</b><span class="t">${ns.over ? 'Затихли' : `${Math.floor(ns.t / 60)}:${String(Math.floor(ns.t % 60)).padStart(2, '0')}`}</span><span class="rp">${AB.IsoNest.config().stageWord || 'Проход'} ${pips}</span><span class="k">Убито: ${ns.kills}</span><span class="xp">Ур. ${P.level()} <em><i style="width:${Math.round((P.xp() / P.need()) * 100)}%"></i></em></span>`;
-      if (nh !== lastNest) { $('#iso-nest').innerHTML = nh; lastNest = nh; }
+      const P = AB.Progress, bio = AB.IsoStash.count('ITEM-007'), cost = AB.IsoNest.RULES.turretCost, tn = AB.IsoNest.config().turrets.length;
+      nh = `<b>Гнездо</b><span class="t">${ns.over ? 'Затихли' : `${Math.floor(ns.t / 60)}:${String(Math.floor(ns.t % 60)).padStart(2, '0')}`}</span>`
+        + `<span class="rp">Взлом <u><s style="width:${Math.round(ns.prog * 100)}%"></s></u> ${Math.round(ns.prog * 100)}%</span>`
+        + `<span class="k">Био: ${bio} · у Миры ${ns.bank}/${cost} · турели ${ns.turrets}/${tn}</span>`
+        + `<span class="k">Убито: ${ns.kills}</span><span class="xp">Ур. ${P.level()} <em><i style="width:${Math.round((P.xp() / P.need()) * 100)}%"></i></em></span>`;
+    } else if (bs) {
+      const L = AB.IsoBoss.config(), col = AB.IsoEnemies.get(L.enemy), hp = col ? Math.round((col.hp / AB.ID.get(L.enemy).hp) * 100) : 0;
+      nh = `<b>Колосс</b><span class="rp">Броня <u><s style="width:${hp}%"></s></u> ${hp}%</span>`
+        + `<span class="k">Био: ${AB.IsoStash.count('ITEM-007')} · пушки ${bs.on.filter(Boolean).length}/${L.cannons.length} (${bs.bank.map((b, i) => (bs.on[i] ? '✓' : `${b}/${L.cost}`)).join(' · ')})</span>`;
     }
+    if (nh && nh !== lastNest) { $('#iso-nest').innerHTML = nh; lastNest = nh; }
   }
   let lastQuest = '', lastNest = '';
-  AB.Bus.on('nest:start', ({ stages }) => toast(`${AB.IsoNest.config().start || 'Гнездо проснулось!'} (${stages} этапа)`, 'bad'));
-  AB.Bus.on('nest:stage', ({ stage, stages }) => toast(stage < stages ? `${AB.IsoNest.config().stageWord || 'Проход'}: этап ${stage} из ${stages} готов` : AB.IsoNest.config().done || 'Готово!', 'good'));
-  AB.Bus.on('nest:won', () => toast('Гнездо затихло', 'good'));
+  AB.Bus.on('nest:start', () => toast(AB.IsoNest.config().start || 'Гнездо проснулось!', 'bad'));
+  AB.Bus.on('nest:won', () => toast(`${AB.IsoNest.config().done || ''} Гнездо затихло`, 'good'));
+  AB.Bus.on('nest:reset', () => toast('Миру ударили — взлом сброшен, всё заново!', 'bad'));
+  AB.Bus.on('nest:breach', () => toast('Дверь выбита! Теперь они идут без остановки', 'bad'));
+  AB.Bus.on('nest:bio', ({ n, bank }) => toast(`Мира: биоматериал +${n} (${bank}/${AB.IsoNest.RULES.turretCost})`, 'good'));
+  AB.Bus.on('nest:turret', ({ n, of }) => toast(`Турель ${n} из ${of} включена!`, 'good'));
+  AB.Bus.on('boss:start', () => toast('Плазма его почти не берёт! Биоматериал с выводка — на приёмники у пушек', 'bad'));
+  AB.Bus.on('boss:bio', ({ bank, cost }) => toast(`Пушка: биоматериал ${bank}/${cost}`, 'info'));
+  AB.Bus.on('boss:cannon', ({ n, of }) => toast(`Пушка ${n} из ${of} ожила!`, 'good'));
   AB.Bus.on('nest:order', ({ id, on }) => toast(`${AB.ID.get(id).name}: ${on ? 'работает у замка' : 'за мной'}`, 'info'));
   // новый уровень: пауза и выбор одного из трёх улучшений (черновик PERK-001…009)
   let paused = false;
@@ -224,6 +238,7 @@
       AB.IsoInteract.update(dt, input);
       AB.IsoEnemies.update(dt);
       AB.IsoNest.update(dt, input);
+      AB.IsoBoss.update(dt);
       if (!busy) AB.IsoCombat.update(dt, input);
       if (Math.random() < 0.1) AB.Quests.check();
       AB.Anim.update(dt);

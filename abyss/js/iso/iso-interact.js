@@ -134,10 +134,18 @@ AB.IsoInteract = (() => {
       const st = AB.IsoNest.state(), cfg = AB.IsoNest.config();
       return { label: st ? `${cfg.verb || 'Чинить'} (этап ${st.stage + 1} из ${AB.ID.get('ARENA-001').goal.stages})` : 'Заклинило', ok: true };
     }
-    // электронный замок (№55): открывает только наручный терминал; взлом будит гнездо
+    // электронный замок (№55/№57): открывает только наручный терминал; взламывает Мира
     if (t.kind === 'door' && t.ref.def.hack && !t.ref.hacked) {
-      const has = hasItem(t.ref.def.hack);
+      const has = hasItem(t.ref.def.hack), st = AB.IsoNest.state();
+      if (st) return { label: `${t.ref.def.name}: взламывает Мира — ${Math.round(st.prog * 100)}%`, ok: false };
       return { label: has ? `${t.ref.def.name}: взломать наручным терминалом` : `${t.ref.def.name}: нужен наручный терминал`, ok: has };
+    }
+    // двери лаборатории в обороне (№57): выбита / чинить / открыть-закрыть
+    if (t.kind === 'door' && t.ref.barricade) {
+      const d = t.ref, pct = Math.round((d.hp / d.max) * 100);
+      if (d.state === 'broken') return { label: `${d.def.name}: выбита — не закрыть`, ok: false };
+      if (d.state === 'closed' && d.hp < d.max && armorySide(d)) return { label: `Чинить дверь (${pct}%)`, ok: true };
+      return { label: d.state === 'open' ? 'Закрыть дверь' : `Открыть дверь (${pct}%)`, ok: true };
     }
     if (t.kind === 'door') {
       const d = t.ref;
@@ -166,6 +174,7 @@ AB.IsoInteract = (() => {
     const ns = AB.IsoNest && AB.IsoNest.state(), ld = AB.IsoParty.lead();
     if (ns && ld.repair) return { label: `${AB.IsoNest.config().stageWord || 'Починка'} — этап ${ns.stage + 1}…`, ok: true, progress: ns.prog };
     if (work && work.t.kind === 'container') return { label: `Обыск: ${work.t.name}…`, ok: true, progress: work.p / work.time };
+    if (work && work.t.kind === 'doorfix') return { label: `Чинить дверь… ${Math.round((work.t.ref.hp / work.t.ref.max) * 100)}%`, ok: true, progress: work.p / work.time };
     if (work) { return { label: `${AB.Equip.action(work.t.ref.id, AB.IsoParty.lead().id).label}…`, ok: true, progress: work.p / work.time }; }
     const t = nearest();
     return t ? { ...label(t), id: t.id } : null;
@@ -229,12 +238,22 @@ AB.IsoInteract = (() => {
     AB.Bus.emit('container:looted', { label: t.name, found, full });
   }
 
+  // ведущий по эту сторону двери, что и оружейная (дальше от лаборатории)
+  function armorySide(d) { const l = AB.IsoParty.lead(); return l.x > d.tiles[0][0] + 0.5; }
   function toggleDoor(d) {
+    if (d.barricade) {
+      if (d.state === 'broken') { AB.Bus.emit('door:denied', { reason: 'Дверь выбита — её уже не закрыть' }); return true; }
+      if (d.state === 'closed' && d.hp < d.max && armorySide(d)) {
+        const l = AB.IsoParty.lead(); AB.IsoParty.stop();
+        work = { t: { kind: 'doorfix', ref: d, name: d.def.name }, p: 0, time: AB.IsoNest.RULES.repairTime, x: l.x, y: l.y };
+        return true;
+      }
+    }
     if (d.state === 'jammed') { if (!AB.IsoNest.repairLead()) AB.Bus.emit('door:denied', { reason: 'Подойдите к замку ближе' }); return true; }
     if (d.def.hack && !d.hacked) {
       if (!hasItem(d.def.hack)) { AB.Bus.emit('door:denied', { reason: 'Электронный замок. Нужен наручный терминал — он в оружейной, в шкафу с оружием' }); return true; }
       if (!AB.IsoNest.isDone() && !AB.IsoNest.state()) AB.IsoNest.start();
-      if (!AB.IsoNest.repairLead()) AB.Bus.emit('door:denied', { reason: 'Подойдите к замку ближе' });
+      else AB.Bus.emit('door:denied', { reason: 'Замок взламывает Мира. Защищайте её!' });
       return true;
     }
     if (locked(d)) { AB.Bus.emit('door:denied', { reason: doorAccess(d).reason }); return true; }
@@ -255,6 +274,15 @@ AB.IsoInteract = (() => {
     W().setDoor(d.tiles, d.state !== 'open');
     AB.Bus.emit('iso:door', { key: d.key, state: d.state, name: d.def.name });
     return true;
+  }
+
+  const work0time = () => AB.IsoNest.RULES.repairTime;
+  // предмет на пол в точке (биоматериал с убитого мутанта, №57)
+  function dropAt(room, item, qty, x, y) {
+    if (!room) return;
+    AB.Rooms.dropItem(room, item, qty, 0);
+    const it = AB.Rooms.worldItems(room).filter((q) => q.key.startsWith('drop-')).sort((a, b) => Number(b.key.slice(5)) - Number(a.key.slice(5)))[0];
+    if (it) dropPos.set(`${room}:${it.key}`, { x, y });
   }
 
   // есть ли вещь у отряда: в руках у кого-то или в общих вещах
@@ -305,8 +333,9 @@ AB.IsoInteract = (() => {
     const l = AB.IsoParty.lead();
     // доступ мог измениться (дали питание, прошло событие): запертая дверь — непроходима
     for (const d of doors.values()) {
-      if (d.state !== 'jammed') W().setDoor(d.tiles, d.state !== 'open' || locked(d));
-      d.anim += ((d.state !== 'open' || locked(d) ? 1 : 0) - d.anim) * Math.min(1, dt * 10);
+      const shut = d.state === 'broken' ? false : d.state !== 'open' || locked(d);
+      if (d.state !== 'jammed') W().setDoor(d.tiles, shut);
+      d.anim += ((shut ? 1 : 0) - d.anim) * Math.min(1, dt * 10);
     }
     if (work) {
       // ведущий сошёл с места или пошёл — работа прервана
@@ -315,7 +344,9 @@ AB.IsoInteract = (() => {
         work.p += dt;
         if (work.p >= work.time) {
           const t = work.t; work = null;
-          if (t.kind === 'container') loot(t); else AB.Equip.apply(t.ref.id, l.id);
+          if (t.kind === 'container') loot(t);
+          else if (t.kind === 'doorfix') { AB.IsoNest.repairDoor(t.ref.key); if (t.ref.state === 'closed' && t.ref.hp < t.ref.max) work = { t, p: 0, time: work0time(), x: l.x, y: l.y }; }
+          else AB.Equip.apply(t.ref.id, l.id);
         }
       }
     }
@@ -331,6 +362,6 @@ AB.IsoInteract = (() => {
   return {
     REACH, init, update, targets, alongRoom, sideX, nearest, prompt, act, click, hoverAt, label,
     actNearest() { const t = nearest(); return t ? act(t) : false; },
-    doors: () => [...doors.values()], locked, hasItem, hovered: () => hover, working: () => work, intent: () => intent,
+    doors: () => [...doors.values()], locked, hasItem, dropAt, hovered: () => hover, working: () => work, intent: () => intent,
   };
 })();

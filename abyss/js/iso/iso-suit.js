@@ -10,7 +10,8 @@
 
 AB.IsoSuit = (() => {
   const R = () => AB.RIGS.EXOSUIT;
-  // Марк снаружи — в костюме
+  // Марк снаружи — в костюме. Правило автора (№58): транспорт только вне зданий —
+  // на корабле и в зданиях (секторы без outside) — только герои
   const suited = (m) => !!m && m.id === 'CHAR-001' && !!(AB.IsoWorld.layout() || {}).outside;
   const weapon = () => ({ id: 'EQUIP-005', name: 'Манипуляторы экзокостюма', short: 'МНП', weapon: { ...R().weapon, range: R().weapon.reachCells * 50 } });
 
