@@ -73,7 +73,7 @@
       const chip = (sl) => (sl ? `<u title="${itemName(sl.item)}">${AB.ID.get(sl.item).short}</u>` : '<u class="empty">—</u>');
       const c = AB.Chars.get(m.id), hp = c ? Math.max(0, c.hp / d.stats.maxHp) : 1, dead = c && c.dead;
       const ht = AB.Inventory.heat(m.id);
-      return `<button class="pm ${lead ? 'lead' : ''} ${dead ? 'dead' : ''}" data-i="${i}" aria-pressed="${lead}" title="${d.name}: снаряжение и здоровье${lead ? ' · ведёт отряд' : ' · Q — передать управление'}"><b>${d.name}</b><span>${chip(AB.Inventory.weapon(m.id))}</span>`
+      return `<button class="pm ${lead ? 'lead' : ''} ${dead ? 'dead' : ''}" data-i="${i}" aria-pressed="${lead}" title="${d.name}: снаряжение и здоровье${lead ? ' · ведёт отряд' : ' · Q — передать управление'}"><b>${AB.IsoSuit.suited(m) ? 'Экзокостюм' : d.name}</b><span>${AB.IsoSuit.suited(m) ? '<u title="Манипуляторы: удар на 2 клетки">МНП</u>' : chip(AB.Inventory.weapon(m.id))}</span>`
         + `<i class="hp" style="width:${Math.round(hp * 100)}%"></i>${ht ? `<i class="heat ${ht.over ? 'over' : ''}" style="width:${Math.round(ht.heat * 100)}%"></i>` : ''}</button>`;
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }

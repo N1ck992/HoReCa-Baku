@@ -21,13 +21,14 @@ AB.IsoCombat = (() => {
   try { autoFight = localStorage.getItem('abyss_autofight') !== 'off'; } catch (e) { /* хранилище недоступно */ }
 
   const mod = (k) => (AB.Perks ? AB.Perks.mod(k) : 1);   // улучшения (перки) — множители
-  const weaponOf = (id) => { const s = AB.Inventory.weapon(id); return s ? AB.ID.get(s.item) : null; };
+  // №56: снаружи Марк в экзокостюме — бьёт манипуляторами костюма, а не оружием в руках
+  const weaponOf = (id) => { if (AB.IsoSuit && AB.IsoSuit.suited(AB.IsoParty.find(id))) return AB.IsoSuit.weapon(); const s = AB.Inventory.weapon(id); return s ? AB.ID.get(s.item) : null; };
   const charOf = (id) => AB.Chars.get(id);
   const member = (id) => AB.IsoParty.members().find((m) => m.id === id);
   const hostile = (e) => ['ALERT', 'CHASE', 'ATTACK', 'RETREAT', 'APPEAR'].includes(e.state);
   const canShoot = (id, w) => w.weapon.ranged && (w.weapon.infinite || (w.weapon.energy ? !(AB.Inventory.heat(id) || {}).over : false));
   // дальность удара/выстрела в клетках
-  const reachOf = (id, w) => (canShoot(id, w) ? w.weapon.range / T : (w.weapon.ranged ? 60 : w.weapon.range) / T + 0.35);
+  const reachOf = (id, w) => (w.weapon.reachCells ? w.weapon.reachCells : canShoot(id, w) ? w.weapon.range / T : (w.weapon.ranged ? 60 : w.weapon.range) / T + 0.35);
 
   function canAttack(m) {
     const c = charOf(m.id);
@@ -69,7 +70,7 @@ AB.IsoCombat = (() => {
       const end = hit ? { x: hit.x, y: hit.y } : { x: m.x + dx * Math.min(range, 6), y: m.y + dy * Math.min(range, 6) };
       AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart });
     } else {
-      const dmg = (w.ranged ? w.bash : w.damage) * mod('meleeDamage'), reach = (w.ranged ? 60 : w.range) / T + 0.45;
+      const dmg = (w.ranged ? w.bash : w.damage) * mod('meleeDamage'), reach = w.reachCells ? w.reachCells + 0.15 : (w.ranged ? 60 : w.range) / T + 0.45;
       const n = Math.hypot(m.hx, m.hy) || 1;
       for (const e of AB.IsoEnemies.alive()) {
         const rx = e.x - m.x, ry = e.y - m.y, d = Math.hypot(rx, ry);
@@ -85,6 +86,7 @@ AB.IsoCombat = (() => {
     const c = charOf(id), m = member(id);
     if (!c || c.dead) return;
     amount *= mod('damageTaken');
+    if (AB.IsoSuit && AB.IsoSuit.suited(m)) amount *= AB.IsoSuit.rig().armor;   // корпус костюма держит удар
     c.hp = Math.max(0, c.hp - amount);
     swings.delete(id);
     AB.Bus.emit('char:hp', { charId: id, hp: c.hp, delta: -amount });
@@ -207,7 +209,8 @@ AB.IsoCombat = (() => {
   }
 
   return {
-    update, attack, attackNearest, damageChar, setTarget, weaponOf,
+    update, attack, attackNearest, damageChar, setTarget, weaponOf, reachOf,
+    swingOf: (id) => swings.get(id) || null,
     target: () => target, isSwinging: (id) => swings.has(id),
     auraActive: (id) => (healing.get(id) || 0) > 0, hasAura: (id) => { const w = weaponOf(id); return !!(w && w.weapon.aura); },
     autoFight: () => autoFight,

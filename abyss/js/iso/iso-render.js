@@ -553,6 +553,8 @@ AB.IsoRender = (() => {
       ctx.strokeStyle = `rgba(94,230,255,${0.45 + Math.sin(time * 4) * 0.15})`; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 10, 0, 0, 7); ctx.stroke();
     }
+    // №56: снаружи — не герой, а экзокостюм (11 частей, js/data/rigs/EXOSUIT.js)
+    if (AB.IsoSuit && AB.IsoSuit.suited(m)) { AB.IsoSuit.draw(ctx, AB.IsoSuit.poseOf(m), p.x, p.y, FIG_K); return; }
     if (AB.Render && AB.Render.drawFigure) AB.Render.drawFigure(ctx, m, p.x, p.y, FIG_K);
   }
 
@@ -560,7 +562,8 @@ AB.IsoRender = (() => {
     const p = toScreen(m.x, m.y);
     ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center';
     ctx.fillStyle = isLead ? '#bfefff' : 'rgba(217,207,194,.85)';
-    ctx.fillText(AB.ID.get(m.id).name, p.x, p.y - 96);
+    const suit = AB.IsoSuit && AB.IsoSuit.suited(m);
+    ctx.fillText(suit ? 'Экзокостюм' : AB.ID.get(m.id).name, p.x, p.y - (suit ? 104 : 96));
   }
 
   function drawMarker() {

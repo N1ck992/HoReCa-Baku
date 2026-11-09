@@ -15,7 +15,8 @@ AB.IsoOverworld = (() => {
   let open_ = false, cv, g, dpr = 1;
   const cells = new Map();             // q,r → { q, r, kind, seen }
   let pos = null, path = [], stepT = 0, anim = null, cam = { x: 0, y: 0 }, size = 34, time = 0, last = 0, onSite = null;
-  let mode = 'suit';                    // №55: 'suit' — Марк в экзокостюме один (акт II), 'capsule' — база-капсула (акт III)
+  let mode = 'suit';
+  let suitStride = 0, suitFace = 1;                    // №55: 'suit' — Марк в экзокостюме один (акт II), 'capsule' — база-капсула (акт III)
   const viewR = () => (AB.IsoActs ? AB.IsoActs.view() : 2);   // на сколько клеток видно вокруг (сонар базы — дальше)
   const shown = (s) => !AB.IsoActs || AB.IsoActs.siteVisible(s);
 
@@ -169,6 +170,9 @@ AB.IsoOverworld = (() => {
     // шаг экзокостюма: тяжёлый, ~0,45 с на клетку
     if (!anim && path.length) { anim = { from: { ...pos }, to: path.shift(), t: 0 }; }
     if (anim) {
+      suitStride += dt / 0.45 * 78;                                   // шаг костюма: одна клетка — один шаг
+      const a0 = px(anim.from.q, anim.from.r), a1 = px(anim.to.q, anim.to.r);
+      if (Math.abs(a1.x - a0.x) > 1) suitFace = a1.x > a0.x ? 1 : -1;
       anim.t += dt / 0.45;
       if (anim.t >= 1) { pos = anim.to; anim = null; reveal(); }
     }
@@ -216,8 +220,9 @@ AB.IsoOverworld = (() => {
       g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(cur.x, cur.y - 6, 16 * dpr, 9 * dpr, 0, 0, 7); g.fill();
       g.fillStyle = '#5ee6ff'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(cur.x + i * 7 * dpr, cur.y - 7, 2.4 * dpr, 0, 7); g.fill(); }
     } else {
-      g.fillStyle = '#c9a24a'; g.beginPath(); g.arc(cur.x, cur.y - 4, 8 * dpr, 0, 7); g.fill();
-      g.fillStyle = '#5ee6ff'; g.beginPath(); g.arc(cur.x + 2 * dpr, cur.y - 6, 3.2 * dpr, 0, 7); g.fill();
+      // №56: экзокостюм — та же фигура из частей, что в изометрии; занимает одну клетку
+      const pose = { facing: suitFace, phase: suitStride / 78 * Math.PI * 2, moving: !!anim, attack: -1, hurt: 0, dead: false, t: time };
+      AB.IsoSuit.draw(g, pose, cur.x, cur.y + size * 0.55, (size * 1.35) / AB.RIGS.EXOSUIT.height);
     }
     // свет нашлемных фонарей
     const lg = g.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, size * 3.2);

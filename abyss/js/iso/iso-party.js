@@ -38,7 +38,7 @@ AB.IsoParty = (() => {
   }
 
   const lead = () => members[leader];
-  const speedOf = (m, run) => { const st = AB.ID.get(m.id).stats; return ((run ? st.runSpeed : st.speed) / PX_PER_TILE) * (AB.Perks ? AB.Perks.mod('moveSpeed') : 1); };
+  const speedOf = (m, run) => { const st = AB.IsoSuit && AB.IsoSuit.suited(m) ? AB.IsoSuit.rig() : AB.ID.get(m.id).stats; return ((run ? st.runSpeed : st.speed) / PX_PER_TILE) * (AB.Perks ? AB.Perks.mod('moveSpeed') : 1); };
 
   // ведущему: идти к точке (путь в обход препятствий)
   function goTo(x, y) {
