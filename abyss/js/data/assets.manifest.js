@@ -32,6 +32,7 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ITEM015-01', owner: 'ITEM-015', type: 'icon', src: null, desc: 'Кристалл' },
   { id: 'ASSET-ENEMY008-01', owner: 'ENEMY-008', type: 'sprite', src: null, desc: 'Глубинный хищник' },
   { id: 'ASSET-CHAR004-01', owner: 'CHAR-004', type: 'sprite', src: null, desc: 'Сайлас' },
+  { id: 'ASSET-ENEMY009-01', owner: 'ENEMY-009', type: 'sprite', src: null, desc: 'Исполин' },
   { id: 'ASSET-ROOM013-01', owner: 'ROOM-013', type: 'background', src: null, desc: 'Фон: гидропоника' },
   { id: 'ASSET-ROOM014-01', owner: 'ROOM-014', type: 'background', src: null, desc: 'Фон: технический коридор Б' },
   { id: 'ASSET-ROOM015-01', owner: 'ROOM-015', type: 'background', src: null, desc: 'Фон: насосная' },

@@ -123,4 +123,21 @@ AB.ENEMIES.push({
   spawn: { room: 'ROOM-019', x: 1200, patrol: [900, 1500], requires: [] },
 });
 
+// ENEMY-009 — исполин (дополнение №63, черновик): сильная медленная тварь на карте дна.
+// Держит свою территорию, бьёт тяжело; с него — кристаллы и биоматериал.
+AB.ENEMIES.push({
+  ...MUTANT,
+  id: 'ENEMY-009', name: 'Исполин', type: 'giant', pending: true,
+  asset: 'ASSET-ENEMY009-01',
+  scale: 2.4,
+  tint: { flesh: '#5a4a6a', dark: '#211a2a', plate: '#3a3048' },
+  hp: 900, damage: 42,
+  speed: { patrol: 30, investigate: 50, chase: 90, retreat: 0 },
+  attack: { range: 120, windup: 0.9, cooldown: 1.8 },
+  detection: { sight: 300, behind: 0.5 },
+  behavior: { start: 'PATROL', retreatBelow: 0, retreatTime: 0, loseAfter: 99, investigateTime: 3 },
+  carry: null,
+  spawn: { room: 'ROOM-019', x: 900, patrol: [700, 1100], requires: [] },
+});
+
 AB.ENEMIES.forEach((e) => AB.ID.register(e.id, e));

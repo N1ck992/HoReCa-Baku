@@ -1,10 +1,16 @@
 // =====================================================================
-// ISO OVERWORLD (дополнение №54, ПРОТОТИП). Выход за борт: дно океана вокруг
-// «Абисса» — карта из шестиугольников, вид сверху. Марк в экзокостюме ходит
-// по клеткам (нажать — проложить путь), туман открывается вокруг. Скалы и
-// впадины не пройти. На клетке с точкой — её описание; на «Абиссе» — вернуться
-// на корабль (состояние бункера сохраняется: это та же страница).
-// Ресурсов, боя и базы пока нет — только карта и перемещение.
+// ISO OVERWORLD (дополнения №54–63). Дно океана вокруг «Абисса» — карта из
+// шестиугольников под углом. №63 (решение автора: «управление базой и
+// отрядами вне базы — как в Warpath»):
+//   • на карте — база (в акте II это «Абисс», в акте III — капсула, её можно
+//     вести по дну) и отряды: герой в своём транспорте (Марк — экзокостюм);
+//   • внизу справа — карточки: база и герои; у героя — его транспорт, здоровье,
+//     что делает; «Выйти» — отряд выходит из базы, «Отозвать» — возвращается;
+//   • выбранная карточка — тот, кто идёт по нажатию на клетку; нажать на тварь —
+//     отряд подходит и бьёт (костюм — на 2 клетки, сам, как только достаёт);
+//   • по дну бродят твари и исполины, они появляются снова; с них — добыча;
+//   • разбитый костюм не гибнет: отряд отступает на базу и чинится там.
+// Транспорт — только снаружи (№58): в базе и на корабле — герои пешком.
 // =====================================================================
 
 AB.IsoOverworld = (() => {
@@ -14,26 +20,20 @@ AB.IsoOverworld = (() => {
   const key = (q, r) => `${q},${r}`;
   let open_ = false, cv, g, dpr = 1;
   const cells = new Map();             // q,r → { q, r, kind, seen }
-  let pos = null, path = [], stepT = 0, anim = null, cam = { x: 0, y: 0 }, size = 34, time = 0, last = 0, onSite = null;
-  // №61: бой прямо на карте — костюм занимает клетку и бьёт на 2 клетки; твари ходят по клеткам
-  const mobs = [];                      // { id, q, r, hp, max, hunt, stepT, atkT, flash, anim, t }
-  const loot = new Map();               // q,r → [item, qty] — что лежит на клетке
-  let target = null, atk = null, suitAtkT = 0, suitFlash = 0, hpShow = 1;
-  const SUIT = () => AB.RIGS.EXOSUIT;
-  let mode = 'suit';
-  let suitStride = 0, suitFace = 1;                    // №55: 'suit' — Марк в экзокостюме один (акт II), 'capsule' — база-капсула (акт III)
-  const viewR = () => (AB.IsoActs ? AB.IsoActs.view() : 2);   // на сколько клеток видно вокруг (сонар базы — дальше)
+  let cam = { x: 0, y: 0 }, size = 34, time = 0, last = 0, onSite = null;
+  let mode = 'suit';                   // 'suit' — акт II (база — «Абисс»), 'capsule' — акт III (база — капсула)
+  const viewR = () => (AB.IsoActs ? AB.IsoActs.view() : 2);
   const shown = (s) => !AB.IsoActs || AB.IsoActs.siteVisible(s);
+  const SUIT = () => AB.RIGS.EXOSUIT;
 
   const inside = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) <= D().radius;
   const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
-  // №58: карта под углом — дно сжато по вертикали (камера смотрит наискосок), у камней — объём
-  const TILT = 0.6, STEP = 0.75;        // наклон; секунд на клетку (тяжёлый шаг, медленнее прежнего)
+  const TILT = 0.6, STEP = 0.75, BASE_STEP = 1.1;      // наклон карты; секунд на клетку (костюм, капсула)
   const px = (q, r) => ({ x: size * SQ3 * (q + r / 2), y: size * 1.5 * r * TILT });
   const siteAt = (q, r) => D().sites.find((s) => s.q === q && s.r === r) || null;
   const passable = (q, r) => { const c = cells.get(key(q, r)); return !!c && c.kind !== 'rock' && c.kind !== 'trench'; };
 
-  // ---------- рельеф: ил, скалы, впадины, кристаллы (детерминированно по seed) ----------
+  // ---------- рельеф ----------
   function build() {
     const rng = AB.util.rng(D().seed), R = D().radius;
     for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) {
@@ -41,21 +41,16 @@ AB.IsoOverworld = (() => {
       const n = rng();
       cells.set(key(q, r), { q, r, kind: n < 0.13 ? 'rock' : n < 0.2 ? 'crystal' : 'silt', seen: false });
     }
-    // впадина — изломанная линия поперёк карты
     let q = -R + 1, r = 4;
     for (let i = 0; i < R * 2; i++) {
       if (inside(q, r) && !siteAt(q, r) && cells.has(key(q, r))) cells.get(key(q, r)).kind = 'trench';
       q++; if (rng() < 0.4) r--;
     }
-    // точки и путь к ним — проходимы
     for (const s of D().sites) {
       cells.get(key(s.q, s.r)).kind = s.kind === 'crystal' ? 'crystal' : 'silt';
       for (const [dq, dr] of DIRS) { const c = cells.get(key(s.q + dq, s.r + dr)); if (c && c.kind === 'rock') c.kind = 'silt'; }
     }
-    // гарантируем дорогу от «Абисса» к каждой точке: где не дойти — пробиваем узкий проход
     for (const s of D().sites) if (!route(D().start, s)) carve(D().start, s);
-    pos = { ...D().start };
-    reveal();
   }
   function carve(a, b) {
     let c = { ...a };
@@ -65,10 +60,9 @@ AB.IsoOverworld = (() => {
       c = n;
     }
   }
-  // поиск пути по клеткам (A*)
   function route(a, b) {
     if (!passable(b.q, b.r)) return null;
-    const open = [{ ...a, g: 0, f: dist(a, b) }], from = new Map([[key(a.q, a.r), null]]), gs = new Map([[key(a.q, a.r), 0]]);
+    const open = [{ q: a.q, r: a.r, g: 0, f: dist(a, b) }], from = new Map([[key(a.q, a.r), null]]), gs = new Map([[key(a.q, a.r), 0]]);
     while (open.length) {
       open.sort((x, y) => x.f - y.f);
       const c = open.shift();
@@ -86,80 +80,121 @@ AB.IsoOverworld = (() => {
     }
     return null;
   }
-  function reveal() { for (const c of cells.values()) if (dist(c, pos) <= viewR()) c.seen = true; }
+
+  // ---------- база и отряды ----------
+  // единица на карте: { id, kind: 'base'|'squad', q, r, path, anim, stride, face, ... }
+  const base = { id: 'base', kind: 'base', q: 0, r: 0, path: [], anim: null, stride: 0, face: 1 };
+  const squads = [];                    // { id (герой), vehicle, state: 'home'|'out'|'retreat', q, r, path, anim, target, atk, atkT, flash, stride, face }
+  let sel = null;                       // кто выбран: 'base' или ID героя
+  const unit = (id) => (id === 'base' ? base : squads.find((s) => s.id === id)) || null;
+  const selU = () => unit(sel) || squads.find((s) => s.state !== 'home') || base;
+  const at = (u) => (u.anim ? u.anim.to : { q: u.q, r: u.r });
+  const outSquads = () => squads.filter((s) => s.state !== 'home');
+  // у кого из экипажа есть транспорт (пока один экзокостюм — у Марка)
+  function syncSquads() {
+    const crew = AB.IsoActs ? AB.IsoActs.crew() : ['CHAR-001'];
+    for (const id of crew) if (!squads.some((s) => s.id === id)) {
+      const vehicle = id === 'CHAR-001' ? 'EQUIP-005' : null;
+      squads.push({ id, kind: 'squad', vehicle, state: 'home', q: base.q, r: base.r, path: [], anim: null, target: null, atk: null, atkT: 0, flash: 0, stride: 0, face: 1 });
+    }
+  }
+  function deploy(id) {
+    const s = unit(id);
+    if (!s || !s.vehicle || s.state !== 'home') return false;
+    s.state = 'out'; s.q = base.q; s.r = base.r; s.path = []; s.anim = null;
+    sel = id; reveal();
+    say(`${AB.ID.get(id).name}: экзокостюм вышел из базы`);
+    return true;
+  }
+  function recall(id) {
+    const s = unit(id);
+    if (!s || s.state === 'home') return;
+    s.target = null;
+    const p = route(at(s), base);
+    if (p && p.length) { s.path = p; s.state = 'retreat'; s.recall = true; }
+    else dock(s);
+  }
+  function dock(s) {
+    s.state = 'home'; s.path = []; s.anim = null; s.target = null; s.recall = false;
+    s.q = base.q; s.r = base.r;
+    if (sel === s.id && mode === 'capsule') sel = 'base';
+  }
+  // разбитый костюм: отступает на базу (не гибнет, как раненые в Warpath)
+  function retreat(s) {
+    const c = AB.Chars.get(s.id); if (c) c.hp = Math.max(1, c.hp);
+    s.target = null; s.atk = null; s.state = 'retreat';
+    s.path = route(at(s), base) || [];
+    say(`${AB.ID.get(s.id).name}: костюм разбит — отступление на базу, там починят`);
+  }
 
   // ---------- открыть / закрыть ----------
   function init() {
     cv = document.getElementById('ow-map'); g = cv.getContext('2d');
     build();
+    base.q = D().start.q; base.r = D().start.r;
     cv.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       const t = pick(e.clientX, e.clientY);
       if (!t || !cells.has(key(t.q, t.r))) return;
-      const mb = mobAt(t.q, t.r);
-      if (mb && mode === 'suit') {
-        target = mb;
-        if (dist(anim ? anim.to : pos, mb) <= SUIT().weapon.reachCells) { path = []; return; }
-      } else target = null;
-      const p = route(anim ? anim.to : pos, t);
-      if (!p) { say('Туда не пройти'); return; }
-      path = p;
+      tapCell(t);
     });
     document.getElementById('ow-back').addEventListener('click', back);
     document.getElementById('ow-act').addEventListener('click', () => {
       if (!onSite) return;
       if (onSite.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(onSite);
     });
-    // база-капсула (акт III): экипаж, вещи, модули
-    // №61: «База» — войти в капсулу (помещение с экипажем, снаряжением и модулями)
-    document.getElementById('ow-base-btn').addEventListener('click', () => AB.IsoActs.enterBase());
-    document.getElementById('ow-base').addEventListener('click', (e) => {
-      if (e.target.closest('[data-base-close]') || e.target.id === 'ow-base') { baseOpen(false); return; }
-      const b = e.target.closest('[data-build]');
-      if (b && AB.IsoActs.build(b.dataset.build)) baseOpen(true);
+    document.getElementById('ow-base-btn').addEventListener('click', () => { for (const s of squads) if (s.state !== 'home') dock(s); AB.IsoActs.enterBase(); });
+    const sq = document.getElementById('ow-squads');
+    sq.addEventListener('pointerdown', (e) => e.stopPropagation());
+    sq.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
+      if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; return; }
+      if (c) { const u = unit(c.dataset.u); if (u && (u.kind === 'base' || u.state !== 'home')) sel = c.dataset.u; else if (u && u.vehicle) deploy(u.id); squadsSig = ''; }
     });
-    window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { const s = siteAt(pos.q, pos.r); if (s && s.key === 'abyss') back(); } });
+    window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { const s = siteAt(selU().q, selU().r); if (s && s.key === 'abyss') back(); } });
     window.addEventListener('resize', () => { if (open_) fit(); });
+  }
+  // нажали на клетку: выбранный отряд идёт туда (на тварь — подходит и бьёт); выбрана база — ведём капсулу
+  function tapCell(t) {
+    let u = selU();
+    const mb = mobAt(t.q, t.r);
+    if (mb) {
+      if (u.kind === 'base') { const s = squads.find((q) => q.vehicle && q.state !== 'retreat'); if (s && s.state === 'home') deploy(s.id); u = s || u; }
+      if (u.kind !== 'squad' || u.state === 'retreat') { say('Нужен отряд в транспорте: «Выйти» на карточке героя'); return; }
+      u.target = mb; sel = u.id;
+      if (dist(at(u), mb) <= SUIT().weapon.reachCells) { u.path = []; return; }
+    } else if (u.kind === 'squad') u.target = null;
+    if (u.kind === 'base' && mode !== 'capsule') { say('«Абисс» не сдвинуть — выберите отряд'); return; }
+    if (u.kind === 'squad' && u.state === 'retreat') { say('Отряд отступает на базу'); return; }
+    const p = route(at(u), t);
+    if (!p) { say('Туда не пройти'); return; }
+    u.path = p;
   }
   function enter() {
     open_ = true;
+    syncSquads();
+    // акт II: базы-капсулы нет, Марк выходит из «Абисса» сразу в костюме
+    if (mode === 'suit') { const m = unit('CHAR-001'); if (m && m.state === 'home') { m.state = 'out'; m.q = base.q; m.r = base.r; } sel = 'CHAR-001'; }
+    else if (!unit(sel)) sel = 'base';
     spawnMobs();
-    reveal(); onSite = undefined;
+    reveal(); onSite = undefined; squadsSig = '';
     document.getElementById('ow').hidden = false;
     document.getElementById('ow-base-btn').hidden = mode !== 'capsule';
     fit(); last = performance.now();
+    const u = selU(), p = px(u.q, u.r); cam.x = p.x; cam.y = p.y;
     requestAnimationFrame(loop);
     AB.Bus.emit('ow:enter', {});
   }
-  // вернуться на корабль: только с клетки «Абисса» — к шлюзу
+  // вернуться на корабль: выбранный (отряд или капсула) — у «Абисса»
   function back() {
-    const s = siteAt(pos.q, pos.r);
+    const u = selU(), s = siteAt(u.q, u.r);
     if (!s || s.key !== 'abyss') { say('Вернуться на корабль можно только у «Абисса»'); return; }
+    if (mode === 'suit') { const m = unit('CHAR-001'); if (m) dock(m); }
     close();
     AB.Bus.emit('ow:exit', {});
   }
-  // закрыть карту без возвращения на корабль (схватка на дне — iso-acts.js)
-  function close() { open_ = false; baseOpen(false); document.getElementById('ow').hidden = true; }
+  function close() { open_ = false; document.getElementById('ow').hidden = true; }
   function say(t) { const el = document.getElementById('ow-say'); el.textContent = t; el.classList.add('show'); clearTimeout(say.t); say.t = setTimeout(() => el.classList.remove('show'), 2000 + t.length * 40); }
-
-  // ---------- база-капсула ----------
-  function baseOpen(on) {
-    const el = document.getElementById('ow-base');
-    el.hidden = !on;
-    if (!on) return;
-    if (AB.IsoActs) AB.IsoActs.onBase();
-    const nm = (id) => AB.ID.get(id).name;
-    const crew = AB.IsoActs.crew().map((id) => { const c = AB.Chars.get(id), d = AB.ID.get(id), hp = c ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
-      return `<div class="crew"><b>${d.name}</b><i style="width:${hp}%"></i></div>`; }).join('');
-    const res = ['ITEM-001', 'ITEM-002', 'ITEM-003', 'ITEM-015'].map((i) => `<span>${nm(i)}: <b>${AB.IsoStash.count(i)}</b></span>`).join('');
-    const mods = AB.ISO_MODULES.map((m) => {
-      const done = AB.IsoActs.built(m.id), ok = AB.IsoActs.canBuild(m.id);
-      const cost = (m.cost || []).map(([i, n]) => `<u class="${AB.IsoStash.count(i) >= n ? '' : 'no'}">${AB.ID.get(i).short} ${AB.IsoStash.count(i)}/${n}</u>`).join(' ');
-      return `<div class="mod ${done ? 'on' : ''}"><b>${m.name}</b><p>${m.desc}</p>${done ? '<em>Пристыкован</em>' : `<div class="cost">${cost}</div><button data-build="${m.id}" ${ok ? '' : 'disabled'}>Пристыковать</button>`}</div>`;
-    }).join('');
-    el.innerHTML = `<div class="inv-card base-card" role="dialog" aria-label="База"><div class="inv-head"><div><h2>База-капсула</h2><div class="muted">Черновик: модули и экипаж ждут правки автора</div></div><button class="inv-x" data-base-close aria-label="Закрыть">✕</button></div>`
-      + `<h3>Экипаж</h3><div class="crew-list">${crew}</div><h3>Ресурсы</h3><div class="res">${res}</div><h3>Модули</h3><div class="mods">${mods}</div></div>`;
-  }
 
   function fit() {
     dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -169,46 +204,208 @@ AB.IsoOverworld = (() => {
   function pick(cx, cy) {
     const rc = cv.getBoundingClientRect();
     const x = ((cx - rc.left) * dpr - cv.width / 2 + cam.x) / size, y = ((cy - rc.top) * dpr - cv.height / 2 + cam.y) / size / TILT;
-    // пиксель → осевые координаты, округление по кубу
     let q = (SQ3 / 3) * x - y / 3, r = (2 / 3) * y, s = -q - r;
     let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
     const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
     if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
     return { q: rq, r: rr };
   }
+  function reveal() {
+    const eyes = [base, ...outSquads()];
+    for (const c of cells.values()) if (!c.seen && eyes.some((u) => dist(c, u) <= viewR())) c.seen = true;
+  }
+  const near = (c) => [base, ...outSquads()].some((u) => dist(c, u) <= viewR());
+
+  // ---------- движение ----------
+  function stepUnit(u, dt, secs) {
+    if (u.kind === 'squad' && u.target && u.target.hp > 0 && u.state === 'out') {
+      if (dist(at(u), u.target) <= SUIT().weapon.reachCells) u.path = [];
+      else if (!u.path.length && !u.anim) { const p = route(u, u.target); if (p) u.path = p; }
+    }
+    if (!u.anim && u.path.length && u.kind === 'squad' && mobAt(u.path[0].q, u.path[0].r)) u.path = [];
+    if (!u.anim && u.path.length) u.anim = { from: { q: u.q, r: u.r }, to: u.path.shift(), t: 0 };
+    if (!u.anim) return;
+    u.stride += dt / secs * 78;
+    const a0 = px(u.anim.from.q, u.anim.from.r), a1 = px(u.anim.to.q, u.anim.to.r);
+    if (Math.abs(a1.x - a0.x) > 1) u.face = a1.x > a0.x ? 1 : -1;
+    u.anim.t += dt / secs;
+    if (u.anim.t >= 1) {
+      u.q = u.anim.to.q; u.r = u.anim.to.r; u.anim = null; reveal();
+      if (u.kind === 'squad') {
+        pickLoot(u);
+        if (u.state === 'retreat' && !u.path.length && u.q === base.q && u.r === base.r) { if (mode === 'capsule') dock(u); else u.state = 'out'; }
+      } else for (const s of squads) if (s.state === 'home') { s.q = base.q; s.r = base.r; }
+    }
+  }
+  const curPos = (u) => (u.anim ? lerpPos(u.anim.from, u.anim.to, u.anim.t) : px(u.q, u.r));
+  const lerpPos = (a, b, t) => { const p = px(a.q, a.r), q = px(b.q, b.r); return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }; };
 
   // ---------- кадр ----------
   function loop(now) {
     if (!open_) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
-    // шаг экзокостюма: тяжёлый, STEP секунд на клетку
     if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
-    // идём к выбранной твари — остановиться, как только достаём
-    if (target && target.hp > 0 && dist(anim ? anim.to : pos, target) <= SUIT().weapon.reachCells) path = [];
-    else if (target && target.hp > 0 && !path.length && !anim) { const p = route(pos, target); if (p) path = p; }
-    // в клетку с тварью не войти
-    if (!anim && path.length && mobAt(path[0].q, path[0].r)) path = [];
-    if (!anim && path.length) { anim = { from: { ...pos }, to: path.shift(), t: 0 }; }
-    if (anim) {
-      suitStride += dt / STEP * 78;                                   // шаг костюма: одна клетка — один шаг
-      const a0 = px(anim.from.q, anim.from.r), a1 = px(anim.to.q, anim.to.r);
-      if (Math.abs(a1.x - a0.x) > 1) suitFace = a1.x > a0.x ? 1 : -1;
-      anim.t += dt / STEP;
-      if (anim.t >= 1) { pos = anim.to; anim = null; reveal(); pickLoot(); }
-    }
-    const cur = anim ? lerpPos(anim.from, anim.to, anim.t) : px(pos.q, pos.r);
-    cam.x += (cur.x - cam.x) * Math.min(1, dt * 6); cam.y += (cur.y - cam.y) * Math.min(1, dt * 6);
-    if (mode === 'suit') fight(dt);
-    draw(cur);
+    if (mode === 'capsule') stepUnit(base, dt, BASE_STEP);
+    for (const s of outSquads()) { stepUnit(s, dt, STEP); if (!s.anim && loot.size) pickLoot(s); }
+    heal(dt);
+    fight(dt);
+    wildTick(dt);
+    const c = curPos(selU());
+    cam.x += (c.x - cam.x) * Math.min(1, dt * 6); cam.y += (c.y - cam.y) * Math.min(1, dt * 6);
+    draw();
     hud();
     requestAnimationFrame(loop);
   }
-  const lerpPos = (a, b, t) => { const p = px(a.q, a.r), q = px(b.q, b.r); return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }; };
+  // на базе (и в «Абиссе», и в капсуле) костюм чинят: здоровье понемногу возвращается
+  function heal(dt) {
+    for (const s of squads) {
+      const c = AB.Chars.get(s.id), d = AB.ID.get(s.id);
+      if (!c || c.dead) continue;
+      const home = s.state === 'home' || (s.q === base.q && s.r === base.r && !s.anim);
+      if (home) c.hp = Math.min(d.stats.maxHp, c.hp + dt * (AB.IsoActs && AB.IsoActs.built('MOD-003') ? 12 : 4));
+    }
+  }
 
+  // ---------- твари ----------
+  const mobs = [];                      // { id, kind, q, r, home, hp, max, hunt, stepT, atkT, flash, anim, t, face, stride, mt }
+  const loot = new Map();               // q,r → [[item, qty], …]
+  let wildSeq = 0;
+  const wildT = { hunters: 0, giants: 0 };
+  function mobAt(q, r) { return mobs.find((m) => m.hp > 0 && m.q === q && m.r === r) || null; }
+  function addMob(id, q, r, kind) {
+    const def = AB.ID.get(id);
+    mobs.push({ id, kind, q, r, home: { q, r }, hp: def.hp, max: def.hp, hunt: false, stepT: 0, atkT: 1, flash: 0, anim: 'PATROL', t: Math.random() * 3, face: -1, stride: 0, mt: 1 });
+  }
+  // сюжетные твари на своих точках (ISO_SITES[].mob) и бродячие по случайным местам (OVERWORLD.wild)
+  function spawnMobs() {
+    const act = AB.IsoActs ? AB.IsoActs.act() : 2;
+    for (const s of D().sites) {
+      const d = AB.ISO_SITES && AB.ISO_SITES[s.key];
+      if (!d || !d.mob || mobs.some((m) => m.id === d.mob) || AB.Enemies.isDead(d.mob) || act < d.act) continue;
+      addMob(d.mob, s.q, s.r, 'story');
+    }
+    if (act < 2 || !D().wild) return;
+    for (const [kind, w] of Object.entries(D().wild)) {
+      while (mobs.filter((m) => m.kind === kind && m.hp > 0).length < w.count) if (!spawnWild(kind, w, true)) break;
+    }
+  }
+  function spawnWild(kind, w, initial) {
+    const free = [...cells.values()].filter((c) => passable(c.q, c.r) && !siteAt(c.q, c.r) && !mobAt(c.q, c.r) && !loot.has(key(c.q, c.r))
+      && dist(c, D().start) >= w.minDist && dist(c, base) >= w.minDist - 1 && outSquads().every((s) => dist(c, s) > 3)
+      && mobs.every((m) => m.hp <= 0 || dist(c, m) >= 2) && (initial || !near(c)));
+    if (!free.length) return false;
+    const c = free[Math.floor(Math.random() * free.length)];
+    addMob(`${w.enemy}~w${++wildSeq}`, c.q, c.r, kind);
+    return true;
+  }
+  function wildTick(dt) {
+    if (!D().wild || (AB.IsoActs && AB.IsoActs.act() < 2)) return;
+    for (const [kind, w] of Object.entries(D().wild)) {
+      if (mobs.filter((m) => m.kind === kind && m.hp > 0).length >= w.count) { wildT[kind] = 0; continue; }
+      wildT[kind] += dt;
+      if (wildT[kind] >= w.respawn) { wildT[kind] = 0; spawnWild(kind, w, false); }
+    }
+  }
+  const wildOf = (m) => (D().wild && D().wild[m.kind]) || { aggro: 3, leash: 99, loot: [] };
+
+  function fight(dt) {
+    const sw = SUIT().weapon;
+    for (const s of squads) { s.flash = Math.max(0, s.flash - dt); s.atkT = Math.max(0, s.atkT - dt); }
+    for (const m of mobs) {
+      m.t += dt; m.flash = Math.max(0, m.flash - dt * 4);
+      if (m.hp <= 0) continue;
+      if (m.mt < 1) { m.mt = Math.min(1, m.mt + dt / (m.kind === 'giants' ? 1.4 : 0.9)); m.stride += dt * 80; }
+      const w = wildOf(m), def = AB.ID.get(m.id);
+      // цель — ближайший отряд снаружи (отступающих не трогают)
+      const foes = squads.filter((s) => s.state === 'out' && !(AB.Chars.get(s.id) || {}).dead);
+      const tgt = foes.sort((a, b) => dist(at(a), m) - dist(at(b), m))[0];
+      const d = tgt ? dist(at(tgt), m) : 99;
+      if (!m.hunt && tgt && d <= w.aggro) {
+        m.hunt = true; m.anim = 'ALERT'; m.t = 0;
+        if (m.kind === 'story') say('Мира: «Оно двинулось к тебе! Бей, как только подойдёт на две клетки»');
+        else if (m.kind === 'giants') say('Исполин! Держитесь на расстоянии двух клеток');
+      }
+      if (m.hunt && (!tgt || dist(m, m.home) > w.leash + 1 || d > w.leash + 2)) { m.hunt = false; m.anim = 'PATROL'; }
+      m.atkT = Math.max(0, m.atkT - dt);
+      if (!m.hunt) {
+        // без цели — назад на своё место
+        if (m.mt >= 1 && (m.q !== m.home.q || m.r !== m.home.r)) {
+          m.stepT -= dt;
+          if (m.stepT <= 0) { const r = route(m, m.home), nx = r && r[0]; if (nx && !mobAt(nx.q, nx.r)) { m.from = { q: m.q, r: m.r }; m.q = nx.q; m.r = nx.r; m.mt = 0; } m.stepT = 1.2; }
+        }
+        continue;
+      }
+      const here = at(tgt);
+      m.face = px(here.q, here.r).x >= px(m.q, m.r).x ? 1 : -1;
+      if (d <= 1) {
+        if (m.atkT <= 0) { m.anim = 'ATTACK'; m.t = 0; m.atkT = def.attack.cooldown + def.attack.windup; m.hit = def.attack.windup; m.victim = tgt; }
+        if (m.hit != null) {
+          m.hit -= dt;
+          if (m.hit <= 0) {
+            m.hit = null;
+            const v = m.victim, c = v && AB.Chars.get(v.id);
+            if (v && c && v.state === 'out' && dist(at(v), m) <= 1) {
+              v.flash = 0.3;
+              c.hp -= def.damage * SUIT().armor;
+              AB.Bus.emit('char:hit', { charId: v.id, amount: def.damage * SUIT().armor });
+              if (c.hp <= 1) retreat(v);
+            }
+          }
+        }
+        if (m.anim === 'ATTACK' && m.t > 1) m.anim = 'CHASE';
+      } else if (m.mt >= 1) {
+        m.stepT -= dt; m.anim = 'CHASE';
+        if (m.stepT <= 0) {
+          const r = route(m, here), nx = r && r[0];
+          if (nx && !(nx.q === here.q && nx.r === here.r) && !mobAt(nx.q, nx.r) && !outSquads().some((s) => { const a = at(s); return (s.q === nx.q && s.r === nx.r) || (a.q === nx.q && a.r === nx.r); })) { m.from = { q: m.q, r: m.r }; m.q = nx.q; m.r = nx.r; m.mt = 0; }
+          m.stepT = m.kind === 'giants' ? 1.4 : 0.9;
+        }
+      }
+    }
+    // удары отрядов: сам по ближайшей твари в досягаемости (или по выбранной цели)
+    for (const s of outSquads()) {
+      if (s.state !== 'out') continue;
+      const here = at(s);
+      if (s.atk) {
+        s.atk.t += dt;
+        if (!s.atk.done && s.atk.t >= sw.hitAt * 2) {
+          s.atk.done = true;
+          const m = s.atk.m;
+          if (m.hp > 0 && dist(m, here) <= sw.reachCells) {
+            m.hp = Math.max(0, m.hp - sw.damage); m.flash = 1; m.hunt = true;
+            if (m.hp <= 0) mobDead(m, s);
+          }
+        }
+        if (s.atk.t > 0.8) s.atk = null;
+      } else if (s.atkT <= 0 && !s.anim) {
+        const foe = (s.target && s.target.hp > 0 && dist(s.target, here) <= sw.reachCells) ? s.target
+          : mobs.filter((m) => m.hp > 0 && (m.hunt || s.target === m) && dist(m, here) <= sw.reachCells).sort((a, b) => dist(a, here) - dist(b, here))[0];
+        if (foe) { s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1; s.path = []; }
+      }
+    }
+  }
+  function mobDead(m, s) {
+    m.anim = 'DEAD';
+    for (const q of squads) if (q.target === m) q.target = null;
+    if (m.kind === 'story') AB.IsoEnemies.markDead(m.id);
+    else for (const [item, n] of wildOf(m).loot) dropLoot(m.q, m.r, item, n);
+    AB.Bus.emit('enemy:dead', { id: m.id, name: AB.ID.get(m.id).name, q: m.q, r: m.r });
+    if (m.kind !== 'story') say(`${AB.ID.get(m.id).name} убит — добыча на клетке`);
+  }
+  function dropLoot(q, r, item, qty) { const k = key(q, r); loot.set(k, [...(loot.get(k) || []), [item, qty]]); }
+  function pickLoot(u) {
+    const k = key(u.q, u.r), l = loot.get(k);
+    if (!l) return;
+    const got = [], left = [];
+    for (const [item, qty] of l) { const n = AB.IsoStash.add(item, qty); if (n) got.push(`${AB.ID.get(item).name} ×${n}`); if (n < qty) left.push([item, qty - n]); }
+    if (left.length) loot.set(k, left); else loot.delete(k);
+    if (got.length) say(`Подобрано: ${got.join(', ')}`);
+  }
+
+  // ---------- рисование ----------
   const COLOR = { silt: '#1d3038', rock: '#2a3238', trench: '#020406', crystal: '#2a1f3a' };
   const hv = (x, y, s, i) => { const a = Math.PI / 180 * (60 * i - 30); return { x: x + s * Math.cos(a), y: y + s * Math.sin(a) * TILT }; };
   function hex(x, y, s) { g.beginPath(); for (let i = 0; i < 6; i++) { const v = hv(x, y, s, i); g.lineTo(v.x, v.y); } g.closePath(); }
-  // боковые грани ближней к камере стороны (вершины 0,1,2 — правая, нижняя, левая)
   function sides(x, y, s, h, col) {
     for (const [a, b, shade] of [[0, 1, 0.75], [1, 2, 0.55], [2, 3, 0.65]]) {
       const v1 = hv(x, y, s, a), v2 = hv(x, y, s, b);
@@ -216,31 +413,32 @@ AB.IsoOverworld = (() => {
       g.fillStyle = col; g.fill(); g.fillStyle = `rgba(0,0,0,${1 - shade})`; g.fill();
     }
   }
-  const LIFT = { rock: 0.42, crystal: 0.12, silt: 0.06, trench: -0.18 };   // высота клетки в долях size
-  function draw(cur) {
+  const LIFT = { rock: 0.42, crystal: 0.12, silt: 0.06, trench: -0.18 };
+  function draw() {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#010305'; g.fillRect(0, 0, cv.width, cv.height);
     g.setTransform(1, 0, 0, 1, cv.width / 2 - cam.x, cv.height / 2 - cam.y);
-    // дальние ряды — раньше (камера смотрит сверху-спереди)
     const order = [...cells.values()].filter((c) => c.seen).sort((a, b) => a.r - b.r || a.q - b.q);
     for (const c of order) {
-      const p0 = px(c.q, c.r), near = dist(c, pos) <= viewR(), lift = LIFT[c.kind] * size;
+      const p0 = px(c.q, c.r), lit = near(c), lift = LIFT[c.kind] * size;
       const p = { x: p0.x, y: p0.y - Math.max(0, lift) };
       if (lift > 0) sides(p.x, p.y, size * 0.97, lift + size * 0.06, c.kind === 'rock' ? '#1c2328' : '#1a2a30');
       hex(p.x, p.y, size * 0.97);
       g.fillStyle = COLOR[c.kind]; g.fill();
       if (c.kind === 'crystal') { g.fillStyle = `rgba(170,110,255,${0.12 + Math.sin(time * 2 + c.q) * 0.06})`; g.fill(); }
       if (c.kind === 'rock') { g.fillStyle = 'rgba(255,255,255,.04)'; g.fill(); }
-      if (!near) { g.fillStyle = 'rgba(0,0,0,.5)'; g.fill(); }        // видели раньше — в полутьме
+      if (!lit) { g.fillStyle = 'rgba(0,0,0,.5)'; g.fill(); }
       g.strokeStyle = 'rgba(120,180,200,.08)'; g.lineWidth = 1; g.stroke();
       if (c.kind === 'crystal') for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(190,140,255,.7)'; g.fillRect(p.x - size * 0.3 + i * size * 0.25, p.y - size * 0.15 - (i % 2) * 6, 3, 8); }
     }
-    // путь
-    if (path.length) {
-      g.strokeStyle = 'rgba(94,230,255,.5)'; g.setLineDash([4, 6]); g.lineWidth = 2; g.beginPath(); g.moveTo(cur.x, cur.y);
-      for (const s of path) { const p = px(s.q, s.r); g.lineTo(p.x, p.y); } g.stroke(); g.setLineDash([]);
+    // пути отрядов и капсулы
+    for (const u of [base, ...outSquads()]) {
+      if (!u.path.length) continue;
+      const c = curPos(u);
+      g.strokeStyle = u.kind === 'base' ? 'rgba(255,210,120,.5)' : u.state === 'retreat' ? 'rgba(255,120,90,.5)' : 'rgba(94,230,255,.5)';
+      g.setLineDash([4, 6]); g.lineWidth = 2; g.beginPath(); g.moveTo(c.x, c.y);
+      for (const s of u.path) { const p = px(s.q, s.r); g.lineTo(p.x, p.y); } g.stroke(); g.setLineDash([]);
     }
-    // точки (видны, если клетку уже видели)
     for (const s of D().sites) {
       const c = cells.get(key(s.q, s.r)); if (!c.seen || !shown(s)) continue;
       const p = px(s.q, s.r);
@@ -248,116 +446,61 @@ AB.IsoOverworld = (() => {
       g.font = `${11 * dpr}px "Oswald", sans-serif`; g.textAlign = 'center'; g.fillStyle = 'rgba(230,220,200,.85)';
       g.fillText(s.name, p.x, p.y + size * 0.85);
     }
-    // находки на клетках и твари
-    for (const [k, [item]] of loot) { const [q, r] = k.split(',').map(Number); const c = cells.get(k); if (!c || !c.seen) continue; const p = px(q, r); g.fillStyle = `rgba(190,140,255,${0.6 + Math.sin(time * 4) * 0.3})`; g.beginPath(); g.moveTo(p.x, p.y - 14 * dpr); g.lineTo(p.x + 6 * dpr, p.y - 4 * dpr); g.lineTo(p.x, p.y + 4 * dpr); g.lineTo(p.x - 6 * dpr, p.y - 4 * dpr); g.closePath(); g.fill(); }
-    for (const m of mobs) drawMob(m);
-    // экзокостюм или капсула
-    g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(cur.x, cur.y + 6, (mode === 'capsule' ? 18 : 10) * dpr, 4 * dpr, 0, 0, 7); g.fill();
-    if (mode === 'capsule') {
-      g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(cur.x, cur.y - 6, 16 * dpr, 9 * dpr, 0, 0, 7); g.fill();
-      g.fillStyle = '#5ee6ff'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(cur.x + i * 7 * dpr, cur.y - 7, 2.4 * dpr, 0, 7); g.fill(); }
-    } else {
-      // №56: экзокостюм — та же фигура из частей, что в изометрии; занимает одну клетку
-      const pose = { facing: suitFace, phase: suitStride / 78 * Math.PI * 2, moving: !!anim, attack: atk ? Math.min(1, atk.t / 0.8) : -1, hurt: suitFlash > 0 ? 1 : 0, dead: !!(AB.Chars.get('CHAR-001') || {}).dead, t: time };
-      AB.IsoSuit.draw(g, pose, cur.x, cur.y + size * 0.2, (size * 1.3) / AB.RIGS.EXOSUIT.height);
-      if (mobs.some((m) => m.hp > 0 && m.hunt)) bar(cur.x, cur.y - size * 1.25, hpShow, '#5ee6ff');
+    for (const [k, items] of loot) {
+      const c = cells.get(k); if (!c || !c.seen) continue;
+      const p = px(c.q, c.r), col = items.some(([i]) => i === 'ITEM-015') ? '190,140,255' : '120,255,170';
+      g.fillStyle = `rgba(${col},${0.6 + Math.sin(time * 4) * 0.3})`; g.beginPath(); g.moveTo(p.x, p.y - 14 * dpr); g.lineTo(p.x + 6 * dpr, p.y - 4 * dpr); g.lineTo(p.x, p.y + 4 * dpr); g.lineTo(p.x - 6 * dpr, p.y - 4 * dpr); g.closePath(); g.fill();
     }
-    // свет нашлемных фонарей
-    const lg = g.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, size * 3.2);
-    lg.addColorStop(0, 'rgba(120,200,220,.08)'); lg.addColorStop(1, 'rgba(120,200,220,0)');
-    g.fillStyle = lg; g.fillRect(cur.x - size * 3.2, cur.y - size * 3.2, size * 6.4, size * 6.4);
+    // выбранный — кольцо под ним
+    const su = selU(), sp = curPos(su);
+    g.strokeStyle = `rgba(94,230,255,${0.55 + Math.sin(time * 4) * 0.2})`; g.lineWidth = 2 * dpr;
+    g.beginPath(); g.ellipse(sp.x, sp.y + 2, size * 0.7, size * 0.7 * TILT, 0, 0, 7); g.stroke();
+    // по глубине: твари, капсула, костюмы
+    const things = [];
+    for (const m of mobs) things.push({ y: curMob(m).y, f: () => drawMob(m) });
+    if (mode === 'capsule') things.push({ y: curPos(base).y, f: drawBase });
+    for (const s of outSquads()) things.push({ y: curPos(s).y, f: () => drawSquad(s) });
+    things.sort((a, b) => a.y - b.y).forEach((t) => t.f());
+    for (const u of [base, ...outSquads()]) {
+      const c = curPos(u), lg = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, size * 3.2);
+      lg.addColorStop(0, 'rgba(120,200,220,.07)'); lg.addColorStop(1, 'rgba(120,200,220,0)');
+      g.fillStyle = lg; g.fillRect(c.x - size * 3.2, c.y - size * 3.2, size * 6.4, size * 6.4);
+    }
   }
-  // ---------- бой на карте (№61) ----------
-  function mobAt(q, r) { return mobs.find((m) => m.hp > 0 && m.q === q && m.r === r) || null; }
+  function drawBase() {
+    const c = curPos(base);
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(c.x, c.y + 6, 20 * dpr, 5 * dpr, 0, 0, 7); g.fill();
+    g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(c.x, c.y - 6, 18 * dpr, 10 * dpr, 0, 0, 7); g.fill();
+    g.fillStyle = '#8a6e30'; g.fillRect(c.x - 14 * dpr, c.y - 2, 28 * dpr, 4 * dpr);
+    g.fillStyle = '#5ee6ff'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(c.x + i * 8 * dpr, c.y - 8, 2.6 * dpr, 0, 7); g.fill(); }
+  }
+  function drawSquad(s) {
+    const c = curPos(s), me = AB.Chars.get(s.id);
+    const pose = { facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
+    if (s.state === 'retreat') g.globalAlpha = 0.75;
+    AB.IsoSuit.draw(g, pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height);
+    g.globalAlpha = 1;
+    const hp = me ? me.hp / AB.ID.get(s.id).stats.maxHp : 1;
+    if (hp < 0.999 || mobs.some((m) => m.hp > 0 && m.hunt)) bar(c.x, c.y - size * 1.25, hp, '#5ee6ff');
+  }
   function bar(x, y, f, col) {
     const w = size * 0.9;
     g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(x - w / 2, y, w, 4 * dpr);
     g.fillStyle = col; g.fillRect(x - w / 2, y, w * Math.max(0, f), 4 * dpr);
   }
+  const curMob = (m) => { let p = px(m.q, m.r); if (m.from && m.mt < 1) { const a = px(m.from.q, m.from.r); p = { x: a.x + (p.x - a.x) * m.mt, y: a.y + (p.y - a.y) * m.mt }; } return p; };
   function drawMob(m) {
     const c = cells.get(key(m.q, m.r));
-    if (!c || !c.seen || dist(m, pos) > viewR() + 1) return;
-    let p = px(m.q, m.r);
-    if (m.from && m.mt < 1) { const a = px(m.from.q, m.from.r); p = { x: a.x + (p.x - a.x) * m.mt, y: a.y + (p.y - a.y) * m.mt }; }
-    const def = AB.ID.get(m.id), k = (size * 1.25) / (90 * (def.scale || 1));
+    if (!c || !c.seen || !near(c)) return;
+    if (m.hp <= 0 && (m.fade == null ? 1 : m.fade) <= 0) return;
+    const p = curMob(m);
+    const def = AB.ID.get(m.id), k = (size * (m.kind === 'giants' ? 1.9 : 1.25)) / (90 * (def.scale || 1));
     const e = { id: m.id, x: 0, state: m.hp <= 0 ? 'DEAD' : m.anim, facing: m.face, stride: m.stride, flash: m.flash, t: m.t, hp: m.hp, risen: true };
     if (m.hp <= 0) { m.fade = Math.max(0, (m.fade == null ? 1 : m.fade) - 0.01); g.globalAlpha = m.fade; }
     if (AB.Render && AB.Render.drawEnemyFigure) { try { AB.Render.drawEnemyFigure(g, e, p.x, p.y + size * 0.2, k); } catch (er) { /* без фигуры */ } }
     g.globalAlpha = 1;
-    if (m.hp > 0 && m.hunt) bar(p.x, p.y - size * 1.2, m.hp / m.max, '#ff5a4a');
+    if (m.hp > 0 && (m.hunt || m.hp < m.max)) bar(p.x, p.y - size * (m.kind === 'giants' ? 1.75 : 1.2), m.hp / m.max, m.kind === 'giants' ? '#ff9a3a' : '#ff5a4a');
   }
-  // твари этого акта на своих клетках (данные — js/data/iso-acts.js: ISO_SITES[].mob)
-  function spawnMobs() {
-    for (const s of D().sites) {
-      const d = AB.ISO_SITES && AB.ISO_SITES[s.key];
-      if (!d || !d.mob || mobs.some((m) => m.id === d.mob) || AB.Enemies.isDead(d.mob) || (AB.IsoActs && AB.IsoActs.act() < d.act)) continue;
-      const def = AB.ID.get(d.mob);
-      mobs.push({ id: d.mob, q: s.q, r: s.r, hp: def.hp, max: def.hp, hunt: false, stepT: 0, atkT: 1, flash: 0, anim: 'PATROL', t: 0, face: -1, stride: 0, mt: 1 });
-    }
-  }
-  function fight(dt) {
-    const sw = SUIT().weapon, me = AB.Chars.get('CHAR-001');
-    if (me && me.dead) return;
-    hpShow = me ? me.hp / AB.ID.get('CHAR-001').stats.maxHp : 1;
-    suitFlash = Math.max(0, suitFlash - dt);
-    suitAtkT = Math.max(0, suitAtkT - dt);
-    const here = anim ? anim.to : pos;
-    for (const m of mobs) {
-      m.t += dt; m.flash = Math.max(0, m.flash - dt * 4);
-      if (m.hp <= 0) continue;
-      const d = dist(m, here), def = AB.ID.get(m.id);
-      if (m.mt < 1) { m.mt = Math.min(1, m.mt + dt / 0.9); m.stride += dt * 80; }
-      if (!m.hunt && d <= 3) { m.hunt = true; m.anim = 'ALERT'; m.t = 0; say('Мира: «Оно двинулось к тебе! Бей, как только подойдёт на две клетки»'); }
-      if (!m.hunt) continue;
-      m.face = px(here.q, here.r).x >= px(m.q, m.r).x ? 1 : -1;
-      m.atkT = Math.max(0, m.atkT - dt);
-      if (d <= 1) {
-        // вплотную — бьёт
-        if (m.atkT <= 0) { m.anim = 'ATTACK'; m.t = 0; m.atkT = def.attack.cooldown + def.attack.windup; m.hit = def.attack.windup; }
-        if (m.hit != null) { m.hit -= dt; if (m.hit <= 0) { m.hit = null; suitFlash = 0.3; AB.IsoCombat.damageChar('CHAR-001', def.damage * SUIT().armor, null); } }
-        if (m.anim === 'ATTACK' && m.t > 1) m.anim = 'CHASE';
-      } else if (m.mt >= 1) {
-        // шаг к костюму (тяжело, ~0,9 с на клетку)
-        m.stepT -= dt; m.anim = 'CHASE';
-        if (m.stepT <= 0) {
-          const r = route(m, here);
-          const nx = r && r[0];
-          if (nx && !(nx.q === here.q && nx.r === here.r) && !mobAt(nx.q, nx.r)) { m.from = { q: m.q, r: m.r }; m.q = nx.q; m.r = nx.r; m.mt = 0; }
-          m.stepT = 0.9;
-        }
-      }
-    }
-    // удар костюма: сам по ближайшей твари в досягаемости (или по выбранной)
-    if (atk) {
-      atk.t += dt;
-      if (!atk.done && atk.t >= sw.hitAt * 2) {
-        atk.done = true;
-        const m = atk.m;
-        if (m.hp > 0 && dist(m, here) <= sw.reachCells) {
-          m.hp = Math.max(0, m.hp - sw.damage); m.flash = 1; m.hunt = true;
-          if (m.hp <= 0) mobDead(m);
-        }
-      }
-      if (atk.t > 0.8) atk = null;
-    } else if (suitAtkT <= 0 && !anim) {
-      const foe = (target && target.hp > 0 && dist(target, here) <= sw.reachCells) ? target : mobs.filter((m) => m.hp > 0 && m.hunt && dist(m, here) <= sw.reachCells).sort((a, b) => dist(a, here) - dist(b, here))[0];
-      if (foe) { atk = { m: foe, t: 0 }; suitAtkT = sw.cooldown; suitFace = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1; path = []; }
-    }
-  }
-  function mobDead(m) {
-    m.anim = 'DEAD'; target = null;
-    AB.IsoEnemies.markDead(m.id);
-    AB.Bus.emit('enemy:dead', { id: m.id, name: AB.ID.get(m.id).name, q: m.q, r: m.r });
-  }
-  // предмет на клетку (кристалл с убитой твари) и подбор, когда костюм встал на клетку
-  function dropLoot(q, r, item, qty) { loot.set(key(q, r), [item, qty]); }
-  function pickLoot() {
-    const k = key(pos.q, pos.r), l = loot.get(k);
-    if (!l) return;
-    const n = AB.IsoStash.add(l[0], l[1]);
-    if (n) { loot.delete(k); say(`Подобрано: ${AB.ID.get(l[0]).name}`); }
-  }
-
   function icon(kind, x, y) {
     const s = size * 0.42;
     g.save(); g.translate(x, y);
@@ -371,14 +514,16 @@ AB.IsoOverworld = (() => {
     else { g.beginPath(); g.moveTo(0, -s); g.lineTo(s * 0.4, 0); g.lineTo(0, s); g.lineTo(-s * 0.4, 0); g.closePath(); g.fill(); }
     g.restore();
   }
-  // карточка точки, где стоит экзокостюм
-  let topHtml = '';
+
+  // ---------- интерфейс: цель задания сверху, точка под выбранным, карточки отряда справа внизу ----------
+  let topHtml = '', squadsSig = '';
   function hud() {
-    // сверху: кто на карте и текущая цель задания
     const q = AB.Quests.active().map((x) => x.objectives.find((o) => !o.ok)).find(Boolean);
-    const th = `<b>Дно океана</b><span>${mode === 'capsule' ? `Капсула-база · экипаж: ${AB.IsoActs.crew().length}` : 'Марк в экзокостюме · Мира на связи'}</span>${q ? `<em>▸ ${q.text}</em>` : ''}`;
+    const th = `<b>Дно океана</b><span>${mode === 'capsule' ? `База-капсула · экипаж: ${AB.IsoActs.crew().length}` : 'Марк в экзокостюме · Мира на связи'}</span>${q ? `<em>▸ ${q.text}</em>` : ''}`;
     if (th !== topHtml) { document.getElementById('ow-top').innerHTML = th; topHtml = th; }
-    let s = anim ? null : siteAt(pos.q, pos.r);
+    squadPanel();
+    const u = selU();
+    let s = u.anim ? null : siteAt(u.q, u.r);
     if (s && !shown(s)) s = null;
     if (s === onSite) return;
     onSite = s;
@@ -387,17 +532,40 @@ AB.IsoOverworld = (() => {
     if (!s) return;
     card.querySelector('b').textContent = s.name;
     card.querySelector('p').textContent = s.desc;
-    const act = document.getElementById('ow-act'), a = AB.IsoActs ? AB.IsoActs.siteAction(s) : { label: s.key === 'abyss' ? 'Вернуться на корабль' : 'Исследовать — появится позже', ok: s.key === 'abyss' };
+    const act = document.getElementById('ow-act'), a = AB.IsoActs ? AB.IsoActs.siteAction(s) : { label: 'Исследовать — появится позже', ok: false };
     act.textContent = a.label;
     act.disabled = !a.ok;
+  }
+  const STATE = { home: 'на базе', out: 'снаружи', retreat: 'возвращается' };
+  function squadPanel() {
+    const el = document.getElementById('ow-squads');
+    const rows = [];
+    if (mode === 'capsule') rows.push({ id: 'base', html: `<div class="sq-art capsule"><i></i></div><div class="sq-tx"><b>База-капсула</b><span>${base.anim || base.path.length ? 'в пути' : 'стоит'}</span></div>` });
+    for (const s of squads) {
+      if (mode === 'suit' && s.id !== 'CHAR-001') continue;
+      const c = AB.Chars.get(s.id), d = AB.ID.get(s.id), hp = c ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
+      const st = !s.vehicle ? 'нет транспорта' : s.state === 'out' && s.atk ? 'в бою' : s.state === 'out' && (s.anim || s.path.length) ? 'в пути' : STATE[s.state];
+      const btn = !s.vehicle ? '' : mode === 'suit' ? '' : s.state === 'home' ? '<button data-do="out">Выйти</button>' : '<button data-do="back">Отозвать</button>';
+      rows.push({ id: s.id, off: !s.vehicle, html: `<div class="sq-art"><canvas data-pt="${s.id}"></canvas>${s.vehicle ? '<img src="assets/exosuit/v2/body.png" alt="Экзокостюм">' : ''}</div><div class="sq-tx"><b>${d.name}</b><span>${s.vehicle ? 'Экзокостюм · ' : ''}${st}</span><u><i style="width:${hp}%"></i></u>${btn}</div>` });
+    }
+    const sig = rows.map((r) => r.id + r.html).join('|') + sel;
+    if (sig === squadsSig) return;
+    squadsSig = sig;
+    el.innerHTML = rows.map((r) => `<div class="sq ${r.id === selU().id ? 'on' : ''} ${r.off ? 'off' : ''}" data-u="${r.id}">${r.html}</div>`).join('');
+    for (const c of el.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(c, c.dataset.pt, 1);
   }
 
   return {
     init, enter, back, close, say, isOpen: () => open_,
-    setMode(m) { mode = m; }, mode: () => mode, refresh() { onSite = undefined; },
-    mobs: () => mobs.map((m) => ({ id: m.id, q: m.q, r: m.r, hp: m.hp, hunt: m.hunt })), dropLoot, attack(id) { target = mobs.find((m) => m.id === id) || null; },
-    pos: () => ({ ...pos }), goTo(q, r) { const p = route(anim ? anim.to : pos, { q, r }); if (p) path = p; return !!p; },
+    setMode(m) { mode = m; if (m === 'capsule') { for (const s of squads) if (s.state !== 'home') dock(s); sel = 'base'; } }, mode: () => mode, refresh() { onSite = undefined; },
+    mobs: () => mobs.filter((m) => m.hp > 0).map((m) => ({ id: m.id, kind: m.kind, q: m.q, r: m.r, hp: m.hp, hunt: m.hunt })), dropLoot,
+    attack(id) { const m = mobs.find((q) => q.id === id), s = selU(); if (m && s.kind === 'squad') s.target = m; },
+    pos: () => ({ q: selU().q, r: selU().r }),
+    goTo(q, r) { const u = selU(); if (u.kind === 'base' && mode !== 'capsule') return false; const p = route(at(u), { q, r }); if (p) u.path = p; return !!p; },
+    select(id) { if (unit(id)) { sel = id; squadsSig = ''; return true; } return false; },
+    deploy, recall, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle })), base: () => ({ q: base.q, r: base.r }),
+    lootAt: (q, r) => loot.get(key(q, r)) || null, time: () => time, _sq: () => squads,
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
-    moving: () => !!anim || path.length > 0, route,
+    moving: () => { const u = selU(); return !!u.anim || u.path.length > 0; }, route,
   };
 })();

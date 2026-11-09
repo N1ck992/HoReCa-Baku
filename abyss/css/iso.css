@@ -272,3 +272,30 @@ body.quiet #iso-help { display: none; }
 }
 #iso-fs { font-size: 16px !important; }
 #iso-death { z-index: 16; }
+
+/* ---------- №63: отряды на карте дна (как в Warpath): карточки справа внизу ---------- */
+#ow-squads { position: absolute; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 6px; align-items: flex-end; z-index: 1; }
+#ow-squads .sq { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: center; width: 210px; padding: 5px 8px 5px 5px; background: rgba(8, 12, 14, .82); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+#ow-squads .sq.on { border-color: rgba(94, 230, 255, .8); box-shadow: 0 0 0 1px rgba(94, 230, 255, .3) inset; }
+#ow-squads .sq.off { opacity: .55; cursor: default; }
+#ow-squads .sq-art { position: relative; width: 58px; height: 58px; border-radius: 6px; background: radial-gradient(circle at 50% 70%, #1d3038, #0b1114); overflow: hidden; }
+#ow-squads .sq-art canvas { position: absolute; left: 0; top: 0; width: 34px; height: 46px; }
+#ow-squads .sq-art img { position: absolute; right: -2px; bottom: 0; height: 52px; filter: drop-shadow(0 0 2px #000); }
+#ow-squads .sq-art.capsule i { position: absolute; left: 9px; top: 20px; width: 40px; height: 20px; border-radius: 50%; background: #c9a24a; box-shadow: inset 0 -4px 0 #8a6e30; }
+#ow-squads .sq-art.capsule i::after { content: '• • •'; position: absolute; left: 0; right: 0; top: 1px; text-align: center; color: #5ee6ff; font-size: 12px; letter-spacing: 1px; }
+#ow-squads .sq-tx { display: grid; gap: 2px; min-width: 0; }
+#ow-squads .sq-tx b { font: 600 13px var(--display); color: #d9cfc2; letter-spacing: .5px; }
+#ow-squads .sq.on .sq-tx b { color: #bfefff; }
+#ow-squads .sq-tx span { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ow-squads .sq-tx u { display: block; height: 3px; background: rgba(255, 255, 255, .1); text-decoration: none; }
+#ow-squads .sq-tx u i { display: block; height: 100%; background: #5ee6ff; }
+#ow-squads .sq-tx button { justify-self: start; margin-top: 2px; font: 11px var(--mono); padding: 3px 8px; border-radius: 4px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid rgba(94, 230, 255, .45); }
+#ow-card { left: calc(12px + env(safe-area-inset-left, 0px)); transform: none; width: min(440px, calc(100vw - 250px)); }
+@media (max-width: 560px) {
+  #ow-squads .sq { width: 168px; grid-template-columns: 48px minmax(0, 1fr); }
+  #ow-squads .sq-art { width: 48px; height: 48px; }
+  #ow-squads .sq-art img { height: 44px; }
+  #ow-card { width: calc(100vw - 200px); min-width: 150px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  #ow-card p { font-size: 11px; }
+  #ow-hint { display: none; }
+}
