@@ -76,4 +76,24 @@ AB.CHARACTERS.push({
   },
 });
 
+// CHAR-004 — новый член экипажа базы (акт III, дополнение №55, ЧЕРНОВИК: имя, облик, история —
+// предложение разработчика). Киборг-разведчик с корабля, упавшего задолго до «Абисса» (канон §0:
+// синтетики и киборги). Пока живёт только на базе-капсуле, в отряд на корабле не ходит.
+AB.CHARACTERS.push({
+  id: 'CHAR-004',
+  name: 'Сайлас',
+  role: 'Разведчик',
+  specialization: 'scout',
+  crew: true,
+  pending: true,
+  stats: { maxHp: 120, speed: 115, runSpeed: 220 },
+  skills: { scout: true },
+  appearances: ['ASSET-CHAR004-01'],
+  look: { dark: '#24282c', mid: '#5c6670', light: '#9aa6b0', hair: '#1c1c1c', build: 1.05 },
+  anims: {
+    idle: 'ANIM-CHAR003-05', walk: 'ANIM-CHAR003-01', run: 'ANIM-CHAR003-02',
+    interact: 'ANIM-CHAR003-03', hurt: 'ANIM-CHAR003-04', death: 'ANIM-CHAR003-06',
+  },
+});
+
 AB.CHARACTERS.forEach((c) => AB.ID.register(c.id, c));

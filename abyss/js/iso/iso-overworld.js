@@ -15,7 +15,9 @@ AB.IsoOverworld = (() => {
   let open_ = false, cv, g, dpr = 1;
   const cells = new Map();             // q,r → { q, r, kind, seen }
   let pos = null, path = [], stepT = 0, anim = null, cam = { x: 0, y: 0 }, size = 34, time = 0, last = 0, onSite = null;
-  const VIEW = 2;                       // на сколько клеток видно вокруг
+  let mode = 'suit';                    // №55: 'suit' — Марк в экзокостюме один (акт II), 'capsule' — база-капсула (акт III)
+  const viewR = () => (AB.IsoActs ? AB.IsoActs.view() : 2);   // на сколько клеток видно вокруг (сонар базы — дальше)
+  const shown = (s) => !AB.IsoActs || AB.IsoActs.siteVisible(s);
 
   const inside = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) <= D().radius;
   const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
@@ -76,7 +78,7 @@ AB.IsoOverworld = (() => {
     }
     return null;
   }
-  function reveal() { for (const c of cells.values()) if (dist(c, pos) <= VIEW) c.seen = true; }
+  function reveal() { for (const c of cells.values()) if (dist(c, pos) <= viewR()) c.seen = true; }
 
   // ---------- открыть / закрыть ----------
   function init() {
@@ -91,13 +93,25 @@ AB.IsoOverworld = (() => {
       path = p;
     });
     document.getElementById('ow-back').addEventListener('click', back);
-    document.getElementById('ow-act').addEventListener('click', () => { if (onSite && onSite.key === 'abyss') back(); });
+    document.getElementById('ow-act').addEventListener('click', () => {
+      if (!onSite) return;
+      if (onSite.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(onSite);
+    });
+    // база-капсула (акт III): экипаж, вещи, модули
+    document.getElementById('ow-base-btn').addEventListener('click', () => baseOpen(true));
+    document.getElementById('ow-base').addEventListener('click', (e) => {
+      if (e.target.closest('[data-base-close]') || e.target.id === 'ow-base') { baseOpen(false); return; }
+      const b = e.target.closest('[data-build]');
+      if (b && AB.IsoActs.build(b.dataset.build)) baseOpen(true);
+    });
     window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { const s = siteAt(pos.q, pos.r); if (s && s.key === 'abyss') back(); } });
     window.addEventListener('resize', () => { if (open_) fit(); });
   }
   function enter() {
     open_ = true;
+    reveal(); onSite = undefined;
     document.getElementById('ow').hidden = false;
+    document.getElementById('ow-base-btn').hidden = mode !== 'capsule';
     fit(); last = performance.now();
     requestAnimationFrame(loop);
     AB.Bus.emit('ow:enter', {});
@@ -106,11 +120,31 @@ AB.IsoOverworld = (() => {
   function back() {
     const s = siteAt(pos.q, pos.r);
     if (!s || s.key !== 'abyss') { say('Вернуться на корабль можно только у «Абисса»'); return; }
-    open_ = false;
-    document.getElementById('ow').hidden = true;
+    close();
     AB.Bus.emit('ow:exit', {});
   }
-  function say(t) { const el = document.getElementById('ow-say'); el.textContent = t; el.classList.add('show'); clearTimeout(say.t); say.t = setTimeout(() => el.classList.remove('show'), 2000); }
+  // закрыть карту без возвращения на корабль (схватка на дне — iso-acts.js)
+  function close() { open_ = false; baseOpen(false); document.getElementById('ow').hidden = true; }
+  function say(t) { const el = document.getElementById('ow-say'); el.textContent = t; el.classList.add('show'); clearTimeout(say.t); say.t = setTimeout(() => el.classList.remove('show'), 2000 + t.length * 40); }
+
+  // ---------- база-капсула ----------
+  function baseOpen(on) {
+    const el = document.getElementById('ow-base');
+    el.hidden = !on;
+    if (!on) return;
+    if (AB.IsoActs) AB.IsoActs.onBase();
+    const nm = (id) => AB.ID.get(id).name;
+    const crew = AB.IsoActs.crew().map((id) => { const c = AB.Chars.get(id), d = AB.ID.get(id), hp = c ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
+      return `<div class="crew"><b>${d.name}</b><i style="width:${hp}%"></i></div>`; }).join('');
+    const res = ['ITEM-001', 'ITEM-002', 'ITEM-003', 'ITEM-015'].map((i) => `<span>${nm(i)}: <b>${AB.IsoStash.count(i)}</b></span>`).join('');
+    const mods = AB.ISO_MODULES.map((m) => {
+      const done = AB.IsoActs.built(m.id), ok = AB.IsoActs.canBuild(m.id);
+      const cost = (m.cost || []).map(([i, n]) => `<u class="${AB.IsoStash.count(i) >= n ? '' : 'no'}">${AB.ID.get(i).short} ${AB.IsoStash.count(i)}/${n}</u>`).join(' ');
+      return `<div class="mod ${done ? 'on' : ''}"><b>${m.name}</b><p>${m.desc}</p>${done ? '<em>Пристыкован</em>' : `<div class="cost">${cost}</div><button data-build="${m.id}" ${ok ? '' : 'disabled'}>Пристыковать</button>`}</div>`;
+    }).join('');
+    el.innerHTML = `<div class="inv-card base-card" role="dialog" aria-label="База"><div class="inv-head"><div><h2>База-капсула</h2><div class="muted">Черновик: модули и экипаж ждут правки автора</div></div><button class="inv-x" data-base-close aria-label="Закрыть">✕</button></div>`
+      + `<h3>Экипаж</h3><div class="crew-list">${crew}</div><h3>Ресурсы</h3><div class="res">${res}</div><h3>Модули</h3><div class="mods">${mods}</div></div>`;
+  }
 
   function fit() {
     dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -154,7 +188,7 @@ AB.IsoOverworld = (() => {
     g.setTransform(1, 0, 0, 1, cv.width / 2 - cam.x, cv.height / 2 - cam.y);
     for (const c of cells.values()) {
       if (!c.seen) continue;
-      const p = px(c.q, c.r), near = dist(c, pos) <= VIEW;
+      const p = px(c.q, c.r), near = dist(c, pos) <= viewR();
       hex(p.x, p.y, size * 0.97);
       g.fillStyle = COLOR[c.kind]; g.fill();
       if (c.kind === 'crystal') { g.fillStyle = `rgba(170,110,255,${0.12 + Math.sin(time * 2 + c.q) * 0.06})`; g.fill(); }
@@ -170,16 +204,21 @@ AB.IsoOverworld = (() => {
     }
     // точки (видны, если клетку уже видели)
     for (const s of D().sites) {
-      const c = cells.get(key(s.q, s.r)); if (!c.seen) continue;
+      const c = cells.get(key(s.q, s.r)); if (!c.seen || !shown(s)) continue;
       const p = px(s.q, s.r);
       icon(s.kind, p.x, p.y);
       g.font = `${11 * dpr}px "Oswald", sans-serif`; g.textAlign = 'center'; g.fillStyle = 'rgba(230,220,200,.85)';
       g.fillText(s.name, p.x, p.y + size * 0.85);
     }
-    // экзокостюм
-    g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(cur.x, cur.y + 6, 10 * dpr, 4 * dpr, 0, 0, 7); g.fill();
-    g.fillStyle = '#c9a24a'; g.beginPath(); g.arc(cur.x, cur.y - 4, 8 * dpr, 0, 7); g.fill();
-    g.fillStyle = '#5ee6ff'; g.beginPath(); g.arc(cur.x + 2 * dpr, cur.y - 6, 3.2 * dpr, 0, 7); g.fill();
+    // экзокостюм или капсула
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(cur.x, cur.y + 6, (mode === 'capsule' ? 18 : 10) * dpr, 4 * dpr, 0, 0, 7); g.fill();
+    if (mode === 'capsule') {
+      g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(cur.x, cur.y - 6, 16 * dpr, 9 * dpr, 0, 0, 7); g.fill();
+      g.fillStyle = '#5ee6ff'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(cur.x + i * 7 * dpr, cur.y - 7, 2.4 * dpr, 0, 7); g.fill(); }
+    } else {
+      g.fillStyle = '#c9a24a'; g.beginPath(); g.arc(cur.x, cur.y - 4, 8 * dpr, 0, 7); g.fill();
+      g.fillStyle = '#5ee6ff'; g.beginPath(); g.arc(cur.x + 2 * dpr, cur.y - 6, 3.2 * dpr, 0, 7); g.fill();
+    }
     // свет нашлемных фонарей
     const lg = g.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, size * 3.2);
     lg.addColorStop(0, 'rgba(120,200,220,.08)'); lg.addColorStop(1, 'rgba(120,200,220,0)');
@@ -199,8 +238,14 @@ AB.IsoOverworld = (() => {
     g.restore();
   }
   // карточка точки, где стоит экзокостюм
+  let topHtml = '';
   function hud() {
-    const s = anim ? null : siteAt(pos.q, pos.r);
+    // сверху: кто на карте и текущая цель задания
+    const q = AB.Quests.active().map((x) => x.objectives.find((o) => !o.ok)).find(Boolean);
+    const th = `<b>Дно океана</b><span>${mode === 'capsule' ? `Капсула-база · экипаж: ${AB.IsoActs.crew().length}` : 'Марк в экзокостюме · Мира на связи'}</span>${q ? `<em>▸ ${q.text}</em>` : ''}`;
+    if (th !== topHtml) { document.getElementById('ow-top').innerHTML = th; topHtml = th; }
+    let s = anim ? null : siteAt(pos.q, pos.r);
+    if (s && !shown(s)) s = null;
     if (s === onSite) return;
     onSite = s;
     const card = document.getElementById('ow-card');
@@ -208,13 +253,14 @@ AB.IsoOverworld = (() => {
     if (!s) return;
     card.querySelector('b').textContent = s.name;
     card.querySelector('p').textContent = s.desc;
-    const act = document.getElementById('ow-act');
-    act.textContent = s.key === 'abyss' ? 'Вернуться на корабль' : 'Исследовать — появится позже';
-    act.disabled = s.key !== 'abyss';
+    const act = document.getElementById('ow-act'), a = AB.IsoActs ? AB.IsoActs.siteAction(s) : { label: s.key === 'abyss' ? 'Вернуться на корабль' : 'Исследовать — появится позже', ok: s.key === 'abyss' };
+    act.textContent = a.label;
+    act.disabled = !a.ok;
   }
 
   return {
-    init, enter, back, isOpen: () => open_,
+    init, enter, back, close, say, isOpen: () => open_,
+    setMode(m) { mode = m; }, mode: () => mode, refresh() { onSite = undefined; },
     pos: () => ({ ...pos }), goTo(q, r) { const p = route(anim ? anim.to : pos, { q, r }); if (p) path = p; return !!p; },
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
     moving: () => !!anim || path.length > 0, route,

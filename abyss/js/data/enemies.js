@@ -106,4 +106,21 @@ AB.ENEMIES.push({
   spawn: { room: 'ROOM-009', x: 1250, patrol: [900, 1500], requires: [] },
 });
 
+// ENEMY-008 — глубинный хищник (акт II, дополнение №55, черновик): первая тварь снаружи,
+// на дне у «Абисса». Пока — фигура мутанта, крупнее и другой окраски.
+AB.ENEMIES.push({
+  ...MUTANT,
+  id: 'ENEMY-008', name: 'Глубинный хищник', type: 'beast', pending: true,
+  asset: 'ASSET-ENEMY008-01',
+  scale: 1.6,
+  tint: { flesh: '#3d5a66', dark: '#14232a', plate: '#2a4a52' },
+  hp: 260, damage: 20,
+  speed: { patrol: 50, investigate: 80, chase: 150, retreat: 0 },
+  attack: { range: 80, windup: 0.6, cooldown: 1.2 },
+  detection: { sight: 600, behind: 0.6 },
+  behavior: { start: 'PATROL', retreatBelow: 0, retreatTime: 0, loseAfter: 99, investigateTime: 3 },
+  carry: null,
+  spawn: { room: 'ROOM-019', x: 1200, patrol: [900, 1500], requires: [] },
+});
+
 AB.ENEMIES.forEach((e) => AB.ID.register(e.id, e));

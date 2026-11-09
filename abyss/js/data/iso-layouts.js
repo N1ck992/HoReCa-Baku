@@ -24,6 +24,9 @@
 // =====================================================================
 
 AB.ISO_LAYOUTS = {
+  // №55: акт I — линейный маршрут без возвратов (решение автора: это первая локация и обучение).
+  // Жилой сектор (Мира) → склад (топливо) → гидропоника (провода) → техкоридор Б →
+  // генераторная (код знает Мира) → после запуска — сразу к командному центру.
   'SECTOR-001': {
     name: 'Жилая палуба и гидропоника',
     areas: [
@@ -32,10 +35,8 @@ AB.ISO_LAYOUTS = {
       { room: 'ROOM-005', x: 27, y: 2, w: 22, h: 15 },    // склад
       { room: 'ROOM-005', x: 40, y: 17, w: 3, h: 6 },     // спуск к гидропонике
       { room: 'ROOM-013', x: 30, y: 23, w: 22, h: 13 },   // гидропоника
-      { room: 'ROOM-015', x: 39, y: 36, w: 4, h: 3 },     // проход в насосную
-      { room: 'ROOM-015', x: 35, y: 39, w: 13, h: 6 },    // насосная
       { room: 'ROOM-014', x: 12, y: 27, w: 18, h: 4 },    // техкоридор Б
-      { room: 'ROOM-016', x: 2, y: 22, w: 10, h: 14 },    // резервуарный зал
+      { room: 'ROOM-003', x: 2, y: 21, w: 10, h: 13 },    // генераторная (в конце техкоридора)
     ],
     props: [
       // жилой сектор: койки и шкафчики вдоль стены, стол
@@ -60,11 +61,12 @@ AB.ISO_LAYOUTS = {
       { kind: 'algaefarm', x: 41, y: 31, w: 2, h: 2, equip: 'EQUIP-009' }, { kind: 'algaetank', x: 45, y: 31, w: 2, h: 2 },
       // техкоридор Б: трубы
       { kind: 'pipe', x: 17, y: 27, w: 1, h: 1 }, { kind: 'pipe', x: 23, y: 30, w: 1, h: 1 },
-      // насосная: насосы
-      { kind: 'pump', x: 37, y: 41, w: 2, h: 2 }, { kind: 'pump', x: 43, y: 41, w: 2, h: 2 },
-      // резервуарный зал: резервуары
-      { kind: 'reservoir', x: 4, y: 24, w: 3, h: 3 }, { kind: 'reservoir', x: 4, y: 30, w: 3, h: 3 },
-      { kind: 'reservoir', x: 8, y: 32, w: 2, h: 2 },
+      // генераторная: щит, кабельный узел, генератор, пульт, топливный бак
+      { kind: 'panel', x: 3, y: 21, w: 1, h: 1, equip: 'EQUIP-001', asset: 'ASSET-ROOM003-03' },
+      { kind: 'cable', x: 6, y: 21, w: 2, h: 1, equip: 'EQUIP-002', asset: 'ASSET-ROOM003-04' },
+      { kind: 'generator', x: 5, y: 25, w: 4, h: 3, equip: 'EQUIP-003', asset: 'ASSET-ROOM003-02' },
+      { kind: 'console', x: 10, y: 22, w: 1, h: 2, equip: 'EQUIP-004', asset: 'ASSET-ROOM003-05' },
+      { kind: 'fueltank', x: 4, y: 31, w: 2, h: 2, equip: 'EQUIP-010' },
     ],
     lights: [
       { x: 6, y: 6, color: [255, 60, 40], radius: 7 },
@@ -74,24 +76,18 @@ AB.ISO_LAYOUTS = {
       { x: 35, y: 29, color: [90, 230, 130], radius: 7 },
       { x: 45, y: 29, color: [90, 230, 130], radius: 7 },
       { x: 20, y: 29, color: [255, 60, 40], radius: 5 },
-      { x: 41, y: 42, color: [255, 140, 60], radius: 6 },
-      { x: 6, y: 28, color: [90, 230, 130], radius: 6 },
+      { x: 7, y: 27, color: [255, 160, 70], radius: 8 },
+      { x: 4, y: 32, color: [255, 60, 40], radius: 5 },
     ],
     doors: [
       { key: 'A', tiles: [[24, 6], [24, 7], [24, 8]], axis: 'x' },          // жилой сектор ↔ склад
       { key: 'D', tiles: [[29, 27], [29, 28], [29, 29], [29, 30]], axis: 'x' },   // гидропоника ↔ техкоридор Б
-      // спуск со склада в гидропонику: в испытании «Гнездо» его заклинивает (№50)
-      { key: 'H', tiles: [[40, 22], [41, 22], [42, 22]], axis: 'y', name: 'Спуск на склад', room: 'ROOM-005', state: 'open' },
+      // техкоридор Б → генераторная: кодовый замок (код знает Мира — EVENT-003)
+      { key: 'G', tiles: [[12, 27], [12, 28], [12, 29], [12, 30]], axis: 'x', name: 'Дверь генераторной', room: 'ROOM-011', roomDoor: 'east', state: 'closed' },
     ],
-    // испытание «Гнездо» (ARENA-001, №44/№50): откуда лезут мутанты на нижней палубе
-    nest: {
-      door: 'H', repairAt: { x: 41.5, y: 23.6 },
-      spawns: [{ x: 12.5, y: 28.5 }, { x: 4.5, y: 28.5 }, { x: 8.5, y: 25.0 }, { x: 46.5, y: 43.5 }],
-    },
     exits: [
-      { room: 'ROOM-002', door: 'west', x: 2, y: 7, wall: 'w', to: { sector: 'SECTOR-002', x: 58.5, y: 7.5 } },        // в генераторную
-      { room: 'ROOM-005', door: 'east', x: 48, y: 9, wall: 'e', to: { sector: 'SECTOR-003', x: 3.5, y: 12.5 } },        // к мостику (питание)
-      { room: 'ROOM-002', door: 'hatch', x: 20, y: 11, floor: true, to: { sector: 'SECTOR-002', x: 47.5, y: 17.5 } },  // люк в технический тоннель
+      // генераторная → командный центр: дверь оживает, когда есть питание
+      { room: 'ROOM-003', door: 'east', x: 2, y: 27, wall: 'w', toName: 'Командный центр', to: { sector: 'SECTOR-003', x: 3.5, y: 12.5 } },
     ],
     items: {
       'ROOM-005:fuel': { x: 42.5, y: 8.5 },
@@ -105,11 +101,11 @@ AB.ISO_LAYOUTS = {
     },
     // противники помещений (rooms.js: enemies) — где стоят в изометрии
     enemyPos: { 'ENEMY-007': { x: 44.5, y: 34.0 } },
-    // для проверки боя в тестовой сцене: экземпляры обычного мутанта (как волны «Гнезда»)
+    // для проверки боя в тестовой сцене: экземпляры обычного мутанта
     testEnemies: [
       { id: 'ENEMY-001~1', x: 6.5, y: 28.5 },
       { id: 'ENEMY-001~2', x: 21.5, y: 29.0 },
-      { id: 'ENEMY-001~3', x: 41.5, y: 42.5 },
+      { id: 'ENEMY-001~3', x: 36.5, y: 34.5 },
     ],
     // существующие персонажи; в отряде — не больше пяти
     party: [
@@ -125,9 +121,7 @@ AB.ISO_LAYOUTS = {
     areas: [
       { room: 'ROOM-001', x: 2, y: 2, w: 14, h: 9 },      // криоотсек
       { room: 'ROOM-001', x: 16, y: 5, w: 2, h: 3 },      // проход в коридор
-      { room: 'ROOM-011', x: 18, y: 4, w: 30, h: 4 },     // коридор
-      { room: 'ROOM-011', x: 48, y: 5, w: 1, h: 2 },      // дверь генераторной
-      { room: 'ROOM-003', x: 49, y: 2, w: 12, h: 10 },    // генераторная
+      { room: 'ROOM-011', x: 18, y: 4, w: 30, h: 4 },     // коридор (в конце — завал; генераторная — за гидропоникой, №55)
       { room: 'ROOM-012', x: 20, y: 16, w: 30, h: 3 },    // технический тоннель (под коридором)
     ],
     props: [
@@ -138,22 +132,14 @@ AB.ISO_LAYOUTS = {
       { kind: 'medbed', x: 11, y: 7, w: 2, h: 1, asset: 'ASSET-ROOM001-03' },
       { kind: 'locker', x: 14, y: 3, w: 1, h: 2, asset: 'ASSET-ROOM001-05', container: 'cabinet' },
       { kind: 'pipe', x: 26, y: 4, w: 1, h: 1 }, { kind: 'crate', x: 40, y: 7, w: 2, h: 1 },
-      { kind: 'panel', x: 50, y: 2, w: 1, h: 1, equip: 'EQUIP-001', asset: 'ASSET-ROOM003-03' },
-      { kind: 'cable', x: 54, y: 2, w: 2, h: 1, equip: 'EQUIP-002', asset: 'ASSET-ROOM003-04' },
-      { kind: 'generator', x: 54, y: 5, w: 4, h: 3, equip: 'EQUIP-003', asset: 'ASSET-ROOM003-02' },
-      { kind: 'console', x: 59, y: 3, w: 1, h: 2, equip: 'EQUIP-004', asset: 'ASSET-ROOM003-05' },
-      { kind: 'fueltank', x: 51, y: 9, w: 2, h: 2, equip: 'EQUIP-010' },
+      { kind: 'crate', x: 46, y: 4, w: 2, h: 2 }, { kind: 'crate', x: 45, y: 6, w: 1, h: 2 },   // завал в конце коридора
       { kind: 'pipe', x: 30, y: 16, w: 1, h: 1 }, { kind: 'pipe', x: 42, y: 18, w: 1, h: 1 },
     ],
-    doors: [
-      // коридор → генераторная: кодовый замок (код знает Мира — EVENT-003)
-      { key: 'G', tiles: [[48, 5], [48, 6]], axis: 'x', name: 'Дверь генераторной', room: 'ROOM-011', roomDoor: 'east', state: 'closed' },
-    ],
+    doors: [],
     links: [
       { key: 'T', name: 'Люк в технический тоннель', a: { room: 'ROOM-011', door: 'hatch', x: 32, y: 6 }, b: { room: 'ROOM-012', door: 'up-west', x: 21, y: 17 } },
     ],
     exits: [
-      { room: 'ROOM-003', door: 'east', x: 60, y: 7, wall: 'e', to: { sector: 'SECTOR-001', x: 3.5, y: 7.5 } },        // в жилой сектор (питание)
       { room: 'ROOM-012', door: 'up-east', x: 48, y: 17, floor: true, to: { sector: 'SECTOR-001', x: 19.5, y: 10.5 } }, // лестница в жилой сектор
     ],
     items: {
@@ -166,7 +152,6 @@ AB.ISO_LAYOUTS = {
       { x: 11, y: 5, color: [255, 60, 40], radius: 6 },
       { x: 24, y: 6, color: [255, 60, 40], radius: 5 },
       { x: 36, y: 6, color: [255, 60, 40], radius: 5 },
-      { x: 55, y: 6, color: [255, 160, 70], radius: 8 },
       { x: 28, y: 17, color: [255, 60, 40], radius: 5 },
       { x: 42, y: 17, color: [255, 60, 40], radius: 5 },
     ],
@@ -193,6 +178,15 @@ AB.ISO_LAYOUTS['SECTOR-003'] = {
     { room: 'ROOM-009', x: 40, y: 21, w: 24, h: 14 },   // система жизнеобеспечения
     { room: 'ROOM-009', x: 64, y: 26, w: 1, h: 3 },     // проход в шлюз
     { room: 'ROOM-010', x: 65, y: 24, w: 16, h: 8 },    // шлюз
+    // акт II (№55, черновик): грузовой лифт вниз → мастерская → архив → лестница обратно в шлюз
+    { room: 'ROOM-010', x: 67, y: 32, w: 3, h: 2 },     // грузовой лифт
+    { room: 'ROOM-004', x: 63, y: 34, w: 11, h: 9 },    // инженерная мастерская
+    { room: 'ROOM-004', x: 74, y: 37, w: 2, h: 3 },     // проход в архив
+    { room: 'ROOM-017', x: 76, y: 34, w: 10, h: 9 },    // архив экспедиции
+    { room: 'ROOM-017', x: 77, y: 32, w: 3, h: 2 },     // лестница в шлюз
+    // акт III: под архивом — нижний ангар с капсулой
+    { room: 'ROOM-017', x: 80, y: 43, w: 3, h: 2 },     // шлюз ангара
+    { room: 'ROOM-018', x: 62, y: 45, w: 24, h: 12 },   // нижний ангар
   ],
   props: [
     { kind: 'console', x: 5, y: 8, w: 2, h: 1 }, { kind: 'console', x: 9, y: 8, w: 2, h: 1 }, { kind: 'console', x: 13, y: 8, w: 2, h: 1 },
@@ -206,18 +200,46 @@ AB.ISO_LAYOUTS['SECTOR-003'] = {
     { kind: 'exorack', x: 71, y: 24, w: 2, h: 1, asset: 'ASSET-ROOM010-02' },
     { kind: 'exorack', x: 74, y: 24, w: 2, h: 1, asset: 'ASSET-ROOM010-02' },
     { kind: 'exorack', x: 77, y: 24, w: 2, h: 1, equip: 'EQUIP-005', asset: 'ASSET-ROOM010-02' },
+    // мастерская, архив, ангар (№55)
+    { kind: 'bench', x: 66, y: 35, w: 3, h: 1, equip: 'EQUIP-011' },
+    { kind: 'locker', x: 71, y: 35, w: 2, h: 1, container: 'parts-box' },
+    { kind: 'shelf', x: 64, y: 39, w: 1, h: 3 }, { kind: 'exorack', x: 70, y: 41, w: 2, h: 1 },
+    { kind: 'console', x: 81, y: 34, w: 2, h: 1, equip: 'EQUIP-012' },
+    { kind: 'shelf', x: 77, y: 37, w: 1, h: 4 }, { kind: 'shelf', x: 84, y: 37, w: 1, h: 4 },
+    { kind: 'capsule', x: 67, y: 48, w: 7, h: 5, equip: 'EQUIP-013' },
+    { kind: 'console', x: 78, y: 45, w: 2, h: 1, equip: 'EQUIP-014' },
+    { kind: 'crate', x: 63, y: 54, w: 2, h: 2 }, { kind: 'crate', x: 83, y: 53, w: 2, h: 3 }, { kind: 'crate', x: 80, y: 54, w: 2, h: 2 },
   ],
   doors: [
     // командный центр → лаборатория: заблокировано изнутри, пока не закончится сцена с врачом
     { key: 'L', tiles: [[18, 11], [18, 12], [18, 13]], axis: 'x', name: 'Дверь в лабораторию', room: 'ROOM-008', roomDoor: 'east', state: 'closed' },
+    // оружейная → жизнеобеспечение: электронный замок, открывает только наручный терминал (№55).
+    // Взлом — 3 этапа; шум будит гнездо в лаборатории (испытание ARENA-001)
+    { key: 'K', tiles: [[49, 20], [50, 20], [51, 20]], axis: 'y', name: 'Электронный замок', room: 'ROOM-006', roomDoor: 'east', state: 'closed', hack: 'ITEM-011' },
+    // акт II (№55): грузовой лифт открывается в начале акта; лестница из архива — после засады
+    { key: 'W', tiles: [[67, 33], [68, 33], [69, 33]], axis: 'y', name: 'Грузовой лифт', room: 'ROOM-010', to: 'ROOM-004', state: 'closed',
+      access: { type: 'event', event: 'EVENT-015', reason: 'Грузовой лифт: на нижнюю палубу нет питания' } },
+    { key: 'R', tiles: [[75, 37], [75, 38], [75, 39]], axis: 'x', name: 'Дверь архива', room: 'ROOM-004', state: 'closed' },
+    { key: 'V', tiles: [[77, 33], [78, 33], [79, 33]], axis: 'y', name: 'Лестница в шлюз', room: 'ROOM-017', to: 'ROOM-010', state: 'closed',
+      access: { type: 'event', event: 'EVENT-018', reason: 'Переборка заблокирована: открыть можно с пульта архива' } },
+    // акт III: шлюз нижнего ангара
+    { key: 'X', tiles: [[80, 44], [81, 44], [82, 44]], axis: 'y', name: 'Шлюз ангара', room: 'ROOM-017', to: 'ROOM-018', state: 'closed',
+      access: { type: 'event', event: 'EVENT-021', reason: 'Ангар: давление не выровнено' } },
     // жизнеобеспечение → шлюз: проход держит Колосс
     { key: 'S', tiles: [[64, 26], [64, 27], [64, 28]], axis: 'x', name: 'Проход в шлюз', room: 'ROOM-009', roomDoor: 'east', state: 'closed' },
   ],
   exits: [
-    { room: 'ROOM-008', door: 'west', x: 2, y: 12, wall: 'w', to: { sector: 'SECTOR-001', x: 46.5, y: 9.5 } },   // на склад
     { room: 'ROOM-010', door: 'east', x: 80, y: 28, wall: 'e', to: { overworld: true, after: 'EQUIP-005' } },     // внешний люк: в экзокостюме — на дно (№54)
   ],
   items: {},
+  // испытание «Гнездо» (ARENA-001, №55): пока Марк взламывает замок, мутанты лезут из лаборатории
+  nest: {
+    door: 'K', repairAt: { x: 50.5, y: 18.4 },
+    spawns: [{ x: 22.5, y: 15.5 }, { x: 30.5, y: 16.5 }, { x: 40.5, y: 9.5 }, { x: 36.5, y: 7.5 }],
+    verb: 'Взломать замок', stageWord: 'Взлом',
+    start: 'Шум взлома разбудил гнездо в лаборатории! Держитесь, пока терминал подбирает код',
+    done: 'Замок взломан!',
+  },
   enemyPos: { 'ENEMY-004': { x: 28.5, y: 14.5 }, 'ENEMY-005': { x: 38.5, y: 11.5 }, 'ENEMY-003': { x: 52.5, y: 28.5 } },
   // где стоит врач, когда выходит навстречу (rooms.js: x 620 в командном центре)
   lights: [
@@ -226,6 +248,38 @@ AB.ISO_LAYOUTS['SECTOR-003'] = {
     { x: 49, y: 14, color: [255, 214, 170], radius: 6 },
     { x: 46, y: 27, color: [255, 60, 40], radius: 7 }, { x: 57, y: 27, color: [255, 120, 60], radius: 8 },
     { x: 72, y: 28, color: [120, 200, 255], radius: 8 },
+    { x: 68, y: 38, color: [255, 200, 140], radius: 7 }, { x: 80, y: 38, color: [120, 180, 255], radius: 7 },
+    { x: 70, y: 50, color: [120, 200, 255], radius: 9 }, { x: 81, y: 51, color: [255, 60, 40], radius: 6 },
   ],
 };
 AB.ID.register('SECTOR-003', { id: 'SECTOR-003', name: AB.ISO_LAYOUTS['SECTOR-003'].name, iso: true, doors: [] });
+
+// Дно океана у «Абисса» (акт II, №55, черновик): место первой схватки снаружи.
+// Сюда попадают с карты дна (клетка «Сигнал сонара»); выход — обратно на карту.
+AB.ISO_LAYOUTS['SECTOR-004'] = {
+  name: 'Дно у «Абисса»',
+  outside: true,
+  areas: [
+    { room: 'ROOM-019', x: 2, y: 3, w: 26, h: 16 },
+    { room: 'ROOM-019', x: 28, y: 6, w: 8, h: 10 },
+    { room: 'ROOM-019', x: 8, y: 19, w: 12, h: 4 },
+  ],
+  props: [
+    { kind: 'rock', x: 9, y: 5, w: 2, h: 2 }, { kind: 'rock', x: 14, y: 12, w: 3, h: 2 }, { kind: 'rock', x: 5, y: 15, w: 2, h: 3 },
+    { kind: 'rock', x: 24, y: 4, w: 2, h: 2 }, { kind: 'rock', x: 19, y: 16, w: 2, h: 2 }, { kind: 'rock', x: 31, y: 13, w: 2, h: 2 },
+    { kind: 'crystal', x: 33, y: 7, w: 1, h: 1 }, { kind: 'crystal', x: 30, y: 8, w: 1, h: 1 }, { kind: 'crystal', x: 12, y: 21, w: 1, h: 1 },
+    { kind: 'crate', x: 20, y: 6, w: 3, h: 1 }, { kind: 'crate', x: 22, y: 7, w: 1, h: 2 },
+  ],
+  doors: [],
+  exits: [
+    { room: 'ROOM-019', door: 'out', x: 3, y: 10, floor: true, toName: 'карту дна', to: { overworld: true } },
+  ],
+  items: {},
+  enemyPos: { 'ENEMY-008': { x: 24.5, y: 11.5 } },
+  enter: { x: 5.5, y: 10.5 },
+  lights: [
+    { x: 6, y: 10, color: [90, 170, 210], radius: 7 }, { x: 18, y: 9, color: [60, 120, 170], radius: 8 },
+    { x: 31, y: 9, color: [160, 100, 255], radius: 6 }, { x: 12, y: 20, color: [160, 100, 255], radius: 5 },
+  ],
+};
+AB.ID.register('SECTOR-004', { id: 'SECTOR-004', name: AB.ISO_LAYOUTS['SECTOR-004'].name, iso: true, pending: true, doors: [] });

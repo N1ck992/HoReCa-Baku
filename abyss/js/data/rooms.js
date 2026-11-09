@@ -351,9 +351,8 @@ AB.ROOMS.push(
 );
 
 // Остальные помещения из GDD §6: зарегистрированы, но ещё не построены.
-const ROOM_STUBS = [
-  ['ROOM-004', 'Инженерная мастерская'],
-];
+// ROOM-004 построена в изометрии (акт II, дополнение №55) — см. ниже.
+const ROOM_STUBS = [];
 
 // ROOM-012 — технический тоннель под жилыми палубами (дополнение №35): не прямой коридор слева
 // направо, а проход под палубой — спуск по люку из коридора ROOM-011, выход по лестнице в жилой
@@ -469,6 +468,38 @@ AB.ROOMS.push({
   ],
   fx: { steam: [900], sparks: [], drips: [350, 800, 1400] },
 });
+
+// ---------------------------------------------------------------------
+// Акты II и III — только изометрия (дополнение №55, ЧЕРНОВИК: названия, тексты
+// и вид — предложение разработчика по решению автора «продумай сам», ждут правки).
+// Помещения у шлюза: грузовой лифт вниз → мастерская → архив → лестница в шлюз;
+// под архивом — нижний ангар с капсулой. ROOM-019 — дно океана у «Абисса».
+// ---------------------------------------------------------------------
+const ISO_ROOM = (o) => ({ connections: [], access: { type: 'open' }, items: [], containers: [], enemies: [], equipment: [], events: [], doors: [], props: [], lights: [], fx: {}, iso: true, pending: true, ...o });
+AB.ROOMS.push(
+  ISO_ROOM({
+    id: 'ROOM-004', name: 'Инженерная мастерская', desc: 'Верстаки, станки, ящики с запчастями. Здесь чинили экзокостюмы.',
+    width: 1200, height: 380, theme: 'armory', state: 'damaged', spawn: { x: 140 },
+    equipment: ['EQUIP-011'],
+    containers: [{ key: 'parts-box', x: 900, prop: 'cabinet', label: 'Ящик с запчастями', loot: [['ITEM-002', 2], ['ITEM-001', 3]] }],
+  }),
+  ISO_ROOM({
+    id: 'ROOM-017', name: 'Архив экспедиции', desc: 'Стойки накопителей и пульт бортового журнала. Записи за сотни лет.',
+    width: 1100, height: 380, theme: 'bridge', state: 'safe', spawn: { x: 140 },
+    equipment: ['EQUIP-012'],
+  }),
+  ISO_ROOM({
+    id: 'ROOM-018', name: 'Нижний ангар', desc: 'Стыковочный ангар под днищем. В захватах — исследовательская капсула.',
+    width: 2000, height: 440, theme: 'airlock', state: 'flooded', spawn: { x: 140 },
+    equipment: ['EQUIP-013', 'EQUIP-014'],
+    items: [{ key: 'meds-hangar', item: 'ITEM-005', qty: 1, x: 300 }],
+  }),
+  ISO_ROOM({
+    id: 'ROOM-019', name: 'Дно у «Абисса»', desc: 'Каменистое дно у обломков. Фонари костюма выхватывают из темноты метров десять.',
+    width: 1800, height: 440, theme: 'tunnel', state: 'flooded', spawn: { x: 200 },
+    enemies: ['ENEMY-008'],
+  }),
+);
 
 AB.ROOMS.forEach((r) => AB.ID.register(r.id, r));
 ROOM_STUBS.forEach(([id, name]) => AB.ID.register(id, { name, stub: true, connections: [], access: { type: 'locked' } }));

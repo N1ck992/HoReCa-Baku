@@ -37,7 +37,7 @@
   });
   AB.Bus.on('iso:door', ({ state, name }) => toast(`${name}: ${state === 'open' ? 'открыта' : 'закрыта'}`, 'info'));
   AB.Bus.on('combat:noweapon', () => toast('Нечем драться: найдите что-нибудь тяжёлое', 'info'));
-  AB.Bus.on('weapon:overheat', () => toast('Плазмомёт перегрет — пара секунд на остывание', 'info'));
+  AB.Bus.on('weapon:overheat', () => toast('Терминал перегрет — пара секунд на остывание', 'info'));
   AB.Bus.on('enemy:dead', ({ name }) => toast(`${name} убит`, 'good'));
   // гибель Марка или Миры — конец, как в основной игре; остальные — отряд идёт дальше
   AB.Bus.on('char:dead', ({ charId }) => {
@@ -50,7 +50,7 @@
   function updatePrompt() {
     const p = AB.IsoInteract.prompt();
     document.body.classList.toggle('quiet', !!p || AB.Dialog.isOpen());   // подсказка или диалог — без строки помощи
-    if (!p) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
+    if (!p || AB.Dialog.isOpen()) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
     const html = p.progress !== undefined
       ? `${p.label}<span class="bar"><i style="width:${Math.round(p.progress * 100)}%"></i></span>`
       : `${isTouch ? '' : `<kbd class="${p.ok ? '' : 'no'}">E</kbd> `}${p.label}`;
@@ -87,15 +87,15 @@
     if (ns) {
       const g = AB.ID.get('ARENA-001').goal, P = AB.Progress;
       const pips = Array.from({ length: g.stages }, (_, i) => `<u class="${i < ns.stage ? 'ok' : i === ns.stage ? 'cur' : ''}">${i === ns.stage && !ns.over ? `<s style="width:${Math.round(ns.prog * 100)}%"></s>` : ''}</u>`).join('');
-      const nh = `<b>Гнездо</b><span class="t">${ns.over ? 'Затихли' : `${Math.floor(ns.t / 60)}:${String(Math.floor(ns.t % 60)).padStart(2, '0')}`}</span><span class="rp">Проход ${pips}</span><span class="k">Убито: ${ns.kills}</span><span class="xp">Ур. ${P.level()} <em><i style="width:${Math.round((P.xp() / P.need()) * 100)}%"></i></em></span>`;
+      const nh = `<b>Гнездо</b><span class="t">${ns.over ? 'Затихли' : `${Math.floor(ns.t / 60)}:${String(Math.floor(ns.t % 60)).padStart(2, '0')}`}</span><span class="rp">${AB.IsoNest.config().stageWord || 'Проход'} ${pips}</span><span class="k">Убито: ${ns.kills}</span><span class="xp">Ур. ${P.level()} <em><i style="width:${Math.round((P.xp() / P.need()) * 100)}%"></i></em></span>`;
       if (nh !== lastNest) { $('#iso-nest').innerHTML = nh; lastNest = nh; }
     }
   }
   let lastQuest = '', lastNest = '';
-  AB.Bus.on('nest:start', ({ stages }) => toast(`Гнездо проснулось! Спуск на склад заклинило — почините его (${stages} этапа)`, 'bad'));
-  AB.Bus.on('nest:stage', ({ stage, stages }) => toast(stage < stages ? `Проход: этап ${stage} из ${stages} готов` : 'Проход починен!', 'good'));
+  AB.Bus.on('nest:start', ({ stages }) => toast(`${AB.IsoNest.config().start || 'Гнездо проснулось!'} (${stages} этапа)`, 'bad'));
+  AB.Bus.on('nest:stage', ({ stage, stages }) => toast(stage < stages ? `${AB.IsoNest.config().stageWord || 'Проход'}: этап ${stage} из ${stages} готов` : AB.IsoNest.config().done || 'Готово!', 'good'));
   AB.Bus.on('nest:won', () => toast('Гнездо затихло', 'good'));
-  AB.Bus.on('nest:order', ({ id, on }) => toast(`${AB.ID.get(id).name}: ${on ? 'чинит проход' : 'за мной'}`, 'info'));
+  AB.Bus.on('nest:order', ({ id, on }) => toast(`${AB.ID.get(id).name}: ${on ? 'работает у замка' : 'за мной'}`, 'info'));
   // новый уровень: пауза и выбор одного из трёх улучшений (черновик PERK-001…009)
   let paused = false;
   AB.Bus.on('progress:level', () => setTimeout(showPerks, 300));
@@ -109,11 +109,29 @@
   }
 
   // диалоги — та же система (AB.Dialog), реплики из данных
+  // над окном — портреты по пояс: Марк слева, собеседник справа; говорит — ярко, слушает — приглушён (№55)
+  let talk = null;
   AB.Bus.on('dialog:line', (l) => {
     ui.dialog.hidden = false;
-    ui.dialog.innerHTML = `<b>${l.name}</b><p>${l.text}</p><span class="muted">${isTouch ? 'Коснитесь' : 'E, пробел или нажатие'} — ${l.last ? 'закрыть' : 'дальше'}</span>`;
+    if (!talk || talk.id !== l.id) {
+      const who = [...new Set(AB.ID.get(l.id).lines.map((q) => q.speaker))];
+      const left = who.includes('CHAR-001') ? 'CHAR-001' : who[0], right = who.find((q) => q !== left && String(q).startsWith('CHAR-')) || null;
+      talk = { id: l.id, left, right };
+    }
+    talk.speaker = l.speaker;
+    ui.dialog.classList.toggle('log', !String(l.speaker).startsWith('CHAR-'));
+    ui.dialog.querySelector('.tx').innerHTML = `<b>${l.name}</b><p>${l.text}</p><span class="muted">${isTouch ? 'Коснитесь' : 'E, пробел или нажатие'} — ${l.last ? 'закрыть' : 'дальше'}</span>`;
+    ui.dialog.classList.toggle('right', l.speaker === talk.right);
   });
-  AB.Bus.on('dialog:end', () => { ui.dialog.hidden = true; });
+  AB.Bus.on('dialog:end', () => { ui.dialog.hidden = true; talk = null; });
+  function drawPortraits() {
+    if (!talk || ui.dialog.hidden) return;
+    const [cl, cr] = ui.dialog.querySelectorAll('.pt');
+    cl.classList.toggle('dim', talk.speaker !== talk.left); cr.classList.toggle('dim', talk.speaker !== talk.right);
+    cr.style.visibility = talk.right ? 'visible' : 'hidden';
+    AB.IsoRender.portrait(cl, talk.left, 1);
+    if (talk.right) AB.IsoRender.portrait(cr, talk.right, -1);
+  }
   AB.Bus.on('quest:start', ({ name }) => toast(`Новое задание: ${name}`, 'info'));
   AB.Bus.on('quest:done', ({ name }) => toast(`Задание выполнено: ${name}`, 'good'));
   AB.Bus.on('world:power', ({ on }) => { if (on) setTimeout(() => toast('Питание корабля восстановлено', 'good'), 1200); });
@@ -127,8 +145,16 @@
     if (charId === null && delta > 0 && AB.ID.get(itemId).weapon) setTimeout(() => toast(`${itemName(itemId)} — в вещах отряда: дайте в руки (I)`, 'info'), 900);
   });
   // конец акта: тот же текст, что в основной игре; остаться в бункере или начать сначала
+  // №55: карточки актов I–III — js/data/iso-acts.js
+  let actNow = 1;
   AB.Bus.on('act:end', ({ act }) => {
-    $('#iso-act .act-no').textContent = `Конец ${act === 1 ? 'первого' : act} акта`;
+    actNow = act;
+    const a = AB.ISO_ACTS[act];
+    $('#iso-act .act-no').textContent = a.no;
+    $('#iso-act h2').textContent = a.title;
+    $('#iso-act p:not(.act-next):not(.muted)').textContent = a.text;
+    $('#iso-act .act-next').textContent = a.next;
+    $('#iso-act-out').textContent = a.cont;
     $('#iso-act').hidden = false;
   });
 
@@ -150,6 +176,7 @@
     AB.IsoInventory.init();
     AB.IsoInput.init($('#iso'));
     AB.IsoMap.init($('#iso-map'));
+    AB.IsoInput.stick($('#iso-stick'));
     ui.party.addEventListener('click', (e) => {
       const b = e.target.closest('[data-i]');
       if (b) AB.IsoInventory.openHero(AB.IsoParty.members()[Number(b.dataset.i)].id);
@@ -164,10 +191,9 @@
     $('#iso-ids').addEventListener('click', () => { AB.isoShowIds = !AB.isoShowIds; });
     $('#iso-restart').addEventListener('click', () => AB.IsoGame.restart());
     $('#iso-act-new').addEventListener('click', () => AB.IsoGame.restart());
-    // выйти за борт: экран конца акта закрывается, Марк в экзокостюме — на дне (№54)
-    $('#iso-act-out').addEventListener('click', () => { $('#iso-act').hidden = true; clearFade(); AB.IsoOverworld.enter(); });
+    // дальше: следующий акт (после третьего — остаться на карте дна)
+    $('#iso-act-out').addEventListener('click', () => { $('#iso-act').hidden = true; clearFade(); last = performance.now(); AB.IsoActs.next(actNow); });
     AB.IsoOverworld.init();
-    $('#iso-act-stay').addEventListener('click', () => { $('#iso-act').hidden = true; clearFade(); });
     $('#iso-act').addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#iso-perks').addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#iso-perks').addEventListener('click', (e) => {
@@ -205,6 +231,7 @@
       AB.IsoMap.draw(dt);
       updateHud();
       updatePrompt();
+      drawPortraits();
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

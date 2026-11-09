@@ -16,6 +16,9 @@ AB.Quests = (() => {
     if (o.done.room) return AB.Rooms.visited().includes(o.done.room);
     if (o.done.weapon) return AB.Chars.all().some((c) => { const w = AB.Inventory.weapon(c.id); return !!w && w.item === o.done.weapon; });
     if (o.done.enemyDead) return AB.Enemies.isDead(o.done.enemyDead);
+    // №55 (изометрия): сюжетное событие прошло; отметка прохождения
+    if (o.done.event) return !!(AB.Story && AB.Story.isDone(o.done.event));
+    if (o.done.flag) return !!(AB.Flags && AB.Flags.has(o.done.flag));
     if (o.done.equip) {
       const s = AB.Equip.state(o.done.equip);
       return o.done.state === 'inspected' ? s === 'inspected' || s === 'done' : s === o.done.state;

@@ -180,3 +180,52 @@ body.quiet #iso-help { display: none; }
 #ow-say { position: absolute; left: 50%; transform: translateX(-50%); top: calc(60px + env(safe-area-inset-top, 0px)); padding: 6px 12px; background: rgba(8, 10, 12, .85); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 #ow-say.show { opacity: 1; }
 #iso-act .muted { font-size: 11px; }
+
+/* ---------- №55: джойстик, карта по центру на телефоне, портреты в диалоге ---------- */
+#iso-stick { position: fixed; z-index: 4; left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: 112px; height: 112px; border-radius: 50%; background: radial-gradient(circle, rgba(94, 230, 255, .08), rgba(10, 12, 14, .45) 70%); border: 1px solid rgba(94, 230, 255, .3); touch-action: none; display: grid; place-items: center; }
+#iso-stick[hidden] { display: none; }
+#iso-stick i { width: 46px; height: 46px; border-radius: 50%; background: rgba(94, 230, 255, .22); border: 1px solid rgba(94, 230, 255, .6); box-shadow: 0 0 10px rgba(94, 230, 255, .25); pointer-events: none; }
+#iso-stick.on { border-color: rgba(94, 230, 255, .6); }
+@media (max-width: 560px) {
+  #iso-map { left: 50%; transform: translateX(-50%); width: 128px; height: 66px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  body.has-stick #iso-party .pm { min-width: 96px; padding: 4px 7px 7px; }
+  body.has-stick #iso-nest { left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
+  body.has-stick #iso-prompt { bottom: calc(136px + env(safe-area-inset-bottom, 0px)); }
+}
+#iso-dialog .pt { position: absolute; bottom: calc(100% - 1px); width: 150px; height: 168px; pointer-events: none; transition: opacity .2s, filter .2s; }
+#iso-dialog .pt.l { left: 6px; }
+#iso-dialog .pt.r { right: 6px; }
+#iso-dialog .pt.dim { opacity: .38; filter: grayscale(.7) brightness(.8); }
+#iso-dialog.right .tx { text-align: right; }
+@media (max-height: 520px) { #iso-dialog .pt { width: 104px; height: 116px; } }
+@media (max-width: 560px) { #iso-dialog { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); } #iso-dialog .pt { width: 118px; height: 132px; } }
+
+/* ---------- №55: акты, карта дна — цель задания, база-капсула ---------- */
+#iso-act { z-index: 15; }
+#iso-dialog.log .tx b { color: #ffd27a; }
+#ow-top em { display: block; margin-top: 4px; font-style: normal; font-size: 12px; color: #ffd27a; max-width: calc(100vw - 150px); }
+#ow-base-btn { position: absolute; right: calc(14px + env(safe-area-inset-right, 0px)); top: calc(52px + env(safe-area-inset-top, 0px)); font: 13px var(--mono); padding: 7px 12px; border-radius: 5px; cursor: pointer; background: rgba(40, 32, 12, .8); color: #ffe2a8; border: 1px solid rgba(255, 210, 120, .5); }
+#ow-base-btn[hidden] { display: none; }
+#ow-base { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .6); }
+#ow-base[hidden] { display: none; }
+.base-card { max-width: 620px; }
+.base-card h3 { margin: 0; font: 600 12px var(--display); letter-spacing: 3px; text-transform: uppercase; color: var(--muted); }
+.crew-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.crew { position: relative; display: grid; min-width: 120px; padding: 6px 10px 9px; background: #111316; border: 1px solid var(--line); border-radius: 6px; }
+.crew b { font: 600 13px var(--display); color: #d9cfc2; }
+.crew span { font-size: 10px; color: var(--muted); }
+.crew i { position: absolute; left: 0; bottom: 0; height: 3px; background: #c0392b; }
+.res { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.res b { color: var(--fg); }
+.mods { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.mod { display: grid; gap: 5px; align-content: start; padding: 10px; background: #0d1317; border: 1px solid var(--line); border-radius: 7px; }
+.mod.on { border-color: rgba(120, 230, 150, .45); }
+.mod b { font: 700 14px var(--display); color: #bfefff; }
+.mod p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.4; }
+.mod em { font-style: normal; font-size: 11px; color: #9be8b0; }
+.mod .cost { display: flex; flex-wrap: wrap; gap: 4px; }
+.mod .cost u { text-decoration: none; font-size: 10px; padding: 1px 5px; border: 1px solid var(--line); border-radius: 3px; color: #e8dcc4; }
+.mod .cost u.no { color: #e09080; border-color: rgba(255, 120, 80, .35); }
+.mod button { justify-self: start; font: 12px var(--mono); padding: 5px 10px; border-radius: 5px; cursor: pointer; background: #16181b; color: var(--fg); border: 1px solid rgba(94, 230, 255, .4); }
+.mod button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 560px) { body.has-stick #iso-toast { top: calc(100px + env(safe-area-inset-top, 0px)); bottom: auto; } }

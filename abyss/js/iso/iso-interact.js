@@ -38,7 +38,9 @@ AB.IsoInteract = (() => {
   // ---------- Доступ к дверям (правила старой системы помещений) ----------
   const roomDoor = (room, key) => (AB.ID.get(room).doors || []).find((q) => q.key === key);
   function access(room, key) { const rd = roomDoor(room, key); return rd ? AB.Rooms.canPass(rd) : { ok: true }; }
-  function locked(door) { return !access(door.def.room, door.def.roomDoor).ok; }
+  // у двери планировки может быть своё условие доступа (№55: двери актов II–III)
+  function doorAccess(door) { return door.def.access ? AB.Rooms.canPass(door.def) : access(door.def.room, door.def.roomDoor); }
+  function locked(door) { return !doorAccess(door).ok; }
   const doorCenter = (d) => { const n = d.tiles.length; return { x: d.tiles.reduce((a, t) => a + t[0], 0) / n + 0.5, y: d.tiles.reduce((a, t) => a + t[1], 0) / n + 0.5 }; };
 
   // ---------- Что есть вокруг ----------
@@ -99,7 +101,7 @@ AB.IsoInteract = (() => {
     }
     for (const e of layout.exits || []) {
       const rd = roomDoor(e.room, e.door), to = rd && AB.ID.get(rd.to);
-      out.push({ kind: 'exit', id: `exit:${e.room}:${e.door}`, x: e.x + 0.5, y: e.y + 0.5, ref: e, rd, name: `${rd && rd.kind === 'hatch' ? 'Люк' : rd && rd.kind === 'ladder' ? 'Лестница' : 'Дверь'}: ${to ? to.name : rd.to}` });
+      out.push({ kind: 'exit', id: `exit:${e.room}:${e.door}`, x: e.x + 0.5, y: e.y + 0.5, ref: e, rd, name: `${rd && rd.kind === 'hatch' ? 'Люк' : rd && rd.kind === 'ladder' ? 'Лестница' : 'Дверь'}: ${e.toName || (to ? to.name : rd.to)}` });
     }
     return out;
   }
@@ -129,12 +131,17 @@ AB.IsoInteract = (() => {
       return { label: a.ok ? a.label : `${t.name}: ${a.label.charAt(0).toLowerCase()}${a.label.slice(1)}`, ok: a.ok };
     }
     if (t.kind === 'door' && t.ref.state === 'jammed') {
-      const st = AB.IsoNest.state();
-      return { label: st ? `${t.ref.def.name}: заклинило — чинить (этап ${st.stage + 1} из ${AB.ID.get('ARENA-001').goal.stages})` : 'Заклинило', ok: true };
+      const st = AB.IsoNest.state(), cfg = AB.IsoNest.config();
+      return { label: st ? `${cfg.verb || 'Чинить'} (этап ${st.stage + 1} из ${AB.ID.get('ARENA-001').goal.stages})` : 'Заклинило', ok: true };
+    }
+    // электронный замок (№55): открывает только наручный терминал; взлом будит гнездо
+    if (t.kind === 'door' && t.ref.def.hack && !t.ref.hacked) {
+      const has = hasItem(t.ref.def.hack);
+      return { label: has ? `${t.ref.def.name}: взломать наручным терминалом` : `${t.ref.def.name}: нужен наручный терминал`, ok: has };
     }
     if (t.kind === 'door') {
       const d = t.ref;
-      if (locked(d)) return { label: `${d.def.name}: ${access(d.def.room, d.def.roomDoor).reason.toLowerCase()}`, ok: false };
+      if (locked(d)) return { label: `${d.def.name}: ${doorAccess(d).reason.toLowerCase()}`, ok: false };
       return { label: d.state === 'open' ? 'Закрыть дверь' : 'Открыть дверь', ok: true };
     }
     if (t.kind === 'container') {
@@ -147,8 +154,9 @@ AB.IsoInteract = (() => {
     }
     // внешний люк шлюза: после осмотра экзокостюма — выход за борт (№54)
     if (t.ref.to && t.ref.to.overworld) {
-      const ready = ['inspected', 'done'].includes(AB.Equip.state(t.ref.to.after));
-      return { label: ready ? 'Внешний люк — выйти за борт в экзокостюме' : 'Внешний люк: только в экзокостюме', ok: ready };
+      if (!t.ref.to.after) return { label: `Вернуться на ${t.ref.toName || 'карту дна'}`, ok: true };
+      const ready = AB.Equip.state(t.ref.to.after) === 'done';
+      return { label: ready ? (AB.Flags.has('undocked') ? 'Внешний люк — к капсуле' : 'Внешний люк — выйти за борт в экзокостюме') : 'Внешний люк: только в экзокостюме', ok: ready };
     }
     const a = access(t.ref.room, t.ref.door);
     const dest = t.ref.to ? AB.IsoGame.sectorName(t.ref.to.sector) : null;
@@ -156,7 +164,7 @@ AB.IsoInteract = (() => {
   }
   function prompt() {
     const ns = AB.IsoNest && AB.IsoNest.state(), ld = AB.IsoParty.lead();
-    if (ns && ld.repair) return { label: `Чинить проход — этап ${ns.stage + 1}…`, ok: true, progress: ns.prog };
+    if (ns && ld.repair) return { label: `${AB.IsoNest.config().stageWord || 'Починка'} — этап ${ns.stage + 1}…`, ok: true, progress: ns.prog };
     if (work && work.t.kind === 'container') return { label: `Обыск: ${work.t.name}…`, ok: true, progress: work.p / work.time };
     if (work) { return { label: `${AB.Equip.action(work.t.ref.id, AB.IsoParty.lead().id).label}…`, ok: true, progress: work.p / work.time }; }
     const t = nearest();
@@ -196,7 +204,7 @@ AB.IsoInteract = (() => {
       return true;
     }
     if (t.ref.to && t.ref.to.overworld) {
-      if (['inspected', 'done'].includes(AB.Equip.state(t.ref.to.after))) AB.IsoOverworld.enter();
+      if (!t.ref.to.after || AB.Equip.state(t.ref.to.after) === 'done') AB.IsoOverworld.enter();
       else AB.Bus.emit('door:denied', { reason: 'Внешний люк: только в экзокостюме' });
       return true;
     }
@@ -222,8 +230,14 @@ AB.IsoInteract = (() => {
   }
 
   function toggleDoor(d) {
-    if (d.state === 'jammed') { if (!AB.IsoNest.repairLead()) AB.Bus.emit('door:denied', { reason: 'Подойдите к проходу со стороны гидропоники' }); return true; }
-    if (locked(d)) { AB.Bus.emit('door:denied', { reason: access(d.def.room, d.def.roomDoor).reason }); return true; }
+    if (d.state === 'jammed') { if (!AB.IsoNest.repairLead()) AB.Bus.emit('door:denied', { reason: 'Подойдите к замку ближе' }); return true; }
+    if (d.def.hack && !d.hacked) {
+      if (!hasItem(d.def.hack)) { AB.Bus.emit('door:denied', { reason: 'Электронный замок. Нужен наручный терминал — он в оружейной, в шкафу с оружием' }); return true; }
+      if (!AB.IsoNest.isDone() && !AB.IsoNest.state()) AB.IsoNest.start();
+      if (!AB.IsoNest.repairLead()) AB.Bus.emit('door:denied', { reason: 'Подойдите к замку ближе' });
+      return true;
+    }
+    if (locked(d)) { AB.Bus.emit('door:denied', { reason: doorAccess(d).reason }); return true; }
     if (d.state === 'open') {
       // ведущий в проёме — не закрыть; ведомые из проёма отходят на его сторону
       const inDoor = (m) => d.tiles.some(([x, y]) => Math.floor(m.x) === x && Math.floor(m.y) === y);
@@ -241,6 +255,11 @@ AB.IsoInteract = (() => {
     W().setDoor(d.tiles, d.state !== 'open');
     AB.Bus.emit('iso:door', { key: d.key, state: d.state, name: d.def.name });
     return true;
+  }
+
+  // есть ли вещь у отряда: в руках у кого-то или в общих вещах
+  function hasItem(id) {
+    return AB.IsoStash.count(id) > 0 || AB.IsoParty.members().some((m) => { const w = AB.Inventory.weapon(m.id); return w && w.item === id; });
   }
 
   // ---------- Нажатие на объект: подойти и сделать ----------
@@ -312,6 +331,6 @@ AB.IsoInteract = (() => {
   return {
     REACH, init, update, targets, alongRoom, sideX, nearest, prompt, act, click, hoverAt, label,
     actNearest() { const t = nearest(); return t ? act(t) : false; },
-    doors: () => [...doors.values()], locked, hovered: () => hover, working: () => work, intent: () => intent,
+    doors: () => [...doors.values()], locked, hasItem, hovered: () => hover, working: () => work, intent: () => intent,
   };
 })();

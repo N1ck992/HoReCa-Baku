@@ -27,6 +27,11 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-CHAR003-01', owner: 'CHAR-003', type: 'sprite', src: null, desc: 'Доктор Хейл' },
   { id: 'ASSET-ENEMY003-01', owner: 'ENEMY-003', type: 'sprite', src: null, desc: 'Колосс' },
   { id: 'ASSET-ITEM013-01', owner: 'ITEM-013', type: 'icon', src: null, desc: 'Водорослевая паста' },
+  // №55, акты II–III (черновик): картинок пока нет — заглушки
+  { id: 'ASSET-ITEM014-01', owner: 'ITEM-014', type: 'icon', src: null, desc: 'Жетон экспедиции' },
+  { id: 'ASSET-ITEM015-01', owner: 'ITEM-015', type: 'icon', src: null, desc: 'Кристалл' },
+  { id: 'ASSET-ENEMY008-01', owner: 'ENEMY-008', type: 'sprite', src: null, desc: 'Глубинный хищник' },
+  { id: 'ASSET-CHAR004-01', owner: 'CHAR-004', type: 'sprite', src: null, desc: 'Сайлас' },
   { id: 'ASSET-ROOM013-01', owner: 'ROOM-013', type: 'background', src: null, desc: 'Фон: гидропоника' },
   { id: 'ASSET-ROOM014-01', owner: 'ROOM-014', type: 'background', src: null, desc: 'Фон: технический коридор Б' },
   { id: 'ASSET-ROOM015-01', owner: 'ROOM-015', type: 'background', src: null, desc: 'Фон: насосная' },

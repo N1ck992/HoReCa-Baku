@@ -84,4 +84,29 @@ AB.EQUIPMENT.push(
   },
 );
 
+// Акты II–III, только изометрия (дополнение №55, черновик)
+AB.EQUIPMENT.push(
+  {
+    id: 'EQUIP-011', name: 'Верстак мастерской', room: 'ROOM-004', asset: null, x: 500, y: -80, w: 200, h: 120,
+    needs: 'ITEM-002', skill: 'repair', time: 3.0, pending: true,
+    text: { ready: 'Починить уплотнители шлема', missing: 'Нужны электронные компоненты (ящик с запчастями)', done: 'Уплотнители шлема починены' },
+  },
+  {
+    id: 'EQUIP-012', name: 'Бортовой журнал', room: 'ROOM-017', asset: null, x: 600, y: -120, w: 160, h: 200,
+    time: 1.5, pending: true,
+    text: { ready: 'Открыть бортовой журнал', done: 'Журнал прочитан' },
+  },
+  {
+    id: 'EQUIP-013', name: 'Реактор капсулы', room: 'ROOM-018', asset: null, x: 1000, y: -120, w: 300, h: 220,
+    inspect: 'Исследовательская капсула «Абисса». Корпус цел, захваты держат. Реактор пуст.',
+    needs: 'ITEM-015', time: 2.5, pending: true,
+    text: { inspect: 'Осмотреть капсулу', ready: 'Зарядить реактор кристаллом', missing: 'Нужен источник энергии — кристалл со дна', done: 'Реактор капсулы работает' },
+  },
+  {
+    id: 'EQUIP-014', name: 'Пульт стыковки', room: 'ROOM-018', asset: null, x: 1500, y: -120, w: 120, h: 200,
+    requires: ['EQUIP-013'], skill: 'repair', time: 2.0, pending: true,
+    text: { ready: 'Отстыковать капсулу', missing: 'Сначала — реактор капсулы', done: 'Капсула отстыкована' },
+  },
+);
+
 AB.EQUIPMENT.forEach((e) => AB.ID.register(e.id, e));

@@ -103,6 +103,41 @@ AB.IsoInput = (() => {
     return { x: wx / n, y: wy / n };
   }
 
+  // джойстик (телефон, №55): слева снизу; отклонение — направление по экрану, как WASD.
+  // Сильно отклонили — бег, слегка — шагом.
+  const stk = { id: null, x: 0, y: 0, el: null, knob: null, cx: 0, cy: 0, R: 44 };
+  function stick(el) {
+    if (!el) return;
+    stk.el = el; stk.knob = el.querySelector('i');
+    const touch = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('stick');
+    el.hidden = !touch;
+    if (touch) document.body.classList.add('has-stick');
+    const set = (e) => {
+      const dx = e.clientX - stk.cx, dy = e.clientY - stk.cy, n = Math.hypot(dx, dy), k = n > stk.R ? stk.R / n : 1;
+      stk.x = (dx * k) / stk.R; stk.y = (dy * k) / stk.R;
+      stk.knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    };
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (AB.Dialog.isOpen()) { AB.Dialog.next(); return; }
+      const r = el.getBoundingClientRect();
+      stk.cx = r.left + r.width / 2; stk.cy = r.top + r.height / 2; stk.R = r.width * 0.36;
+      stk.id = e.pointerId; el.setPointerCapture(e.pointerId); el.classList.add('on');
+      AB.IsoParty.stop(); AB.IsoCombat.setTarget(null);
+      set(e);
+    });
+    el.addEventListener('pointermove', (e) => { if (e.pointerId === stk.id) set(e); });
+    const end = (e) => { if (e.pointerId !== stk.id) return; stk.id = null; stk.x = stk.y = 0; stk.knob.style.transform = ''; el.classList.remove('on'); };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  function stickAxis() {
+    const n = Math.hypot(stk.x, stk.y);
+    if (stk.id == null || n < 0.18) return null;
+    const TW = AB.IsoRender.TW, TH = AB.IsoRender.TH;
+    const wx = stk.y / TH + stk.x / TW, wy = stk.y / TH - stk.x / TW, m = Math.hypot(wx, wy);
+    return { x: wx / m, y: wy / m, walk: n < 0.55 };
+  }
+
   // кадр: удерживаемый указатель ведёт героя за собой; клавиши — напрямую
   function update(dt) {
     if (hold != null && pointers.has(hold)) {
@@ -110,9 +145,11 @@ AB.IsoInput = (() => {
       if (holdT <= 0) { const p = pointers.get(hold); moveTo(p.x, p.y); holdT = 0.2; }
     }
     if (AB.IsoInventory && (AB.IsoInventory.isOpen() || AB.IsoInventory.heroOpen())) return { x: 0, y: 0, walk: false };   // открыт инвентарь — стоит
+    const st = stickAxis();
+    if (st) return st;
     const a = axis();
     return { x: a.x, y: a.y, walk: keys.has('ShiftLeft') || keys.has('ShiftRight') };
   }
 
-  return { init, update, hoverFoe: () => hoverFoe };
+  return { init, update, stick, hoverFoe: () => hoverFoe, stickActive: () => stk.id != null };
 })();

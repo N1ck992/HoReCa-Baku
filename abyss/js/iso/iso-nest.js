@@ -14,7 +14,8 @@ AB.IsoNest = (() => {
   const ID = 'ARENA-001';
   let A = null, done = false, seq = 0;
   const def = () => AB.ID.get(ID);
-  const lay = () => AB.ISO_LAYOUTS['SECTOR-001'].nest;
+  // №55: место испытания — в планировке сектора (nest): дверь, где работать, откуда лезут
+  const lay = () => (AB.ISO_LAYOUTS[AB.IsoGame.sector()] || {}).nest || AB.ISO_LAYOUTS['SECTOR-003'].nest;
   const door = () => AB.IsoInteract.doors().find((d) => d.key === lay().door);
   const mod = (k) => (AB.Perks ? AB.Perks.mod(k) : 1);
 
@@ -24,10 +25,7 @@ AB.IsoNest = (() => {
     const has = AB.IsoStash.count('ITEM-011') || AB.IsoParty.members().some((m) => { const w = AB.Inventory.weapon(m.id); return w && w.item === 'ITEM-011'; });
     if (has) AB.Quests.start('QUEST-005');
   });
-  // спустились в гидропонику с заданием — гнездо просыпается
-  AB.Bus.on('room:enter', ({ roomId }) => {
-    if (roomId === 'ROOM-013' && !A && !done && AB.Quests.active().some((q) => q.id === 'QUEST-005')) start();
-  });
+  // №55: гнездо просыпается, когда Марк начинает взламывать электронный замок (iso-interact.js)
 
   function start() {
     const d = def();
@@ -82,7 +80,7 @@ AB.IsoNest = (() => {
   function finish() {
     A.over = true;
     for (const e of aliveFoes()) AB.IsoEnemies.damage(e.id, 9999, null);
-    const dr = door(); dr.state = 'open';
+    const dr = door(); dr.state = 'open'; dr.hacked = true;
     AB.IsoWorld.setDoor(dr.tiles, false);
     for (const m of AB.IsoParty.members()) m.repair = false;
     done = true;
@@ -107,7 +105,7 @@ AB.IsoNest = (() => {
   }
 
   return {
-    update, start,
+    update, start, config: () => lay() || {},
     active: () => !!A && !A.over, state: () => A, isDone: () => done,
     canRepair,
     // ведущий у прохода нажал E — чинить

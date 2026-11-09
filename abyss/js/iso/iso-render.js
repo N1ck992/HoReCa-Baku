@@ -46,12 +46,18 @@ AB.IsoRender = (() => {
     fueltank: { h: 48, top: '#5a3a2a', l: '#46301f', r: '#3a2818' },
     glass: { h: 90, top: 'rgba(120,200,230,.25)', l: 'rgba(120,200,230,.18)', r: 'rgba(120,200,230,.12)', edge: 'rgba(160,230,255,.4)' },
     exorack: { h: 96, top: '#3a3f44', l: '#4a5058', r: '#383d44' },
+    // №55: мастерская, ангар, дно
+    bench: { h: 30, top: '#55504a', l: '#403b35', r: '#35312c' },
+    capsule: { h: 70, top: '#c9a24a', l: '#8a6e30', r: '#6e5726', glow: [255, 210, 120] },
+    rock: { h: 46, top: '#2a3438', l: '#1d2528', r: '#171e21' },
+    crystal: { h: 34, top: '#9a6cff', l: '#6a44c0', r: '#55369c', glow: [170, 110, 255] },
   };
   const ROOM_TINT = {
     'ROOM-002': [52, 48, 50], 'ROOM-005': [56, 54, 50], 'ROOM-013': [40, 56, 48],
     'ROOM-014': [48, 46, 46], 'ROOM-015': [50, 48, 44], 'ROOM-016': [38, 50, 52],
     'ROOM-001': [42, 50, 58], 'ROOM-011': [50, 46, 44], 'ROOM-003': [54, 50, 42], 'ROOM-012': [36, 44, 46],
     'ROOM-008': [44, 52, 60], 'ROOM-007': [46, 54, 52], 'ROOM-006': [52, 50, 46], 'ROOM-009': [44, 48, 50], 'ROOM-010': [46, 50, 56],
+    'ROOM-004': [52, 50, 44], 'ROOM-017': [44, 50, 58], 'ROOM-018': [42, 48, 54], 'ROOM-019': [26, 38, 44],
   };
 
   function init(canvas) {
@@ -262,9 +268,65 @@ AB.IsoRender = (() => {
     drawFx();
     lighting(sc, party);
     for (const m of party) if (!m.hidden) nameTag(m, m === l);
-    for (const m of AB.IsoParty.npcs()) nameTag(m, false);
+    for (const m of AB.IsoParty.npcs()) if (!m.hidden) nameTag(m, false);
+    beacons();
     overlays(fx);
     for (const e of AB.IsoEnemies.all()) enemyBar(e);
+  }
+
+  // Метки того, с чем можно что-то сделать (№55): поверх темноты — чтобы не пройти мимо.
+  // Предметы на полу и не обысканные тайники — жёлтый ромб и луч света; оружие — ярче и с названием;
+  // оборудование, которое ещё не готово, — голубой ромб; запертая дверь, которую можно взломать, — тоже.
+  function beacons() {
+    const l = AB.IsoParty.lead();
+    for (const t of AB.IsoInteract.targets()) {
+      let col = null, big = false, text = null;
+      if (t.kind === 'item') { const d = AB.ID.get(t.ref.item); col = d.weapon ? '255,200,90' : '255,214,120'; big = !!d.weapon || d.category === 'key'; text = big ? d.name : null; }
+      else if (t.kind === 'container') { if (AB.Rooms.isSearched(t.room, t.ref.key)) continue; const loot = t.ref.loot || []; big = loot.some(([i]) => AB.ID.get(i).weapon); col = big ? '255,200,90' : '255,214,120'; text = big ? t.name : null; }
+      else if (t.kind === 'equip') { if (AB.Equip.state(t.ref.id) === 'done' || t.ref.hidden) continue; col = '94,230,255'; }
+      else if (t.kind === 'door' && t.ref.def.hack && t.ref.state !== 'open' && !t.ref.hacked) { col = '94,230,255'; big = true; text = t.ref.def.name; }
+      else continue;
+      const p = toScreen(t.x, t.y), far = Math.hypot(t.x - l.x, t.y - l.y);
+      if (far > 22) continue;
+      const lift = t.kind === 'item' ? 26 : 62, bob = Math.sin(time * 3 + t.x) * 3, a = 0.55 + Math.sin(time * 4 + t.y) * 0.25;
+      // луч
+      const g = ctx.createLinearGradient(0, p.y - lift - 30, 0, p.y);
+      g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(1, `rgba(${col},${big ? 0.32 : 0.18})`);
+      ctx.fillStyle = g; ctx.fillRect(p.x - (big ? 7 : 4), p.y - lift - 30, big ? 14 : 8, lift + 30);
+      // ромб
+      const r = big ? 7 : 5, y = p.y - lift + bob;
+      ctx.fillStyle = `rgba(${col},${a})`; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.x, y - r); ctx.lineTo(p.x + r * 0.75, y); ctx.lineTo(p.x, y + r); ctx.lineTo(p.x - r * 0.75, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+      if (text) {
+        ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillText(text, p.x + 1, y - r - 5);
+        ctx.fillStyle = `rgba(${col},.95)`; ctx.fillText(text, p.x, y - r - 6);
+      }
+    }
+  }
+
+  // Портрет по пояс для окна диалога (№55): та же составная фигура, крупно, видна верхняя половина
+  function portrait(cv2, id, facing, dim) {
+    const r = cv2.getBoundingClientRect(), dp = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(r.width * dp), h = Math.round(r.height * dp);
+    if (!w || !h) return;
+    if (cv2.width !== w || cv2.height !== h) { cv2.width = w; cv2.height = h; }
+    const c2 = cv2.getContext('2d');
+    c2.setTransform(1, 0, 0, 1, 0, 0); c2.clearRect(0, 0, w, h);
+    const m = AB.IsoParty.find(id);
+    const fig = { ...(m || { id, x: 0, y: 0 }), facing, hidden: false, down: false, path: null };
+    const k = (h / dp) / 72;                     // видно примерно до пояса
+    c2.setTransform(dp, 0, 0, dp, 0, 0);
+    if (AB.Render && AB.Render.drawFigure) {
+      try { AB.Render.drawFigure(c2, fig, w / dp / 2, 4 + 126 * k * 0.98, k); } catch (e) { /* фигуры нет — пустой портрет */ }
+    }
+    // снизу — растворение в окно диалога
+    c2.setTransform(1, 0, 0, 1, 0, 0);
+    c2.globalCompositeOperation = 'destination-out';
+    const g = c2.createLinearGradient(0, h * 0.62, 0, h);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+    c2.fillStyle = g; c2.fillRect(0, 0, w, h);
+    c2.globalCompositeOperation = 'source-over';
   }
 
   let hl = new Set();
@@ -545,7 +607,7 @@ AB.IsoRender = (() => {
   }
 
   return {
-    TW, TH, init, frame, pick, screenOf, toScreen, toWorld,
+    TW, TH, init, frame, pick, screenOf, toScreen, toWorld, portrait,
     zoom(dz) { if (dz) { cam.z = U.clamp(Math.round((cam.z + dz) * 100) / 100, ZMIN, ZMAX); try { localStorage.setItem('abyss_iso_zoom', String(cam.z)); } catch (e) { /* хранилище недоступно */ } } return cam.z; },
     setZoom(z) { cam.z = U.clamp(z, ZMIN, ZMAX); return cam.z; },
     camera: () => ({ ...cam }),

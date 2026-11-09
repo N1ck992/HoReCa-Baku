@@ -194,6 +194,7 @@ AB.IsoParty = (() => {
   function addNpc(id, x, y) {
     if (find(id)) return find(id);
     const m = make({ id, x, y });
+    m.sector = AB.IsoGame ? AB.IsoGame.sector() : null;       // №55: персонаж сцены живёт в своём секторе
     if (!W().free(m.x, m.y)) { const n = W().nearestFree(m.x, m.y); if (n) { m.x = n.x + 0.5; m.y = n.y + 0.5; } }
     npcs.push(m);
     AB.Anim.play(id, 'idle');
@@ -207,6 +208,19 @@ AB.IsoParty = (() => {
     m.path = null; m.goal = null;
     members.push(m);
     AB.Bus.emit('iso:party', { leader: lead().id, joined: id });
+    return true;
+  }
+  // №55: вышел из отряда и остался в сцене (Мира у пульта, пока Марк за бортом)
+  function leave(id) {
+    const i = members.findIndex((m) => m.id === id);
+    if (i < 0 || members.length < 2) return false;
+    const cur = lead();
+    const m = members.splice(i, 1)[0];
+    m.path = null; m.goal = null; m.flee = false; m.repair = false;
+    m.sector = AB.IsoGame ? AB.IsoGame.sector() : null;
+    npcs.push(m);
+    leader = Math.max(0, members.indexOf(cur));
+    AB.Bus.emit('iso:party', { leader: lead().id, left: id });
     return true;
   }
   // сцена ведёт персонажа к точке
@@ -237,8 +251,9 @@ AB.IsoParty = (() => {
   }
 
   return {
-    MAX, init, update, addNpc, join, walkTo, placeAll, npcTick, find,
-    npcs: () => npcs, goTo, stop, setLeader, cycle, lead,
+    MAX, init, update, addNpc, join, leave, walkTo, placeAll, npcTick, find,
+    npcs: () => npcs.filter((m) => !m.sector || !AB.IsoGame || m.sector === AB.IsoGame.sector()),
+    allNpcs: () => npcs, goTo, stop, setLeader, cycle, lead,
     leaderIndex: () => leader, members: () => members,
   };
 })();

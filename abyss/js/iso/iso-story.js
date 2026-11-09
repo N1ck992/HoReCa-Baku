@@ -10,7 +10,11 @@
 
 AB.IsoStory = (() => {
   // весь акт I (№49–50); порядок и шаги — из events.js
-  const SUPPORTED = ['EVENT-001', 'EVENT-014', 'EVENT-003', 'EVENT-004', 'EVENT-002', 'EVENT-005', 'EVENT-006', 'EVENT-007', 'EVENT-008', 'EVENT-009', 'EVENT-011', 'EVENT-012', 'EVENT-010'];
+  // №55: акт I кончается на внешних камерах (EVENT-012); экзокостюм — акт II (EVENT-010 не используется)
+  const SUPPORTED = ['EVENT-001', 'EVENT-014', 'EVENT-003', 'EVENT-004', 'EVENT-002', 'EVENT-005', 'EVENT-006', 'EVENT-007', 'EVENT-008', 'EVENT-009', 'EVENT-011', 'EVENT-012',
+    'EVENT-015', 'EVENT-016', 'EVENT-017', 'EVENT-018', 'EVENT-019', 'EVENT-020', 'EVENT-021', 'EVENT-022'];
+  // триггер события в изометрии (js/data/iso-acts.js может заменить триггер из events.js)
+  const trig = (def) => (AB.ISO_TRIGGER && AB.ISO_TRIGGER[def.id]) || def.trigger;
   const done = new Set();
   const queue = [];
   let running = null;                 // { def, t, next, wait, skip }
@@ -94,7 +98,15 @@ AB.IsoStory = (() => {
     console_ghost: (s) => { fx.ghost = s.duration; fx.flicker = Math.max(fx.flicker, s.duration); },
     spawn_enemy: (s) => {
       const hero = P().find('CHAR-001');
-      const p = s.x === 'behind' && hero ? { x: hero.x - 6, y: hero.y } : posOf(s.room, s.x);
+      // «за спиной»: в нескольких клетках от Марка, на свободном месте, куда можно дойти
+      let p = null;
+      if (s.x === 'behind' && hero) {
+        for (const [dx, dy] of [[-6, 0], [6, 0], [0, -6], [0, 6], [-4, -4], [4, 4], [-4, 4], [4, -4], [-3, 0], [3, 0]]) {
+          const n = AB.IsoWorld.nearestFree(hero.x + dx, hero.y + dy, 2);
+          if (n && AB.IsoWorld.path(n.x + 0.5, n.y + 0.5, hero.x, hero.y)) { p = { x: n.x + 0.5, y: n.y + 0.5 }; break; }
+        }
+      }
+      if (!p) p = posOf(s.room, s.x);
       // WATCH — только показаться; иначе — настоящее поведение (преследователь нападает)
       AB.IsoEnemies.spawn(s.enemy, p.x, p.y, { story: s.state === 'WATCH', scripted: true, state: s.state, facing: s.facing || 1 });
     },
@@ -129,11 +141,26 @@ AB.IsoStory = (() => {
     enemy_state: (s) => { const e = AB.IsoEnemies.get(s.enemy); if (e) { e.state = s.state; e.t = 0; e.target = 'CHAR-001'; } },
     act_end: (s) => { fx.actEnd = 1; AB.Bus.emit('act:end', { act: s.act }); },
     leave: (s) => { const m = P().find(s.char); if (m) m.hidden = true; },
+    // №55: персонаж выходит из отряда и остаётся на месте (Мира у пульта)
+    stay: (s) => { P().leave(s.char); const c = AB.Chars.get(s.char); if (c) c.follow = null; },
+    // сцена сама доводит оборудование до готовности (надеть экзокостюм)
+    equip_apply: (s) => { for (let i = 0; i < 2 && AB.Equip.state(s.equip) !== 'done'; i++) AB.Equip.apply(s.equip, 'CHAR-001'); },
+    // подойти к оборудованию
+    walk_equip: (s) => {
+      const lp = AB.IsoWorld.props().find((p) => p.equip === s.equip), m = P().find(s.char);
+      if (!lp || !m) return;
+      const n = AB.IsoWorld.nearestFree(lp.x + lp.w / 2, lp.y + lp.h + 0.6, 3);
+      if (!n) return;
+      if (running.skip) { m.x = n.x + 0.5; m.y = n.y + 0.5; return; }
+      P().walkTo(s.char, n.x + 0.5, n.y + 0.5, 2.2);
+    },
+    // шаг, который выполняет логика актов (js/iso/iso-acts.js)
+    run: (s) => { if (AB.IsoActs) AB.IsoActs.run(s.fn); },
   };
 
   function trigger(kind) {
     for (const def of AB.EVENTS) {
-      if (def.trigger !== kind || (def.once && done.has(def.id))) continue;
+      if (trig(def) !== kind || (def.once && done.has(def.id))) continue;
       if (off || !SUPPORTED.includes(def.id)) continue;
       if (def.needs === 'power' && !AB.World.hasPower()) continue;
       if (running) { if (running.def.id !== def.id && !queue.includes(def.id)) queue.push(def.id); }
@@ -152,9 +179,10 @@ AB.IsoStory = (() => {
     if (!l) return;
     const room = AB.IsoWorld.room(l.x, l.y);
     for (const def of AB.EVENTS) {
-      if (!def.trigger.startsWith('zone:') || done.has(def.id)) continue;
-      const [, r, xs] = def.trigger.split(':');
-      if (r === room && AB.IsoInteract.sideX(room, l.x, l.y) > Number(xs)) trigger(def.trigger);
+      const tg = trig(def);
+      if (!tg.startsWith('zone:') || done.has(def.id)) continue;
+      const [, r, xs] = tg.split(':');
+      if (r === room && AB.IsoInteract.sideX(room, l.x, l.y) > Number(xs)) trigger(tg);
     }
   }
 

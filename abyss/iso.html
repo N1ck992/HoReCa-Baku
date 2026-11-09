@@ -38,7 +38,12 @@
       <div class="inv-body"><div id="iso-inv-grid"></div><div id="iso-inv-detail"></div></div>
     </div>
   </div>
-  <div id="iso-dialog" hidden role="dialog" aria-live="polite"></div>
+  <div id="iso-dialog" hidden role="dialog" aria-live="polite">
+    <canvas class="pt l" aria-hidden="true"></canvas><canvas class="pt r" aria-hidden="true"></canvas>
+    <div class="tx"></div>
+  </div>
+  <!-- телефон: джойстик слева снизу (№55) -->
+  <div id="iso-stick" hidden aria-label="Джойстик"><i></i></div>
   <button id="iso-skip" hidden>Пропустить сцену ▸▸</button>
   <div id="iso-hero" hidden><div class="inv-card" id="iso-hero-body" role="dialog" aria-label="Герой"></div></div>
   <div id="iso-nest" hidden aria-live="polite"></div>
@@ -51,9 +56,7 @@
       <h2>Тишина на дне</h2>
       <p>Марк закрывает забрало. Впереди — три тысячи метров чёрной воды и ответ на вопрос, кто отправил сигнал.</p>
       <p class="act-next">Акт II · «Петля» — выход за борт в экзокостюме</p>
-      <button id="iso-act-out">Выйти за борт</button>
-      <button id="iso-act-stay">Остаться в бункере</button>
-      <p class="muted">На корабль всегда можно вернуться — через шлюз «Абисса».</p>
+      <button id="iso-act-out">Продолжить</button>
       <button id="iso-act-new" class="danger">Начать заново</button>
     </div>
   </div>
@@ -62,6 +65,8 @@
     <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
     <div id="ow-top"><b>Дно океана</b><span>рядом с «Абиссом» · прототип</span></div>
     <button id="ow-back" title="Вернуться на корабль (только у «Абисса»)">На корабль</button>
+    <button id="ow-base-btn" hidden title="База-капсула: экипаж, ресурсы, модули">База</button>
+    <div id="ow-base" hidden></div>
     <div id="ow-card" hidden><b></b><p></p><button id="ow-act"></button></div>
     <div id="ow-hint">Нажмите на клетку — экзокостюм пойдёт туда. Скалы и впадины не пройти.</div>
     <div id="ow-say"></div>
@@ -98,6 +103,7 @@
   <script src="js/data/iso-layouts.js"></script>
   <script src="js/data/iso-quests.js"></script>
   <script src="js/data/overworld.js"></script>
+  <script src="js/data/iso-acts.js"></script>
   <!-- Из старых систем: ресурсы, анимации, персонажи и отряд, инвентарь, оборудование,
        состояние помещений (предметы, доступ к дверям), отрисовка составных персонажей -->
   <script src="js/systems/asset-manager.js"></script>
@@ -126,6 +132,7 @@
   <script src="js/iso/iso-map.js"></script>
   <script src="js/iso/iso-nest.js"></script>
   <script src="js/iso/iso-overworld.js"></script>
+  <script src="js/iso/iso-acts.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>
