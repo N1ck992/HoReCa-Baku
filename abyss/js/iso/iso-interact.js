@@ -144,8 +144,10 @@ AB.IsoInteract = (() => {
     if (t.kind === 'door' && t.ref.barricade) {
       const d = t.ref, pct = Math.round((d.hp / d.max) * 100);
       if (d.state === 'broken') return { label: `${d.def.name}: выбита — не закрыть`, ok: false };
-      if (d.state === 'closed' && d.hp < d.max && armorySide(d)) return { label: `Чинить дверь (${pct}%)`, ok: true };
-      return { label: d.state === 'open' ? 'Закрыть дверь' : `Открыть дверь (${pct}%)`, ok: true };
+      if (d.state === 'open') return { label: 'Закрыть дверь', ok: true };
+      if (AB.IsoNest.underAttack(d)) return { label: `Ломают (${pct}%) — чинить нельзя, стреляйте сквозь решётку`, ok: false };
+      if (d.hp < d.max && armorySide(d)) return { label: `Чинить решётку (${pct}%)`, ok: true };
+      return { label: `${d.def.name} заколочена (${pct}%) — выход через служебную дверь`, ok: false };
     }
     if (t.kind === 'door') {
       const d = t.ref;
@@ -243,6 +245,8 @@ AB.IsoInteract = (() => {
   function toggleDoor(d) {
     if (d.barricade) {
       if (d.state === 'broken') { AB.Bus.emit('door:denied', { reason: 'Дверь выбита — её уже не закрыть' }); return true; }
+      if (d.state === 'closed' && AB.IsoNest.underAttack(d)) { AB.Bus.emit('door:denied', { reason: 'Решётку ломают — сначала отстреляйте их' }); return true; }
+      if (d.state === 'closed' && !(d.hp < d.max && armorySide(d))) { AB.Bus.emit('door:denied', { reason: 'Решётка заколочена. Выйти к ним можно через служебную дверь' }); return true; }
       if (d.state === 'closed' && d.hp < d.max && armorySide(d)) {
         const l = AB.IsoParty.lead(); AB.IsoParty.stop();
         work = { t: { kind: 'doorfix', ref: d, name: d.def.name }, p: 0, time: AB.IsoNest.RULES.repairTime, x: l.x, y: l.y };
@@ -337,6 +341,8 @@ AB.IsoInteract = (() => {
       if (d.state !== 'jammed') W().setDoor(d.tiles, shut);
       d.anim += ((shut ? 1 : 0) - d.anim) * Math.min(1, dt * 10);
     }
+    // починку решётки прерывает мутант у неё (№59)
+    if (work && work.t.kind === 'doorfix' && AB.IsoNest.underAttack(work.t.ref)) { work = null; AB.Bus.emit('door:denied', { reason: 'Решётку ломают — чинить нельзя' }); }
     if (work) {
       // ведущий сошёл с места или пошёл — работа прервана
       if ((input && (input.x || input.y)) || l.path || Math.hypot(l.x - work.x, l.y - work.y) > 0.3) { work = null; }
@@ -345,7 +351,7 @@ AB.IsoInteract = (() => {
         if (work.p >= work.time) {
           const t = work.t; work = null;
           if (t.kind === 'container') loot(t);
-          else if (t.kind === 'doorfix') { AB.IsoNest.repairDoor(t.ref.key); if (t.ref.state === 'closed' && t.ref.hp < t.ref.max) work = { t, p: 0, time: work0time(), x: l.x, y: l.y }; }
+          else if (t.kind === 'doorfix') { AB.IsoNest.repairDoor(t.ref.key); if (t.ref.state === 'closed' && t.ref.hp < t.ref.max && !AB.IsoNest.underAttack(t.ref)) work = { t, p: 0, time: work0time(), x: l.x, y: l.y }; }
           else AB.Equip.apply(t.ref.id, l.id);
         }
       }

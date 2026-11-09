@@ -229,3 +229,14 @@ body.quiet #iso-help { display: none; }
 .mod button { justify-self: start; font: 12px var(--mono); padding: 5px 10px; border-radius: 5px; cursor: pointer; background: #16181b; color: var(--fg); border: 1px solid rgba(94, 230, 255, .4); }
 .mod button:disabled { opacity: .45; cursor: default; }
 @media (max-width: 560px) { body.has-stick #iso-toast { top: calc(100px + env(safe-area-inset-top, 0px)); bottom: auto; } }
+
+/* №59: полоса обороны на телефоне — сверху, под кнопками (не налезает на кнопку действия) */
+@media (max-width: 560px) {
+  body.has-stick #iso-nest, #iso-nest { top: calc(54px + env(safe-area-inset-top, 0px)); bottom: auto; left: 50%; transform: translateX(-50%); width: calc(100vw - 24px); max-width: none; flex-wrap: wrap; gap: 4px 10px; white-space: normal; padding: 5px 10px; font-size: 10px; }
+  #iso-nest .k { display: inline; font-size: 10px; }
+  body.nest-on #iso-hud { top: calc(118px + env(safe-area-inset-top, 0px)); }
+  body.nest-on #iso-quest { display: none; }
+  body.has-stick.nest-on #iso-toast { top: calc(160px + env(safe-area-inset-top, 0px)); }
+}
+#iso-death #iso-cp { border-color: rgba(94, 230, 255, .5); color: #bfefff; }
+#iso-death #iso-cp[hidden] { display: none; }

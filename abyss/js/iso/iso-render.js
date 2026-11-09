@@ -256,7 +256,14 @@ AB.IsoRender = (() => {
         const hid = occludes(o.x, o.y, 74, party);
         const a = alphaFor(`d${o.x},${o.y}`, hid, dt);
         const dr = o.dr, along = (xx, yy) => dr.tiles.some(([tx, ty]) => tx === xx && ty === yy);
-        block(o.x, o.y, 74 * o.dr.anim, DOOR_LOOK, a, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
+        const grate = dr.barricade && dr.state === 'closed';   // №59: решётка — сквозь неё видно
+        block(o.x, o.y, 74 * o.dr.anim, DOOR_LOOK, grate ? a * 0.35 : a, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
+        if (grate) {
+          const b0 = toScreen(o.x + 0.5, o.y), b1 = toScreen(o.x + 0.5, o.y + 1);
+          ctx.strokeStyle = 'rgba(190,190,180,.85)'; ctx.lineWidth = 2;
+          for (let i = 0; i <= 4; i++) { const t = i / 4, x = b0.x + (b1.x - b0.x) * t, y = b0.y + (b1.y - b0.y) * t; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 70); ctx.stroke(); }
+          ctx.beginPath(); ctx.moveTo(b0.x, b0.y - 35); ctx.lineTo(b1.x, b1.y - 35); ctx.moveTo(b0.x, b0.y - 68); ctx.lineTo(b1.x, b1.y - 68); ctx.stroke();
+        }
         if (o.x === dr.tiles[dr.tiles.length - 1][0] && o.y === dr.tiles[dr.tiles.length - 1][1]) doorLamp(dr);
       } else if (o.k === 'x') {
         const a = alphaFor(`w${o.x},${o.y}`, occludes(o.x, o.y, WALL_H, party), dt);
@@ -300,11 +307,11 @@ AB.IsoRender = (() => {
     ctx.beginPath(); ctx.ellipse(c.x, c.y, 22, 11, 0, 0, 7); ctx.stroke();
     ctx.beginPath(); ctx.ellipse(c.x, c.y, 12, 6, 0, 0, 7); ctx.stroke();
     ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(${col},.95)`;
-    ctx.fillText(text, c.x, c.y + 24);
+    ctx.fillText(text, c.x, c.y + 26);
   }
   function defenseMarks() {
     const L = AB.IsoWorld.layout(), ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
-    if (ns && !ns.over && L.nest) drawPad(L.nest.pad, `Приёмник · био ${AB.IsoStash.count('ITEM-007')} → Мире`, '120,255,170');
+    if (ns && !ns.over && L.nest) drawPad(L.nest.pad, `Приёмник: ${AB.IsoStash.count('ITEM-007')} био`, '120,255,170');
     if (bs && L.boss) L.boss.cannons.forEach((c, i) => { if (!bs.on[i]) drawPad(c.pad, `Пушка ${bs.bank[i]}/${L.boss.cost}`, '255,200,90'); });
     // прочность дверей лаборатории
     for (const d of AB.IsoInteract.doors()) {
@@ -328,7 +335,7 @@ AB.IsoRender = (() => {
       if (t.kind === 'item') { const d = AB.ID.get(t.ref.item); col = d.weapon ? '255,200,90' : '255,214,120'; big = !!d.weapon || d.category === 'key'; text = big ? d.name : null; }
       else if (t.kind === 'container') { if (AB.Rooms.isSearched(t.room, t.ref.key)) continue; const loot = t.ref.loot || []; big = loot.some(([i]) => AB.ID.get(i).weapon); col = big ? '255,200,90' : '255,214,120'; text = big ? t.name : null; }
       else if (t.kind === 'equip') { if (AB.Equip.state(t.ref.id) === 'done' || t.ref.hidden) continue; col = '94,230,255'; }
-      else if (t.kind === 'door' && t.ref.def.hack && t.ref.state !== 'open' && !t.ref.hacked) { col = '94,230,255'; big = true; text = t.ref.def.name; }
+      else if (t.kind === 'door' && t.ref.def.hack && t.ref.state !== 'open' && !t.ref.hacked && !AB.IsoNest.state()) { col = '94,230,255'; big = true; text = t.ref.def.name; }
       else continue;
       const p = toScreen(t.x, t.y), far = Math.hypot(t.x - l.x, t.y - l.y);
       if (far > 22) continue;

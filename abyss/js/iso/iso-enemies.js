@@ -38,7 +38,7 @@ AB.IsoEnemies = (() => {
   const def = (e) => AB.ID.get(e.id);
   const here = () => [...list.values()].filter((e) => e.sector === sectorNow());
   const alive = () => here().filter((e) => e.state !== 'DEAD' && !e.story);
-  const sees = (e, m) => W().clear(e.x, e.y, m.x, m.y, 0.05);
+  const sees = (e, m) => W().see(e.x, e.y, m.x, m.y, 0.05);
 
   function setState(e, s) {
     e.state = s; e.t = 0; e.hitDone = false; e.path = null;
@@ -169,7 +169,7 @@ AB.IsoEnemies = (() => {
       case 'CHASE': {
         if (!tg || e.loseT > d.behavior.loseAfter) { e.target = null; setState(e, 'PATROL'); break; }
         const dist = Math.hypot(tg.x - e.x, tg.y - e.y);
-        if (dist <= d.attack.range / T + 0.25 && e.cooldown <= 0 && sees(e, tg)) { e.hx = tg.x - e.x; e.hy = tg.y - e.y; setState(e, 'ATTACK'); break; }
+        if (dist <= d.attack.range / T + 0.25 && e.cooldown <= 0 && W().clear(e.x, e.y, tg.x, tg.y, 0.05)) { e.hx = tg.x - e.x; e.hy = tg.y - e.y; setState(e, 'ATTACK'); break; }   // сквозь решётку когтями не достать
         run = true;
         // №57: путь к цели перекрыт закрытой дверью — ломать её
         if (e.nest) {

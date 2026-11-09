@@ -46,10 +46,10 @@ AB.IsoNest = (() => {
     if (A || done) return;
     const L = lay();
     A = { t: 0, prog: 0, kills: 0, next: RULES.waves.first, foes: new Set(), over: false, bank: 0, turrets: 0, resets: 0, fireT: L.turrets.map(() => 0) };
-    // двери лаборатории захлопываются; у каждой — прочность
-    for (const k of L.doors) {
+    // двери лаборатории захлопываются: решётку ломают (у неё прочность), служебная — просто закрыта
+    for (const k of [...L.doors, L.flank].filter(Boolean)) {
       const d = doorOf(k);
-      d.hp = RULES.doorHp; d.max = RULES.doorHp; d.barricade = true;
+      if (L.doors.includes(k)) { d.hp = RULES.doorHp; d.max = RULES.doorHp; d.barricade = true; AB.IsoWorld.setGrate(d.tiles, true); }
       for (const m of [...AB.IsoParty.members(), ...AB.IsoParty.npcs()]) if (d.tiles.some(([x, y]) => Math.floor(m.x) === x && Math.floor(m.y) === y)) { m.x += 1.2; m.path = null; }
       d.state = 'closed';
     }
@@ -141,7 +141,7 @@ AB.IsoNest = (() => {
       if (A.fireT[i] > 0) continue;
       const tp = { x: L.turrets[i].x + 0.5, y: L.turrets[i].y + 0.5 };
       let best = null, bd = T.range;
-      for (const e of aliveFoes()) { const d = Math.hypot(e.x - tp.x, e.y - tp.y); if (d < bd && AB.IsoWorld.clear(tp.x, tp.y, e.x, e.y, 0.05)) { bd = d; best = e; } }
+      for (const e of aliveFoes()) { const d = Math.hypot(e.x - tp.x, e.y - tp.y); if (d < bd && AB.IsoWorld.see(tp.x, tp.y, e.x, e.y, 0.05)) { bd = d; best = e; } }
       if (!best) { A.fireT[i] = 0.2; continue; }
       A.fireT[i] = T.every;
       AB.IsoEnemies.damage(best.id, T.damage, null, 'ranged');
@@ -169,6 +169,7 @@ AB.IsoNest = (() => {
   function finish() {
     A.over = true;
     for (const e of aliveFoes()) AB.IsoEnemies.damage(e.id, 9999, null);
+    for (const k of lay().doors) { const d = doorOf(k); d.barricade = false; AB.IsoWorld.setGrate(d.tiles, false); if (d.state === 'closed') d.state = 'open'; }
     const dr = doorOf(lay().door); dr.state = 'open'; dr.hacked = true;
     AB.IsoWorld.setDoor(dr.tiles, false);
     for (const m of AB.IsoParty.members()) m.repair = false;
@@ -178,9 +179,26 @@ AB.IsoNest = (() => {
     setTimeout(() => { A = null; AB.Quests.check(); }, 1500);
   }
 
+  // дверь сейчас ломают: мутант вплотную к ней
+  function underAttack(d) {
+    const n = d.tiles.length, cx = d.tiles.reduce((a, t) => a + t[0], 0) / n + 0.5, cy = d.tiles.reduce((a, t) => a + t[1], 0) / n + 0.5;
+    return AB.IsoEnemies.alive().some((e) => e.state !== 'DEAD' && Math.hypot(e.x - cx, e.y - cy) < 1.7);
+  }
+  // служебная дверь закрывается сама, когда рядом никого из отряда (и в проёме нет мутанта)
+  function flankTick() {
+    const d = lay().flank && doorOf(lay().flank);
+    if (!d || d.state !== 'open') return;
+    const n = d.tiles.length, cx = d.tiles.reduce((a, t) => a + t[0], 0) / n + 0.5, cy = d.tiles.reduce((a, t) => a + t[1], 0) / n + 0.5;
+    const near = (m) => Math.hypot(m.x - cx, m.y - cy) < 1.8;
+    if (AB.IsoParty.members().some(near) || AB.IsoEnemies.alive().some(near)) return;
+    d.state = 'closed';
+    AB.Bus.emit('iso:door', { key: d.key, state: 'closed', name: d.def.name });
+  }
+
   function update(dt) {
     if (!A) return;
     for (const k of lay().doors) { const d = doorOf(k); if (d && d.hitT) d.hitT = Math.max(0, d.hitT - dt); }
+    if (!A.over) flankTick();
     if (A.over) return;
     A.t += dt; A.next -= dt;
     if (A.next <= 0) spawnWave();
@@ -190,7 +208,8 @@ AB.IsoNest = (() => {
   }
 
   return {
-    update, start, breach, hitDoor, repairDoor, RULES,
+    update, start, breach, hitDoor, repairDoor, underAttack, RULES,
+    markDone() { done = true; },   // контрольная точка после обороны (iso-game.js)
     config: () => lay() || {},
     active: () => !!A && !A.over, state: () => A, isDone: () => done,
     canRepair: atLock,

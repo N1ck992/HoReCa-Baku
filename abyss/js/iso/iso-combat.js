@@ -63,7 +63,7 @@ AB.IsoCombat = (() => {
       for (const e of AB.IsoEnemies.alive()) {
         const rx = e.x - m.x, ry = e.y - m.y, along = rx * dx + ry * dy, side = Math.abs(rx * dy - ry * dx);
         if (along <= 0 || along > best || side > (e === e0 ? 0.9 : 0.55)) continue;
-        if (!W().clear(m.x, m.y, e.x, e.y, 0.05)) continue;
+        if (!W().see(m.x, m.y, e.x, e.y, 0.05)) continue;
         hit = e; best = along;
       }
       if (hit) landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged');
@@ -131,7 +131,7 @@ AB.IsoCombat = (() => {
     let best = null, bd = reach;
     for (const e of AB.IsoEnemies.alive()) {
       const d = Math.hypot(e.x - m.x, e.y - m.y);
-      if (d <= bd && hostile(e) && W().clear(m.x, m.y, e.x, e.y, 0.05)) { bd = d; best = e; }
+      if (d <= bd && hostile(e) && W().see(m.x, m.y, e.x, e.y, 0.05)) { bd = d; best = e; }
     }
     return best;
   }
@@ -157,7 +157,7 @@ AB.IsoCombat = (() => {
       const w = weaponOf(l.id);
       if (!w) { target = null; AB.Bus.emit('combat:noweapon', { charId: l.id }); return; }
       const d = Math.hypot(e.x - l.x, e.y - l.y), reach = reachOf(l.id, w) * (canShoot(l.id, w) ? 0.85 : 0.9);
-      if (d <= reach && W().clear(l.x, l.y, e.x, e.y, 0.05)) { AB.IsoParty.stop(); attack(l, e); }
+      if (d <= reach && W().see(l.x, l.y, e.x, e.y, 0.05)) { AB.IsoParty.stop(); attack(l, e); }
       else if (!l.path || Math.hypot((l.goal || l).x - e.x, (l.goal || l).y - e.y) > 0.8) AB.IsoParty.goTo(e.x, e.y);
       return;
     }
@@ -187,7 +187,7 @@ AB.IsoCombat = (() => {
         if (d < bd) { bd = d; best = e; }
       }
       if (!best) continue;
-      const see = W().clear(m.x, m.y, best.x, best.y, 0.05);
+      const see = W().see(m.x, m.y, best.x, best.y, 0.05);
       if (m.repair) { m.engage = null; continue; }   // №57: взламывает замок — не стреляет (лечит аурой)
       if (bd <= reach * (canShoot(m.id, w) ? 0.8 : 0.9) && see) { m.engage = { x: m.x, y: m.y, hold: true }; attack(m, best); }
       else m.engage = { x: best.x, y: best.y };

@@ -124,8 +124,21 @@ AB.IsoWorld = (() => {
     return out;
   }
 
+  // №59: решётка — закрытая дверь, сквозь которую видно и можно стрелять (но не пройти)
+  const grates = new Set();
+  function see(ax, ay, bx, by, r = 0.05) {
+    const len = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(len / 0.2));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      if (!free(x, y, r) && !grates.has(idx(Math.floor(x), Math.floor(y)))) return false;
+    }
+    return true;
+  }
+
   return {
-    FLOOR, WALL, PROP, DOOR, build,
+    FLOOR, WALL, PROP, DOOR, see,
+    build(id) { grates.clear(); return build(id); },
+    setGrate(tiles, on) { for (const [x, y] of tiles) if (inside(x, y)) { if (on) grates.add(idx(x, y)); else grates.delete(idx(x, y)); } },
     // дверь закрылась/открылась: клетки створки становятся непроходимыми или снова полом
     setDoor(tiles, closed) { for (const [x, y] of tiles) if (inside(x, y) && (cells[idx(x, y)] === FLOOR || cells[idx(x, y)] === DOOR)) cells[idx(x, y)] = closed ? DOOR : FLOOR; }, free, move, path, nearestFree, clear, walkable,
     cell, room: (x, y) => (inside(Math.floor(x), Math.floor(y)) ? roomOf[idx(Math.floor(x), Math.floor(y))] : null),

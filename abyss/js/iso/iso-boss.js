@@ -73,7 +73,7 @@ AB.IsoBoss = (() => {
       const p = { x: c.x + 0.5, y: c.y + 0.5 };
       // Колосс выше баков — тяжёлые пушки достают его поверх них; выводок — только по прямой
       let tgt = col && col.state !== 'DEAD' && Math.hypot(col.x - p.x, col.y - p.y) < RULES.cannon.range ? col : null;
-      if (!tgt) tgt = alive.map((id) => AB.IsoEnemies.get(id)).find((e) => AB.IsoWorld.clear(p.x, p.y, e.x, e.y, 0.05)) || null;
+      if (!tgt) tgt = alive.map((id) => AB.IsoEnemies.get(id)).find((e) => AB.IsoWorld.see(p.x, p.y, e.x, e.y, 0.05)) || null;
       if (!tgt) { B.fireT[i] = 0.3; return; }
       B.fireT[i] = RULES.cannon.every;
       AB.IsoEnemies.damage(tgt.id, RULES.cannon.damage, null, 'ranged');

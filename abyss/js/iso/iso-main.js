@@ -43,6 +43,10 @@
   AB.Bus.on('char:dead', ({ charId }) => {
     if (charId !== 'CHAR-001' && charId !== 'CHAR-002') { toast(`${AB.ID.get(charId).name} погибла`); return; }
     $('#iso-death h2').textContent = charId === 'CHAR-001' ? 'Вы погибли' : 'Её больше нет';
+    // №59: есть контрольная точка (оборона оружейной, Колосс) — можно повторить с неё
+    const cp = AB.IsoGame.checkpoint();
+    $('#iso-cp').hidden = !cp;
+    if (cp) { $('#iso-cp').textContent = `С контрольной точки: ${cp.name}`; $('#iso-death-text').textContent = 'Можно повторить с контрольной точки — с теми вещами, что были при входе.'; }
     setTimeout(() => { $('#iso-death').hidden = false; }, 1400);
   });
 
@@ -85,6 +89,7 @@
     // оборона оружейной и бой с Колоссом (№57): полоса сверху
     const ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
     $('#iso-nest').hidden = !ns && !bs;
+    document.body.classList.toggle('nest-on', !!(ns || bs));
     let nh = '';
     if (ns) {
       const P = AB.Progress, bio = AB.IsoStash.count('ITEM-007'), cost = AB.IsoNest.RULES.turretCost, tn = AB.IsoNest.config().turrets.length;
@@ -204,6 +209,9 @@
     });
     $('#iso-ids').addEventListener('click', () => { AB.isoShowIds = !AB.isoShowIds; });
     $('#iso-restart').addEventListener('click', () => AB.IsoGame.restart());
+    $('#iso-cp').addEventListener('click', () => AB.IsoGame.fromCheckpoint());
+    $('#iso-cp').addEventListener('pointerdown', (e) => e.stopPropagation());
+    AB.Bus.on('iso:checkpoint', ({ name }) => toast(`Контрольная точка: ${name}`, 'good'));
     $('#iso-act-new').addEventListener('click', () => AB.IsoGame.restart());
     // дальше: следующий акт (после третьего — остаться на карте дна)
     $('#iso-act-out').addEventListener('click', () => { $('#iso-act').hidden = true; clearFade(); last = performance.now(); AB.IsoActs.next(actNow); });
