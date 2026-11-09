@@ -94,6 +94,13 @@ AB.IsoInteract = (() => {
       const room = W().room(p.x + 0.5, p.y + 0.5), def = ((AB.ID.get(room) || {}).containers || []).find((c) => c.key === p.container);
       if (def) out.push({ kind: 'container', id: `box:${room}:${def.key}`, x: p.x + p.w / 2, y: p.y + p.h / 2, rect: p, room, ref: def, name: def.label });
     }
+    // база-капсула (№61): пульт, шкафчики экипажа, гнёзда модулей
+    for (const p of W().props()) {
+      const c = { x: p.x + p.w / 2, y: p.y + p.h / 2, rect: p };
+      if (p.pilot) out.push({ kind: 'pilot', id: 'pilot', ...c, name: 'Пульт капсулы' });
+      if (p.stash) out.push({ kind: 'stash', id: 'stash', ...c, name: 'Шкафчики экипажа' });
+      if (p.bay) out.push({ kind: 'bay', id: `bay:${p.bay}`, ...c, ref: AB.ID.get(p.bay), name: AB.ID.get(p.bay).name });
+    }
     for (const d of doors.values()) { const c = doorCenter(d); out.push({ kind: 'door', id: `door:${d.key}`, x: c.x, y: c.y, ref: d, name: d.def.name }); }
     for (const l of layout.links || []) for (const [end, other] of [[l.a, l.b], [l.b, l.a]]) {
       const rd = roomDoor(end.room, end.door);
@@ -126,6 +133,13 @@ AB.IsoInteract = (() => {
   function label(t) {
     const lid = AB.IsoParty.lead().id;
     if (t.kind === 'item') return { label: `Подобрать: ${t.name}${t.ref.qty > 1 ? ` ×${t.ref.qty}` : ''}`, ok: true };
+    if (t.kind === 'pilot') return { label: 'Пульт капсулы — вести капсулу по дну', ok: true };
+    if (t.kind === 'stash') return { label: 'Шкафчики экипажа — снаряжение и вещи', ok: true };
+    if (t.kind === 'bay') {
+      const m = t.ref, cost = (m.cost || []).map(([i, n]) => `${AB.ID.get(i).short} ${AB.IsoStash.count(i)}/${n}`).join(', ');
+      if (AB.IsoActs.built(m.id)) return { label: `${m.name}: работает — ${m.desc}`, ok: false };
+      return AB.IsoActs.canBuild(m.id) ? { label: `Пристыковать модуль «${m.name}» (${cost})`, ok: true } : { label: `Гнездо модуля «${m.name}»: нужно ${cost}`, ok: false };
+    }
     if (t.kind === 'equip') {
       const a = AB.Equip.action(t.ref.id, lid);
       return { label: a.ok ? a.label : `${t.name}: ${a.label.charAt(0).toLowerCase()}${a.label.slice(1)}`, ok: a.ok };
@@ -203,6 +217,9 @@ AB.IsoInteract = (() => {
       return true;
     }
     if (t.kind === 'door') return toggleDoor(t.ref);
+    if (t.kind === 'pilot') { AB.IsoActs.leaveBase(); return true; }
+    if (t.kind === 'stash') { AB.IsoInventory.open(); return true; }
+    if (t.kind === 'bay') { if (!AB.IsoActs.build(t.ref.id)) AB.Bus.emit('door:denied', { reason: label(t).label }); return true; }
     if (t.kind === 'container') {
       if (AB.Rooms.isSearched(t.room, t.ref.key)) { AB.Bus.emit('container:empty', { label: t.name }); return true; }
       AB.IsoParty.stop(); work = { t, p: 0, time: 1.2, x: l.x, y: l.y };
@@ -300,7 +317,7 @@ AB.IsoInteract = (() => {
     let best = null, bd = 34;
     for (const t of targets()) {
       const p = S(t.x, t.y);
-      const lift = t.kind === 'door' || t.kind === 'equip' || t.kind === 'container' || (t.kind === 'exit' && !t.ref.floor) ? 30 : 6;   // у высоких объектов — по их середине
+      const lift = t.kind === 'door' || t.kind === 'equip' || t.kind === 'container' || t.kind === 'pilot' || t.kind === 'stash' || t.kind === 'bay' || (t.kind === 'exit' && !t.ref.floor) ? 30 : 6;   // у высоких объектов — по их середине
       const d = Math.min(Math.hypot(p.x - cx, p.y - cy), Math.hypot(p.x - cx, p.y - lift - cy));
       if (d < bd) { bd = d; best = t; }
     }

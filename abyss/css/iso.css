@@ -271,3 +271,4 @@ body.quiet #iso-help { display: none; }
   #ow-hint { display: none; }
 }
 #iso-fs { font-size: 16px !important; }
+#iso-death { z-index: 16; }

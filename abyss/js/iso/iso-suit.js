@@ -121,7 +121,12 @@ AB.IsoSuit = (() => {
     limb(g, an.sp, an.el, 16, C.hull, C.hullDark);
     limb(g, an.el, an.hd, 18, C.hull, C.hullDark, { claw: true, open: an.open });
     // вспышка урона
-    if (pose.hurt) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(255,80,60,.35)'; g.fillRect(-40, -160, 80, 165); g.globalCompositeOperation = 'source-over'; }
+    if (pose.hurt) {
+      // удар по корпусу: красное свечение вокруг костюма (без заливки фона)
+      const rg = g.createRadialGradient(0, -75, 10, 0, -75, 70);
+      rg.addColorStop(0, 'rgba(255,80,60,.35)'); rg.addColorStop(1, 'rgba(255,80,60,0)');
+      g.fillStyle = rg; g.beginPath(); g.ellipse(0, -75, 45, 80, 0, 0, 7); g.fill();
+    }
     g.restore();
   }
 

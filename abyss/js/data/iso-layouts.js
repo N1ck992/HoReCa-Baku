@@ -297,4 +297,43 @@ AB.ISO_LAYOUTS['SECTOR-004'] = {
     { x: 31, y: 9, color: [160, 100, 255], radius: 6 }, { x: 12, y: 20, color: [160, 100, 255], radius: 5 },
   ],
 };
+// №61: база-капсула изнутри (черновик). Капсула — автономный батискаф-вездеход: кабина, жилой
+// отсек, шлюз и модульный отсек с гнёздами под модули (MOD-*). Транспорт снаружи, внутри — только герои.
+AB.ISO_LAYOUTS['SECTOR-005'] = {
+  name: 'База-капсула',
+  areas: [
+    { room: 'ROOM-020', x: 2, y: 4, w: 7, h: 6 },       // кабина
+    { room: 'ROOM-021', x: 9, y: 6, w: 1, h: 2 },       // проход
+    { room: 'ROOM-021', x: 10, y: 3, w: 12, h: 8 },     // жилой отсек
+    { room: 'ROOM-022', x: 22, y: 6, w: 1, h: 2 },      // проход
+    { room: 'ROOM-022', x: 23, y: 5, w: 5, h: 4 },      // шлюз
+    { room: 'ROOM-023', x: 15, y: 11, w: 2, h: 1 },     // проход вниз
+    { room: 'ROOM-023', x: 10, y: 12, w: 12, h: 5 },    // модульный отсек
+  ],
+  props: [
+    { kind: 'console', x: 3, y: 4, w: 3, h: 1, pilot: true },
+    { kind: 'table', x: 5, y: 7, w: 1, h: 1 },
+    { kind: 'bunk', x: 11, y: 3, w: 3, h: 1 }, { kind: 'bunk', x: 15, y: 3, w: 3, h: 1 }, { kind: 'bunk', x: 19, y: 3, w: 2, h: 1 },
+    { kind: 'table', x: 15, y: 6, w: 2, h: 2 },
+    { kind: 'locker', x: 11, y: 9, w: 2, h: 1, stash: true },
+    { kind: 'exorack', x: 24, y: 5, w: 2, h: 1 },
+    { kind: 'bay', x: 11, y: 14, w: 3, h: 2, bay: 'MOD-002' },
+    { kind: 'bay', x: 15, y: 14, w: 3, h: 2, bay: 'MOD-003' },
+    { kind: 'bay', x: 19, y: 14, w: 2, h: 2, bay: 'MOD-004' },
+  ],
+  doors: [],
+  exits: [
+    { room: 'ROOM-022', door: 'out', x: 27, y: 6, wall: 'e', toName: 'дно (капсула)', to: { overworld: true } },
+  ],
+  items: {},
+  crewAt: { 'CHAR-004': { x: 19.5, y: 7.5 } },
+  enter: { x: 24.5, y: 7.5 },
+  lights: [
+    { x: 5, y: 6, color: [120, 200, 255], radius: 6 }, { x: 13, y: 6, color: [255, 214, 170], radius: 7 },
+    { x: 19, y: 6, color: [255, 214, 170], radius: 6 }, { x: 25, y: 7, color: [120, 200, 255], radius: 5 },
+    { x: 16, y: 14, color: [120, 255, 170], radius: 7 },
+  ],
+};
+AB.ID.register('SECTOR-005', { id: 'SECTOR-005', name: 'База-капсула', iso: true, pending: true, doors: [] });
+
 AB.ID.register('SECTOR-004', { id: 'SECTOR-004', name: AB.ISO_LAYOUTS['SECTOR-004'].name, iso: true, pending: true, doors: [] });

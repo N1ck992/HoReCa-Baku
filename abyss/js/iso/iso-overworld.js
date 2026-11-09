@@ -15,6 +15,11 @@ AB.IsoOverworld = (() => {
   let open_ = false, cv, g, dpr = 1;
   const cells = new Map();             // q,r → { q, r, kind, seen }
   let pos = null, path = [], stepT = 0, anim = null, cam = { x: 0, y: 0 }, size = 34, time = 0, last = 0, onSite = null;
+  // №61: бой прямо на карте — костюм занимает клетку и бьёт на 2 клетки; твари ходят по клеткам
+  const mobs = [];                      // { id, q, r, hp, max, hunt, stepT, atkT, flash, anim, t }
+  const loot = new Map();               // q,r → [item, qty] — что лежит на клетке
+  let target = null, atk = null, suitAtkT = 0, suitFlash = 0, hpShow = 1;
+  const SUIT = () => AB.RIGS.EXOSUIT;
   let mode = 'suit';
   let suitStride = 0, suitFace = 1;                    // №55: 'suit' — Марк в экзокостюме один (акт II), 'capsule' — база-капсула (акт III)
   const viewR = () => (AB.IsoActs ? AB.IsoActs.view() : 2);   // на сколько клеток видно вокруг (сонар базы — дальше)
@@ -91,6 +96,11 @@ AB.IsoOverworld = (() => {
       e.stopPropagation();
       const t = pick(e.clientX, e.clientY);
       if (!t || !cells.has(key(t.q, t.r))) return;
+      const mb = mobAt(t.q, t.r);
+      if (mb && mode === 'suit') {
+        target = mb;
+        if (dist(anim ? anim.to : pos, mb) <= SUIT().weapon.reachCells) { path = []; return; }
+      } else target = null;
       const p = route(anim ? anim.to : pos, t);
       if (!p) { say('Туда не пройти'); return; }
       path = p;
@@ -101,7 +111,8 @@ AB.IsoOverworld = (() => {
       if (onSite.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(onSite);
     });
     // база-капсула (акт III): экипаж, вещи, модули
-    document.getElementById('ow-base-btn').addEventListener('click', () => baseOpen(true));
+    // №61: «База» — войти в капсулу (помещение с экипажем, снаряжением и модулями)
+    document.getElementById('ow-base-btn').addEventListener('click', () => AB.IsoActs.enterBase());
     document.getElementById('ow-base').addEventListener('click', (e) => {
       if (e.target.closest('[data-base-close]') || e.target.id === 'ow-base') { baseOpen(false); return; }
       const b = e.target.closest('[data-build]');
@@ -112,6 +123,7 @@ AB.IsoOverworld = (() => {
   }
   function enter() {
     open_ = true;
+    spawnMobs();
     reveal(); onSite = undefined;
     document.getElementById('ow').hidden = false;
     document.getElementById('ow-base-btn').hidden = mode !== 'capsule';
@@ -170,16 +182,23 @@ AB.IsoOverworld = (() => {
     if (!open_) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
     // шаг экзокостюма: тяжёлый, STEP секунд на клетку
+    if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
+    // идём к выбранной твари — остановиться, как только достаём
+    if (target && target.hp > 0 && dist(anim ? anim.to : pos, target) <= SUIT().weapon.reachCells) path = [];
+    else if (target && target.hp > 0 && !path.length && !anim) { const p = route(pos, target); if (p) path = p; }
+    // в клетку с тварью не войти
+    if (!anim && path.length && mobAt(path[0].q, path[0].r)) path = [];
     if (!anim && path.length) { anim = { from: { ...pos }, to: path.shift(), t: 0 }; }
     if (anim) {
       suitStride += dt / STEP * 78;                                   // шаг костюма: одна клетка — один шаг
       const a0 = px(anim.from.q, anim.from.r), a1 = px(anim.to.q, anim.to.r);
       if (Math.abs(a1.x - a0.x) > 1) suitFace = a1.x > a0.x ? 1 : -1;
       anim.t += dt / STEP;
-      if (anim.t >= 1) { pos = anim.to; anim = null; reveal(); }
+      if (anim.t >= 1) { pos = anim.to; anim = null; reveal(); pickLoot(); }
     }
     const cur = anim ? lerpPos(anim.from, anim.to, anim.t) : px(pos.q, pos.r);
     cam.x += (cur.x - cam.x) * Math.min(1, dt * 6); cam.y += (cur.y - cam.y) * Math.min(1, dt * 6);
+    if (mode === 'suit') fight(dt);
     draw(cur);
     hud();
     requestAnimationFrame(loop);
@@ -229,6 +248,9 @@ AB.IsoOverworld = (() => {
       g.font = `${11 * dpr}px "Oswald", sans-serif`; g.textAlign = 'center'; g.fillStyle = 'rgba(230,220,200,.85)';
       g.fillText(s.name, p.x, p.y + size * 0.85);
     }
+    // находки на клетках и твари
+    for (const [k, [item]] of loot) { const [q, r] = k.split(',').map(Number); const c = cells.get(k); if (!c || !c.seen) continue; const p = px(q, r); g.fillStyle = `rgba(190,140,255,${0.6 + Math.sin(time * 4) * 0.3})`; g.beginPath(); g.moveTo(p.x, p.y - 14 * dpr); g.lineTo(p.x + 6 * dpr, p.y - 4 * dpr); g.lineTo(p.x, p.y + 4 * dpr); g.lineTo(p.x - 6 * dpr, p.y - 4 * dpr); g.closePath(); g.fill(); }
+    for (const m of mobs) drawMob(m);
     // экзокостюм или капсула
     g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(cur.x, cur.y + 6, (mode === 'capsule' ? 18 : 10) * dpr, 4 * dpr, 0, 0, 7); g.fill();
     if (mode === 'capsule') {
@@ -236,14 +258,106 @@ AB.IsoOverworld = (() => {
       g.fillStyle = '#5ee6ff'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(cur.x + i * 7 * dpr, cur.y - 7, 2.4 * dpr, 0, 7); g.fill(); }
     } else {
       // №56: экзокостюм — та же фигура из частей, что в изометрии; занимает одну клетку
-      const pose = { facing: suitFace, phase: suitStride / 78 * Math.PI * 2, moving: !!anim, attack: -1, hurt: 0, dead: false, t: time };
+      const pose = { facing: suitFace, phase: suitStride / 78 * Math.PI * 2, moving: !!anim, attack: atk ? Math.min(1, atk.t / 0.8) : -1, hurt: suitFlash > 0 ? 1 : 0, dead: !!(AB.Chars.get('CHAR-001') || {}).dead, t: time };
       AB.IsoSuit.draw(g, pose, cur.x, cur.y + size * 0.2, (size * 1.3) / AB.RIGS.EXOSUIT.height);
+      if (mobs.some((m) => m.hp > 0 && m.hunt)) bar(cur.x, cur.y - size * 1.25, hpShow, '#5ee6ff');
     }
     // свет нашлемных фонарей
     const lg = g.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, size * 3.2);
     lg.addColorStop(0, 'rgba(120,200,220,.08)'); lg.addColorStop(1, 'rgba(120,200,220,0)');
     g.fillStyle = lg; g.fillRect(cur.x - size * 3.2, cur.y - size * 3.2, size * 6.4, size * 6.4);
   }
+  // ---------- бой на карте (№61) ----------
+  function mobAt(q, r) { return mobs.find((m) => m.hp > 0 && m.q === q && m.r === r) || null; }
+  function bar(x, y, f, col) {
+    const w = size * 0.9;
+    g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(x - w / 2, y, w, 4 * dpr);
+    g.fillStyle = col; g.fillRect(x - w / 2, y, w * Math.max(0, f), 4 * dpr);
+  }
+  function drawMob(m) {
+    const c = cells.get(key(m.q, m.r));
+    if (!c || !c.seen || dist(m, pos) > viewR() + 1) return;
+    let p = px(m.q, m.r);
+    if (m.from && m.mt < 1) { const a = px(m.from.q, m.from.r); p = { x: a.x + (p.x - a.x) * m.mt, y: a.y + (p.y - a.y) * m.mt }; }
+    const def = AB.ID.get(m.id), k = (size * 1.25) / (90 * (def.scale || 1));
+    const e = { id: m.id, x: 0, state: m.hp <= 0 ? 'DEAD' : m.anim, facing: m.face, stride: m.stride, flash: m.flash, t: m.t, hp: m.hp, risen: true };
+    if (m.hp <= 0) { m.fade = Math.max(0, (m.fade == null ? 1 : m.fade) - 0.01); g.globalAlpha = m.fade; }
+    if (AB.Render && AB.Render.drawEnemyFigure) { try { AB.Render.drawEnemyFigure(g, e, p.x, p.y + size * 0.2, k); } catch (er) { /* без фигуры */ } }
+    g.globalAlpha = 1;
+    if (m.hp > 0 && m.hunt) bar(p.x, p.y - size * 1.2, m.hp / m.max, '#ff5a4a');
+  }
+  // твари этого акта на своих клетках (данные — js/data/iso-acts.js: ISO_SITES[].mob)
+  function spawnMobs() {
+    for (const s of D().sites) {
+      const d = AB.ISO_SITES && AB.ISO_SITES[s.key];
+      if (!d || !d.mob || mobs.some((m) => m.id === d.mob) || AB.Enemies.isDead(d.mob) || (AB.IsoActs && AB.IsoActs.act() < d.act)) continue;
+      const def = AB.ID.get(d.mob);
+      mobs.push({ id: d.mob, q: s.q, r: s.r, hp: def.hp, max: def.hp, hunt: false, stepT: 0, atkT: 1, flash: 0, anim: 'PATROL', t: 0, face: -1, stride: 0, mt: 1 });
+    }
+  }
+  function fight(dt) {
+    const sw = SUIT().weapon, me = AB.Chars.get('CHAR-001');
+    if (me && me.dead) return;
+    hpShow = me ? me.hp / AB.ID.get('CHAR-001').stats.maxHp : 1;
+    suitFlash = Math.max(0, suitFlash - dt);
+    suitAtkT = Math.max(0, suitAtkT - dt);
+    const here = anim ? anim.to : pos;
+    for (const m of mobs) {
+      m.t += dt; m.flash = Math.max(0, m.flash - dt * 4);
+      if (m.hp <= 0) continue;
+      const d = dist(m, here), def = AB.ID.get(m.id);
+      if (m.mt < 1) { m.mt = Math.min(1, m.mt + dt / 0.9); m.stride += dt * 80; }
+      if (!m.hunt && d <= 3) { m.hunt = true; m.anim = 'ALERT'; m.t = 0; say('Мира: «Оно двинулось к тебе! Бей, как только подойдёт на две клетки»'); }
+      if (!m.hunt) continue;
+      m.face = px(here.q, here.r).x >= px(m.q, m.r).x ? 1 : -1;
+      m.atkT = Math.max(0, m.atkT - dt);
+      if (d <= 1) {
+        // вплотную — бьёт
+        if (m.atkT <= 0) { m.anim = 'ATTACK'; m.t = 0; m.atkT = def.attack.cooldown + def.attack.windup; m.hit = def.attack.windup; }
+        if (m.hit != null) { m.hit -= dt; if (m.hit <= 0) { m.hit = null; suitFlash = 0.3; AB.IsoCombat.damageChar('CHAR-001', def.damage * SUIT().armor, null); } }
+        if (m.anim === 'ATTACK' && m.t > 1) m.anim = 'CHASE';
+      } else if (m.mt >= 1) {
+        // шаг к костюму (тяжело, ~0,9 с на клетку)
+        m.stepT -= dt; m.anim = 'CHASE';
+        if (m.stepT <= 0) {
+          const r = route(m, here);
+          const nx = r && r[0];
+          if (nx && !(nx.q === here.q && nx.r === here.r) && !mobAt(nx.q, nx.r)) { m.from = { q: m.q, r: m.r }; m.q = nx.q; m.r = nx.r; m.mt = 0; }
+          m.stepT = 0.9;
+        }
+      }
+    }
+    // удар костюма: сам по ближайшей твари в досягаемости (или по выбранной)
+    if (atk) {
+      atk.t += dt;
+      if (!atk.done && atk.t >= sw.hitAt * 2) {
+        atk.done = true;
+        const m = atk.m;
+        if (m.hp > 0 && dist(m, here) <= sw.reachCells) {
+          m.hp = Math.max(0, m.hp - sw.damage); m.flash = 1; m.hunt = true;
+          if (m.hp <= 0) mobDead(m);
+        }
+      }
+      if (atk.t > 0.8) atk = null;
+    } else if (suitAtkT <= 0 && !anim) {
+      const foe = (target && target.hp > 0 && dist(target, here) <= sw.reachCells) ? target : mobs.filter((m) => m.hp > 0 && m.hunt && dist(m, here) <= sw.reachCells).sort((a, b) => dist(a, here) - dist(b, here))[0];
+      if (foe) { atk = { m: foe, t: 0 }; suitAtkT = sw.cooldown; suitFace = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1; path = []; }
+    }
+  }
+  function mobDead(m) {
+    m.anim = 'DEAD'; target = null;
+    AB.IsoEnemies.markDead(m.id);
+    AB.Bus.emit('enemy:dead', { id: m.id, name: AB.ID.get(m.id).name, q: m.q, r: m.r });
+  }
+  // предмет на клетку (кристалл с убитой твари) и подбор, когда костюм встал на клетку
+  function dropLoot(q, r, item, qty) { loot.set(key(q, r), [item, qty]); }
+  function pickLoot() {
+    const k = key(pos.q, pos.r), l = loot.get(k);
+    if (!l) return;
+    const n = AB.IsoStash.add(l[0], l[1]);
+    if (n) { loot.delete(k); say(`Подобрано: ${AB.ID.get(l[0]).name}`); }
+  }
+
   function icon(kind, x, y) {
     const s = size * 0.42;
     g.save(); g.translate(x, y);
@@ -281,6 +395,7 @@ AB.IsoOverworld = (() => {
   return {
     init, enter, back, close, say, isOpen: () => open_,
     setMode(m) { mode = m; }, mode: () => mode, refresh() { onSite = undefined; },
+    mobs: () => mobs.map((m) => ({ id: m.id, q: m.q, r: m.r, hp: m.hp, hunt: m.hunt })), dropLoot, attack(id) { target = mobs.find((m) => m.id === id) || null; },
     pos: () => ({ ...pos }), goTo(q, r) { const p = route(anim ? anim.to : pos, { q, r }); if (p) path = p; return !!p; },
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
     moving: () => !!anim || path.length > 0, route,

@@ -39,17 +39,17 @@ AB.IsoActs = (() => {
     // Мира остаётся на корабле: на дне её не рисуем
     const mira = AB.IsoParty.allNpcs().find((m) => m.id === 'CHAR-002'); if (mira) mira.hidden = true;
   });
-  // тварь на дне убита — под ней кристалл; Мира на связи
-  AB.Bus.on('enemy:dead', ({ id }) => {
+  // тварь на дне убита (бой на карте, №61) — на её клетке кристалл; Мира на связи
+  AB.Bus.on('enemy:dead', ({ id, q, r }) => {
     if (id !== 'ENEMY-008') return;
     visited.add('contact');
-    AB.Rooms.dropItem('ROOM-019', 'ITEM-015', 1, 1200);
-    setTimeout(() => toast('Мира: «Цель не двигается… Ты цел? Подбери, что там, и возвращайся на «Абисс»»'), 900);
+    if (q != null) AB.IsoOverworld.dropLoot(q, r, 'ITEM-015', 1);
+    setTimeout(() => AB.IsoOverworld.say('Мира: «Цель не двигается… Ты цел? Там что-то светится — подбери и возвращайся на «Абисс»»'), 900);
   });
   // вернулись на корабль с карты (iso-main.js переносит отряд в шлюз)
   AB.Bus.on('ow:exit', () => {
     const mira = AB.IsoParty.allNpcs().find((m) => m.id === 'CHAR-002'); if (mira) mira.hidden = false;
-    if (AB.Quests.status('QUEST-007') === 'active' && AB.Enemies.isDead('ENEMY-008')) { AB.Flags.add('ow-back'); pendingBack = true; }
+    if (AB.Quests.status('QUEST-007') === 'active' && AB.Enemies.isDead('ENEMY-008')) { AB.Flags.add('ow-back'); pendingBack = true; setTimeout(afterBack, 500); }
   });
   AB.Bus.on('iso:travel', ({ sector }) => {
     const mira = AB.IsoParty.allNpcs().find((m) => m.id === 'CHAR-002');
@@ -71,8 +71,7 @@ AB.IsoActs = (() => {
     undock() {
       AB.Flags.add('undocked');
       AB.IsoOverworld.setMode('capsule');
-      AB.IsoOverworld.enter();
-      setTimeout(() => AB.IsoOverworld.say('Капсула на ходу. Кнопка «База» — экипаж, вещи и модули'), 600);
+      enterBase();                                  // экипаж на борту: сразу внутри капсулы (№61)
     },
   };
 
@@ -83,8 +82,8 @@ AB.IsoActs = (() => {
     if (!d) return { label: 'Исследовать — появится позже', ok: false };
     if (visited.has(site.key) && !d.repeat) return { label: 'Здесь уже всё сделано', ok: false };
     if (act < d.act) return { label: act === 2 ? 'Мира: «Не уходи далеко — сначала сигнал»' : 'Позже', ok: false };
-    if (d.encounter && AB.Enemies.isDead('ENEMY-008')) return { label: 'Здесь уже всё сделано', ok: false };
-    if (act === 2 && !d.encounter) return { label: 'Мира: «Не уходи далеко — сначала сигнал»', ok: false };
+    if (d.mob) return { label: AB.Enemies.isDead(d.mob) ? 'Здесь уже всё сделано' : d.label, ok: false };
+    if (act === 2) return { label: 'Мира: «Не уходи далеко — сначала сигнал»', ok: false };
     if (d.act === 3 && !AB.Flags.has('undocked')) return { label: 'Сначала — капсула', ok: false };
     return { label: d.label, ok: true };
   }
@@ -93,14 +92,6 @@ AB.IsoActs = (() => {
     const d = AB.ISO_SITES[site.key], a = siteAction(site);
     if (!a.ok || !d) return;
     if (d.say) AB.IsoOverworld.say(d.say);
-    if (d.encounter) {
-      // схватка на дне: карта закрывается, Марк — в изометрии (SECTOR-004)
-      AB.IsoOverworld.close();
-      Object.assign(AB.IsoStory.fx, { fade: 0, fadeTo: 0, fadeDur: 0, fadeFrom: 0, actEnd: 0 });
-      const lay = AB.ISO_LAYOUTS[d.encounter];
-      AB.IsoGame.travel(d.encounter, lay.enter.x, lay.enter.y);
-      return;
-    }
     if (d.repeat) return;
     visited.add(site.key);
     const got = [];
@@ -124,7 +115,8 @@ AB.IsoActs = (() => {
     built.add(id);
     AB.Flags.add('module');
     if (m.effect === 'heal') healCrew();
-    AB.IsoOverworld.say(`Модуль пристыкован: ${m.name}`);
+    const msg = `Модуль пристыкован: ${m.name}`;
+    if (AB.IsoOverworld.isOpen()) AB.IsoOverworld.say(msg); else toast(msg, 'good');
     checkEnd();
     return true;
   }
@@ -136,7 +128,36 @@ AB.IsoActs = (() => {
     }
   }
 
+  // ---------- база-капсула изнутри (№61) ----------
+  // войти: карта закрывается, отряд — в шлюзе капсулы; остальной экипаж — на своих местах
+  let pendingCrew = false;
+  function enterBase() {
+    AB.IsoOverworld.close();
+    Object.assign(AB.IsoStory.fx, { fade: 0, fadeTo: 0, fadeDur: 0, fadeFrom: 0, actEnd: 0 });
+    const L = AB.ISO_LAYOUTS['SECTOR-005'];
+    pendingCrew = true;
+    if (AB.IsoGame.sector() === 'SECTOR-005') { AB.IsoParty.placeAll(L.enter.x, L.enter.y); AB.IsoRender.snap(); placeCrew(); }
+    else AB.IsoGame.travel('SECTOR-005', L.enter.x, L.enter.y);
+    if (built.has('MOD-003')) healCrew();
+  }
+  function placeCrew() {
+    if (!pendingCrew) return;
+    pendingCrew = false;
+    const L = AB.ISO_LAYOUTS['SECTOR-005'];
+    for (const id of crew) {
+      if (AB.IsoParty.members().some((m) => m.id === id)) continue;
+      const at = L.crewAt[id]; if (!at) continue;
+      const m = AB.IsoParty.find(id) || AB.IsoParty.addNpc(id, at.x, at.y);
+      m.hidden = false; m.facing = -1;
+      if (!AB.Chars.get(id) && AB.Chars.spawn) { const c = AB.Chars.spawn(id, { room: 'ROOM-021', x: 0 }); if (c) c.controllable = false; }
+    }
+    toast('База-капсула. Пульт в кабине — вести капсулу; шкафчики — вещи; модульный отсек — гнёзда модулей', 'info');
+  }
+  AB.Bus.on('iso:travel', ({ sector }) => { if (sector === 'SECTOR-005') placeCrew(); });
+  function leaveBase() { AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); }
+
   return {
+    enterBase, leaveBase,
     act: () => act, next, run: (fn) => RUN[fn] && RUN[fn](), afterBack,
     siteAction, siteVisible, doSite, build, canBuild: (id) => { const m = AB.ISO_MODULES.find((q) => q.id === id); return !!m && !built.has(id) && has(m.cost); },
     built: (id) => built.has(id), crew: () => crew.slice(), visited: (k) => visited.has(k),

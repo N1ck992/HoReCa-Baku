@@ -51,6 +51,9 @@ AB.IsoRender = (() => {
     capsule: { h: 70, top: '#c9a24a', l: '#8a6e30', r: '#6e5726', glow: [255, 210, 120] },
     rock: { h: 46, top: '#2a3438', l: '#1d2528', r: '#171e21' },
     crystal: { h: 34, top: '#9a6cff', l: '#6a44c0', r: '#55369c', glow: [170, 110, 255] },
+    // №61: гнездо модуля в капсуле — пустое / с пристыкованным модулем
+    bay: { h: 14, top: '#2a2f34', l: '#202428', r: '#1a1d20' },
+    baybuilt: { h: 54, top: '#3e6a58', l: '#2c4c40', r: '#243f35', glow: [120, 255, 170] },
   };
   const ROOM_TINT = {
     'ROOM-002': [52, 48, 50], 'ROOM-005': [56, 54, 50], 'ROOM-013': [40, 56, 48],
@@ -243,7 +246,7 @@ AB.IsoRender = (() => {
         const W = AB.IsoWorld;
         block(o.x, o.y, WALL_H, WALL_LOOK, a, { l: W.cell(o.x, o.y + 1) !== W.WALL, r: W.cell(o.x + 1, o.y) !== W.WALL });
       } else if (o.k === 'p') {
-        const look = PROP_LOOK[o.p.kind] || PROP_LOOK.crate;
+        const look = o.p.bay && AB.IsoActs.built(o.p.bay) ? PROP_LOOK.baybuilt : PROP_LOOK[o.p.kind] || PROP_LOOK.crate;
         const hid = occludes(o.x, o.y, look.h, party);
         const a = alphaFor(`p${o.x},${o.y}`, hid, dt);
         const inside = (xx, yy) => xx >= o.p.x && yy >= o.p.y && xx < o.p.x + o.p.w && yy < o.p.y + o.p.h;
@@ -335,6 +338,8 @@ AB.IsoRender = (() => {
       if (t.kind === 'item') { const d = AB.ID.get(t.ref.item); col = d.weapon ? '255,200,90' : '255,214,120'; big = !!d.weapon || d.category === 'key'; text = big ? d.name : null; }
       else if (t.kind === 'container') { if (AB.Rooms.isSearched(t.room, t.ref.key)) continue; const loot = t.ref.loot || []; big = loot.some(([i]) => AB.ID.get(i).weapon); col = big ? '255,200,90' : '255,214,120'; text = big ? t.name : null; }
       else if (t.kind === 'equip') { if (AB.Equip.state(t.ref.id) === 'done' || t.ref.hidden) continue; col = '94,230,255'; }
+      else if (t.kind === 'bay') { const on = AB.IsoActs.built(t.ref.id), can = AB.IsoActs.canBuild(t.ref.id); col = on ? '120,255,170' : can ? '94,230,255' : '150,150,150'; big = true; text = `${t.name}${on ? '' : can ? ' — можно пристыковать' : ' — нужны ресурсы'}`; }
+      else if (t.kind === 'pilot' || t.kind === 'stash') { col = '94,230,255'; text = t.name; }
       else if (t.kind === 'door' && t.ref.def.hack && t.ref.state !== 'open' && !t.ref.hacked && !AB.IsoNest.state()) { col = '94,230,255'; big = true; text = t.ref.def.name; }
       else continue;
       const p = toScreen(t.x, t.y), far = Math.hypot(t.x - l.x, t.y - l.y);

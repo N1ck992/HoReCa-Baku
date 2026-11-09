@@ -271,5 +271,6 @@ AB.IsoEnemies = (() => {
     // кто угрожает персонажу (для бегства Миры): преследователь или босс рядом
     threat(m) { return here().find((e) => !e.story && e.state !== 'DEAD' && e.state !== 'DORMANT' && (def(e).type === 'pursuer' || def(e).type === 'boss') && Math.hypot(e.x - m.x, e.y - m.y) < 7) || null; },
     isDead: (id) => dead.has(id) || (list.has(id) && list.get(id).state === 'DEAD'),
+    markDead: (id) => { dead.add(id); },   // №61: убит на карте дна (не в изометрии)
   };
 })();

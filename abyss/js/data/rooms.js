@@ -494,6 +494,11 @@ AB.ROOMS.push(
     equipment: ['EQUIP-013', 'EQUIP-014'],
     items: [{ key: 'meds-hangar', item: 'ITEM-005', qty: 1, x: 300 }],
   }),
+  // №61: база-капсула изнутри — автономный батискаф-вездеход (черновик)
+  ISO_ROOM({ id: 'ROOM-020', name: 'Кабина капсулы', desc: 'Кресло пилота, пульт, обзорные иллюминаторы. Отсюда капсулу ведут по дну.', width: 700, height: 360, theme: 'bridge', state: 'safe', spawn: { x: 140 } }),
+  ISO_ROOM({ id: 'ROOM-021', name: 'Жилой отсек', desc: 'Койки экипажа, стол, шкафчики со снаряжением. Здесь живут герои.', width: 1200, height: 360, theme: 'living', state: 'safe', spawn: { x: 140 } }),
+  ISO_ROOM({ id: 'ROOM-022', name: 'Шлюз капсулы', desc: 'Тесный шлюз: выход на дно и стойка для экзокостюма.', width: 500, height: 360, theme: 'airlock', state: 'safe', spawn: { x: 140 } }),
+  ISO_ROOM({ id: 'ROOM-023', name: 'Модульный отсек', desc: 'Стыковочные гнёзда: сюда пристыковывают новые модули базы.', width: 1200, height: 360, theme: 'armory', state: 'safe', spawn: { x: 140 } }),
   ISO_ROOM({
     id: 'ROOM-019', name: 'Дно у «Абисса»', desc: 'Каменистое дно у обломков. Фонари костюма выхватывают из темноты метров десять.',
     width: 1800, height: 440, theme: 'tunnel', state: 'flooded', spawn: { x: 200 },
