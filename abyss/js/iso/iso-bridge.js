@@ -10,7 +10,8 @@
 AB.IsoBridge = (() => {
   // заглушки систем, которых в изометрии нет (сюжет — AB.IsoStory, он задаёт AB.Story сам)
   // противники — изометрические (AB.IsoEnemies); старый интерфейс «погиб ли» для оборудования
-  if (!AB.Enemies) AB.Enemies = { isDead: (id) => !!(AB.IsoEnemies && AB.IsoEnemies.isDead(id)), inRoom: () => [], inCombat: () => false, threatFor: () => null };
+  // ARENA-001 — испытание «Гнездо»: «погибло» = пройдено (цель задания QUEST-005)
+  if (!AB.Enemies) AB.Enemies = { isDead: (id) => (id === 'ARENA-001' ? !!(AB.IsoNest && AB.IsoNest.isDone()) : !!(AB.IsoEnemies && AB.IsoEnemies.isDead(id))), inRoom: () => [], inCombat: () => false, threatFor: () => null };
   if (!AB.Dialog) AB.Dialog = { isOpen: () => false };
 
   let lastRoom = null;

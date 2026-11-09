@@ -71,6 +71,14 @@ AB.IsoInteract = (() => {
     return n ? { x: n.x + 0.5, y: n.y + 0.5 } : { x: px, y: py };
   }
 
+  // обратно: клетка → x вида сбоку (для событий «дошёл до места»)
+  function sideX(room, x, y) {
+    const a = layout.areas.filter((q) => q.room === room).sort((p, q) => q.w * q.h - p.w * p.h)[0];
+    if (!a) return 0;
+    const t = a.w >= a.h ? (x - a.x) / a.w : (y - a.y) / a.h;
+    return Math.max(0, Math.min(1, t)) * (AB.ID.get(room).width || 1000);
+  }
+
   function targets() {
     const out = [];
     for (const room of rooms()) for (const it of AB.Rooms.worldItems(room)) {
@@ -120,6 +128,10 @@ AB.IsoInteract = (() => {
       const a = AB.Equip.action(t.ref.id, lid);
       return { label: a.ok ? a.label : `${t.name}: ${a.label.charAt(0).toLowerCase()}${a.label.slice(1)}`, ok: a.ok };
     }
+    if (t.kind === 'door' && t.ref.state === 'jammed') {
+      const st = AB.IsoNest.state();
+      return { label: st ? `${t.ref.def.name}: заклинило — чинить (этап ${st.stage + 1} из ${AB.ID.get('ARENA-001').goal.stages})` : 'Заклинило', ok: true };
+    }
     if (t.kind === 'door') {
       const d = t.ref;
       if (locked(d)) return { label: `${d.def.name}: ${access(d.def.room, d.def.roomDoor).reason.toLowerCase()}`, ok: false };
@@ -138,6 +150,8 @@ AB.IsoInteract = (() => {
     return { label: !a.ok ? `${t.name}: ${a.reason.toLowerCase()}` : dest ? `${t.name} → ${dest}` : `${t.name} — сектор ещё не перенесён`, ok: a.ok };
   }
   function prompt() {
+    const ns = AB.IsoNest && AB.IsoNest.state(), ld = AB.IsoParty.lead();
+    if (ns && ld.repair) return { label: `Чинить проход — этап ${ns.stage + 1}…`, ok: true, progress: ns.prog };
     if (work && work.t.kind === 'container') return { label: `Обыск: ${work.t.name}…`, ok: true, progress: work.p / work.time };
     if (work) { return { label: `${AB.Equip.action(work.t.ref.id, AB.IsoParty.lead().id).label}…`, ok: true, progress: work.p / work.time }; }
     const t = nearest();
@@ -198,6 +212,7 @@ AB.IsoInteract = (() => {
   }
 
   function toggleDoor(d) {
+    if (d.state === 'jammed') { if (!AB.IsoNest.repairLead()) AB.Bus.emit('door:denied', { reason: 'Подойдите к проходу со стороны гидропоники' }); return true; }
     if (locked(d)) { AB.Bus.emit('door:denied', { reason: access(d.def.room, d.def.roomDoor).reason }); return true; }
     if (d.state === 'open') {
       // ведущий в проёме — не закрыть; ведомые из проёма отходят на его сторону
@@ -261,7 +276,7 @@ AB.IsoInteract = (() => {
     const l = AB.IsoParty.lead();
     // доступ мог измениться (дали питание, прошло событие): запертая дверь — непроходима
     for (const d of doors.values()) {
-      W().setDoor(d.tiles, d.state !== 'open' || locked(d));
+      if (d.state !== 'jammed') W().setDoor(d.tiles, d.state !== 'open' || locked(d));
       d.anim += ((d.state !== 'open' || locked(d) ? 1 : 0) - d.anim) * Math.min(1, dt * 10);
     }
     if (work) {
@@ -285,7 +300,7 @@ AB.IsoInteract = (() => {
   }
 
   return {
-    REACH, init, update, targets, alongRoom, nearest, prompt, act, click, hoverAt, label,
+    REACH, init, update, targets, alongRoom, sideX, nearest, prompt, act, click, hoverAt, label,
     actNearest() { const t = nearest(); return t ? act(t) : false; },
     doors: () => [...doors.values()], locked, hovered: () => hover, working: () => work, intent: () => intent,
   };

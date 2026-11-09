@@ -20,10 +20,11 @@ AB.IsoCombat = (() => {
   let autoFight = true;
   try { autoFight = localStorage.getItem('abyss_autofight') !== 'off'; } catch (e) { /* хранилище недоступно */ }
 
+  const mod = (k) => (AB.Perks ? AB.Perks.mod(k) : 1);   // улучшения (перки) — множители
   const weaponOf = (id) => { const s = AB.Inventory.weapon(id); return s ? AB.ID.get(s.item) : null; };
   const charOf = (id) => AB.Chars.get(id);
   const member = (id) => AB.IsoParty.members().find((m) => m.id === id);
-  const hostile = (e) => ['ALERT', 'CHASE', 'ATTACK', 'RETREAT'].includes(e.state);
+  const hostile = (e) => ['ALERT', 'CHASE', 'ATTACK', 'RETREAT', 'APPEAR'].includes(e.state);
   const canShoot = (id, w) => w.weapon.ranged && (w.weapon.infinite || (w.weapon.energy ? !(AB.Inventory.heat(id) || {}).over : false));
   // дальность удара/выстрела в клетках
   const reachOf = (id, w) => (canShoot(id, w) ? w.weapon.range / T : (w.weapon.ranged ? 60 : w.weapon.range) / T + 0.35);
@@ -64,11 +65,11 @@ AB.IsoCombat = (() => {
         if (!W().clear(m.x, m.y, e.x, e.y, 0.05)) continue;
         hit = e; best = along;
       }
-      if (hit) landed = AB.IsoEnemies.damage(hit.id, w.damage, m, 'ranged');
+      if (hit) landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged');
       const end = hit ? { x: hit.x, y: hit.y } : { x: m.x + dx * Math.min(range, 6), y: m.y + dy * Math.min(range, 6) };
       AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart });
     } else {
-      const dmg = w.ranged ? w.bash : w.damage, reach = (w.ranged ? 60 : w.range) / T + 0.45;
+      const dmg = (w.ranged ? w.bash : w.damage) * mod('meleeDamage'), reach = (w.ranged ? 60 : w.range) / T + 0.45;
       const n = Math.hypot(m.hx, m.hy) || 1;
       for (const e of AB.IsoEnemies.alive()) {
         const rx = e.x - m.x, ry = e.y - m.y, d = Math.hypot(rx, ry);
@@ -83,6 +84,7 @@ AB.IsoCombat = (() => {
   function damageChar(id, amount, from) {
     const c = charOf(id), m = member(id);
     if (!c || c.dead) return;
+    amount *= mod('damageTaken');
     c.hp = Math.max(0, c.hp - amount);
     swings.delete(id);
     AB.Bus.emit('char:hp', { charId: id, hp: c.hp, delta: -amount });
@@ -113,7 +115,7 @@ AB.IsoCombat = (() => {
         const mc = charOf(m.id);
         if (!mc || mc.dead || Math.hypot(m.x - c.x, m.y - c.y) > au.radius / T) continue;
         const max = AB.ID.get(m.id).stats.maxHp;
-        if (mc.hp < max) { mc.hp = Math.min(max, mc.hp + au.heal * dt); any = true; AB.Bus.emit('char:hp', { charId: m.id, hp: mc.hp, delta: 0 }); }
+        if (mc.hp < max) { mc.hp = Math.min(max, mc.hp + au.heal * mod('auraHeal') * dt); any = true; AB.Bus.emit('char:hp', { charId: m.id, hp: mc.hp, delta: 0 }); }
       }
       healing.set(c.id, any ? 0.4 : Math.max(0, (healing.get(c.id) || 0) - dt));
     }
@@ -173,7 +175,7 @@ AB.IsoCombat = (() => {
       if (m === l) continue;
       m.engage = null;
       const c = charOf(m.id), w = weaponOf(m.id);
-      if (!c || c.dead || !w) continue;
+      if (!c || c.dead || !w || (m.flee && AB.IsoEnemies.threat(m))) continue;   // бежит — не дерётся
       const reach = reachOf(m.id, w);
       // противники недалеко от ведущего (ведомые не убегают от отряда)
       let best = null, bd = 1e9;
@@ -184,13 +186,14 @@ AB.IsoCombat = (() => {
       }
       if (!best) continue;
       const see = W().clear(m.x, m.y, best.x, best.y, 0.05);
+      if (m.repair) { if (bd <= Math.min(reach, 2.4) && see) { m.engage = null; attack(m, best); } continue; }   // чинит — только отбивается
       if (bd <= reach * (canShoot(m.id, w) ? 0.8 : 0.9) && see) { m.engage = { x: m.x, y: m.y, hold: true }; attack(m, best); }
       else m.engage = { x: best.x, y: best.y };
     }
   }
 
   function update(dt, input) {
-    AB.Inventory.cool(dt);
+    AB.Inventory.cool(dt * mod('plasmaCool'));
     auras(dt);
     for (const [id, sw] of swings) {
       sw.t += dt;

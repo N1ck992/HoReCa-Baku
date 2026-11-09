@@ -101,12 +101,15 @@ AB.IsoInventory = (() => {
         <div class="gear"><span class="slot-label">Одежда</span><div class="slot"><b>⌂</b></div>
           <div class="gear-text"><b>Текущий облик</b><span class="muted">${m ? m.appearance : ''} · одежды-вещей пока нет</span></div></div>
       </div>
-      <div class="inv-actions">${lead ? '<span class="muted">Ведёт отряд</span>' : `<button data-hero="lead" ${c.dead ? 'disabled' : ''}>Вести отряд</button>`}</div>`;
+      <div class="inv-actions">${lead ? '<span class="muted">Ведёт отряд</span>' : `<button data-hero="lead" ${c.dead ? 'disabled' : ''}>Вести отряд</button>`}
+        ${!lead && AB.IsoNest.active() && !c.dead ? (m && m.repair ? '<button data-hero="follow">Бросить проход — за мной</button>' : '<button data-hero="repair">Чинить проход</button>') : ''}</div>`;
   }
   function onHeroClick(e) {
     const b = e.target.closest('[data-hero]');
     if (b && !b.disabled) {
       if (b.dataset.hero === 'unequip' && !S().unequip(hero)) AB.Bus.emit('iso:toast', { text: 'В общем инвентаре нет места', kind: 'info' });
+      if (b.dataset.hero === 'repair') AB.IsoNest.order(hero, true);
+      if (b.dataset.hero === 'follow') AB.IsoNest.order(hero, false);
       if (b.dataset.hero === 'lead') { const i = AB.IsoParty.members().findIndex((m) => m.id === hero); AB.IsoParty.setLeader(i); }
       renderHero();
       return;

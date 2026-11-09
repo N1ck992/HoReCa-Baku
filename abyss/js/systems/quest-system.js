@@ -87,6 +87,8 @@ AB.Quests = (() => {
 
   return {
     init, start, check, current, target,
+    // все активные задания (изометрия показывает несколько сразу)
+    active: () => [...prog].filter(([, p]) => p.status === 'active').map(([id, p]) => { const q = AB.ID.get(id); return { id, name: q.name, objectives: q.stages[p.stage].objectives.map((o) => ({ ...o, ok: objectiveDone(o) })) }; }),
     status: (id) => (prog.get(id) || {}).status || null,
     serialize: () => [...prog],
     restore(d) { (d || []).forEach(([id, p]) => prog.set(id, p)); },

@@ -115,3 +115,49 @@ body { font: 13px/1.4 var(--mono); user-select: none; -webkit-user-select: none;
 #iso-inv-grid .slot { width: 72px; height: 72px; padding: 0; }
 @media (max-width: 560px) { #iso-inv-grid { grid-template-columns: repeat(4, 64px); } #iso-inv-grid .slot { width: 64px; height: 64px; } #iso-quest { max-width: calc(100vw - 32px); } }
 body.quiet #iso-help { display: none; }
+
+/* ---------- Карта сектора (№50): по центру снизу ---------- */
+#iso-map { position: fixed; z-index: 3; left: 50%; transform: translateX(-50%); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); width: 210px; height: 96px; background: rgba(6, 8, 10, .55); border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; }
+#iso-map.big { z-index: 6; width: min(520px, calc(100vw - 32px)); height: min(240px, 40vh); cursor: zoom-out; background: rgba(6, 8, 10, .85); }
+#iso-prompt { bottom: calc(114px + env(safe-area-inset-bottom, 0px)); }
+#iso-dialog { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
+#iso-help { display: none; }
+@media (max-width: 560px) { #iso-map { width: 150px; height: 74px; left: calc(12px + env(safe-area-inset-left, 0px)); transform: none; } #iso-prompt { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); } #iso-map.big { left: 50%; transform: translateX(-50%); } }
+
+/* ---------- Конец акта ---------- */
+#iso-act { position: fixed; inset: 0; z-index: 11; display: grid; place-items: center; padding: 16px; background: radial-gradient(ellipse at center, rgba(4, 16, 24, .9), #000 75%); }
+#iso-act[hidden] { display: none; }
+#iso-act .act-card { max-width: 460px; width: 100%; display: grid; gap: 12px; text-align: center; }
+#iso-act .act-no { font: 12px var(--mono); letter-spacing: 6px; text-transform: uppercase; color: var(--muted); }
+#iso-act h2 { margin: 0; font: 700 34px var(--display); letter-spacing: 6px; text-transform: uppercase; color: #bfefff; }
+#iso-act p { margin: 0; line-height: 1.5; }
+#iso-act .act-next { color: #9fe7ff; font-size: 12px; letter-spacing: 1px; }
+#iso-act button { font: 14px var(--mono); padding: 10px; border-radius: 6px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid var(--line); }
+#iso-act button.danger { color: #ff5a4a; border-color: rgba(255, 59, 47, .4); }
+#iso-quest b + div { margin-top: 0; }
+#iso-quest div + b { margin-top: 6px; }
+
+/* ---------- «Гнездо» и улучшения (№50) ---------- */
+#iso-nest { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); display: flex; gap: 12px; align-items: baseline; padding: 6px 14px; background: rgba(8, 4, 4, .7); border: 1px solid rgba(255, 70, 50, .45); border-radius: 6px; pointer-events: none; white-space: nowrap; }
+#iso-nest[hidden] { display: none; }
+#iso-nest b { font: 700 12px var(--display); letter-spacing: 4px; text-transform: uppercase; color: #ffb38a; }
+#iso-nest .t { font: 700 18px var(--mono); color: #fff; }
+#iso-nest .k { font-size: 11px; color: var(--muted); }
+#iso-nest .rp { display: inline-flex; gap: 3px; align-items: center; font-size: 11px; color: var(--muted); }
+#iso-nest .rp u { position: relative; display: inline-block; width: 16px; height: 8px; border: 1px solid rgba(255, 200, 80, .5); background: rgba(0, 0, 0, .5); overflow: hidden; text-decoration: none; }
+#iso-nest .rp u.ok { background: #e0b640; }
+#iso-nest .rp s { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255, 224, 138, .75); }
+#iso-nest .xp { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; color: #bfefff; }
+#iso-nest .xp em { display: inline-block; width: 46px; height: 5px; background: rgba(0, 0, 0, .6); border: 1px solid rgba(94, 230, 255, .4); }
+#iso-nest .xp em i { display: block; height: 100%; background: var(--cyan); }
+#iso-perks { position: fixed; inset: 0; z-index: 12; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .72); }
+#iso-perks[hidden] { display: none; }
+.perk-card { max-width: 720px; width: 100%; display: grid; gap: 12px; text-align: center; }
+.perk-card .act-no { font: 12px var(--mono); letter-spacing: 6px; text-transform: uppercase; color: var(--muted); }
+.perk-card h2 { margin: 0; font: 700 24px var(--display); letter-spacing: 4px; text-transform: uppercase; color: #bfefff; }
+.perk-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.perk { display: grid; gap: 6px; align-content: start; min-height: 110px; padding: 14px; text-align: left; cursor: pointer; background: #0d1317; color: var(--fg); border: 1px solid rgba(94, 230, 255, .35); border-radius: 8px; font: 13px var(--mono); }
+.perk:hover, .perk:focus-visible { border-color: rgba(94, 230, 255, .9); }
+.perk b { font: 700 15px var(--display); color: #bfefff; }
+.perk span { color: var(--muted); line-height: 1.45; }
+@media (max-width: 560px) { #iso-nest { top: auto; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); left: calc(170px + env(safe-area-inset-left, 0px)); transform: none; flex-wrap: wrap; white-space: normal; max-width: calc(100vw - 180px); } #iso-nest .k { display: none; } }

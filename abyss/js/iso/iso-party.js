@@ -38,7 +38,7 @@ AB.IsoParty = (() => {
   }
 
   const lead = () => members[leader];
-  const speedOf = (m, run) => { const st = AB.ID.get(m.id).stats; return (run ? st.runSpeed : st.speed) / PX_PER_TILE; };
+  const speedOf = (m, run) => { const st = AB.ID.get(m.id).stats; return ((run ? st.runSpeed : st.speed) / PX_PER_TILE) * (AB.Perks ? AB.Perks.mod('moveSpeed') : 1); };
 
   // ведущему: идти к точке (путь в обход препятствий)
   function goTo(x, y) {
@@ -124,6 +124,19 @@ AB.IsoParty = (() => {
       if (i === leader) continue;
       const m = members[i];
       if (isDead(m)) continue;
+      // «Гнездо»: поручено чинить проход — идёт туда и стоит, а не за ведущим
+      if (m.repair) { k++; animate(m, m.path ? walkPath(m, dt, speedOf(m, true)) : separate(m, dt) * 0, dt); continue; }
+      // бегство (Мира от преследователя и Колосса): прочь от угрозы, к ведущему
+      const threat = m.flee && AB.IsoEnemies.threat(m);
+      if (threat) {
+        const dx = m.x - threat.x + (l.x - m.x) * 0.3, dy = m.y - threat.y + (l.y - m.y) * 0.3, n = Math.hypot(dx, dy) || 1;
+        const goal = W().nearestFree(m.x + (dx / n) * 3, m.y + (dy / n) * 3, 2);
+        m.replanT -= dt;
+        if (goal && (!m.path || m.replanT <= 0)) { m.path = W().path(m.x, m.y, goal.x + 0.5, goal.y + 0.5); m.replanT = 0.3; }
+        k++;
+        animate(m, m.path ? walkPath(m, dt, speedOf(m, true)) : 0, dt);
+        continue;
+      }
       // в бою: стоит и бьёт (hold) или подходит к противнику; иначе — место в строю
       const slot = m.engage ? { x: m.engage.x, y: m.engage.y } : slotFor(k);
       k++;
@@ -171,7 +184,7 @@ AB.IsoParty = (() => {
     const tr = AB.Anim.current(m.id);
     // разовая анимация (пробуждение, действие) закончилась — снова обычное состояние
     if (tr && tr.done && ['wake', 'interact', 'hurt', 'attack'].includes(tr.action)) m.action = null;
-    if ((AB.IsoCombat && AB.IsoCombat.isSwinging(m.id)) || (tr && ['hurt', 'death', 'interact'].includes(tr.action) && !tr.done) || isDead(m)) return;
+    if ((AB.IsoCombat && AB.IsoCombat.isSwinging(m.id)) || (tr && ['hurt', 'death', 'interact'].includes(tr.action) && !tr.done) || isDead(m) || (m.repair && !m.moving)) return;
     const action = !m.moving ? 'idle' : m.run ? 'run' : 'walk';
     if (m.action !== action) { m.action = action; AB.Anim.play(m.id, action); }
   }

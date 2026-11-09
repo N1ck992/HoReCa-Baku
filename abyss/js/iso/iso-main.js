@@ -78,12 +78,35 @@
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
     // задание: текущие цели из системы заданий основной игры
-    const q = AB.Quests.current();
-    const qh = q ? `<b>${q.name}</b>${q.objectives.map((o) => `<div class="${o.ok ? 'ok' : ''}">${o.text}</div>`).join('')}` : '';
+    const qh = AB.Quests.active().map((q) => `<b>${q.name}</b>${q.objectives.map((o) => `<div class="${o.ok ? 'ok' : ''}">${o.text}</div>`).join('')}`).join('');
     if (qh !== lastQuest) { ui.quest.innerHTML = qh; lastQuest = qh; }
     ui.skip.hidden = !AB.IsoStory.isRunning();
+    // испытание «Гнездо»: время, этапы прохода, убито, уровень и опыт
+    const ns = AB.IsoNest.state();
+    $('#iso-nest').hidden = !ns;
+    if (ns) {
+      const g = AB.ID.get('ARENA-001').goal, P = AB.Progress;
+      const pips = Array.from({ length: g.stages }, (_, i) => `<u class="${i < ns.stage ? 'ok' : i === ns.stage ? 'cur' : ''}">${i === ns.stage && !ns.over ? `<s style="width:${Math.round(ns.prog * 100)}%"></s>` : ''}</u>`).join('');
+      const nh = `<b>Гнездо</b><span class="t">${ns.over ? 'Затихли' : `${Math.floor(ns.t / 60)}:${String(Math.floor(ns.t % 60)).padStart(2, '0')}`}</span><span class="rp">Проход ${pips}</span><span class="k">Убито: ${ns.kills}</span><span class="xp">Ур. ${P.level()} <em><i style="width:${Math.round((P.xp() / P.need()) * 100)}%"></i></em></span>`;
+      if (nh !== lastNest) { $('#iso-nest').innerHTML = nh; lastNest = nh; }
+    }
   }
-  let lastQuest = '';
+  let lastQuest = '', lastNest = '';
+  AB.Bus.on('nest:start', ({ stages }) => toast(`Гнездо проснулось! Спуск на склад заклинило — почините его (${stages} этапа)`, 'bad'));
+  AB.Bus.on('nest:stage', ({ stage, stages }) => toast(stage < stages ? `Проход: этап ${stage} из ${stages} готов` : 'Проход починен!', 'good'));
+  AB.Bus.on('nest:won', () => toast('Гнездо затихло', 'good'));
+  AB.Bus.on('nest:order', ({ id, on }) => toast(`${AB.ID.get(id).name}: ${on ? 'чинит проход' : 'за мной'}`, 'info'));
+  // новый уровень: пауза и выбор одного из трёх улучшений (черновик PERK-001…009)
+  let paused = false;
+  AB.Bus.on('progress:level', () => setTimeout(showPerks, 300));
+  function showPerks() {
+    if (paused || AB.Progress.unspent() <= 0) return;
+    const cards = AB.Perks.offer(3);
+    paused = true;
+    $('#iso-perks h2').textContent = `Уровень ${AB.Progress.level() - AB.Progress.unspent() + 1}: улучшение`;
+    $('#iso-perks .perk-list').innerHTML = cards.map((p) => `<button class="perk" data-perk="${p.id}"><b>${p.name}</b><span>${p.desc}</span></button>`).join('') || '<button class="perk" data-perk="">Продолжить</button>';
+    $('#iso-perks').hidden = false;
+  }
 
   // диалоги — та же система (AB.Dialog), реплики из данных
   AB.Bus.on('dialog:line', (l) => {
@@ -97,7 +120,19 @@
   AB.Bus.on('container:looted', ({ label, found, full }) => toast(found.length ? `${label}: ${found.map(([id, n]) => `${itemName(id)} ×${n}`).join(', ')}${full ? ' · остальное — рядом на полу' : ''}` : `${label}: инвентарь полон — находки рядом на полу`, 'good'));
   AB.Bus.on('container:empty', ({ label }) => toast(`${label}: пусто`, 'info'));
   AB.Bus.on('iso:travel', ({ sector }) => toast(AB.IsoGame.sectorName(sector), 'info'));
+  AB.Bus.on('enemy:retreat', ({ id }) => { if (AB.ID.get(id).type === 'pursuer') toast('Он отступил в темноту', 'info'); });
+  AB.Bus.on('quest:done', ({ id }) => { if (id === 'QUEST-002') setTimeout(() => toast('Безопасная зона: переборки заблокированы изнутри', 'good'), 1400); });
+  // оружие, найденное при занятых руках, — в общий инвентарь: подсказать
+  AB.Bus.on('inventory:changed', ({ charId, itemId, delta }) => {
+    if (charId === null && delta > 0 && AB.ID.get(itemId).weapon) setTimeout(() => toast(`${itemName(itemId)} — в вещах отряда: дайте в руки (I)`, 'info'), 900);
+  });
+  // конец акта: тот же текст, что в основной игре; остаться в бункере или начать сначала
+  AB.Bus.on('act:end', ({ act }) => {
+    $('#iso-act .act-no').textContent = `Конец ${act === 1 ? 'первого' : act} акта`;
+    $('#iso-act').hidden = false;
+  });
 
+  let last = 0;
   function boot() {
     AB.Assets.load();
     AB.IsoRender.init($('#iso'));
@@ -105,6 +140,7 @@
     AB.IsoGame.start();                                   // пробуждение в криоотсеке (или тестовая сцена)
     AB.IsoInventory.init();
     AB.IsoInput.init($('#iso'));
+    AB.IsoMap.init($('#iso-map'));
     ui.party.addEventListener('click', (e) => {
       const b = e.target.closest('[data-i]');
       if (b) AB.IsoInventory.openHero(AB.IsoParty.members()[Number(b.dataset.i)].id);
@@ -118,15 +154,28 @@
     });
     $('#iso-ids').addEventListener('click', () => { AB.isoShowIds = !AB.isoShowIds; });
     $('#iso-restart').addEventListener('click', () => AB.IsoGame.restart());
+    $('#iso-act-new').addEventListener('click', () => AB.IsoGame.restart());
+    $('#iso-act-stay').addEventListener('click', () => { $('#iso-act').hidden = true; AB.IsoStory.fx.fade = 0; AB.IsoStory.fx.fadeTo = 0; AB.IsoStory.fx.fadeDur = 0; AB.IsoStory.fx.fadeFrom = 0; AB.IsoStory.fx.actEnd = 0; });
+    $('#iso-act').addEventListener('pointerdown', (e) => e.stopPropagation());
+    $('#iso-perks').addEventListener('pointerdown', (e) => e.stopPropagation());
+    $('#iso-perks').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-perk]');
+      if (!b) return;
+      if (b.dataset.perk) { AB.Perks.choose(b.dataset.perk); toast(`Улучшение: ${AB.ID.get(b.dataset.perk).name}`, 'good'); }
+      AB.Progress.spend();
+      $('#iso-perks').hidden = true; paused = false; last = performance.now();
+      if (AB.Progress.unspent() > 0) setTimeout(showPerks, 400);
+    });
     $('#iso-restart-top').addEventListener('click', () => AB.IsoGame.restart());
     $('#iso-restart-top').addEventListener('pointerdown', (e) => e.stopPropagation());
     for (const el of [ui.party, ui.zoom]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); AB.IsoInteract.actNearest(); });
 
-    let last = performance.now();
+    last = performance.now();
     function loop(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      if (paused) { requestAnimationFrame(loop); return; }   // выбор улучшения — мир стоит
       // сцена, диалог или переход — управление у сцены
       const busy = AB.IsoStory.locked() || AB.IsoGame.busy();
       const raw = AB.IsoInput.update(dt), input = busy ? { x: 0, y: 0, walk: false } : raw;
@@ -136,10 +185,12 @@
       AB.IsoBridge.sync();
       AB.IsoInteract.update(dt, input);
       AB.IsoEnemies.update(dt);
+      AB.IsoNest.update(dt, input);
       if (!busy) AB.IsoCombat.update(dt, input);
       if (Math.random() < 0.1) AB.Quests.check();
       AB.Anim.update(dt);
       AB.IsoRender.frame(dt);
+      AB.IsoMap.draw(dt);
       updateHud();
       updatePrompt();
       requestAnimationFrame(loop);

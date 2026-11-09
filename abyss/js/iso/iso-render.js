@@ -44,11 +44,14 @@ AB.IsoRender = (() => {
     cable: { h: 26, top: '#3c3630', l: '#2e2925', r: '#26221e' },
     generator: { h: 64, top: '#4a4438', l: '#3a3428', r: '#2f2a20' },
     fueltank: { h: 48, top: '#5a3a2a', l: '#46301f', r: '#3a2818' },
+    glass: { h: 90, top: 'rgba(120,200,230,.25)', l: 'rgba(120,200,230,.18)', r: 'rgba(120,200,230,.12)', edge: 'rgba(160,230,255,.4)' },
+    exorack: { h: 96, top: '#3a3f44', l: '#4a5058', r: '#383d44' },
   };
   const ROOM_TINT = {
     'ROOM-002': [52, 48, 50], 'ROOM-005': [56, 54, 50], 'ROOM-013': [40, 56, 48],
     'ROOM-014': [48, 46, 46], 'ROOM-015': [50, 48, 44], 'ROOM-016': [38, 50, 52],
     'ROOM-001': [42, 50, 58], 'ROOM-011': [50, 46, 44], 'ROOM-003': [54, 50, 42], 'ROOM-012': [36, 44, 46],
+    'ROOM-008': [44, 52, 60], 'ROOM-007': [46, 54, 52], 'ROOM-006': [52, 50, 46], 'ROOM-009': [44, 48, 50], 'ROOM-010': [46, 50, 56],
   };
 
   function init(canvas) {
@@ -254,6 +257,7 @@ AB.IsoRender = (() => {
       else drawMember(o.m, o.m === l && !o.npc);
     }
 
+    drawTrueForm(fx);
     updateFx(dt);
     drawFx();
     lighting(sc, party);
@@ -337,6 +341,55 @@ AB.IsoRender = (() => {
     ctx.fillStyle = `rgba(120,210,255,${a})`;
     ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt - 1); ctx.lineTo(e.x, e.y - hgt - 1); ctx.lineTo(s.x, s.y - hgt - 1); ctx.lineTo(w.x, w.y - hgt - 1); ctx.closePath(); ctx.fill();
   }
+  // истинный облик (ASSET-CHAR002-02): на миг в помещении, между ними, — непонятно, кто это
+  function drawTrueForm(fx) {
+    const tf = fx.trueForm;
+    if (!tf) return;
+    const a = AB.Assets.get('ASSET-CHAR002-02'), k = Math.sin(Math.min(1, 1 - tf.t / tf.dur) * Math.PI);
+    const p = toScreen(tf.x, tf.y);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, k * 1.4) * (Math.sin(time * 40) > -0.6 ? 0.9 : 0.4);
+    if (a.status === 'ready') { const h = 150, w = a.img.width * (h / a.img.height); ctx.drawImage(a.img, p.x - w / 2, p.y - h, w, h); }
+    else { ctx.fillStyle = '#0a1418'; ctx.beginPath(); ctx.ellipse(p.x, p.y - 40, 50, 30, 0, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+  // внешние камеры шлюза: дно океана, лучи прожекторов, проходящий левиафан
+  function cameraView(fx) {
+    if (!(fx.window > 0)) return;
+    const W = cv.width, H = cv.height, a = Math.min(1, fx.window);
+    const w = Math.min(W * 0.8, 900 * dpr), h = w * 0.42, x = (W - w) / 2, y = H * 0.16;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#01060c'); g.addColorStop(1, '#031820');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    // лучи прожекторов
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [sx0, ang] of [[0.25, 0.25], [0.7, -0.2]]) {
+      const lg = ctx.createLinearGradient(x + w * sx0, y, x + w * sx0 + ang * h, y + h);
+      lg.addColorStop(0, 'rgba(140,200,220,.18)'); lg.addColorStop(1, 'rgba(140,200,220,0)');
+      ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(x + w * sx0 - 6, y); ctx.lineTo(x + w * sx0 + 6, y); ctx.lineTo(x + w * sx0 + ang * h + 90, y + h); ctx.lineTo(x + w * sx0 + ang * h - 90, y + h); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // морской снег
+    ctx.fillStyle = 'rgba(200,230,240,.35)';
+    for (let i = 0; i < 70; i++) { const px = x + ((i * 97 + time * 8) % w), py = y + ((i * 53 + time * (6 + (i % 5))) % h); ctx.fillRect(px, py, 1.5 * dpr, 1.5 * dpr); }
+    // дно
+    ctx.fillStyle = '#02090c'; ctx.beginPath(); ctx.moveTo(x, y + h);
+    for (let i = 0; i <= 12; i++) ctx.lineTo(x + (w / 12) * i, y + h * (0.8 + Math.sin(i * 1.7) * 0.06)); ctx.lineTo(x + w, y + h); ctx.fill();
+    // левиафан: огромная тень проходит над дном
+    if (fx.leviathan >= 0) {
+      const t = fx.leviathan / 9, lx = x - w * 0.6 + t * w * 2.2, ly = y + h * 0.42;
+      ctx.fillStyle = 'rgba(0,0,0,.85)';
+      ctx.beginPath(); ctx.ellipse(lx, ly, w * 0.42, h * 0.11, -0.04, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(lx - w * 0.38, ly); ctx.lineTo(lx - w * 0.58, ly - h * 0.12); ctx.lineTo(lx - w * 0.55, ly + h * 0.1); ctx.fill();
+      ctx.fillStyle = 'rgba(120,220,255,.6)'; ctx.beginPath(); ctx.arc(lx + w * 0.34, ly - h * 0.02, 3 * dpr, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(94,230,255,.5)'; ctx.lineWidth = 2 * dpr; ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(94,230,255,.8)'; ctx.font = `${11 * dpr}px "Share Tech Mono", monospace`; ctx.textAlign = 'left';
+    ctx.fillText('ВНЕШНЯЯ КАМЕРА · ГЛУБИНА 3000 М', x + 10 * dpr, y + 18 * dpr);
+    ctx.restore();
+  }
   // экранные эффекты сцен: затемнение, тревога, мерцание света, помехи на пульте
   function overlays(fx) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -351,6 +404,8 @@ AB.IsoRender = (() => {
       ctx.fillStyle = 'rgba(200,250,255,.15)';
       for (let i = 0; i < 5; i++) { const y = (time * 700 + i * 157) % H; ctx.fillRect(0, y, W, 2 * dpr); }
     }
+    if (fx.trueForm) { const k = Math.sin(Math.min(1, 1 - fx.trueForm.t / fx.trueForm.dur) * Math.PI); ctx.fillStyle = `rgba(120,220,255,${0.08 * k})`; ctx.fillRect(0, 0, W, H); }
+    cameraView(fx);
     const f = Math.max(fx.fade || 0, AB.IsoGame ? AB.IsoGame.fade() : 0);
     if (f > 0) { ctx.fillStyle = `rgba(0,0,0,${f})`; ctx.fillRect(0, 0, W, H); }
   }

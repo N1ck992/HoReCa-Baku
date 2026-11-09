@@ -15,9 +15,11 @@ AB.IsoEnemies = (() => {
 
   const sectorNow = () => (AB.IsoGame ? AB.IsoGame.sector() : null);
   // story — появление в сюжетной сцене (преследователь): стоит и смотрит, в бою не участвует
-  function spawn(id, x, y, { story = false, state = null, facing = 1 } = {}) {
+  // scripted — появился по сюжетной сцене (преследователь бессмертен и иначе на карту не ставится)
+  function spawn(id, x, y, { story = false, scripted = false, state = null, facing = 1 } = {}) {
     const def = AB.ID.get(id);
-    if (!def || (def.immortal && !story) || dead.has(id)) return null;
+    if (!def || (def.immortal && !story && !scripted) || dead.has(id)) return null;
+    if (!AB.IsoWorld.free(x, y)) { const n = AB.IsoWorld.nearestFree(x, y, 4); if (n) { x = n.x + 0.5; y = n.y + 0.5; } }
     if (list.has(id)) list.delete(id);
     const e = {
       sector: sectorNow(), story, alpha: 1,
@@ -27,6 +29,7 @@ AB.IsoEnemies = (() => {
       target: null, path: null, replanT: 0, loseT: 0, wander: null, retreated: false, hitDone: false,
     };
     if (story) { e.state = state || 'WATCH'; e.facing = facing; }
+    else if (state) { e.state = state; e.facing = facing; e.alpha = state === 'APPEAR' ? 0 : 1; }
     list.set(id, e);
     AB.Anim.play(id, 'idle');
     return e;
@@ -85,9 +88,52 @@ AB.IsoEnemies = (() => {
     if (e.anim !== a) { e.anim = a; AB.Anim.play(e.id, a); }
   }
 
+  // ---------- Преследователь (ENEMY-002): нападает только на Миру, убить нельзя ----------
+  const member = (id) => AB.IsoParty.members().find((m) => m.id === id);
+  function pursuerTick(e, d, dt) {
+    const target = member(d.target), tc = target && AB.Chars.get(target.id), lead = AB.IsoParty.lead();
+    e.t += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.flash = Math.max(0, e.flash - dt * 4);
+    if (e.state !== 'RETREAT') e.alpha = Math.min(1, e.alpha + dt * 1.8);
+    if (e.stagger > 0) { e.stagger -= dt; W().move(e, e.knockX * dt, e.knockY * dt, 0.32); e.knockX *= 0.85; e.knockY *= 0.85; return; }
+    let went = 0;
+    switch (e.state) {
+      case 'APPEAR': if (e.t > 0.7) setState(e, 'CHASE'); break;
+      case 'CHASE': {
+        if (!target || !tc || tc.dead) { setState(e, 'RETREAT'); break; }
+        // кто встал между ним и Мирой — того он и бьёт
+        const tx = target.x - e.x, ty = target.y - e.y, td = Math.hypot(tx, ty);
+        const guard = AB.IsoParty.members().filter((m) => m !== target && !(AB.Chars.get(m.id) || {}).dead)
+          .find((m) => { const mx = m.x - e.x, my = m.y - e.y, md = Math.hypot(mx, my); return md < td && md < d.attack.range / T + 0.6 && (mx * tx + my * ty) / (md * td || 1) > 0.5; });
+        const goal = guard || target, gd = Math.hypot(goal.x - e.x, goal.y - e.y);
+        if (gd < d.attack.range / T + 0.3 && e.cooldown <= 0) { e.victim = goal.id; e.hx = goal.x - e.x; e.hy = goal.y - e.y; setState(e, 'ATTACK'); break; }
+        went = gd > d.attack.range / T * 0.8 ? stepTo(e, goal.x, goal.y, d.speed.chase / T, dt) : 0;
+        break;
+      }
+      case 'ATTACK': {
+        const v = member(e.victim);
+        if (!e.hitDone && e.t >= d.attack.windup) {
+          e.hitDone = true;
+          if (v && Math.hypot(v.x - e.x, v.y - e.y) < d.attack.range / T + 0.5) AB.IsoCombat.damageChar(v.id, v.id === d.target ? d.damage : d.shove, e);
+        }
+        if (e.t > d.attack.windup + 0.4) { e.cooldown = d.attack.cooldown; setState(e, 'CHASE'); }
+        break;
+      }
+      case 'RETREAT': {
+        // отступает в темноту, подальше от Марка, и растворяется
+        if (lead) { const dx = e.x - lead.x, dy = e.y - lead.y, n = Math.hypot(dx, dy) || 1; went = stepTo(e, e.x + (dx / n) * 3, e.y + (dy / n) * 3, d.speed.retreat / T, dt); }
+        if (e.t > 0.6) e.alpha -= dt * 1.2;
+        if (e.alpha <= 0) { list.delete(e.id); AB.Bus.emit('enemy:gone', { id: e.id }); }
+        break;
+      }
+    }
+    animate(e, went, dt, true);
+  }
+
   function tick(e, dt) {
     if (e.story) { e.t += dt; return; }   // сюжетное появление — без поведения
     const d = def(e);
+    if (d.type === 'pursuer') { pursuerTick(e, d, dt); return; }
+    if (e.state === 'DORMANT') { e.t += dt; return; }   // спит до своей сцены (Колосс)
     e.t += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.flash = Math.max(0, e.flash - dt * 4);
     if (e.state === 'DEAD') return;
     if (e.stagger > 0) {
@@ -152,6 +198,18 @@ AB.IsoEnemies = (() => {
     const e = list.get(id);
     if (!e || e.state === 'DEAD') return false;
     const d = def(e);
+    if (d.immortal) {
+      // преследователь: убить нельзя; после нескольких ударов отступает
+      if (!['APPEAR', 'CHASE', 'ATTACK'].includes(e.state)) return false;
+      e.hits = (e.hits || 0) + 1; e.flash = 1; e.stagger = 0.4;
+      if (from) { const dx = e.x - from.x, dy = e.y - from.y, n = Math.hypot(dx, dy) || 1; e.knockX = (dx / n) * 4; e.knockY = (dy / n) * 4; }
+      AB.Anim.play(id, 'hurt', { restart: true });
+      AB.Bus.emit('iso:enemyHit', { id, x: e.x, y: e.y, amount: 0, hp: e.hp });
+      if (e.hits >= d.hitsToRetreat) { setState(e, 'RETREAT'); AB.Bus.emit('enemy:retreat', { id }); }
+      else if (e.state === 'ATTACK') setState(e, 'CHASE');
+      return true;
+    }
+    if (e.state === 'DORMANT') return false;
     if (d.armor && d.armor[kind] != null) amount = Math.round(amount * d.armor[kind]);
     e.hp = Math.max(0, e.hp - amount);
     e.flash = 1;
@@ -190,6 +248,10 @@ AB.IsoEnemies = (() => {
   return {
     spawn, update, damage, alive, spawnSector, get: (id) => list.get(id), all: here,
     despawn: (id) => list.delete(id),
+    // ушли из помещения преследователя — он исчезает (как в основной игре)
+    leaveRoom(roomId) { for (const e of [...list.values()]) if (def(e).type === 'pursuer' && !e.story && (e.sector !== sectorNow() || AB.IsoWorld.room(e.x, e.y) !== roomId)) list.delete(e.id); },
+    // кто угрожает персонажу (для бегства Миры): преследователь или босс рядом
+    threat(m) { return here().find((e) => !e.story && e.state !== 'DEAD' && e.state !== 'DORMANT' && (def(e).type === 'pursuer' || def(e).type === 'boss') && Math.hypot(e.x - m.x, e.y - m.y) < 7) || null; },
     isDead: (id) => dead.has(id) || (list.has(id) && list.get(id).state === 'DEAD'),
   };
 })();

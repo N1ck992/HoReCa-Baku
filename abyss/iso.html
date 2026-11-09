@@ -26,6 +26,7 @@
     <button id="iso-restart-top" title="Начать прохождение бункера сначала">Заново</button>
     <a id="iso-back" href="index.html" title="Вернуться к игре (вид сбоку)">Вид сбоку</a>
   </div>
+  <canvas id="iso-map" aria-label="Карта сектора (нажмите — крупнее)"></canvas>
   <div id="iso-prompt" role="button" aria-live="polite"></div>
   <div id="iso-toast" aria-live="polite"></div>
   <div id="iso-inv" hidden>
@@ -40,6 +41,20 @@
   <div id="iso-dialog" hidden role="dialog" aria-live="polite"></div>
   <button id="iso-skip" hidden>Пропустить сцену ▸▸</button>
   <div id="iso-hero" hidden><div class="inv-card" id="iso-hero-body" role="dialog" aria-label="Герой"></div></div>
+  <div id="iso-nest" hidden aria-live="polite"></div>
+  <div id="iso-perks" hidden role="dialog" aria-label="Выбор улучшения">
+    <div class="perk-card"><div class="act-no">Новый уровень</div><h2>Выберите улучшение</h2><div class="perk-list"></div></div>
+  </div>
+  <div id="iso-act" hidden>
+    <div class="act-card">
+      <div class="act-no">Конец первого акта</div>
+      <h2>Тишина на дне</h2>
+      <p>Марк закрывает забрало. Впереди — три тысячи метров чёрной воды и ответ на вопрос, кто отправил сигнал.</p>
+      <p class="act-next">Акт II · «Петля» — выход за борт в экзокостюме</p>
+      <button id="iso-act-stay">Остаться в бункере</button>
+      <button id="iso-act-new" class="danger">Начать заново</button>
+    </div>
+  </div>
   <div id="iso-death" hidden role="dialog" aria-label="Гибель"><div class="death-card"><h2>Вы погибли</h2><p>Прохождение бункера начнётся сначала.</p><button id="iso-restart">Начать заново</button></div></div>
   <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · I — вещи · нажмите на героя справа внизу — снаряжение · Q — следующий · колесо — масштаб</div>
 
@@ -70,6 +85,7 @@
   <script src="js/data/rigs/COMPANION.js"></script>
   <script src="js/data/rigs.js"></script>
   <script src="js/data/iso-layouts.js"></script>
+  <script src="js/data/iso-quests.js"></script>
   <!-- Из старых систем: ресурсы, анимации, персонажи и отряд, инвентарь, оборудование,
        состояние помещений (предметы, доступ к дверям), отрисовка составных персонажей -->
   <script src="js/systems/asset-manager.js"></script>
@@ -81,6 +97,8 @@
   <script src="js/systems/equipment-system.js"></script>
   <script src="js/systems/dialog.js"></script>
   <script src="js/systems/quest-system.js"></script>
+  <script src="js/systems/perks.js"></script>
+  <script src="js/systems/progress.js"></script>
   <script src="js/render/renderer.js"></script>
   <!-- Изометрическая сцена -->
   <script src="js/iso/iso-world.js"></script>
@@ -93,6 +111,8 @@
   <script src="js/iso/iso-inventory.js"></script>
   <script src="js/iso/iso-story.js"></script>
   <script src="js/iso/iso-game.js"></script>
+  <script src="js/iso/iso-map.js"></script>
+  <script src="js/iso/iso-nest.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>

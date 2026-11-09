@@ -80,10 +80,17 @@ AB.ISO_LAYOUTS = {
     doors: [
       { key: 'A', tiles: [[24, 6], [24, 7], [24, 8]], axis: 'x' },          // жилой сектор ↔ склад
       { key: 'D', tiles: [[29, 27], [29, 28], [29, 29], [29, 30]], axis: 'x' },   // гидропоника ↔ техкоридор Б
+      // спуск со склада в гидропонику: в испытании «Гнездо» его заклинивает (№50)
+      { key: 'H', tiles: [[40, 22], [41, 22], [42, 22]], axis: 'y', name: 'Спуск на склад', room: 'ROOM-005', state: 'open' },
     ],
+    // испытание «Гнездо» (ARENA-001, №44/№50): откуда лезут мутанты на нижней палубе
+    nest: {
+      door: 'H', repairAt: { x: 41.5, y: 23.6 },
+      spawns: [{ x: 12.5, y: 28.5 }, { x: 4.5, y: 28.5 }, { x: 8.5, y: 25.0 }, { x: 46.5, y: 43.5 }],
+    },
     exits: [
       { room: 'ROOM-002', door: 'west', x: 2, y: 7, wall: 'w', to: { sector: 'SECTOR-002', x: 58.5, y: 7.5 } },        // в генераторную
-      { room: 'ROOM-005', door: 'east', x: 48, y: 9, wall: 'e' },                                                       // к мостику — следующий сектор
+      { room: 'ROOM-005', door: 'east', x: 48, y: 9, wall: 'e', to: { sector: 'SECTOR-003', x: 3.5, y: 12.5 } },        // к мостику (питание)
       { room: 'ROOM-002', door: 'hatch', x: 20, y: 11, floor: true, to: { sector: 'SECTOR-002', x: 47.5, y: 17.5 } },  // люк в технический тоннель
     ],
     items: {
@@ -171,3 +178,54 @@ AB.ISO_START = { sector: 'SECTOR-002', party: [{ id: 'CHAR-001', x: 4.0, y: 5.6 
 
 // Сектор только изометрии — в общем реестре ID (секторы основной игры — js/data/sectors.js)
 AB.ID.register('SECTOR-002', { id: 'SECTOR-002', name: AB.ISO_LAYOUTS['SECTOR-002'].name, iso: true, doors: [] });
+
+// Сектор конца акта I (дополнение №50): командный центр, лаборатория, оружейная,
+// система жизнеобеспечения, шлюз. Только для изометрии; помещения и порядок — из rooms.js.
+AB.ISO_LAYOUTS['SECTOR-003'] = {
+  name: 'Мостик и лаборатория',
+  areas: [
+    { room: 'ROOM-008', x: 2, y: 8, w: 16, h: 10 },     // командный центр
+    { room: 'ROOM-008', x: 18, y: 11, w: 2, h: 3 },     // дверь в лабораторию
+    { room: 'ROOM-007', x: 20, y: 6, w: 22, h: 12 },    // лаборатория
+    { room: 'ROOM-007', x: 42, y: 13, w: 2, h: 3 },     // проход в оружейную
+    { room: 'ROOM-006', x: 44, y: 10, w: 12, h: 9 },    // оружейная
+    { room: 'ROOM-006', x: 49, y: 19, w: 3, h: 2 },     // проход в жизнеобеспечение
+    { room: 'ROOM-009', x: 40, y: 21, w: 24, h: 14 },   // система жизнеобеспечения
+    { room: 'ROOM-009', x: 64, y: 26, w: 1, h: 3 },     // проход в шлюз
+    { room: 'ROOM-010', x: 65, y: 24, w: 16, h: 8 },    // шлюз
+  ],
+  props: [
+    { kind: 'console', x: 5, y: 8, w: 2, h: 1 }, { kind: 'console', x: 9, y: 8, w: 2, h: 1 }, { kind: 'console', x: 13, y: 8, w: 2, h: 1 },
+    { kind: 'table', x: 8, y: 13, w: 3, h: 2 },
+    { kind: 'algaetank', x: 23, y: 7, w: 2, h: 2 }, { kind: 'table', x: 27, y: 11, w: 3, h: 1 }, { kind: 'algaetank', x: 31, y: 7, w: 2, h: 2 },
+    { kind: 'glass', x: 34, y: 9, w: 1, h: 5 }, { kind: 'algaetank', x: 37, y: 14, w: 2, h: 2 }, { kind: 'table', x: 39, y: 8, w: 2, h: 1 },
+    { kind: 'shelf', x: 45, y: 11, w: 1, h: 4 }, { kind: 'locker', x: 49, y: 10, w: 2, h: 1, container: 'gun-locker', asset: 'ASSET-ROOM006-02' }, { kind: 'shelf', x: 54, y: 11, w: 1, h: 4 },
+    { kind: 'reservoir', x: 43, y: 23, w: 3, h: 3 }, { kind: 'panel', x: 50, y: 21, w: 2, h: 1, equip: 'EQUIP-006' },
+    { kind: 'reservoir', x: 55, y: 30, w: 3, h: 3 }, { kind: 'reservoir', x: 59, y: 23, w: 3, h: 3 },
+    { kind: 'console', x: 67, y: 24, w: 2, h: 1, equip: 'EQUIP-007' },
+    { kind: 'exorack', x: 71, y: 24, w: 2, h: 1, asset: 'ASSET-ROOM010-02' },
+    { kind: 'exorack', x: 74, y: 24, w: 2, h: 1, asset: 'ASSET-ROOM010-02' },
+    { kind: 'exorack', x: 77, y: 24, w: 2, h: 1, equip: 'EQUIP-005', asset: 'ASSET-ROOM010-02' },
+  ],
+  doors: [
+    // командный центр → лаборатория: заблокировано изнутри, пока не закончится сцена с врачом
+    { key: 'L', tiles: [[18, 11], [18, 12], [18, 13]], axis: 'x', name: 'Дверь в лабораторию', room: 'ROOM-008', roomDoor: 'east', state: 'closed' },
+    // жизнеобеспечение → шлюз: проход держит Колосс
+    { key: 'S', tiles: [[64, 26], [64, 27], [64, 28]], axis: 'x', name: 'Проход в шлюз', room: 'ROOM-009', roomDoor: 'east', state: 'closed' },
+  ],
+  exits: [
+    { room: 'ROOM-008', door: 'west', x: 2, y: 12, wall: 'w', to: { sector: 'SECTOR-001', x: 46.5, y: 9.5 } },   // на склад
+    { room: 'ROOM-010', door: 'east', x: 80, y: 28, wall: 'e' },                                                  // внешний люк: только в экзокостюме
+  ],
+  items: {},
+  enemyPos: { 'ENEMY-004': { x: 28.5, y: 14.5 }, 'ENEMY-005': { x: 38.5, y: 11.5 }, 'ENEMY-003': { x: 52.5, y: 28.5 } },
+  // где стоит врач, когда выходит навстречу (rooms.js: x 620 в командном центре)
+  lights: [
+    { x: 6, y: 12, color: [120, 200, 255], radius: 7 }, { x: 13, y: 12, color: [120, 200, 255], radius: 6 },
+    { x: 25, y: 10, color: [90, 230, 130], radius: 6 }, { x: 33, y: 14, color: [255, 60, 40], radius: 6 },
+    { x: 49, y: 14, color: [255, 214, 170], radius: 6 },
+    { x: 46, y: 27, color: [255, 60, 40], radius: 7 }, { x: 57, y: 27, color: [255, 120, 60], radius: 8 },
+    { x: 72, y: 28, color: [120, 200, 255], radius: 8 },
+  ],
+};
+AB.ID.register('SECTOR-003', { id: 'SECTOR-003', name: AB.ISO_LAYOUTS['SECTOR-003'].name, iso: true, doors: [] });
