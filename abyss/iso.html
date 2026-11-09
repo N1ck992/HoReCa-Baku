@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>ABYSS Изометрия</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oswald:wght@500;700&display=swap">
   <link rel="stylesheet" href="css/iso.css">
@@ -20,6 +23,7 @@
   <!-- герои — справа внизу; нажатие — окно героя (снаряжение, здоровье) -->
   <div id="iso-party" aria-label="Отряд"></div>
   <div id="iso-tools">
+    <button id="iso-fs" title="На весь экран (временно, пока игра не стала приложением)">⛶</button>
     <div id="iso-zoom" aria-label="Камера"><button data-z="-0.15" title="Отдалить (−, колесо, щипок)">−</button><button data-z="0.15" title="Приблизить (+, колесо, щипок)">+</button></div>
     <button id="iso-inv-btn" title="Инвентарь (I, Tab)">Вещи</button>
     <button id="iso-ids" title="Показать или скрыть ID заглушек">ID</button>

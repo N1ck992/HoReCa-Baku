@@ -227,6 +227,22 @@
       if (AB.Progress.unspent() > 0) setTimeout(showPerks, 400);
     });
     $('#iso-restart-top').addEventListener('click', () => AB.IsoGame.restart());
+    // №60: временно — на весь экран (и горизонтально, где браузер позволяет)
+    const fsBtn = $('#iso-fs'), fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    fsBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    fsBtn.addEventListener('click', async () => {
+      try {
+        if (fsEl()) { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+        const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (!req) throw new Error('нет');
+        await req.call(el, { navigationUI: 'hide' });
+        try { if (screen.orientation && screen.orientation.lock && isTouch) await screen.orientation.lock('landscape'); } catch (e) { /* поворот не разрешён — повернёте сами */ }
+      } catch (e) {
+        toast('Браузер не разрешил полный экран здесь. Откройте игру в отдельной вкладке или добавьте на главный экран', 'info');
+      }
+    });
+    const fsSync = () => { fsBtn.textContent = fsEl() ? '✕⛶' : '⛶'; fsBtn.title = fsEl() ? 'Выйти из полноэкранного режима' : 'На весь экран'; setTimeout(() => window.dispatchEvent(new Event('resize')), 120); };
+    document.addEventListener('fullscreenchange', fsSync); document.addEventListener('webkitfullscreenchange', fsSync);
     $('#iso-restart-top').addEventListener('pointerdown', (e) => e.stopPropagation());
     for (const el of [ui.party, ui.zoom]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); AB.IsoInteract.actNearest(); });
