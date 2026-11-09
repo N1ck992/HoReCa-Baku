@@ -133,6 +133,15 @@
   });
 
   let last = 0;
+  const clearFade = () => Object.assign(AB.IsoStory.fx, { fade: 0, fadeTo: 0, fadeDur: 0, fadeFrom: 0, actEnd: 0 });
+  // вернулись с дна — отряд у внешнего люка шлюза
+  AB.Bus.on('ow:exit', () => {
+    clearFade();
+    if (AB.IsoGame.sector() !== 'SECTOR-003') AB.IsoGame.travel('SECTOR-003', 78.5, 28.5);
+    else { AB.IsoParty.placeAll(78.5, 28.5); AB.IsoRender.snap(); }
+    last = performance.now();
+    toast('Шлюз «Абисса»', 'info');
+  });
   function boot() {
     AB.Assets.load();
     AB.IsoRender.init($('#iso'));
@@ -155,7 +164,10 @@
     $('#iso-ids').addEventListener('click', () => { AB.isoShowIds = !AB.isoShowIds; });
     $('#iso-restart').addEventListener('click', () => AB.IsoGame.restart());
     $('#iso-act-new').addEventListener('click', () => AB.IsoGame.restart());
-    $('#iso-act-stay').addEventListener('click', () => { $('#iso-act').hidden = true; AB.IsoStory.fx.fade = 0; AB.IsoStory.fx.fadeTo = 0; AB.IsoStory.fx.fadeDur = 0; AB.IsoStory.fx.fadeFrom = 0; AB.IsoStory.fx.actEnd = 0; });
+    // выйти за борт: экран конца акта закрывается, Марк в экзокостюме — на дне (№54)
+    $('#iso-act-out').addEventListener('click', () => { $('#iso-act').hidden = true; clearFade(); AB.IsoOverworld.enter(); });
+    AB.IsoOverworld.init();
+    $('#iso-act-stay').addEventListener('click', () => { $('#iso-act').hidden = true; clearFade(); });
     $('#iso-act').addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#iso-perks').addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#iso-perks').addEventListener('click', (e) => {
@@ -175,7 +187,7 @@
     function loop(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (paused) { requestAnimationFrame(loop); return; }   // выбор улучшения — мир стоит
+      if (paused || AB.IsoOverworld.isOpen()) { requestAnimationFrame(loop); return; }   // выбор улучшения или дно — бункер стоит
       // сцена, диалог или переход — управление у сцены
       const busy = AB.IsoStory.locked() || AB.IsoGame.busy();
       const raw = AB.IsoInput.update(dt), input = busy ? { x: 0, y: 0, walk: false } : raw;

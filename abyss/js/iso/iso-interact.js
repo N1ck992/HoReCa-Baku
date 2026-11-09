@@ -145,6 +145,11 @@ AB.IsoInteract = (() => {
       const a = t.ref.rd ? AB.Rooms.canPass(t.ref.rd) : { ok: true };
       return { label: a.ok ? t.name : `${t.name}: ${a.reason.charAt(0).toLowerCase()}${a.reason.slice(1)}`, ok: a.ok };
     }
+    // внешний люк шлюза: после осмотра экзокостюма — выход за борт (№54)
+    if (t.ref.to && t.ref.to.overworld) {
+      const ready = ['inspected', 'done'].includes(AB.Equip.state(t.ref.to.after));
+      return { label: ready ? 'Внешний люк — выйти за борт в экзокостюме' : 'Внешний люк: только в экзокостюме', ok: ready };
+    }
     const a = access(t.ref.room, t.ref.door);
     const dest = t.ref.to ? AB.IsoGame.sectorName(t.ref.to.sector) : null;
     return { label: !a.ok ? `${t.name}: ${a.reason.toLowerCase()}` : dest ? `${t.name} → ${dest}` : `${t.name} — сектор ещё не перенесён`, ok: a.ok };
@@ -188,6 +193,11 @@ AB.IsoInteract = (() => {
       const a = t.ref.rd ? AB.Rooms.canPass(t.ref.rd) : { ok: true };
       if (!a.ok) { AB.Bus.emit('door:denied', { reason: a.reason }); return true; }
       AB.IsoGame.travel(null, t.ref.other.x + 0.5, t.ref.other.y + 0.5);
+      return true;
+    }
+    if (t.ref.to && t.ref.to.overworld) {
+      if (['inspected', 'done'].includes(AB.Equip.state(t.ref.to.after))) AB.IsoOverworld.enter();
+      else AB.Bus.emit('door:denied', { reason: 'Внешний люк: только в экзокостюме' });
       return true;
     }
     // выход из сектора: правила доступа — старые; переход — в другой сектор

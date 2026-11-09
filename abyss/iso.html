@@ -51,9 +51,20 @@
       <h2>Тишина на дне</h2>
       <p>Марк закрывает забрало. Впереди — три тысячи метров чёрной воды и ответ на вопрос, кто отправил сигнал.</p>
       <p class="act-next">Акт II · «Петля» — выход за борт в экзокостюме</p>
+      <button id="iso-act-out">Выйти за борт</button>
       <button id="iso-act-stay">Остаться в бункере</button>
+      <p class="muted">На корабль всегда можно вернуться — через шлюз «Абисса».</p>
       <button id="iso-act-new" class="danger">Начать заново</button>
     </div>
+  </div>
+  <!-- Выход за борт (№54, прототип): дно океана, карта из шестиугольников -->
+  <div id="ow" hidden>
+    <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
+    <div id="ow-top"><b>Дно океана</b><span>рядом с «Абиссом» · прототип</span></div>
+    <button id="ow-back" title="Вернуться на корабль (только у «Абисса»)">На корабль</button>
+    <div id="ow-card" hidden><b></b><p></p><button id="ow-act"></button></div>
+    <div id="ow-hint">Нажмите на клетку — экзокостюм пойдёт туда. Скалы и впадины не пройти.</div>
+    <div id="ow-say"></div>
   </div>
   <div id="iso-death" hidden role="dialog" aria-label="Гибель"><div class="death-card"><h2>Вы погибли</h2><p>Прохождение бункера начнётся сначала.</p><button id="iso-restart">Начать заново</button></div></div>
   <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · I — вещи · нажмите на героя справа внизу — снаряжение · Q — следующий · колесо — масштаб</div>
@@ -86,6 +97,7 @@
   <script src="js/data/rigs.js"></script>
   <script src="js/data/iso-layouts.js"></script>
   <script src="js/data/iso-quests.js"></script>
+  <script src="js/data/overworld.js"></script>
   <!-- Из старых систем: ресурсы, анимации, персонажи и отряд, инвентарь, оборудование,
        состояние помещений (предметы, доступ к дверям), отрисовка составных персонажей -->
   <script src="js/systems/asset-manager.js"></script>
@@ -113,6 +125,7 @@
   <script src="js/iso/iso-game.js"></script>
   <script src="js/iso/iso-map.js"></script>
   <script src="js/iso/iso-nest.js"></script>
+  <script src="js/iso/iso-overworld.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>

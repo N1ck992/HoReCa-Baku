@@ -215,7 +215,7 @@ AB.ISO_LAYOUTS['SECTOR-003'] = {
   ],
   exits: [
     { room: 'ROOM-008', door: 'west', x: 2, y: 12, wall: 'w', to: { sector: 'SECTOR-001', x: 46.5, y: 9.5 } },   // на склад
-    { room: 'ROOM-010', door: 'east', x: 80, y: 28, wall: 'e' },                                                  // внешний люк: только в экзокостюме
+    { room: 'ROOM-010', door: 'east', x: 80, y: 28, wall: 'e', to: { overworld: true, after: 'EQUIP-005' } },     // внешний люк: в экзокостюме — на дно (№54)
   ],
   items: {},
   enemyPos: { 'ENEMY-004': { x: 28.5, y: 14.5 }, 'ENEMY-005': { x: 38.5, y: 11.5 }, 'ENEMY-003': { x: 52.5, y: 28.5 } },

@@ -161,3 +161,22 @@ body.quiet #iso-help { display: none; }
 .perk b { font: 700 15px var(--display); color: #bfefff; }
 .perk span { color: var(--muted); line-height: 1.45; }
 @media (max-width: 560px) { #iso-nest { top: auto; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); left: calc(170px + env(safe-area-inset-left, 0px)); transform: none; flex-wrap: wrap; white-space: normal; max-width: calc(100vw - 180px); } #iso-nest .k { display: none; } }
+
+/* ---------- Выход за борт: дно океана (№54, прототип) ---------- */
+#ow { position: fixed; inset: 0; z-index: 13; background: #010305; }
+#ow[hidden] { display: none; }
+#ow-map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+#ow-top { position: absolute; left: calc(14px + env(safe-area-inset-left, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); display: grid; pointer-events: none; }
+#ow-top b { font: 700 18px var(--display); letter-spacing: 3px; text-transform: uppercase; color: #bfefff; }
+#ow-top span { font-size: 11px; color: var(--muted); }
+#ow-back { position: absolute; right: calc(14px + env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); font: 13px var(--mono); padding: 7px 12px; border-radius: 5px; cursor: pointer; background: rgba(10, 12, 14, .7); color: var(--fg); border: 1px solid var(--line); }
+#ow-card { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(52px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100vw - 32px)); display: grid; gap: 6px; padding: 12px 14px; background: rgba(6, 10, 12, .9); border: 1px solid rgba(94, 230, 255, .35); border-radius: 8px; }
+#ow-card[hidden] { display: none; }
+#ow-card b { font: 600 15px var(--display); letter-spacing: 1px; color: #ffe2a8; }
+#ow-card p { margin: 0; font-size: 13px; line-height: 1.45; }
+#ow-card button { justify-self: start; font: 13px var(--mono); padding: 7px 12px; border-radius: 5px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid rgba(94, 230, 255, .4); }
+#ow-card button:disabled { opacity: .5; cursor: default; border-color: var(--line); }
+#ow-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); font-size: 11px; color: var(--muted); text-align: center; pointer-events: none; }
+#ow-say { position: absolute; left: 50%; transform: translateX(-50%); top: calc(60px + env(safe-area-inset-top, 0px)); padding: 6px 12px; background: rgba(8, 10, 12, .85); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#ow-say.show { opacity: 1; }
+#iso-act .muted { font-size: 11px; }
