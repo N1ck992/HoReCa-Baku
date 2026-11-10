@@ -28,7 +28,8 @@ AB.IsoOverworld = (() => {
 
   const inside = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) <= D().radius;
   const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
-  const TILT = 0.6, STEP = 0.75, BASE_STEP = 1.1;      // наклон карты; секунд на клетку (костюм, капсула)
+  // №64: капсула по дну идёт медленно — 5 с на клетку (решение автора); костюм — 0,75 с
+  const TILT = 0.6, STEP = 0.75, BASE_STEP = 5;
   const px = (q, r) => ({ x: size * SQ3 * (q + r / 2), y: size * 1.5 * r * TILT });
   const siteAt = (q, r) => D().sites.find((s) => s.q === q && s.r === r) || null;
   const passable = (q, r) => { const c = cells.get(key(q, r)); return !!c && c.kind !== 'rock' && c.kind !== 'trench'; };
@@ -148,7 +149,7 @@ AB.IsoOverworld = (() => {
     sq.addEventListener('pointerdown', (e) => e.stopPropagation());
     sq.addEventListener('click', (e) => {
       const b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
-      if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; return; }
+      if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'surface') AB.IsoActs.surface(); else if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; return; }
       if (c) { const u = unit(c.dataset.u); if (u && (u.kind === 'base' || u.state !== 'home')) sel = c.dataset.u; else if (u && u.vehicle) deploy(u.id); squadsSig = ''; }
     });
     window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { const s = siteAt(selU().q, selU().r); if (s && s.key === 'abyss') back(); } });
@@ -245,6 +246,7 @@ AB.IsoOverworld = (() => {
     if (!open_) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
     if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
+    if (ascend) { ascendTick(dt); requestAnimationFrame(loop); return; }
     if (mode === 'capsule') stepUnit(base, dt, BASE_STEP);
     for (const s of outSquads()) { stepUnit(s, dt, STEP); if (!s.anim && loot.size) pickLoot(s); }
     heal(dt);
@@ -256,6 +258,31 @@ AB.IsoOverworld = (() => {
     hud();
     requestAnimationFrame(loop);
   }
+  // ---------- №64: всплытие капсулы — финал акта III, переход к общей карте ----------
+  let ascend = null;                     // { t, done }
+  function surface(done) {
+    for (const s of squads) if (s.state !== 'home') dock(s);
+    base.path = []; base.anim = null; sel = 'base';
+    ascend = { t: 0, done };
+    say('Балласт сброшен. Капсула идёт вверх');
+  }
+  function ascendTick(dt) {
+    ascend.t += dt;
+    const k = Math.min(1, ascend.t / 5);
+    const c = px(base.q, base.r);
+    cam.x += (c.x - cam.x) * Math.min(1, dt * 6); cam.y += (c.y - size * 6 * k - cam.y) * Math.min(1, dt * 6);
+    draw();
+    // свет сверху и пузыри
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    const lg = g.createLinearGradient(0, 0, 0, cv.height);
+    lg.addColorStop(0, `rgba(150,210,230,${0.15 + k * 0.7})`); lg.addColorStop(1, `rgba(20,60,80,${k * 0.4})`);
+    g.fillStyle = lg; g.fillRect(0, 0, cv.width, cv.height);
+    g.fillStyle = 'rgba(220,240,255,.6)';
+    for (let i = 0; i < 40; i++) { const x = ((i * 97) % 100) / 100 * cv.width, y = cv.height - ((ascend.t * 120 * dpr + i * 53) % cv.height); g.beginPath(); g.arc(x, y, (1 + (i % 3)) * dpr, 0, 7); g.fill(); }
+    hud();
+    if (ascend.t >= 5.5 && !ascend.fired) { ascend.fired = true; const f = ascend.done; ascend = null; setTimeout(() => f && f(), 0); }
+  }
+
   // на базе (и в «Абиссе», и в капсуле) костюм чинят: здоровье понемногу возвращается
   function heal(dt) {
     for (const s of squads) {
@@ -377,7 +404,7 @@ AB.IsoOverworld = (() => {
           }
         }
         if (s.atk.t > 0.8) s.atk = null;
-      } else if (s.atkT <= 0 && !s.anim) {
+      } else if (s.atkT <= 0 && !s.anim && (!s.path.length || s.target)) {   // на марше приказ «иди» важнее: сам бьёт, когда стоит
         const foe = (s.target && s.target.hp > 0 && dist(s.target, here) <= sw.reachCells) ? s.target
           : mobs.filter((m) => m.hp > 0 && (m.hunt || s.target === m) && dist(m, here) <= sw.reachCells).sort((a, b) => dist(a, here) - dist(b, here))[0];
         if (foe) { s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1; s.path = []; }
@@ -469,6 +496,7 @@ AB.IsoOverworld = (() => {
   }
   function drawBase() {
     const c = curPos(base);
+    if (ascend) c.y -= size * 6 * Math.min(1, ascend.t / 5);          // капсула поднимается
     g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(c.x, c.y + 6, 20 * dpr, 5 * dpr, 0, 0, 7); g.fill();
     g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(c.x, c.y - 6, 18 * dpr, 10 * dpr, 0, 0, 7); g.fill();
     g.fillStyle = '#8a6e30'; g.fillRect(c.x - 14 * dpr, c.y - 2, 28 * dpr, 4 * dpr);
@@ -540,7 +568,10 @@ AB.IsoOverworld = (() => {
   function squadPanel() {
     const el = document.getElementById('ow-squads');
     const rows = [];
-    if (mode === 'capsule') rows.push({ id: 'base', html: `<div class="sq-art capsule"><i></i></div><div class="sq-tx"><b>База-капсула</b><span>${base.anim || base.path.length ? 'в пути' : 'стоит'}</span></div>` });
+    if (mode === 'capsule') {
+      const up = AB.IsoActs && AB.IsoActs.canSurface();
+      rows.push({ id: 'base', html: `<div class="sq-art capsule"><i></i></div><div class="sq-tx"><b>База-капсула</b><span>${ascend ? 'всплывает' : base.anim || base.path.length ? 'в пути · 5 с на клетку' : 'стоит'}</span>${up && !ascend ? '<button data-do="surface">Всплыть</button>' : ''}</div>` });
+    }
     for (const s of squads) {
       if (mode === 'suit' && s.id !== 'CHAR-001') continue;
       const c = AB.Chars.get(s.id), d = AB.ID.get(s.id), hp = c ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
@@ -563,7 +594,7 @@ AB.IsoOverworld = (() => {
     pos: () => ({ q: selU().q, r: selU().r }),
     goTo(q, r) { const u = selU(); if (u.kind === 'base' && mode !== 'capsule') return false; const p = route(at(u), { q, r }); if (p) u.path = p; return !!p; },
     select(id) { if (unit(id)) { sel = id; squadsSig = ''; return true; } return false; },
-    deploy, recall, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle })), base: () => ({ q: base.q, r: base.r }),
+    deploy, recall, surface, ascending: () => !!ascend, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle })), base: () => ({ q: base.q, r: base.r }),
     lootAt: (q, r) => loot.get(key(q, r)) || null, time: () => time, _sq: () => squads,
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
     moving: () => { const u = selU(); return !!u.anim || u.path.length > 0; }, route,

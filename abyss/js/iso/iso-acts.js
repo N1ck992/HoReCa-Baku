@@ -121,11 +121,19 @@ AB.IsoActs = (() => {
     return true;
   }
   function healCrew() { for (const id of crew) { const c = AB.Chars.get(id); if (c && !c.dead) c.hp = AB.ID.get(id).stats.maxHp; } }
+  // №64: экипаж и модуль есть — капсула готова всплыть; всплытие (кнопка на карточке базы) — конец акта III
+  const canSurface = () => act === 3 && AB.Flags.has('recruit') && AB.Flags.has('module') && !AB.Flags.has('surfaced');
   function checkEnd() {
-    if (act === 3 && AB.Flags.has('recruit') && AB.Flags.has('module') && !AB.Flags.has('act3-end')) {
-      AB.Flags.add('act3-end');
-      setTimeout(() => AB.Bus.emit('act:end', { act: 3 }), 2800);
+    if (canSurface() && !AB.Flags.has('surface-ready')) {
+      AB.Flags.add('surface-ready');
+      setTimeout(() => { const t = 'Мира: «Капсула готова к всплытию. Наверху — поверхность и другие люди. Нажми «Всплыть» на карточке базы»'; if (AB.IsoOverworld.isOpen()) AB.IsoOverworld.say(t); else toast(t, 'good'); }, 1500);
     }
+  }
+  function surface() {
+    if (!canSurface()) return false;
+    if (!AB.IsoOverworld.isOpen()) { AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); }
+    AB.IsoOverworld.surface(() => { AB.Flags.add('surfaced'); AB.Bus.emit('act:end', { act: 3 }); });
+    return true;
   }
 
   // ---------- база-капсула изнутри (№61) ----------
@@ -157,7 +165,7 @@ AB.IsoActs = (() => {
   function leaveBase() { AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); }
 
   return {
-    enterBase, leaveBase,
+    enterBase, leaveBase, surface, canSurface,
     act: () => act, next, run: (fn) => RUN[fn] && RUN[fn](), afterBack,
     siteAction, siteVisible, doSite, build, canBuild: (id) => { const m = AB.ISO_MODULES.find((q) => q.id === id); return !!m && !built.has(id) && has(m.cost); },
     built: (id) => built.has(id), crew: () => crew.slice(), visited: (k) => visited.has(k),
