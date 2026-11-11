@@ -61,6 +61,8 @@ AB.IsoRender = (() => {
     intake: { h: 66, top: '#2c4a56', l: '#203a44', r: '#1a3038', glow: [80, 200, 230] },
     algae: { h: 50, top: '#2f6b4a', l: '#1e4a33', r: '#173c29', glow: [90, 230, 130] },
     bioreactor: { h: 70, top: '#4a5a3a', l: '#38462c', r: '#2e3a24', glow: [170, 230, 90] },
+    terminal: { h: 64, top: '#2d3a4a', l: '#38465a', r: '#2a3444', glow: [120, 180, 255] },
+    drill: { h: 72, top: '#5a4a32', l: '#46392a', r: '#3a2e20', glow: [255, 170, 90] },
     reactor: { h: 80, top: '#3a4a5a', l: '#2c3a48', r: '#24303c', glow: [150, 120, 255] },
     battery: { h: 46, top: '#3c4a3a', l: '#2c3a2a', r: '#243024', glow: [120, 255, 140] },
     turbine: { h: 58, top: '#3a4650', l: '#2c363e', r: '#242c33', glow: [94, 230, 255] },

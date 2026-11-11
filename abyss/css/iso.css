@@ -514,3 +514,16 @@ body.base-build #iso-hud { display: none; }
 @media (max-width: 560px) { #bx-res { justify-content: flex-start; } }
 @media (max-width: 560px) { #bx-res { gap: 4px; } #bx-res span { padding: 1px 5px; font-size: 11px; gap: 3px; } #bx-res i { font-size: 9px; } }
 @media (max-width: 420px) { #bx-res span[data-k="ITEM-001"], #bx-res span[data-k="ITEM-002"] { display: none; } }
+/* №74: «Наука» — дерево исследований */
+.bx-tree { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.bx-branch { display: grid; gap: 6px; align-content: start; }
+.bx-branch-h { font: 600 13px var(--display); letter-spacing: 1px; text-transform: uppercase; color: #9fd8ff; }
+.bx-tech { display: grid; gap: 3px; padding: 7px 8px; background: #10151a; border: 1px solid var(--line); border-radius: 6px; }
+.bx-tech b { font: 600 13px var(--display); color: #e8f0f6; }
+.bx-tech.done { border-color: rgba(120, 230, 150, .4); opacity: .8; }
+.bx-tech.cur { border-color: rgba(255, 210, 120, .6); }
+.bx-tech.locked { opacity: .55; }
+.bx-tag { font-size: 10px; color: var(--muted); }
+.bx-tag.ok { color: #9ff0bb; } .bx-tag.wait { color: #ffd27a; }
+#bx-card:has(.bx-tree) { width: min(900px, calc(100vw - 24px)); max-height: min(70vh, 620px); }
+@media (max-width: 560px) { body.in-base #iso-party { display: none; } }

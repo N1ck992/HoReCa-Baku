@@ -29,14 +29,28 @@ AB.BaseBuild = (() => {
     const b = sim().bp(bpId), c = centerCell();
     const cl = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
     const w = b.kind === 'cable' ? 1 : b.kind === 'room' ? cl(4, b.size.short) : b.w, h = b.kind === 'cable' ? 4 : b.kind === 'room' ? cl(4, b.size.long) : b.h;
-    const g = AB.BaseGrids.get(sim().state().grid).snap(c, w, h);
+    const grid = b.kind === 'room' ? 'GRID-001' : null;
+    const g = snapG(grid).snap(c, w, h);
     ghost = { bp: bpId, x: g.x, y: g.y, w, h };
+    if (grid) ghost.grid = grid;
     sel = null; delAsk = false;
+    render();
+  }
+  const snapG = (id) => AB.BaseGrids.get(id || 'GRID-001');
+  // №74: сменить сетку призрака (для помещений): размер подгоняется под правила сетки
+  function setGrid(id) {
+    if (!ghost) return;
+    const G = snapG(id);
+    ghost.grid = id;
+    if (G.step === 3) { ghost.w = Math.max(3, Math.min(9, Math.round(ghost.w / 3) * 3)); ghost.h = Math.max(3, Math.min(9, Math.round(ghost.h / 3) * 3)); }
+    if (id === 'GRID-002') { ghost.w = Math.max(4, ghost.w); ghost.h = Math.max(4, ghost.h); }
+    const g = G.snap({ x: ghost.x + ghost.w / 2, y: ghost.y + ghost.h / 2 }, ghost.w, ghost.h); ghost.x = g.x; ghost.y = g.y;
     render();
   }
   function startEdit(uid) {
     const o = sim().obj(uid); if (!o || o.core) return;
     ghost = { bp: o.bp, uid, x: o.x, y: o.y, w: o.w, h: o.h };
+    if (o.grid) ghost.grid = o.grid;
     delAsk = false;
     render();
   }
@@ -74,7 +88,8 @@ AB.BaseBuild = (() => {
     const b = sim().bp(ghost.bp);
     if (b.kind === 'cable') { const d = dw + dh; if (ghost.w === 1) ghost.h = Math.max(1, Math.min(b.size.long[1], ghost.h + d)); else ghost.w = Math.max(1, Math.min(b.size.long[1], ghost.w + d)); render(); return; }
     if (b.kind !== 'room') return;
-    ghost.w = Math.max(1, ghost.w + dw); ghost.h = Math.max(1, ghost.h + dh);
+    const st = snapG(ghost.grid).step;
+    ghost.w = Math.max(st, ghost.w + dw * st); ghost.h = Math.max(st, ghost.h + dh * st);
     render();
   }
   function rotate() { if (!ghost) return; [ghost.w, ghost.h] = [ghost.h, ghost.w]; render(); }
@@ -87,7 +102,7 @@ AB.BaseBuild = (() => {
   function tap(cx, cy) {
     const c = cellAt(cx, cy);
     if (ghost) {
-      const g = AB.BaseGrids.get(sim().state().grid).snap(c, ghost.w, ghost.h);
+      const g = snapG(ghost.grid).snap(c, ghost.w, ghost.h);
       ghost.x = g.x; ghost.y = g.y; render(); return true;
     }
     const o = objAt(Math.floor(c.x), Math.floor(c.y));
@@ -105,7 +120,9 @@ AB.BaseBuild = (() => {
   }
   function dragTo(cx, cy) {
     if (!drag || !ghost) return;
-    const c = cellAt(cx, cy), x = Math.round(c.x - drag.ox), y = Math.round(c.y - drag.oy);
+    const c = cellAt(cx, cy);
+    let x = Math.round(c.x - drag.ox), y = Math.round(c.y - drag.oy);
+    if (ghost.grid === 'GRID-003') { x = 1 + 3 * Math.round((x - 1) / 3); y = 1 + 3 * Math.round((y - 1) / 3); }
     if (x !== ghost.x || y !== ghost.y) { ghost.x = x; ghost.y = y; render(); }
   }
   function drop() { drag = null; }
@@ -123,14 +140,14 @@ AB.BaseBuild = (() => {
     if (!ghost) return;
     const c = check(), col = c && c.ok ? '120,255,170' : '255,110,90';
     if (ghost.uid) { const o = sim().obj(ghost.uid); if (o) { poly(ctx, toScreen, rectPts(o)); ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); } }
-    for (const [x, y] of AB.BaseGrids.get(S.grid).cells(ghost)) {
+    for (const [x, y] of AB.BaseGrids.cellsOf(ghost)) {
       poly(ctx, toScreen, rectPts({ x, y, w: 1, h: 1 }));
       ctx.fillStyle = `rgba(${col},${0.18 + Math.sin(time * 4) * 0.05})`; ctx.fill();
     }
-    poly(ctx, toScreen, rectPts(ghost)); ctx.strokeStyle = `rgba(${col},.95)`; ctx.lineWidth = 2; ctx.stroke();
+    if (!ghost.grid || ghost.grid === 'GRID-001' || ghost.grid === 'GRID-003') { poly(ctx, toScreen, rectPts(ghost)); ctx.strokeStyle = `rgba(${col},.95)`; ctx.lineWidth = 2; ctx.stroke(); }
     // будущие проходы к соседним помещениям
     if (sim().bp(ghost.bp).kind === 'room' && c && c.ok) {
-      const g = AB.BaseGrids.get(S.grid);
+      const g = AB.BaseGrids;
       for (const r of S.rooms) { if (r.uid === ghost.uid) continue; const d = g.door(ghost, r); if (d) for (const [x, y] of d) { poly(ctx, toScreen, rectPts({ x, y, w: 1, h: 1 })); ctx.fillStyle = 'rgba(255,226,168,.55)'; ctx.fill(); } }
     }
   }
@@ -153,12 +170,14 @@ AB.BaseBuild = (() => {
           const size = b.kind === 'cable' ? `линия до ${b.size.long[1]} клеток` : b.kind === 'room' ? `${b.size.short[0]}×${b.size.long[0]} … ${b.size.short[1]}×${b.size.long[1]}` : `${b.w}×${b.h}`;
           const cost = b.kind === 'cable' ? `${nm(b.costPer.item)} 1 на ${b.costPer.cells} клетки` : b.kind === 'room' ? b.costPerCell.map(([i, n]) => `${nm(i)} ${n} за клетку`).join(', ') : (b.cost || []).map(([i, n]) => `${nm(i)} ${n}`).join(', ');
           return `<button class="bx-bp" data-b="new|${b.id}"><b>${esc(b.name)}</b><span>${esc(b.kind === 'room' ? 'Помещение' : b.kind === 'cable' ? 'Электросеть' : 'Устройство')} · ${esc(size)}</span><span class="cost">${esc(cost)}</span><span class="muted">${esc(b.desc)}</span></button>`;
-        }).join('')}</div>`;
+        }).join('')}</div>
+        <div class="muted">Новые чертежи, сетки и расширение корпуса — в «Науке».</div>`;
       return;
     }
     if (ghost) {
       const b = sim().bp(ghost.bp), c = check(), room = b.kind === 'room';
       bar.innerHTML = `<div class="bx-head"><b>${esc(ghost.uid ? `Перестройка: ${AB.BaseView.title(sim().obj(ghost.uid))}` : b.name)}</b><span class="muted">${ghost.w}×${ghost.h}</span></div>
+        ${room && (b.grids || []).length > 1 ? `<div class="bx-row"><span class="muted">Сетка:</span>${(b.grids || []).map((id) => { const G = snapG(id), has = sim().state().grids.includes(id); return `<button class="bx-chip${(ghost.grid || 'GRID-001') === id ? ' on' : ''}" data-b="grid|${id}" ${has ? '' : 'disabled'} title="${esc(G.desc)}">${esc(G.name)}${has ? '' : ' 🔒'}</button>`; }).join('')}</div><div class="muted">${esc(snapG(ghost.grid).desc)}</div>` : ''}
         <div class="bx-cost">Цена: ${costLine(c.cost)}${ghost.uid ? ' <i class="muted">(вложенное засчитывается)</i>' : ''}</div>
         <div class="bx-st ${c.ok ? 'ok' : 'bad'}">${c.ok ? 'Можно ставить — материалы принесут строители' : esc(c.why)}</div>
         <div class="bx-row">
@@ -191,6 +210,7 @@ AB.BaseBuild = (() => {
     else if (a === 'w') resize(+v, 0);
     else if (a === 'h') resize(0, +v);
     else if (a === 'rot') rotate();
+    else if (a === 'grid') setGrid(v);
     else if (a === 'ok') confirm();
     else if (a === 'cancel') { ghost = null; render(); }
     else if (a === 'move') startEdit(sel);

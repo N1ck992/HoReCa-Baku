@@ -197,7 +197,7 @@ AB.IsoActs = (() => {
     devSet({ act: a, crew: list, built: mods } = {}) { if (a) act = a; if (list) { crew.length = 0; crew.push(...list); } for (const m of mods || []) built.add(m); },
     siteAction, siteVisible, doSite, build, canBuild: (id) => { const m = AB.ISO_MODULES.find((q) => q.id === id); return !!m && !built.has(id) && has(m.cost); },
     built: (id) => built.has(id), crew: () => crew.slice(), visited: (k) => visited.has(k),
-    view: () => (built.has('MOD-002') ? 4 : 2),
+    view: () => (built.has('MOD-002') ? 4 : 2) + (AB.BaseSim && AB.BaseSim.on() ? AB.BaseSim.fx('view') : 0),   // №74: сонар дальнего обзора
     onBase: () => { if (built.has('MOD-003')) healCrew(); },
   };
 })();

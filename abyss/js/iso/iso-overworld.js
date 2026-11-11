@@ -785,7 +785,10 @@ AB.IsoOverworld = (() => {
     goTo(q, r) { const u = selU(); if (u.kind === 'base' && mode !== 'capsule') return false; const p = route(at(u), { q, r }, u); if (p) u.path = p; return !!p; },
     select(id) { if (unit(id)) { sel = id; drive = id === 'base'; squadsSig = ''; return true; } return false; },
     deploy, recall, surface, ascending: () => !!ascend, enterBuilding, selectedKind: () => selU().kind, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle, cargo: s.cargo || 0 })),
-    deposit: (q, r) => { const c = cells.get(key(q, r)); return c && c.dep ? { ...c.dep } : null; }, base: () => ({ q: base.q, r: base.r }),
+    deposit: (q, r) => { const c = cells.get(key(q, r)); return c && c.dep ? { ...c.dep } : null; },
+    // №74: россыпь под капсулой или в соседней клетке (для бура базы); mine — вычерпать
+    depositNear: () => { if (mode !== 'capsule' || base.anim) return null; for (const [dq, dr] of [[0, 0], ...DIRS]) { const c = cells.get(key(base.q + dq, base.r + dr)); if (c && c.dep && c.dep.left > 0) return { q: c.q, r: c.r, left: c.dep.left }; } return null; },
+    mine: (q, r, n) => { const c = cells.get(key(q, r)); if (c && c.dep) c.dep.left = Math.max(0, c.dep.left - n); }, base: () => ({ q: base.q, r: base.r }),
     revealAll() { for (const c of cells.values()) c.seen = true; },
     // админ-панель: убрать бродячих тварей (сюжетные не трогаем)
     clearWild() { let n = 0; for (const m of mobs) if (m.hp > 0 && m.kind !== 'story') { m.hp = 0; m.anim = 'DEAD'; m.fade = 0; n++; } return n; },

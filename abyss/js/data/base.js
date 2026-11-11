@@ -22,9 +22,10 @@ AB.BASE_DATA = {
   // №73: еда. Сытость 100 → 0 за period секунд на базе; ниже hungry — герой идёт есть (1 пищевая биомасса = +per);
   // голодный работает медленнее (slow), совсем без еды — вдвое медленнее (starving); никто не умирает
   food: { item: 'ITEM-020', period: 600, hungry: 35, per: 45, slow: 0.75, starving: 0.5 },
-  refund: 0.5,            // сколько от цены возвращается при сносе построенного
+  refund: 0.5,
+  techEscalation: 0.15,   // №74: каждое изученное делает следующие исследования на 15% дороже и дольше            // сколько от цены возвращается при сносе построенного
   // в шкафчиках капсулы с самого начала — ремкомплект: хватит на первый 3D-принтер и стеллаж
-  starter: [['ITEM-001', 10], ['ITEM-002', 4], ['ITEM-003', 6]],   // №72: + провода на первые кабели и батарею
+  starter: [['ITEM-001', 12], ['ITEM-002', 7], ['ITEM-003', 6]],   // №74: + на научный терминал   // №72: + провода на первые кабели и батарею
 
   // ядро капсулы: есть с самого начала, снести нельзя
   core: {
@@ -55,7 +56,7 @@ AB.BASE_DATA = {
   // room.size: короткая и длинная сторона (можно поворачивать); costPerCell — цена клетки пола.
   // device: cost — цена целиком; work — секунды работы строителя; recipe / store — что делает.
   blueprints: [
-    { id: 'BLD-001', kind: 'room', name: 'Отсек', look: 'ROOM-025', start: true,
+    { id: 'BLD-001', kind: 'room', name: 'Отсек', look: 'ROOM-025', start: true, grids: ['GRID-001', 'GRID-002', 'GRID-003'],
       size: { short: [3, 8], long: [3, 8] }, costPerCell: [['ITEM-017', 1]], workPerCell: 1.2,
       desc: 'Помещение под устройства. Размер выбираете сами: от 3×3 до 8×8 клеток.' },
     { id: 'BLD-002', kind: 'room', name: 'Коридор', look: 'ROOM-026', start: true,
@@ -69,7 +70,7 @@ AB.BASE_DATA = {
       draw: 3,   // №72: энергия в секунду, пока печатает
       // уровни: каждое улучшение быстрее — и прожорливее
       levels: [{}, { up: [['ITEM-017', 8], ['ITEM-002', 2]], work: 15, time: 5.5, draw: 5 },
-        { up: [['ITEM-017', 16], ['ITEM-002', 3], ['ITEM-003', 2]], work: 25, time: 4, inCap: 20, outCap: 20, draw: 8 }],
+        { up: [['ITEM-017', 16], ['ITEM-002', 3], ['ITEM-003', 2]], tech: 'TECH-102', work: 25, time: 4, inCap: 20, outCap: 20, draw: 8 }],
       desc: 'Печатает стройматериал из реголита (2 → 1 за 8 с). Нужен назначенный герой: он носит реголит со склада и уносит готовое.' },
     { id: 'BLD-102', kind: 'device', name: 'Стеллаж', prop: 'rack', start: true, w: 1, h: 2,
       cost: [['ITEM-001', 2]], work: 8, store: { cap: 30 },
@@ -80,9 +81,9 @@ AB.BASE_DATA = {
       desc: 'Кристальный реактор капсулы: ровно 8 энергии в секунду. Энергия идёт по кабелям к устройствам и в батареи.' },
     { id: 'BLD-103', kind: 'device', name: 'Батарея', prop: 'battery', start: true, w: 1, h: 1,
       cost: [['ITEM-001', 2], ['ITEM-002', 2]], work: 10, battery: 120,
-      levels: [{}, { up: [['ITEM-017', 6], ['ITEM-002', 2]], work: 12, battery: 300 }, { up: [['ITEM-017', 12], ['ITEM-002', 3]], work: 18, battery: 600 }],
+      levels: [{}, { up: [['ITEM-017', 6], ['ITEM-002', 2]], tech: 'TECH-402', work: 12, battery: 300 }, { up: [['ITEM-017', 12], ['ITEM-002', 3]], tech: 'TECH-402', work: 18, battery: 600 }],
       desc: 'Копит лишнюю энергию сети и отдаёт, когда устройствам не хватает выработки.' },
-    { id: 'BLD-105', kind: 'device', name: 'Турбина течения', prop: 'turbine', start: true, w: 2, h: 2,
+    { id: 'BLD-105', kind: 'device', name: 'Турбина течения', prop: 'turbine', w: 2, h: 2,
       cost: [['ITEM-001', 4], ['ITEM-003', 2], ['ITEM-002', 1]], work: 25, gen: 4, wave: 150,
       levels: [{}, { up: [['ITEM-017', 10], ['ITEM-003', 2]], work: 20, gen: 7 }],
       desc: 'Крутится от донного течения: в среднем 4 энергии в секунду, но течение то слабеет, то крепнет — нужны батареи.' },
@@ -90,18 +91,27 @@ AB.BASE_DATA = {
     { id: 'BLD-106', kind: 'device', name: 'Водозабор', prop: 'intake', start: true, w: 1, h: 2,
       cost: [['ITEM-001', 3], ['ITEM-003', 1]], work: 12,
       recipe: { ins: [], out: 'ITEM-018', outN: 1, time: 3, inCap: 0, outCap: 12 }, draw: 2,
-      levels: [{}, { up: [['ITEM-017', 6], ['ITEM-002', 1]], work: 12, time: 2, outCap: 20, draw: 3 }],
+      levels: [{}, { up: [['ITEM-017', 6], ['ITEM-002', 1]], tech: 'TECH-301', work: 12, time: 2, outCap: 20, draw: 3 }],
       desc: 'Забирает забортную воду через фильтр: 1 воды за 3 с. Сырья не нужно — только энергия и работник.' },
     { id: 'BLD-107', kind: 'device', name: 'Ферма водорослей', prop: 'algae', start: true, w: 2, h: 2,
       cost: [['ITEM-017', 8], ['ITEM-002', 1]], work: 20,
       recipe: { ins: [['ITEM-018', 2], ['ITEM-007', 1]], out: 'ITEM-019', outN: 6, time: 20, inCap: 10, outCap: 16 }, draw: 3,
-      levels: [{}, { up: [['ITEM-017', 10], ['ITEM-002', 2]], work: 20, time: 14, draw: 5 }],
+      levels: [{}, { up: [['ITEM-017', 10], ['ITEM-002', 2]], tech: 'TECH-302', work: 20, time: 14, draw: 5 }],
       desc: 'Выращивает водоросли: 2 воды и 1 биоматериал (с убитых тварей) → 6 водорослей за 20 с.' },
     { id: 'BLD-108', kind: 'device', name: 'Биореактор', prop: 'bioreactor', start: true, w: 2, h: 2,
       cost: [['ITEM-017', 10], ['ITEM-002', 2]], work: 25,
       recipe: { ins: [['ITEM-019', 2]], out: 'ITEM-020', outN: 1, time: 10, inCap: 12, outCap: 10 }, draw: 4,
-      levels: [{}, { up: [['ITEM-017', 12], ['ITEM-002', 2]], work: 20, time: 6, draw: 7 }],
+      levels: [{}, { up: [['ITEM-017', 12], ['ITEM-002', 2]], tech: 'TECH-302', work: 20, time: 6, draw: 7 }],
       desc: 'Перерабатывает водоросли в пищевую биомассу (2 → 1 за 10 с). Экипаж ест её со стеллажа, когда голоден.' },
+    // №74: исследования и бур
+    { id: 'BLD-111', kind: 'device', name: 'Научный терминал', prop: 'terminal', start: true, w: 1, h: 2,
+      cost: [['ITEM-001', 3], ['ITEM-002', 3]], work: 15, research: true, draw: 3,
+      desc: 'Здесь ведут исследования: работник у терминала продвигает текущее исследование, пока есть энергия. Выбор — кнопка «Наука».' },
+    { id: 'BLD-109', kind: 'device', name: 'Бур', prop: 'drill', w: 2, h: 2, site: 'deposit',
+      cost: [['ITEM-017', 8], ['ITEM-001', 4], ['ITEM-002', 2]], work: 25,
+      recipe: { ins: [], out: 'ITEM-016', outN: 1, time: 4, inCap: 0, outCap: 12 }, draw: 4,
+      levels: [{}, { up: [['ITEM-017', 12], ['ITEM-002', 2]], work: 20, time: 2.5, draw: 6 }],
+      desc: 'Бурит реголит прямо из-под капсулы: работает, только когда капсула стоит на россыпи или рядом с ней на карте дна, и вычерпывает её.' },
     { id: 'BLD-110', kind: 'cable', name: 'Кабель', start: true, size: { short: [1, 1], long: [1, 12] },
       costPer: { item: 'ITEM-003', cells: 3 }, workPerCell: 0.5,
       desc: 'Тянется по полу и через проходы. Устройство в сети, если к нему примыкает кабель, связанный с реактором, турбиной или батареей. 1 провод на 3 клетки.' },
@@ -116,3 +126,44 @@ AB.OVERWORLD.deposits = [
 AB.OVERWORLD.dig = { every: 1.5, cargo: 20, item: 'ITEM-016' };   // 1 реголит за 1,5 с, в костюм влезает 20
 
 AB.BASE_DATA.blueprints.forEach((b) => AB.ID.register(b.id, { ...b, pending: true }));
+
+// ---------- №74: ИССЛЕДОВАНИЯ (черновик). Четыре ветви; каждое изученное делает следующие дороже ----------
+// work — секунды работы у научного терминала; cost — материалы (списываются со складов при начале);
+// req — что нужно изучить раньше; unlock.bp / unlock.grid — что открывает; fx — постоянные улучшения:
+// hullW / hullH — корпус шире / длиннее; reactor — + к выработке реактора; food — + сытости от еды;
+// research — быстрее исследования; view — дальше видно на карте дна (клеток).
+AB.BASE_TECH_BRANCHES = [
+  { id: 'ind', name: 'Промышленность' }, { id: 'sci', name: 'Наука' },
+  { id: 'life', name: 'Жизнеобеспечение' }, { id: 'pow', name: 'Энергетика' },
+];
+AB.BASE_TECH = [
+  { id: 'TECH-101', branch: 'ind', name: 'Бур', work: 60, cost: [['ITEM-017', 10], ['ITEM-002', 2]], unlock: { bp: ['BLD-109'] },
+    desc: 'Чертёж бура: капсула сама добывает реголит, стоя у россыпи.' },
+  { id: 'TECH-102', branch: 'ind', name: 'Скоростная печать', work: 90, cost: [['ITEM-017', 12], ['ITEM-002', 3]],
+    desc: 'Открывает 3-й уровень 3D-принтера: цикл 4 с, вход и выход по 20 (энергия 8/с).' },
+  { id: 'TECH-103', branch: 'ind', name: 'Модульная сетка', req: ['TECH-102'], work: 120, cost: [['ITEM-017', 20]], unlock: { grid: ['GRID-003'] },
+    desc: 'Сборные отсеки 3×3: строятся быстрее и стыкуются вплотную, без стен.' },
+  { id: 'TECH-104', branch: 'ind', name: 'Расширение корпуса I', work: 90, cost: [['ITEM-017', 25]], fx: { hullH: 8 },
+    desc: 'Корпус капсулы длиннее на 8 клеток — больше места под отсеки.' },
+  { id: 'TECH-105', branch: 'ind', name: 'Расширение корпуса II', req: ['TECH-104'], work: 150, cost: [['ITEM-017', 40], ['ITEM-001', 6]], fx: { hullW: 8 },
+    desc: 'Корпус шире на 8 клеток.' },
+  { id: 'TECH-201', branch: 'sci', name: 'Протоколы исследований', work: 45, cost: [['ITEM-002', 2]], fx: { research: 0.25 },
+    desc: 'Все исследования идут на 25% быстрее.' },
+  { id: 'TECH-202', branch: 'sci', name: 'Шестигранная сетка', req: ['TECH-201'], work: 90, cost: [['ITEM-017', 15], ['ITEM-002', 2]], unlock: { grid: ['GRID-002'] },
+    desc: 'Отсеки-многогранники со срезанными углами: на 20% дешевле на клетку.' },
+  { id: 'TECH-203', branch: 'sci', name: 'Сонар дальнего обзора', req: ['TECH-201'], work: 90, cost: [['ITEM-002', 3], ['ITEM-015', 1]], fx: { view: 2 },
+    desc: 'С капсулы видно дальше по карте дна (+2 клетки).' },
+  { id: 'TECH-301', branch: 'life', name: 'Фильтры водозабора', work: 60, cost: [['ITEM-017', 6], ['ITEM-002', 1]],
+    desc: 'Открывает 2-й уровень водозабора: вода за 2 с.' },
+  { id: 'TECH-302', branch: 'life', name: 'Каскадная ферма', work: 90, cost: [['ITEM-017', 10]],
+    desc: 'Открывает 2-й уровень фермы водорослей и биореактора.' },
+  { id: 'TECH-303', branch: 'life', name: 'Питательная смесь', req: ['TECH-302'], work: 120, cost: [['ITEM-019', 10], ['ITEM-002', 2]], fx: { food: 25 },
+    desc: 'Еда сытнее: одна пищевая биомасса даёт +70 сытости вместо +45.' },
+  { id: 'TECH-401', branch: 'pow', name: 'Турбина течения', work: 60, cost: [['ITEM-001', 4], ['ITEM-003', 2]], unlock: { bp: ['BLD-105'] },
+    desc: 'Чертёж турбины течения: вторая выработка энергии, переменная.' },
+  { id: 'TECH-402', branch: 'pow', name: 'Ёмкие батареи', work: 90, cost: [['ITEM-002', 4]],
+    desc: 'Открывает 2-й и 3-й уровни батарей (300 и 600).' },
+  { id: 'TECH-403', branch: 'pow', name: 'Разгон реактора', req: ['TECH-401'], work: 150, cost: [['ITEM-015', 2], ['ITEM-002', 3]], fx: { reactor: 4 },
+    desc: 'Реактор капсулы даёт 12 энергии в секунду вместо 8.' },
+];
+AB.BASE_TECH.forEach((t) => AB.ID.register(t.id, { ...t, pending: true }));

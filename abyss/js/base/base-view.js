@@ -33,6 +33,9 @@ AB.BaseView = (() => {
     count: (i) => AB.IsoStash.count(i),
     take: (i, n) => { n = Math.min(n, AB.IsoStash.count(i)); if (n > 0) AB.IsoStash.remove(i, n); return n; },
     give: (i, n) => AB.IsoStash.add(i, n),
+    // №74: россыпь реголита под капсулой или рядом с ней (на карте дна) — для бура
+    deposit: () => (AB.IsoOverworld.depositNear ? AB.IsoOverworld.depositNear() : null),
+    mine: (d, n) => { if (AB.IsoOverworld.mine && d) AB.IsoOverworld.mine(d.q, d.r, n); },
     present,
   });
 
@@ -56,7 +59,14 @@ AB.BaseView = (() => {
   function layout() {
     const S = sim().state(), g = sim().geom(), L = AB.ISO_LAYOUTS[SEC];
     const look = (u) => (sim().room(u) || {}).look || 'ROOM-021';
-    L.areas = S.rooms.filter((r) => r.built).map((r) => ({ room: r.look, x: r.x, y: r.y, w: r.w, h: r.h }));
+    // №74: помещение непрямоугольной сетки — полосами по рядам его клеток
+    L.areas = [];
+    for (const r of S.rooms.filter((q) => q.built)) {
+      if (!r.grid || r.grid === 'GRID-001' || r.grid === 'GRID-003') { L.areas.push({ room: r.look, x: r.x, y: r.y, w: r.w, h: r.h }); continue; }
+      const rows = new Map();
+      for (const [x, y] of AB.BaseGrids.cellsOf(r)) { const q = rows.get(y) || [x, x]; rows.set(y, [Math.min(q[0], x), Math.max(q[1], x)]); }
+      for (const [y, [a, b]] of rows) L.areas.push({ room: r.look, x: a, y, w: b - a + 1, h: 1 });
+    }
     for (const d of g.doors) if (d.open) {
       const side = sim().room(d.a).built ? d.a : d.b;
       for (const [x, y] of d.cells) L.areas.push({ room: look(side), x, y, w: 1, h: 1 });
@@ -71,6 +81,7 @@ AB.BaseView = (() => {
   }
   AB.Bus.on('base:plan', () => { if (!sim().on()) return; layout(); rebuild = true; });
   AB.Bus.on('base:new', () => setTimeout(() => toast('В шкафчиках капсулы — ремкомплект: металлолом ×6, электроника ×2. Хватит на 3D-принтер и стеллаж', 'good'), 2500));
+  AB.Bus.on('base:tech', ({ done, name }) => { if (done) toast(`Изучено: ${name}`, 'good'); });
   AB.Bus.on('base:built', ({ bp, name, first }) => {
     toast(`Построено: ${name}`, 'good');
     if (bp === 'BLD-101' && first) AB.Flags.add('module');   // задание акта III: первый 3D-принтер
@@ -131,6 +142,7 @@ AB.BaseView = (() => {
     if (!ws.some((id) => sim().state().present.includes(id))) return { t: 'Работник не на базе', c: 'bad' };
     if (d.block === 'full') return { t: 'Выход полон — отнесите на склад', c: 'bad' };
     if (d.block === 'nopower') return { t: 'Нет энергии', c: 'bad' };
+    if (d.block === 'nodeposit') return { t: 'Капсула не у россыпи реголита — подведите её на карте дна', c: 'bad' };
     if (d.block === 'noinput') return { t: `Нет сырья: ${nm(d.blockItem || (sim().insOf(r)[0] || [])[0]).toLowerCase()} — ни на стеллажах, ни в шкафчиках`, c: 'bad' };
     if (d.crafter) return { t: 'Работает', c: 'ok' };
     return { t: 'Ждёт работника', c: 'wait' };
@@ -145,7 +157,7 @@ AB.BaseView = (() => {
     if (!sim().on() || AB.IsoGame.sector() !== SEC) return;
     const S = sim().state(), build = AB.BaseBuild && AB.BaseBuild.on();
     if (build) {
-      const H = S.hull;
+      const H = sim().hull();
       ctx.strokeStyle = 'rgba(94,230,255,.07)'; ctx.lineWidth = 1;
       for (let x = H.x + 1; x <= H.x + H.w - 1; x++) { const a = toScreen(x, H.y + 1), b = toScreen(x, H.y + H.h - 1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
       for (let y = H.y + 1; y <= H.y + H.h - 1; y++) { const a = toScreen(H.x + 1, y), b = toScreen(H.x + H.w - 1, y); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
@@ -154,6 +166,7 @@ AB.BaseView = (() => {
       for (const z of D().reserved || []) { poly(ctx, toScreen, rectPts(z)); ctx.fillStyle = 'rgba(255,120,90,.06)'; ctx.fill(); }
     }
     for (const r of S.rooms) if (!r.built) {
+      if (r.grid === 'GRID-002') { for (const [x, y] of AB.BaseGrids.cellsOf(r)) { poly(ctx, toScreen, rectPts({ x, y, w: 1, h: 1 })); ctx.fillStyle = `rgba(94,230,255,${0.08 + Math.sin(time * 2) * 0.03})`; ctx.fill(); ctx.strokeStyle = 'rgba(94,230,255,.25)'; ctx.lineWidth = 1; ctx.stroke(); } continue; }
       poly(ctx, toScreen, rectPts(r));
       ctx.fillStyle = `rgba(94,230,255,${0.08 + Math.sin(time * 2) * 0.03})`; ctx.fill();
       ctx.strokeStyle = 'rgba(94,230,255,.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
@@ -262,7 +275,7 @@ AB.BaseView = (() => {
     cardT = performance.now();
     const box = el('bx-card'); if (!box) return;
     if (!card || !sim().on() || AB.IsoGame.sector() !== SEC || AB.IsoOverworld.isOpen()) { box.hidden = true; return; }
-    const html = card.crew !== undefined ? crewCard() : objCard();
+    const html = card.science ? scienceCard() : card.crew !== undefined ? crewCard() : objCard();
     if (html == null) { close(); return; }
     if (html !== cardHtml) { box.innerHTML = html; cardHtml = html; }
     box.hidden = false;
@@ -299,6 +312,16 @@ AB.BaseView = (() => {
         <div class="bx-row">${chips([['auto', `Автохранение: ${o.auto ? 'ВКЛ' : 'выкл'}`, o.auto, !o.mat]])}</div>
         <div class="muted">${o.mat ? (o.auto ? 'Герои сами приносят сюда этот материал: из приёмника и с выхода станков.' : 'Включите автохранение — и материал будут приносить сюда без приказов.') : 'Назначьте материал или отнесите сюда груз из приёмника или со станка.'}</div>
         ${o.n === 0 ? `<div class="bx-row">${chips(mats.map((i) => [`mat|${i}`, esc(nm(i)), o.mat === i]))}${o.mat ? chips([['mat|', 'Снять назначение']]) : ''}</div>` : ''}`;
+    }
+    if (b.research) {
+      const T = S.tech, cur = T.cur, ws = sim().workers(o.uid), pw = powerState(o);
+      return `${head(b.desc)}
+        <div class="bx-st ${cur ? (pw && pw.c === 'bad' ? 'bad' : o.crafter ? 'ok' : 'wait') : 'wait'}">${cur ? `${esc(sim().techName(cur.id))}: ${Math.round(100 - (cur.left / cur.total) * 100)}%${pw && pw.c === 'bad' ? ` — ${esc(pw.t)}` : o.crafter ? ' — идёт' : ws.length ? ' — ждёт работника' : ' — нет работника'}` : 'Исследование не выбрано'}</div>
+        <div class="bx-row">${chips([['science', 'Открыть «Науку»']])}</div>
+        <div>Энергия: ${sim().par(o).draw} в секунду, пока идёт исследование</div>
+        ${netLine(o)}
+        <div class="muted">Работники (нужен хотя бы один):</div>
+        <div class="bx-row">${chips(AB.IsoActs.crew().map((id) => [`work|${id}`, esc(crewName(id)), ws.includes(id)]))}</div>`;
     }
     if (b.gen || b.battery) {
       const p = sim().par(o), nt = netOf(o), st = nt && nt.st;
@@ -356,6 +379,27 @@ AB.BaseView = (() => {
     if (!list.length) return '<span class="bad">Нет стеллажа — постройте в режиме стройки</span>';
     return `<span class="bx-row">${list.map((d) => `<button class="bx-chip" data-act="give|${esc(key)}|${d.uid}">${esc(title(d))}${d.mat ? ` (${d.n})` : ' (пусто)'}</button>`).join('')}</span>`;
   }
+  // №74: окно «Наука» — дерево исследований по ветвям
+  function openScience() { card = { science: true }; cardHtml = ''; renderCard(); }
+  function scienceCard() {
+    const T = sim().state().tech, cur = T.cur;
+    const term = sim().state().devs.find((d) => d.built && sim().bp(d.bp).research);
+    const branches = AB.BASE_TECH_BRANCHES.map((br) => {
+      const items = AB.BASE_TECH.filter((t) => t.branch === br.id).map((t) => {
+        const st = sim().techState(t.id), c = sim().techCost(t.id);
+        const cost = c.cost.map(([i, n]) => [i, n, sim().stockOf(i)]);
+        const btn = st.s === 'open' && !cur ? chips([[`res|${t.id}`, 'Изучать']]) : '';
+        const tag = st.s === 'done' ? '<span class="bx-tag ok">изучено</span>' : st.s === 'cur' ? `<span class="bx-tag wait">идёт · ${Math.round(100 - (cur.left / cur.total) * 100)}%</span>` : st.s === 'locked' ? `<span class="bx-tag">${esc(st.why)}</span>` : '';
+        return `<div class="bx-tech ${st.s}"><div class="bx-line"><b>${esc(t.name)}</b>${tag}</div><div class="muted">${esc(t.desc)}</div>
+          ${st.s === 'open' ? `<div class="bx-line"><span class="muted">${matLine(cost)} · ${c.work} с работы</span>${btn}</div>` : ''}</div>`;
+      }).join('');
+      return `<div class="bx-branch"><div class="bx-branch-h">${esc(br.name)}</div>${items}</div>`;
+    }).join('');
+    return `<div class="bx-head"><b>Наука</b><button class="bx-x" data-act="close" aria-label="Закрыть">✕</button></div>
+      <div class="${term ? 'muted' : 'bad'}">${term ? `Исследования ведёт работник у научного терминала, пока есть энергия. Каждое изученное делает следующие на ${Math.round(AB.BASE_DATA.techEscalation * 100)}% дороже — всё не изучить, выбирайте направление.` : 'Нет научного терминала: постройте его («Стройка» → «Научный терминал») и назначьте героя.'}</div>
+      ${cur ? `<div class="bx-st ok">Сейчас: ${esc(sim().techName(cur.id))} — ${Math.round(100 - (cur.left / cur.total) * 100)}%</div>` : ''}
+      <div class="bx-tree">${branches}</div>`;
+  }
   const JOB_NAME = { build: 'Стройка', haul: 'Переноска' };
   const jobName = (j) => JOB_NAME[j] || title(sim().dev(j)) || j;
   function crewCard() {
@@ -379,6 +423,8 @@ AB.BaseView = (() => {
     const o = card && card.uid && sim().obj(card.uid);
     if (a === 'close') { close(); return; }
     if (a === 'build') { close(); AB.BaseBuild.toggle(true); return; }
+    if (a === 'science') { openScience(); return; }
+    if (a === 'res') { const r = sim().research(x); toast(r.ok ? `Исследование начато: ${sim().techName(x)}` : r.why, r.ok ? 'good' : 'info'); if (r.ok && !sim().state().devs.some((d) => d.built && sim().bp(d.bp).research)) setTimeout(() => toast('Нужен научный терминал: «Стройка» → «Научный терминал», и назначьте на него героя', 'info'), 1800); }
     if (a === 'auto' && o) sim().setRack(o.uid, { auto: !o.auto });
     if (a === 'prio' && o) sim().setPrio(o.uid, +x);
     if (a === 'upg' && o) { const r = sim().upgrade(o.uid); toast(r.ok ? 'Улучшение: строители принесут материалы — пока устройство стоит' : r.why, r.ok ? 'good' : 'info'); }
@@ -412,15 +458,18 @@ AB.BaseView = (() => {
       + `<span class="${short_ ? 'bad' : ''}" title="Энергия: расход / выработка в секунду · заряд батарей"><i>⚡</i>${use.toFixed(0)}/${gen.toFixed(0)}${cap ? ` <i>АКБ</i>${Math.round(stv)}/${cap}` : ''}</span>`;
     if (html !== hudHtml) { res.innerHTML = html; hudHtml = html; }
     el('bx-build').classList.toggle('on', !!(AB.BaseBuild && AB.BaseBuild.on()));
+    const T = sim().state().tech, sb = el('bx-sci');
+    if (sb) { const t = T.cur ? `Наука ${Math.round(100 - (T.cur.left / T.cur.total) * 100)}%` : 'Наука'; if (sb.textContent !== t) sb.textContent = t; sb.classList.toggle('on', !!(card && card.science)); }
   }
   function init() {
     const c = el('bx-card');
     if (c) c.addEventListener('click', onCard);
     const b = el('bx-build'); if (b) b.addEventListener('click', () => { close(); AB.BaseBuild.toggle(); });
     const k = el('bx-crew'); if (k) k.addEventListener('click', () => { if (card && card.crew !== undefined) close(); else openCrew(); });
+    const sc = el('bx-sci'); if (sc) sc.addEventListener('click', () => { AB.BaseBuild.toggle(false); if (card && card.science) close(); else openScience(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   AB.Bus.on('iso:travel', ({ sector }) => { if (sector === SEC && sim().on()) { layout(); rebuild = true; } else close(); });
 
-  return { frame, drawFloor, drawTop, tap, open, openCrew, close, title, stock, layout, present, pump, card: () => card };
+  return { frame, drawFloor, drawTop, tap, open, openCrew, openScience, close, title, stock, layout, present, pump, card: () => card };
 })();
