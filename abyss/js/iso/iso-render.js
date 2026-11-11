@@ -184,7 +184,8 @@ AB.IsoRender = (() => {
     if (!floorCv) buildFloor();
     const party = AB.IsoParty.members(), l = AB.IsoParty.lead();
     if (!l) return;
-    const t = toScreen(l.x, l.y - 0.4);
+    const fp = focusPt || l;                          // №68: в базе камера держит всю капсулу
+    const t = toScreen(fp.x, fp.y - 0.4);
     if (snap) { cam.x = t.x; cam.y = t.y; snap = false; }
     cam.x = U.lerp(cam.x, t.x, 1 - Math.pow(0.002, dt));
     cam.y = U.lerp(cam.y, t.y, 1 - Math.pow(0.002, dt));
@@ -386,6 +387,7 @@ AB.IsoRender = (() => {
   }
 
   let hl = new Set();
+  let focusPt = null;
   function exitWall(x, y) {
     for (const e of AB.IsoWorld.layout().exits || []) {
       if (e.floor) continue;
@@ -620,6 +622,9 @@ AB.IsoRender = (() => {
     ctx.fillStyle = isLead ? '#bfefff' : 'rgba(217,207,194,.85)';
     const suit = AB.IsoSuit && AB.IsoSuit.suited(m);
     ctx.fillText(suit ? 'Экзокостюм' : AB.ID.get(m.id).name, p.x, p.y - (suit ? 104 : 96));
+    // в базе — чем занят
+    const task = AB.IsoBase && AB.IsoBase.active() ? AB.IsoBase.taskOf(m.id) : '';
+    if (task) { ctx.font = '9px "Share Tech Mono", monospace'; ctx.fillStyle = 'rgba(160,220,235,.8)'; ctx.fillText(task, p.x, p.y - 85); }
   }
 
   function drawMarker() {
@@ -667,6 +672,7 @@ AB.IsoRender = (() => {
 
   return {
     TW, TH, init, frame, pick, screenOf, toScreen, toWorld, portrait,
+    focus(p) { focusPt = p || null; },
     zoom(dz) { if (dz) { cam.z = U.clamp(Math.round((cam.z + dz) * 100) / 100, ZMIN, ZMAX); try { localStorage.setItem('abyss_iso_zoom', String(cam.z)); } catch (e) { /* хранилище недоступно */ } } return cam.z; },
     setZoom(z) { cam.z = U.clamp(z, ZMIN, ZMAX); return cam.z; },
     camera: () => ({ ...cam }),

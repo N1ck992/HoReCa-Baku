@@ -168,21 +168,42 @@ AB.IsoOverworld = (() => {
       if (!onSite) return;
       if (onSite.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(onSite);
     });
-    document.getElementById('ow-base-btn').addEventListener('click', () => { for (const s of squads) if (s.state !== 'home') dock(s); AB.IsoActs.enterBase(); });
-    // карточки: база — слева внизу, герои — справа внизу (№65); нажатие на карточку — выбрать и подлететь камерой
-    for (const sq of [document.getElementById('ow-squads'), document.getElementById('ow-basecard')]) {
-      sq.addEventListener('pointerdown', (e) => e.stopPropagation());
-      sq.addEventListener('click', (e) => {
-        const b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
-        if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'surface') AB.IsoActs.surface(); else if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; flyTo(unit(id)); return; }
-        if (c) { const u = unit(c.dataset.u); if (u && (u.kind === 'base' || u.state !== 'home')) sel = c.dataset.u; else if (u && u.vehicle) deploy(u.id); squadsSig = ''; flyTo(selU()); }
-      });
-    }
+    // №68: нижняя панель как в Warpath. «Моя база» — войти в капсулу; меню — вести базу, вещи, все отряды, всплыть;
+    // ячейки отрядов: нажатие — выйти из базы / выбрать и подлететь; у выбранного — «Отозвать»
+    const bar = document.getElementById('ow-bar');
+    bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+    bar.addEventListener('click', (e) => {
+      const m = e.target.closest('[data-ow]'), b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
+      if (e.target.closest('#ow-mybase')) { if (mode !== 'capsule') { say('База появится вместе с капсулой'); return; } for (const s of squads) if (s.state !== 'home') dock(s); AB.IsoActs.enterBase(); return; }
+      if (m) {
+        const k = m.dataset.ow;
+        if (k === 'drive') { selAll = false; sel = 'base'; flyTo(base); say('Капсула выбрана: нажмите на клетку — база поедет туда'); }
+        if (k === 'items') AB.IsoInventory.open();
+        if (k === 'all') { selAll = !selAll && outSquads().some((s) => s.state === 'out'); say(selAll ? 'Выбраны все отряды снаружи' : 'Выбор: один отряд'); }
+        if (k === 'surface') AB.IsoActs.surface();
+        squadsSig = ''; return;
+      }
+      if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; flyTo(unit(id)); return; }
+      if (c) {
+        const u = unit(c.dataset.u); if (!u) return;
+        selAll = false;
+        if (u.state === 'home' && u.vehicle) deploy(u.id); else sel = u.id;
+        squadsSig = ''; flyTo(selU());
+      }
+    });
     window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { const s = siteAt(selU().q, selU().r); if (s && s.key === 'abyss') back(); } });
     window.addEventListener('resize', () => { if (open_) fit(); });
   }
   // нажали на клетку: выбранный отряд идёт туда (на тварь — подходит и бьёт); выбрана база — ведём капсулу
+  let selAll = false;
   function tapCell(t) {
+    // «Все отряды»: ведём всех снаружи разом
+    if (selAll && !mobAt(t.q, t.r)) {
+      let any = false;
+      for (const s of outSquads()) if (s.state === 'out') { const p = route(at(s), t); if (p) { s.path = p; s.target = null; any = true; } }
+      if (!any) say('Туда не пройти');
+      return;
+    }
     let u = selU();
     const mb = mobAt(t.q, t.r);
     if (mb) {
@@ -206,7 +227,8 @@ AB.IsoOverworld = (() => {
     spawnMobs();
     reveal(); onSite = undefined; squadsSig = '';
     document.getElementById('ow').hidden = false;
-    document.getElementById('ow-base-btn').hidden = mode !== 'capsule';
+    document.getElementById('ow-mybase').hidden = mode !== 'capsule';
+    for (const b of document.querySelectorAll('#ow-menu [data-ow="drive"], #ow-menu [data-ow="all"]')) b.hidden = mode !== 'capsule';
     fit(); last = performance.now();
     const u = selU(), p = px(u.q, u.r); cam.x = p.x; cam.y = p.y; fly = null;
     requestAnimationFrame(loop);
@@ -628,26 +650,31 @@ AB.IsoOverworld = (() => {
   }
   const STATE = { home: 'на базе', out: 'снаружи', retreat: 'возвращается' };
   function squadPanel() {
-    const el = document.getElementById('ow-squads'), bel = document.getElementById('ow-basecard');
-    const rows = [];
-    if (mode === 'capsule') {
-      const up = AB.IsoActs && AB.IsoActs.canSurface();
-      rows.push({ id: 'base', html: `<div class="sq-art capsule"><i></i></div><div class="sq-tx"><b>База-капсула</b><span>${ascend ? 'всплывает' : base.anim || base.path.length ? 'в пути · 5 с на клетку' : 'стоит'}</span>${up && !ascend ? '<button data-do="surface">Всплыть</button>' : ''}</div>` });
-    }
+    // слева: «Моя база» (подсвечена, если выбрана для движения) и меню; справа — ячейки отрядов
+    const mb = document.getElementById('ow-mybase'), up = mode === 'capsule' && AB.IsoActs && AB.IsoActs.canSurface() && !ascend;
+    mb.classList.toggle('on', sel === 'base' && !selAll);
+    mb.querySelector('span').textContent = ascend ? 'Всплывает' : base.anim || base.path.length ? 'База в пути' : 'Моя база';
+    document.querySelector('#ow-menu [data-ow="surface"]').hidden = !up;
+    document.querySelector('#ow-menu [data-ow="all"]').classList.toggle('on', selAll);
+    const slots = [];
     for (const s of squads) {
-      if (mode === 'suit' && s.id !== 'CHAR-001') continue;
+      if (!s.vehicle || (mode === 'suit' && s.id !== 'CHAR-001')) continue;
       const c = AB.Chars.get(s.id), d = AB.ID.get(s.id), hp = c ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
-      const st = !s.vehicle ? 'нет транспорта' : s.state === 'out' && s.atk ? 'в бою' : s.state === 'out' && (s.anim || s.path.length) ? 'в пути' : STATE[s.state];
-      const btn = !s.vehicle ? '' : mode === 'suit' ? '' : s.state === 'home' ? '<button data-do="out">Выйти</button>' : '<button data-do="back">Отозвать</button>';
-      rows.push({ id: s.id, off: !s.vehicle, html: `<div class="sq-art"><canvas data-pt="${s.id}"></canvas>${s.vehicle ? '<img src="assets/exosuit/v2/body.png" alt="Экзокостюм">' : ''}</div><div class="sq-tx"><b>${d.name}</b><span>${s.vehicle ? 'Экзокостюм · ' : ''}${st}</span><u><i style="width:${hp}%"></i></u>${btn}</div>` });
+      const st = s.state === 'out' && s.atk ? 'в бою' : s.state === 'out' && (s.anim || s.path.length) ? 'в пути' : STATE[s.state];
+      const on = (selAll && s.state === 'out') || (!selAll && sel === s.id && s.state !== 'home');
+      const recallBtn = on && mode !== 'suit' && s.state === 'out' ? '<button data-do="back" title="Отозвать на базу">↩</button>' : '';
+      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${s.state}" data-u="${s.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${s.id}"></canvas><img src="assets/exosuit/v2/body.png" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${recallBtn}</div>`);
     }
-    const sig = rows.map((r) => r.id + r.html).join('|') + sel;
+    // ещё одна ячейка — когда появится второй транспорт; дальше — закрытые (черновик условия)
+    slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');
+    slots.push('<div class="ow-slot lock"><span>Условие:</span><em>модуль «Ангар»</em></div>');
+    slots.push('<div class="ow-slot lock"><i>🔒</i></div>');
+    const sig = slots.join('') + sel + selAll + mb.className;
     if (sig === squadsSig) return;
     squadsSig = sig;
-    const card = (r) => `<div class="sq ${r.id === selU().id ? 'on' : ''} ${r.off ? 'off' : ''}" data-u="${r.id}">${r.html}</div>`;
-    bel.innerHTML = rows.filter((r) => r.id === 'base').map(card).join('');
-    el.innerHTML = rows.filter((r) => r.id !== 'base').map(card).join('');
-    for (const c of el.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(c, c.dataset.pt, 1);
+    const el = document.getElementById('ow-slots');
+    el.innerHTML = slots.join('');
+    for (const cv2 of el.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(cv2, cv2.dataset.pt, 1);
   }
 
   return {
@@ -660,6 +687,8 @@ AB.IsoOverworld = (() => {
     select(id) { if (unit(id)) { sel = id; squadsSig = ''; return true; } return false; },
     deploy, recall, surface, ascending: () => !!ascend, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle })), base: () => ({ q: base.q, r: base.r }),
     revealAll() { for (const c of cells.values()) c.seen = true; },
+    // админ-панель: убрать бродячих тварей (сюжетные не трогаем)
+    clearWild() { let n = 0; for (const m of mobs) if (m.hp > 0 && m.kind !== 'story') { m.hp = 0; m.anim = 'DEAD'; m.fade = 0; n++; } return n; },
     lootAt: (q, r) => loot.get(key(q, r)) || null, time: () => time, _sq: () => squads,
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
     moving: () => { const u = selU(); return !!u.anim || u.path.length > 0; }, route,

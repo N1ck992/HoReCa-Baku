@@ -54,7 +54,7 @@
   function updatePrompt() {
     const p = AB.IsoInteract.prompt();
     document.body.classList.toggle('quiet', !!p || AB.Dialog.isOpen());   // подсказка или диалог — без строки помощи
-    if (!p || AB.Dialog.isOpen()) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
+    if (!p || AB.Dialog.isOpen() || AB.IsoBase.active()) { ui.prompt.classList.remove('show'); lastPrompt = ''; return; }
     const html = p.progress !== undefined
       ? `${p.label}<span class="bar"><i style="width:${Math.round(p.progress * 100)}%"></i></span>`
       : `${isTouch ? '' : `<kbd class="${p.ok ? '' : 'no'}">E</kbd> `}${p.label}`;
@@ -279,6 +279,7 @@
       AB.IsoEnemies.update(dt);
       AB.IsoNest.update(dt, input);
       AB.IsoBoss.update(dt);
+      AB.IsoBase.update(dt);
       if (!busy) AB.IsoCombat.update(dt, input);
       if (Math.random() < 0.1) AB.Quests.check();
       AB.Anim.update(dt);

@@ -69,11 +69,21 @@
   <div id="ow" hidden>
     <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
     <div id="ow-top"><b>Дно океана</b><span>рядом с «Абиссом» · прототип</span></div>
-    <button id="ow-base-btn" hidden title="Войти в капсулу: экипаж, снаряжение, модули">Войти в капсулу</button>
     <div id="ow-base" hidden></div>
     <!-- №63: отряд — база и герои с транспортом (как в Warpath) -->
-    <div id="ow-squads" aria-label="Отряд"></div>
-    <div id="ow-basecard" aria-label="База"></div>
+    <!-- №68: нижняя панель как в Warpath — слева «Моя база» и меню, справа ячейки отрядов -->
+    <div id="ow-bar">
+      <div id="ow-left">
+        <button id="ow-mybase" title="Войти в базу-капсулу"><i class="cap"></i><span>Моя база</span></button>
+        <div id="ow-menu">
+          <button data-ow="drive" title="Вести капсулу по дну (5 с на клетку)"><i>⇄</i><span>Вести базу</span></button>
+          <button data-ow="items" title="Вещи отряда"><i>▤</i><span>Вещи</span></button>
+          <button data-ow="all" title="Выбрать все отряды снаружи: нажатие на клетку ведёт всех"><i>◎</i><span>Все отряды</span></button>
+          <button data-ow="surface" hidden title="Всплыть на поверхность"><i>⇧</i><span>Всплыть</span></button>
+        </div>
+      </div>
+      <div id="ow-slots" aria-label="Отряды"></div>
+    </div>
     <button id="ow-dev" data-dev-open title="Админ-панель">DEV</button>
     <div id="ow-card" hidden><b></b><p></p><button id="ow-act"></button></div>
     <div id="ow-hint">Выберите карточку справа внизу и нажмите на клетку — туда пойдёт отряд или капсула. Нажмите на тварь — отряд подойдёт и ударит.</div>
@@ -147,6 +157,7 @@
   <script src="js/iso/iso-overworld.js"></script>
   <script src="js/iso/iso-acts.js"></script>
   <script src="js/iso/iso-dev.js"></script>
+  <script src="js/iso/iso-base.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>

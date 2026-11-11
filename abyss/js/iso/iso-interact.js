@@ -197,9 +197,9 @@ AB.IsoInteract = (() => {
   }
 
   // ---------- Действия ----------
-  function act(t) {
+  function act(t, remote = false) {
     const l = AB.IsoParty.lead();
-    if (!t || distTo(l, t) > REACH + 0.05) return false;
+    if (!t || (!remote && distTo(l, t) > REACH + 0.05)) return false;
     l.hx = t.x - l.x; l.hy = t.y - l.y;
     if (Math.abs(l.hx - l.hy) > 0.05) l.facing = l.hx - l.hy > 0 ? 1 : -1;
     AB.Anim.play(l.id, 'interact', { restart: true });
@@ -336,6 +336,8 @@ AB.IsoInteract = (() => {
   }
   function click(cx, cy) {
     const t = at(cx, cy);
+    // №68: в базе-капсуле приборами управляют нажатием — без подбегания
+    if (AB.IsoBase && AB.IsoBase.active()) { if (t) act(t, true); return true; }
     if (!t) { intent = null; return false; }
     const l = AB.IsoParty.lead();
     if (distTo(l, t) <= REACH) { intent = null; AB.IsoParty.stop(); act(t); return true; }

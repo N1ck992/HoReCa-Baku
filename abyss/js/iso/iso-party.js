@@ -97,8 +97,11 @@ AB.IsoParty = (() => {
     return n && W().clear(l.x, l.y, n.x + 0.5, n.y + 0.5, 0.2) ? { x: n.x + 0.5, y: n.y + 0.5 } : { x: l.x - fx * 0.9, y: l.y - fy * 0.9 };
   }
 
+  // №68: «сцена» — все в отряде заняты своими делами (база-капсула): никто не идёт за ведущим
+  let scene = false;
   function update(dt, input) {
     if (!members.length) return;
+    if (scene) { for (const m of members) { const went = m.path ? walkPath(m, dt, m.scripted || 1.8) : 0; if (!m.path) { m.goal = null; m.scripted = null; } animate(m, went, dt); } return; }
     if (isDead(lead())) cycle();                   // ведущий погиб — управление следующему живому
     const l = lead();
     if (isDead(l)) return;
@@ -252,7 +255,7 @@ AB.IsoParty = (() => {
   }
 
   return {
-    MAX, init, update, addNpc, join, leave, walkTo, placeAll, npcTick, find,
+    MAX, init, update, addNpc, join, leave, walkTo, setScene(on) { scene = !!on; for (const m of members) { m.path = null; m.goal = null; } }, scene: () => scene, placeAll, npcTick, find,
     npcs: () => npcs.filter((m) => !m.sector || !AB.IsoGame || m.sector === AB.IsoGame.sector()),
     allNpcs: () => npcs, goTo, stop, setLeader, cycle, lead,
     leaderIndex: () => leader, members: () => members,

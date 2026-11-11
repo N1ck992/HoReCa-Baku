@@ -88,6 +88,7 @@ AB.IsoInput = (() => {
     return best;
   }
   function moveTo(cx, cy) {
+    if (AB.IsoBase && AB.IsoBase.active()) return;      // в базе экипаж занят делами — по полу не водим
     AB.IsoCombat.setTarget(null);
     const w = AB.IsoRender.pick(cx, cy);
     AB.IsoParty.goTo(w.x, w.y);
@@ -146,7 +147,7 @@ AB.IsoInput = (() => {
     }
     if (AB.IsoInventory && (AB.IsoInventory.isOpen() || AB.IsoInventory.heroOpen())) return { x: 0, y: 0, walk: false };   // открыт инвентарь — стоит
     const st = stickAxis();
-    if (st) return st;
+    if (st && !(AB.IsoBase && AB.IsoBase.active())) return st;
     const a = axis();
     return { x: a.x, y: a.y, walk: keys.has('ShiftLeft') || keys.has('ShiftRight') };
   }

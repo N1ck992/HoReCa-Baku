@@ -343,3 +343,53 @@ body.quiet #iso-help { display: none; }
 .dev-row button { font: 12px var(--mono); padding: 7px 10px; border-radius: 5px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid rgba(255, 210, 120, .4); text-align: left; }
 #iso-dev-btn { color: #ffd27a !important; }
 #ow-dev { position: absolute; right: calc(14px + env(safe-area-inset-right, 0px)); top: calc(52px + env(safe-area-inset-top, 0px)); font: 12px var(--mono); padding: 6px 10px; border-radius: 5px; cursor: pointer; background: rgba(10, 12, 14, .7); color: #ffd27a; border: 1px solid rgba(255, 210, 120, .4); }
+
+/* ---------- №68: нижняя панель карты как в Warpath ---------- */
+#ow-squads, #ow-basecard, #ow-base-btn { display: none !important; }
+#ow-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; padding: 0 calc(10px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) calc(10px + env(safe-area-inset-left, 0px)); pointer-events: none; background: linear-gradient(to top, rgba(0, 0, 0, .65), rgba(0, 0, 0, 0)); }
+#ow-bar > * { pointer-events: auto; }
+#ow-left { display: flex; align-items: flex-end; gap: 6px; }
+#ow-mybase { position: relative; width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; align-content: center; gap: 2px; cursor: pointer; background: radial-gradient(circle at 50% 40%, #1f5a5a, #0b2026 70%); border: 3px solid rgba(94, 230, 255, .55); box-shadow: 0 0 14px rgba(94, 230, 255, .35); color: #e6faff; font: 600 11px var(--display); letter-spacing: .5px; }
+#ow-mybase[hidden] { display: none; }
+#ow-mybase.on { border-color: #ffd27a; box-shadow: 0 0 16px rgba(255, 210, 120, .5); }
+#ow-mybase .cap { display: block; width: 46px; height: 22px; border-radius: 50%; background: #c9a24a; box-shadow: inset 0 -5px 0 #8a6e30; position: relative; }
+#ow-mybase .cap::after { content: '• • •'; position: absolute; left: 0; right: 0; top: 2px; text-align: center; color: #5ee6ff; font-size: 12px; }
+#ow-menu { display: flex; gap: 4px; padding: 4px; background: rgba(8, 14, 18, .82); border: 1px solid var(--line); border-radius: 8px; }
+#ow-menu button { display: grid; justify-items: center; gap: 2px; min-width: 64px; padding: 5px 6px; cursor: pointer; background: transparent; color: #cfe6ee; border: 0; border-right: 1px solid var(--line); font: 10px var(--mono); }
+#ow-menu button:last-child { border-right: 0; }
+#ow-menu button i { font-style: normal; font-size: 18px; color: #9fe7ff; }
+#ow-menu button.on i, #ow-menu button.on span { color: #ffd27a; }
+#ow-menu button[hidden] { display: none; }
+#ow-menu [data-ow="surface"] i { color: #ffd27a; }
+#ow-slots { display: flex; gap: 6px; align-items: flex-end; }
+.ow-slot { position: relative; width: 108px; height: 92px; border-radius: 6px; overflow: hidden; cursor: pointer; background: radial-gradient(circle at 60% 70%, #1d3038, #0a1013); border: 1px solid rgba(255, 255, 255, .14); }
+.ow-slot.on { border-color: #5ee6ff; box-shadow: 0 0 0 2px rgba(94, 230, 255, .35) inset; }
+.ow-slot canvas { position: absolute; left: 2px; top: 2px; width: 40px; height: 52px; }
+.ow-slot img { position: absolute; right: 2px; top: 2px; height: 64px; filter: drop-shadow(0 0 3px #000); }
+.ow-slot b { position: absolute; left: 5px; bottom: 18px; font: 600 12px var(--display); color: #fff; text-shadow: 0 0 3px #000; }
+.ow-slot span { position: absolute; left: 5px; bottom: 6px; font-size: 9px; color: #9fb4bc; }
+.ow-slot u { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, .1); }
+.ow-slot u i { display: block; height: 100%; background: #5ee6ff; }
+.ow-slot.st-retreat u i { background: #ff8a5a; }
+.ow-slot button { position: absolute; right: 3px; bottom: 6px; width: 26px; height: 22px; padding: 0; font: 13px var(--mono); cursor: pointer; background: rgba(10, 16, 20, .9); color: #ffd27a; border: 1px solid rgba(255, 210, 120, .5); border-radius: 4px; }
+.ow-slot.add { display: grid; place-items: center; font: 300 40px var(--display); color: #9fb4bc; cursor: default; background: rgba(8, 12, 14, .82); }
+.ow-slot.lock { display: grid; place-items: center; align-content: center; text-align: center; cursor: default; background: rgba(8, 12, 14, .82); font-size: 10px; color: var(--muted); }
+.ow-slot.lock em { font-style: normal; color: #ffb34a; font-size: 11px; }
+.ow-slot.lock i { font-style: normal; font-size: 20px; opacity: .5; }
+#ow-card { bottom: calc(110px + env(safe-area-inset-bottom, 0px)) !important; left: 50% !important; transform: translateX(-50%) !important; top: auto !important; width: min(440px, calc(100vw - 24px)) !important; }
+#iso-inv { z-index: 16; }
+@media (max-width: 760px) {
+  #ow-bar { flex-direction: column; align-items: stretch; gap: 6px; }
+  #ow-left { justify-content: flex-start; }
+  #ow-mybase { width: 70px; height: 70px; font-size: 9px; }
+  #ow-mybase .cap { width: 36px; height: 18px; }
+  #ow-menu button { min-width: 52px; }
+  #ow-slots { justify-content: flex-end; }
+  .ow-slot { width: 82px; height: 74px; }
+  .ow-slot img { height: 50px; }
+  .ow-slot canvas { width: 32px; height: 42px; }
+  .ow-slot.lock:last-child { display: none; }
+  #ow-card { bottom: calc(176px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+body.in-base #iso-stick, body.in-base #iso-prompt { display: none !important; }
+.ow-slot.lock span { position: static; font-size: 10px; } .ow-slot.lock em { display: block; margin-top: 2px; }

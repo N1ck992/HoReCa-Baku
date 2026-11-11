@@ -99,7 +99,10 @@ AB.IsoDev = (() => {
     god() { god = !god; return god ? 'Бессмертие: ВКЛ' : 'Бессмертие: выкл'; },
     res() { for (const [i, n] of [['ITEM-001', 10], ['ITEM-002', 5], ['ITEM-003', 5], ['ITEM-015', 3], ['ITEM-007', 6], ['ITEM-005', 3]]) AB.IsoStash.add(i, n); return 'Ресурсы добавлены'; },
     heal() { for (const id of ['CHAR-001', 'CHAR-002', 'CHAR-003', 'CHAR-004']) { const c = AB.Chars.get(id); if (c && !c.dead) c.hp = AB.ID.get(id).stats.maxHp; } return 'Отряд вылечен'; },
-    kill() { let n = 0; for (const e of AB.IsoEnemies.alive()) if (!e.story && AB.ID.get(e.id).type !== 'pursuer') { AB.IsoEnemies.damage(e.id, 99999, null); n++; } return `Убито рядом: ${n}`; },
+    kill() {
+      if (AB.IsoOverworld.isOpen()) return `Тварей на карте убрано: ${AB.IsoOverworld.clearWild()}`;
+      let n = 0; for (const e of AB.IsoEnemies.alive()) if (!e.story && AB.ID.get(e.id).type !== 'pursuer') { AB.IsoEnemies.damage(e.id, 99999, null); n++; } return `Убито рядом: ${n}`;
+    },
     map() { if (AB.IsoOverworld.revealAll) AB.IsoOverworld.revealAll(); return 'Карта дна открыта'; },
     terminal() { AB.IsoStash.add('ITEM-011', 1); return 'Наручный терминал — в вещах (или сразу в руках)'; },
   };
