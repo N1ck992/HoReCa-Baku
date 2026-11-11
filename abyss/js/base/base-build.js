@@ -28,7 +28,7 @@ AB.BaseBuild = (() => {
   function startNew(bpId) {
     const b = sim().bp(bpId), c = centerCell();
     const cl = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
-    const w = b.kind === 'room' ? cl(4, b.size.short) : b.w, h = b.kind === 'room' ? cl(4, b.size.long) : b.h;
+    const w = b.kind === 'cable' ? 1 : b.kind === 'room' ? cl(4, b.size.short) : b.w, h = b.kind === 'cable' ? 4 : b.kind === 'room' ? cl(4, b.size.long) : b.h;
     const g = AB.BaseGrids.get(sim().state().grid).snap(c, w, h);
     ghost = { bp: bpId, x: g.x, y: g.y, w, h };
     sel = null; delAsk = false;
@@ -72,6 +72,7 @@ AB.BaseBuild = (() => {
   function resize(dw, dh) {
     if (!ghost) return;
     const b = sim().bp(ghost.bp);
+    if (b.kind === 'cable') { const d = dw + dh; if (ghost.w === 1) ghost.h = Math.max(1, Math.min(b.size.long[1], ghost.h + d)); else ghost.w = Math.max(1, Math.min(b.size.long[1], ghost.w + d)); render(); return; }
     if (b.kind !== 'room') return;
     ghost.w = Math.max(1, ghost.w + dw); ghost.h = Math.max(1, ghost.h + dh);
     render();
@@ -81,7 +82,7 @@ AB.BaseBuild = (() => {
   // ---------- касания ----------
   function objAt(x, y) {
     const S = sim().state(), inR = (o) => x >= o.x && y >= o.y && x < o.x + o.w && y < o.y + o.h;
-    return S.devs.find((d) => !d.core && inR(d)) || S.rooms.find((r) => !r.core && inR(r)) || null;
+    return S.devs.find((d) => !d.core && inR(d)) || S.cables.find(inR) || S.rooms.find((r) => !r.core && inR(r)) || null;
   }
   function tap(cx, cy) {
     const c = cellAt(cx, cy);
@@ -149,9 +150,9 @@ AB.BaseBuild = (() => {
       const S = sim().state();
       cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Выберите чертёж · нажмите на постройку, чтобы изменить</span><button class="bx-x" data-b="exit" aria-label="Выйти из стройки">✕</button></div>
         <div class="bx-cat-list">${S.unlocked.map((id) => sim().bp(id)).filter((b) => b && !b.core).map((b) => {
-          const size = b.kind === 'room' ? `${b.size.short[0]}×${b.size.long[0]} … ${b.size.short[1]}×${b.size.long[1]}` : `${b.w}×${b.h}`;
-          const cost = b.kind === 'room' ? b.costPerCell.map(([i, n]) => `${nm(i)} ${n} за клетку`).join(', ') : (b.cost || []).map(([i, n]) => `${nm(i)} ${n}`).join(', ');
-          return `<button class="bx-bp" data-b="new|${b.id}"><b>${esc(b.name)}</b><span>${esc(b.kind === 'room' ? 'Помещение' : 'Устройство')} · ${esc(size)}</span><span class="cost">${esc(cost)}</span><span class="muted">${esc(b.desc)}</span></button>`;
+          const size = b.kind === 'cable' ? `линия до ${b.size.long[1]} клеток` : b.kind === 'room' ? `${b.size.short[0]}×${b.size.long[0]} … ${b.size.short[1]}×${b.size.long[1]}` : `${b.w}×${b.h}`;
+          const cost = b.kind === 'cable' ? `${nm(b.costPer.item)} 1 на ${b.costPer.cells} клетки` : b.kind === 'room' ? b.costPerCell.map(([i, n]) => `${nm(i)} ${n} за клетку`).join(', ') : (b.cost || []).map(([i, n]) => `${nm(i)} ${n}`).join(', ');
+          return `<button class="bx-bp" data-b="new|${b.id}"><b>${esc(b.name)}</b><span>${esc(b.kind === 'room' ? 'Помещение' : b.kind === 'cable' ? 'Электросеть' : 'Устройство')} · ${esc(size)}</span><span class="cost">${esc(cost)}</span><span class="muted">${esc(b.desc)}</span></button>`;
         }).join('')}</div>`;
       return;
     }
@@ -161,6 +162,7 @@ AB.BaseBuild = (() => {
         <div class="bx-cost">Цена: ${costLine(c.cost)}${ghost.uid ? ' <i class="muted">(вложенное засчитывается)</i>' : ''}</div>
         <div class="bx-st ${c.ok ? 'ok' : 'bad'}">${c.ok ? 'Можно ставить — материалы принесут строители' : esc(c.why)}</div>
         <div class="bx-row">
+          ${b.kind === 'cable' ? '<button class="bx-chip" data-b="h|-1">− короче</button><button class="bx-chip" data-b="h|1">+ длиннее</button>' : ''}
           ${room ? `<button class="bx-chip" data-b="w|-1">− ширина</button><button class="bx-chip" data-b="w|1">+ ширина</button><button class="bx-chip" data-b="h|-1">− длина</button><button class="bx-chip" data-b="h|1">+ длина</button>` : ''}
           <button class="bx-chip" data-b="rot">⟳ Повернуть</button>
           <button class="bx-chip go" data-b="ok" ${c.ok ? '' : 'disabled'}>✓ ${ghost.uid ? 'Перестроить' : 'Поставить'}</button>

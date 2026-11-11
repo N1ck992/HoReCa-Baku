@@ -500,7 +500,7 @@ body.base-build #iso-party { display: none; }
   #bx-card, #bx-ghost, #bx-cat { bottom: calc(58px + env(safe-area-inset-bottom, 0px)); max-height: 50vh; }
   .bx-cat-list { grid-template-columns: 1fr 1fr; }
 }
-@media (max-width: 1000px) { #bx-res { top: calc(50px + env(safe-area-inset-top, 0px)); } }
+@media (max-width: 1400px) { #bx-res { top: calc(50px + env(safe-area-inset-top, 0px)); } }
 @media (max-width: 560px) { body.in-base #iso-hud { top: calc(84px + env(safe-area-inset-top, 0px)); } }
 @media (max-width: 560px) {
   #bx-ghost { gap: 5px; padding: 9px 10px; }

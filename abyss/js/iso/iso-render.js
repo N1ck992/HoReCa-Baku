@@ -58,6 +58,9 @@ AB.IsoRender = (() => {
     printer: { h: 62, top: '#4a5560', l: '#3a434c', r: '#2e353c', glow: [255, 170, 90] },
     rack: { h: 74, top: '#5a5246', l: '#433d33', r: '#38322a' },
     pile: { h: 18, top: '#5c4a36', l: '#463828', r: '#3a2e20' },
+    reactor: { h: 80, top: '#3a4a5a', l: '#2c3a48', r: '#24303c', glow: [150, 120, 255] },
+    battery: { h: 46, top: '#3c4a3a', l: '#2c3a2a', r: '#243024', glow: [120, 255, 140] },
+    turbine: { h: 58, top: '#3a4650', l: '#2c363e', r: '#242c33', glow: [94, 230, 255] },
     devframe: { h: 10, top: 'rgba(94,230,255,.25)', l: 'rgba(94,230,255,.18)', r: 'rgba(94,230,255,.12)', edge: 'rgba(94,230,255,.6)' },
   };
   const ROOM_TINT = {

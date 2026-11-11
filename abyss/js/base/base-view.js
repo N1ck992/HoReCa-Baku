@@ -64,7 +64,7 @@ AB.BaseView = (() => {
     L.props = D().core.props.map((p) => ({ ...p }));
     for (const d of S.devs) {
       const b = sim().bp(d.bp);
-      L.props.push({ kind: d.built ? b.prop : 'devframe', x: d.x, y: d.y, w: d.w, h: d.h, dev: d.uid });
+      L.props.push({ kind: d.built || d.upTo ? b.prop : 'devframe', x: d.x, y: d.y, w: d.w, h: d.h, dev: d.uid });
     }
     L.lights = S.rooms.filter((r) => r.built).map((r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2, color: r.core ? [255, 214, 170] : [190, 220, 255], radius: Math.max(4, Math.min(8, Math.max(r.w, r.h))) }));
     L.lights.push({ x: 25, y: 7, color: [120, 200, 255], radius: 5 });
@@ -91,6 +91,7 @@ AB.BaseView = (() => {
   function title(o) {
     if (!o) return '';
     if (o.uid === 'pile') return 'Приёмник шлюза';
+    if (o.uid === 'reactor') return 'Реактор капсулы';
     const b = sim().bp(o.bp);
     if (!b) return o.name || '';
     if (b.kind === 'room') return o.core ? (AB.ID.get(o.look) || {}).name : b.name;
@@ -107,14 +108,29 @@ AB.BaseView = (() => {
   }
 
   // ---------- состояние станка словами ----------
+  // №72: электросеть устройства: { net, st } — номер сети и её состояние
+  function netOf(d) { const n = sim().networks().of.get(d.uid); const ps = sim().state().power; return n == null ? null : { n, st: ps && ps.nets[n] }; }
+  function powerState(d) {
+    const p = sim().par(d);
+    if (!p.draw) return null;
+    const nt = netOf(d);
+    if (!nt || !nt.st || (nt.st.gen < 0.01 && nt.st.cap === 0)) return { t: 'Нет сети — проведите кабель от реактора', c: 'bad', k: 'none' };
+    if (!sim().canPower(d)) return { t: 'Сеть без энергии: выработки нет, батареи пусты', c: 'bad', k: 'dry' };
+    if (d.crafter && !d.powered) return { t: 'Не хватает энергии — сеть перегружена (приоритет ниже)', c: 'bad', k: 'short' };
+    return { t: 'В сети', c: 'ok', k: 'ok' };
+  }
   function status(d) {
+    if (d.upTo) return { t: `Улучшается до уровня ${d.upTo}`, c: 'wait' };
     if (!d.built) return { t: 'Строится', c: 'wait' };
-    const b = sim().bp(d.bp), r = b.recipe;
+    const r = sim().bp(d.bp).recipe ? sim().par(d) : null;
     if (!r) return null;
+    const pw = powerState(d);
+    if (pw && pw.c === 'bad') return pw;
     const ws = sim().workers(d.uid);
     if (!ws.length) return { t: 'Нет работника — назначьте героя', c: 'bad' };
     if (!ws.some((id) => sim().state().present.includes(id))) return { t: 'Работник не на базе', c: 'bad' };
     if (d.block === 'full') return { t: 'Выход полон — отнесите на склад', c: 'bad' };
+    if (d.block === 'nopower') return { t: 'Нет энергии', c: 'bad' };
     if (d.block === 'noinput') return { t: `Нет сырья: ${nm(r.in).toLowerCase()} на стеллажах`, c: 'bad' };
     if (d.crafter) return { t: 'Работает', c: 'ok' };
     return { t: 'Ждёт работника', c: 'wait' };
@@ -145,6 +161,18 @@ AB.BaseView = (() => {
       ctx.strokeStyle = 'rgba(94,230,255,.12)';
       for (let i = 0; i < r.w + r.h; i += 2) { const a = toScreen(r.x + Math.min(i, r.w), r.y + Math.max(0, i - r.w)), b = toScreen(r.x + Math.max(0, i - r.h), r.y + Math.min(i, r.h)); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
     }
+    // №72: кабели — по полу; светятся, если в сети есть энергия
+    const nets = sim().networks(), ps = S.power || { nets: [] };
+    for (const c of S.cables) {
+      const n = nets.of.get(c.uid), st = n != null && ps.nets[n], live = c.built && st && (st.gen > 0.01 || st.store > 0.5);
+      const a = toScreen(c.x + 0.5, c.y + 0.5), z = toScreen(c.x + c.w - 0.5, c.y + c.h - 0.5);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = !c.built ? 'rgba(94,230,255,.45)' : live ? `rgba(255,200,90,${0.55 + Math.sin(time * 3 + c.x) * 0.15})` : 'rgba(150,140,130,.55)';
+      ctx.lineWidth = live ? 4 : 3;
+      if (!c.built) ctx.setLineDash([4, 5]);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(z.x, z.y); ctx.stroke(); ctx.setLineDash([]);
+      if (live) { const k = (time * 0.6 + c.x * 0.1) % 1; ctx.fillStyle = 'rgba(255,240,180,.9)'; ctx.beginPath(); ctx.arc(a.x + (z.x - a.x) * k, a.y + (z.y - a.y) * k, 2.2, 0, 7); ctx.fill(); }
+    }
     for (const d of sim().geom().doors) if (!d.open) for (const [x, y] of d.cells) { poly(ctx, toScreen, rectPts({ x, y, w: 1, h: 1 })); ctx.fillStyle = 'rgba(94,230,255,.18)'; ctx.fill(); }
     if (build) AB.BaseBuild.drawFloor(ctx, toScreen, time, poly, rectPts);
     const sel = card && card.uid && sim().obj(card.uid);
@@ -168,20 +196,25 @@ AB.BaseView = (() => {
     for (const d of S.devs) {
       const b = sim().bp(d.bp), c = toScreen(d.x + d.w / 2, d.y + d.h / 2), top = c.y - 70;
       if (!d.built) { frameTag(ctx, d, c.x, c.y - 30); continue; }
+      const p = sim().par(d), lv = (d.lvl || 1) > 1 ? ` ур.${d.lvl}` : '';
+      if (p.gen) { label(ctx, c.x, top + 4, `⚡ ${sim().genOf(d).toFixed(1)}/с${lv}`, '255,210,120'); continue; }
+      if (p.battery) { const f = (d.charge || 0) / p.battery; label(ctx, c.x, top + 18, `АКБ ${Math.round(d.charge || 0)}/${p.battery}${lv}`, f > 0.05 ? COL.ok : COL.bad); bar(ctx, c.x, top + 24, 40, f, COL.ok); if (!netOf(d)) { ctx.fillStyle = 'rgba(255,120,90,.9)'; ctx.font = 'bold 13px "Oswald", sans-serif'; ctx.fillText('⚡✕', c.x, top - 2); } continue; }
       if (d.uid === 'pile') {
         const items = Object.entries(S.pile).filter(([, n]) => n > 0);
         if (items.length) label(ctx, c.x, c.y - 26, items.map(([i, n]) => `${short(i)} ${n}`).join(' · '), COL.wait);
         continue;
       }
-      if (b.store) { label(ctx, c.x, top + 10, d.mat ? `${short(d.mat)} ${d.n}/${b.store.cap}${d.auto ? ' · авто' : ''}` : 'пусто', d.mat ? (d.auto ? COL.ok : COL.info) : '170,170,170'); continue; }
+      if (b.store) { label(ctx, c.x, top + 10, d.mat ? `${short(d.mat)} ${d.n}/${p.cap}${d.auto ? ' · авто' : ''}${lv}` : `пусто${lv}`, d.mat ? (d.auto ? COL.ok : COL.info) : '170,170,170'); continue; }
       if (b.recipe) {
-        const r = b.recipe, st = status(d);
-        label(ctx, c.x, top, `${short(r.in)} ${(d.in || {})[r.in] || 0} → ${short(r.out)} ${(d.out || {})[r.out] || 0}/${r.outCap}`, st.c === 'ok' ? COL.ok : st.c === 'bad' ? COL.bad : COL.wait);
+        const r = p, st = status(d), pw = powerState(d);
+        label(ctx, c.x, top, `${short(r.in)} ${(d.in || {})[r.in] || 0} → ${short(r.out)} ${(d.out || {})[r.out] || 0}/${r.outCap}${lv}`, st.c === 'ok' ? COL.ok : st.c === 'bad' ? COL.bad : COL.wait);
         if (d.crafter) bar(ctx, c.x, top + 6, 50, (d.prog || 0) / r.time, COL.ok);
-        if (st.c === 'bad') { const a = 0.6 + Math.sin(time * 5) * 0.35; ctx.fillStyle = `rgba(255,120,90,${a})`; ctx.font = 'bold 16px "Oswald", sans-serif'; ctx.fillText('!', c.x, top - 16); }
+        if (st.c === 'bad') { const a = 0.6 + Math.sin(time * 5) * 0.35; ctx.fillStyle = `rgba(255,120,90,${a})`; ctx.font = 'bold 16px "Oswald", sans-serif'; ctx.fillText(pw && pw.c === 'bad' ? '⚡✕' : '!', c.x, top - 16); }
+        else if (d.crafter && d.powered) { ctx.fillStyle = 'rgba(255,210,120,.85)'; ctx.font = '12px "Oswald", sans-serif'; ctx.fillText(`⚡${p.draw}`, c.x + 34, top - 2); }
       }
     }
     for (const r of S.rooms) if (!r.built) { const c = toScreen(r.x + r.w / 2, r.y + r.h / 2); frameTag(ctx, r, c.x, c.y); }
+    for (const r of S.cables) if (!r.built) { const c = toScreen(r.x + r.w / 2, r.y + r.h / 2); frameTag(ctx, r, c.x, c.y - 8); }
     // груз в руках
     for (const w of Object.values(S.crew)) {
       if (w.away || !w.carry) continue;
@@ -193,15 +226,16 @@ AB.BaseView = (() => {
     const need = f.need.reduce((a, [, n]) => a + n, 0), got = f.need.reduce((a, [i, n]) => a + Math.min(n, f.got[i] || 0), 0);
     const total = sim().workOf(sim().bp(f.bp), f);
     const done = got >= need;
-    label(ctx, x, y - 6, done ? `${title(f)}: строят` : `${title(f)}: ${got}/${need} материала`, done ? COL.ok : COL.info);
-    bar(ctx, x, y, 56, done ? 1 - f.work / Math.max(1, total) : got / Math.max(1, need), done ? COL.ok : COL.info);
+    const what = f.upTo ? `${title(f)} → ур.${f.upTo}` : title(f), tot = f.upTo ? ((sim().bp(f.bp).levels || [])[f.upTo - 1] || {}).work || total : total;
+    label(ctx, x, y - 6, done ? `${what}: строят` : `${what}: ${got}/${need} материала`, done ? COL.ok : COL.info);
+    bar(ctx, x, y, 56, done ? 1 - f.work / Math.max(1, tot) : got / Math.max(1, need), done ? COL.ok : COL.info);
   }
 
   // ---------- нажатие в капсуле ----------
   function cellAt(cx, cy) { const p = AB.IsoRender.pick(cx, cy); return { x: Math.floor(p.x), y: Math.floor(p.y), fx: p.x, fy: p.y }; }
   function objAt(x, y) {
     const S = sim().state(), inR = (o) => x >= o.x && y >= o.y && x < o.x + o.w && y < o.y + o.h;
-    return S.devs.find(inR) || S.rooms.find((r) => !r.built && inR(r)) || S.rooms.find(inR) || null;
+    return S.devs.find(inR) || S.cables.find((c) => !c.built && inR(c)) || S.rooms.find((r) => !r.built && inR(r)) || S.rooms.find(inR) || null;
   }
   function tap(cx, cy) {
     if (!sim().on() || AB.IsoGame.sector() !== SEC) return false;
@@ -242,7 +276,7 @@ AB.BaseView = (() => {
       const builders = Object.values(S.crew).filter((w) => w.jobs.includes('build')).map((w) => crewName(w.id));
       const need = o.need.map(([i, n]) => [i, n, o.got[i] || 0]);
       const delivered = o.need.every(([i, n]) => (o.got[i] || 0) >= n);
-      return `${head(`Каркас · ${o.w}×${o.h}`)}
+      return `${head(o.upTo ? `Улучшение до уровня ${o.upTo}: устройство стоит, пока строители не закончат` : `Каркас · ${o.w}×${o.h}`)}
         <div>Материалы: ${matLine(need)}</div>
         <div>${delivered ? `Строят: осталось ${Math.ceil(o.work)} с работы` : 'Ждёт материалы: строители носят их со стеллажей и из шкафчиков'}</div>
         <div class="muted">Строители (работа «Стройка»): ${builders.length ? esc(builders.join(', ')) : '<span class="bad">никого</span> — откройте «Экипаж»'}</div>
@@ -257,25 +291,62 @@ AB.BaseView = (() => {
     }
     if (b.store) {
       const mats = ['ITEM-016', 'ITEM-017', 'ITEM-001', 'ITEM-002', 'ITEM-003'];
-      return `${head(`Склад одного материала · вмещает ${b.store.cap}`)}
-        <div>${o.mat ? `Хранит: <b class="v">${esc(nm(o.mat))}</b> — ${o.n} из ${b.store.cap}` : 'Материал не назначен'}</div>
+      const cap = sim().par(o).cap;
+      return `${head(`Склад одного материала · вмещает ${cap}`)}
+        <div>${o.mat ? `Хранит: <b class="v">${esc(nm(o.mat))}</b> — ${o.n} из ${cap}` : 'Материал не назначен'}</div>
+        ${upLine(o)}
         <div class="bx-row">${chips([['auto', `Автохранение: ${o.auto ? 'ВКЛ' : 'выкл'}`, o.auto, !o.mat]])}</div>
         <div class="muted">${o.mat ? (o.auto ? 'Герои сами приносят сюда этот материал: из приёмника и с выхода станков.' : 'Включите автохранение — и материал будут приносить сюда без приказов.') : 'Назначьте материал или отнесите сюда груз из приёмника или со станка.'}</div>
         ${o.n === 0 ? `<div class="bx-row">${chips(mats.map((i) => [`mat|${i}`, esc(nm(i)), o.mat === i]))}${o.mat ? chips([['mat|', 'Снять назначение']]) : ''}</div>` : ''}`;
     }
+    if (b.gen || b.battery) {
+      const p = sim().par(o), nt = netOf(o), st = nt && nt.st;
+      return `${head(b.desc)}
+        ${p.gen ? `<div>Выработка сейчас: <b class="v">${sim().genOf(o).toFixed(1)}</b> энергии/с${b.wave ? ` (в среднем ${p.gen}, течение меняется)` : ''}</div>` : ''}
+        ${p.battery ? `<div>Заряд: <b class="v">${Math.round(o.charge || 0)}</b> из ${p.battery}</div>` : ''}
+        ${netLine(o)}
+        ${o.core ? '' : upLine(o)}`;
+    }
     if (b.recipe) {
-      const r = b.recipe, st = status(o), crewIds = AB.IsoActs.crew();
+      const r = sim().par(o), st = status(o), crewIds = AB.IsoActs.crew();
       const ws = sim().workers(o.uid);
       const outN = (o.out || {})[r.out] || 0;
       return `${head(`${esc(nm(r.in))} ×${r.inN} → ${esc(nm(r.out))} ×${r.outN} за ${r.time} с`)}
         <div class="bx-st ${st.c}">${esc(st.t)}</div>
         <div>Вход: ${esc(nm(r.in))} ${(o.in || {})[r.in] || 0}/${r.inCap} · Выход: ${esc(nm(r.out))} ${outN}/${r.outCap} · сделано всего: ${o.made || 0}</div>
+        <div>Энергия: ${r.draw} в секунду, пока работает · приоритет:</div>
+        <div class="bx-row">${chips([[`prio|3`, 'высокий', o.prio === 3], [`prio|2`, 'обычный', (o.prio || 2) === 2], [`prio|1`, 'низкий', o.prio === 1]])}</div>
+        ${netLine(o)}
+        ${upLine(o)}
         <div class="muted">Работники (нужен хотя бы один):</div>
         <div class="bx-row">${chips(crewIds.map((id) => [`work|${id}`, esc(crewName(id)), ws.includes(id)]))}</div>
         ${outN ? `<div class="bx-line"><span>Отнести ${esc(nm(r.out).toLowerCase())} (${outN}) на склад:</span>${rackPick(`out|${o.uid}|${r.out}`, r.out)}</div>` : ''}
         <div class="muted">Работник сам носит ${esc(nm(r.in).toLowerCase())} со стеллажа. Готовое уносит на стеллаж с автохранением этого материала — пока его нет, станок встанет, когда выход заполнится.</div>`;
     }
     return head(b.desc || '');
+  }
+  // №72: строка про сеть устройства и улучшение
+  function netLine(o) {
+    const nt = netOf(o);
+    if (!nt || !nt.st) return '<div class="bad">Не подключено: к устройству должен примыкать кабель сети</div>';
+    const st = nt.st;
+    return `<div class="muted">Сеть: выработка ${st.gen.toFixed(1)}/с · расход ${st.use.toFixed(1)}/с${st.short ? ` <span class="bad">(нужно ${st.need.toFixed(1)} — не хватает)</span>` : ''} · батареи ${Math.round(st.store)}/${st.cap} · устройств и кабелей: ${st.members}</div>`;
+  }
+  function upLine(o) {
+    const b = sim().bp(o.bp), L = b.levels || [], lv = o.lvl || 1;
+    if (!L.length) return '';
+    if (lv >= L.length) return `<div class="muted">Уровень ${lv} — наивысший</div>`;
+    const next = L[lv], cur = sim().par(o), nx = sim().par({ ...o, lvl: lv + 1 });
+    const fx = [];
+    if (nx.time !== cur.time) fx.push(`цикл ${cur.time} → ${nx.time} с`);
+    if (nx.outCap !== cur.outCap) fx.push(`выход ${cur.outCap} → ${nx.outCap}`);
+    if (nx.cap !== cur.cap) fx.push(`вмещает ${cur.cap} → ${nx.cap}`);
+    if (nx.battery !== cur.battery) fx.push(`ёмкость ${cur.battery} → ${nx.battery}`);
+    if (nx.gen !== cur.gen) fx.push(`выработка ${cur.gen} → ${nx.gen}`);
+    if (nx.draw !== cur.draw) fx.push(`<span class="bad">энергия ${cur.draw} → ${nx.draw}/с</span>`);
+    const cost = next.up.map(([i, n]) => [i, n, stock(i)]);
+    return `<div class="bx-line"><span>Уровень ${lv} → ${lv + 1}: ${fx.join(' · ')}</span></div>
+      <div class="bx-line"><span class="muted">Цена: ${matLine(cost)} · работа ${next.work} с</span>${chips([['upg', 'Улучшить']])}</div>`;
   }
   // выбор стеллажа для приказа «отнести»: подходящие — пустые или с этим же материалом
   function rackPick(key, item) {
@@ -306,6 +377,8 @@ AB.BaseView = (() => {
     if (a === 'close') { close(); return; }
     if (a === 'build') { close(); AB.BaseBuild.toggle(true); return; }
     if (a === 'auto' && o) sim().setRack(o.uid, { auto: !o.auto });
+    if (a === 'prio' && o) sim().setPrio(o.uid, +x);
+    if (a === 'upg' && o) { const r = sim().upgrade(o.uid); toast(r.ok ? 'Улучшение: строители принесут материалы — пока устройство стоит' : r.why, r.ok ? 'good' : 'info'); }
     if (a === 'mat' && o) sim().setRack(o.uid, { mat: x || null });
     if (a === 'work' && o) sim().assign(x, o.uid, !sim().workers(o.uid).includes(x));
     if (a === 'give') {
@@ -330,7 +403,10 @@ AB.BaseView = (() => {
     if (!show) return;
     const res = el('bx-res');
     const items = [['ITEM-016'], ['ITEM-017'], ['ITEM-001'], ['ITEM-002']];
-    const html = items.map(([i]) => `<span title="${esc(nm(i))}"><i>${esc(short(i))}</i>${stock(i)}</span>`).join('');
+    const ps = sim().state().power, nets = (ps && ps.nets || []).filter((n) => n && (n.gen > 0.01 || n.cap));
+    const gen = nets.reduce((a, n) => a + n.gen, 0), use = nets.reduce((a, n) => a + n.use, 0), stv = nets.reduce((a, n) => a + n.store, 0), cap = nets.reduce((a, n) => a + n.cap, 0), short_ = nets.some((n) => n.short);
+    const html = items.map(([i]) => `<span title="${esc(nm(i))}"><i>${esc(short(i))}</i>${stock(i)}</span>`).join('')
+      + `<span class="${short_ ? 'bad' : ''}" title="Энергия: расход / выработка в секунду · заряд батарей"><i>⚡</i>${use.toFixed(0)}/${gen.toFixed(0)}${cap ? ` <i>АКБ</i>${Math.round(stv)}/${cap}` : ''}</span>`;
     if (html !== hudHtml) { res.innerHTML = html; hudHtml = html; }
     el('bx-build').classList.toggle('on', !!(AB.BaseBuild && AB.BaseBuild.on()));
   }
