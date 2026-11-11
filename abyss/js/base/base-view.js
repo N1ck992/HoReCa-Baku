@@ -131,7 +131,7 @@ AB.BaseView = (() => {
     if (!ws.some((id) => sim().state().present.includes(id))) return { t: 'Работник не на базе', c: 'bad' };
     if (d.block === 'full') return { t: 'Выход полон — отнесите на склад', c: 'bad' };
     if (d.block === 'nopower') return { t: 'Нет энергии', c: 'bad' };
-    if (d.block === 'noinput') return { t: `Нет сырья: ${nm(r.in).toLowerCase()} на стеллажах`, c: 'bad' };
+    if (d.block === 'noinput') return { t: `Нет сырья: ${nm(d.blockItem || (sim().insOf(r)[0] || [])[0]).toLowerCase()} — ни на стеллажах, ни в шкафчиках`, c: 'bad' };
     if (d.crafter) return { t: 'Работает', c: 'ok' };
     return { t: 'Ждёт работника', c: 'wait' };
   }
@@ -207,7 +207,8 @@ AB.BaseView = (() => {
       if (b.store) { label(ctx, c.x, top + 10, d.mat ? `${short(d.mat)} ${d.n}/${p.cap}${d.auto ? ' · авто' : ''}${lv}` : `пусто${lv}`, d.mat ? (d.auto ? COL.ok : COL.info) : '170,170,170'); continue; }
       if (b.recipe) {
         const r = p, st = status(d), pw = powerState(d);
-        label(ctx, c.x, top, `${short(r.in)} ${(d.in || {})[r.in] || 0} → ${short(r.out)} ${(d.out || {})[r.out] || 0}/${r.outCap}${lv}`, st.c === 'ok' ? COL.ok : st.c === 'bad' ? COL.bad : COL.wait);
+        const ins = sim().insOf(r).map(([i]) => `${short(i)} ${(d.in || {})[i] || 0}`).join(' ');
+        label(ctx, c.x, top, `${ins ? `${ins} → ` : ''}${short(r.out)} ${(d.out || {})[r.out] || 0}/${r.outCap}${lv}`, st.c === 'ok' ? COL.ok : st.c === 'bad' ? COL.bad : COL.wait);
         if (d.crafter) bar(ctx, c.x, top + 6, 50, (d.prog || 0) / r.time, COL.ok);
         if (st.c === 'bad') { const a = 0.6 + Math.sin(time * 5) * 0.35; ctx.fillStyle = `rgba(255,120,90,${a})`; ctx.font = 'bold 16px "Oswald", sans-serif'; ctx.fillText(pw && pw.c === 'bad' ? '⚡✕' : '!', c.x, top - 16); }
         else if (d.crafter && d.powered) { ctx.fillStyle = 'rgba(255,210,120,.85)'; ctx.font = '12px "Oswald", sans-serif'; ctx.fillText(`⚡${p.draw}`, c.x + 34, top - 2); }
@@ -290,7 +291,7 @@ AB.BaseView = (() => {
         <div class="muted">Первый раз укажите стеллаж сами. Потом включите на нём «Автохранение» — герои с работой «Переноска» будут разносить сами.</div>`;
     }
     if (b.store) {
-      const mats = ['ITEM-016', 'ITEM-017', 'ITEM-001', 'ITEM-002', 'ITEM-003'];
+      const mats = ['ITEM-016', 'ITEM-017', 'ITEM-018', 'ITEM-019', 'ITEM-020', 'ITEM-007', 'ITEM-001', 'ITEM-002', 'ITEM-003'];
       const cap = sim().par(o).cap;
       return `${head(`Склад одного материала · вмещает ${cap}`)}
         <div>${o.mat ? `Хранит: <b class="v">${esc(nm(o.mat))}</b> — ${o.n} из ${cap}` : 'Материал не назначен'}</div>
@@ -311,9 +312,10 @@ AB.BaseView = (() => {
       const r = sim().par(o), st = status(o), crewIds = AB.IsoActs.crew();
       const ws = sim().workers(o.uid);
       const outN = (o.out || {})[r.out] || 0;
-      return `${head(`${esc(nm(r.in))} ×${r.inN} → ${esc(nm(r.out))} ×${r.outN} за ${r.time} с`)}
+      const insT = sim().insOf(r).map(([i, n]) => `${esc(nm(i))} ×${n}`).join(' + ');
+      return `${head(`${insT ? `${insT} → ` : 'Без сырья → '}${esc(nm(r.out))} ×${r.outN} за ${r.time} с`)}
         <div class="bx-st ${st.c}">${esc(st.t)}</div>
-        <div>Вход: ${esc(nm(r.in))} ${(o.in || {})[r.in] || 0}/${r.inCap} · Выход: ${esc(nm(r.out))} ${outN}/${r.outCap} · сделано всего: ${o.made || 0}</div>
+        <div>${insT ? `Вход: ${sim().insOf(r).map(([i]) => `${esc(nm(i))} ${(o.in || {})[i] || 0}/${r.inCap}`).join(', ')} · ` : ''}Выход: ${esc(nm(r.out))} ${outN}/${r.outCap} · сделано всего: ${o.made || 0}</div>
         <div>Энергия: ${r.draw} в секунду, пока работает · приоритет:</div>
         <div class="bx-row">${chips([[`prio|3`, 'высокий', o.prio === 3], [`prio|2`, 'обычный', (o.prio || 2) === 2], [`prio|1`, 'низкий', o.prio === 1]])}</div>
         ${netLine(o)}
@@ -321,7 +323,7 @@ AB.BaseView = (() => {
         <div class="muted">Работники (нужен хотя бы один):</div>
         <div class="bx-row">${chips(crewIds.map((id) => [`work|${id}`, esc(crewName(id)), ws.includes(id)]))}</div>
         ${outN ? `<div class="bx-line"><span>Отнести ${esc(nm(r.out).toLowerCase())} (${outN}) на склад:</span>${rackPick(`out|${o.uid}|${r.out}`, r.out)}</div>` : ''}
-        <div class="muted">Работник сам носит ${esc(nm(r.in).toLowerCase())} со стеллажа. Готовое уносит на стеллаж с автохранением этого материала — пока его нет, станок встанет, когда выход заполнится.</div>`;
+        <div class="muted">${insT ? `Работник сам носит сырьё со стеллажей (а чего там нет — из шкафчиков экипажа).` : 'Сырья не нужно — только энергия и работник.'} Готовое уносит на стеллаж с автохранением этого материала — пока его нет, станок встанет, когда выход заполнится.</div>`;
     }
     return head(b.desc || '');
   }
@@ -363,12 +365,13 @@ AB.BaseView = (() => {
       const task = !here ? 'не на базе' : w.task ? w.task.label : 'свободен';
       const jobs = w.jobs.map((j, i) => `<span class="bx-job"><i>${i + 1}</i>${esc(jobName(j))}<button data-act="up|${id}|${i}" ${i ? '' : 'disabled'} aria-label="Выше">▲</button><button data-act="del|${id}|${i}" aria-label="Убрать">✕</button></span>`).join('');
       const can = [['build', 'Стройка'], ['haul', 'Переноска'], ...S.devs.filter((d) => d.built && sim().bp(d.bp).recipe).map((d) => [d.uid, title(d)])].filter(([j]) => !w.jobs.includes(j));
-      return `<div class="bx-crew"><div class="bx-line"><b>${esc(crewName(id))}</b><span class="muted">${esc(task)}${w.carry ? ` · несёт ${esc(nm(w.carry.item).toLowerCase())} ×${w.carry.n}` : ''}</span></div>
+      const F = AB.BASE_DATA.food, fd = Math.round(w.food ?? 100), hung = fd <= 0 ? 'без еды — работает вдвое медленнее' : fd < F.hungry ? 'голоден — работает медленнее' : '';
+      return `<div class="bx-crew"><div class="bx-line"><b>${esc(crewName(id))}</b><span class="bx-food ${hung ? 'bad' : ''}">сытость ${fd}%${hung ? ` · ${hung}` : ''}</span><span class="muted">${esc(task)}${w.carry ? ` · несёт ${esc(nm(w.carry.item).toLowerCase())} ×${w.carry.n}` : ''}</span></div>
         <div class="bx-jobs">${jobs || '<span class="muted">Нет работ — герой отдыхает</span>'}</div>
         <div class="bx-row">${can.map(([j, t]) => `<button class="bx-chip" data-act="add|${id}|${esc(j)}">+ ${esc(t)}</button>`).join('')}</div></div>`;
     }).join('');
     return `<div class="bx-head"><b>Экипаж и работы</b><button class="bx-x" data-act="close" aria-label="Закрыть">✕</button></div>
-      <div class="muted">Герой делает первую работу в своём списке, где есть дело; если там пусто — переходит к следующей.</div>${rows}`;
+      <div class="muted">Герой делает первую работу в своём списке, где есть дело; если там пусто — переходит к следующей. Голодный сам идёт поесть пищевой биомассы со стеллажа.</div>${rows}`;
   }
   function onCard(e) {
     const btn = e.target.closest('[data-act]'); if (!btn || btn.disabled) return;
@@ -402,10 +405,10 @@ AB.BaseView = (() => {
     box.hidden = !show;
     if (!show) return;
     const res = el('bx-res');
-    const items = [['ITEM-016'], ['ITEM-017'], ['ITEM-001'], ['ITEM-002']];
+    const items = [['ITEM-016'], ['ITEM-017'], ['ITEM-001'], ['ITEM-002'], ['ITEM-020']];
     const ps = sim().state().power, nets = (ps && ps.nets || []).filter((n) => n && (n.gen > 0.01 || n.cap));
     const gen = nets.reduce((a, n) => a + n.gen, 0), use = nets.reduce((a, n) => a + n.use, 0), stv = nets.reduce((a, n) => a + n.store, 0), cap = nets.reduce((a, n) => a + n.cap, 0), short_ = nets.some((n) => n.short);
-    const html = items.map(([i]) => `<span title="${esc(nm(i))}"><i>${esc(short(i))}</i>${stock(i)}</span>`).join('')
+    const html = items.map(([i]) => `<span data-k="${i}" title="${esc(nm(i))}"><i>${esc(short(i))}</i>${stock(i)}</span>`).join('')
       + `<span class="${short_ ? 'bad' : ''}" title="Энергия: расход / выработка в секунду · заряд батарей"><i>⚡</i>${use.toFixed(0)}/${gen.toFixed(0)}${cap ? ` <i>АКБ</i>${Math.round(stv)}/${cap}` : ''}</span>`;
     if (html !== hudHtml) { res.innerHTML = html; hudHtml = html; }
     el('bx-build').classList.toggle('on', !!(AB.BaseBuild && AB.BaseBuild.on()));

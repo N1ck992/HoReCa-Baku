@@ -53,6 +53,13 @@ AB.ITEMS = [
     desc: 'Донный грунт: песок, ил и каменная крошка. Сырьё для промышленного 3D-принтера.' },
   { id: 'ITEM-017', name: 'Стройматериал', short: 'СТР', category: 'resource', stack: 30, icon: 'ASSET-ITEM017-01', use: null, pending: true, base: true,
     desc: 'Спечённые 3D-принтером блоки из реголита. Из них печатают стены и перекрытия новых помещений.' },
+  // №73: цепочка еды базы (черновик)
+  { id: 'ITEM-018', name: 'Вода', short: 'ВОД', category: 'resource', stack: 30, icon: 'ASSET-ITEM018-01', use: null, pending: true, base: true,
+    desc: 'Очищенная забортная вода из водозабора. Нужна для выращивания водорослей.' },
+  { id: 'ITEM-019', name: 'Водоросли', short: 'ВДР', category: 'resource', stack: 30, icon: 'ASSET-ITEM019-01', use: null, pending: true, base: true,
+    desc: 'Свежие водоросли с фермы. Сырьё для биореактора.' },
+  { id: 'ITEM-020', name: 'Пищевая биомасса', short: 'ПИЩ', category: 'resource', stack: 30, icon: 'ASSET-ITEM020-01', use: null, pending: true, base: true,
+    desc: 'Питательная масса из биореактора. Ею питается экипаж базы.' },
 ];
 
 AB.ITEMS.forEach((i) => AB.ID.register(i.id, i));

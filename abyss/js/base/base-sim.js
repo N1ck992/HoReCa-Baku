@@ -57,6 +57,12 @@ AB.BaseSim = (() => {
     return p;
   }
   const rec = (d) => (d && bp(d.bp).recipe ? par(d) : null);
+  // №73: сырьё рецепта списком — у станка может быть несколько видов сырья или ни одного (водозабор)
+  const insOf = (r) => r.ins || (r.in ? [[r.in, r.inN]] : []);
+  const hasIn = (r, item) => insOf(r).some(([i]) => i === item);
+  // сытость: голодный работает медленнее (не умирает)
+  const FOOD = () => D().food;
+  const eff = (w) => { const f = w.food == null ? 100 : w.food; return f <= 0 ? FOOD().starving : f < FOOD().hungry ? FOOD().slow : 1; };
 
   // ---------- геометрия: где пол, проходы, что занято ----------
   function geom() {
@@ -153,7 +159,7 @@ AB.BaseSim = (() => {
     if (ref.slot === 'frame') { const need = (o.need.find(([i]) => i === item) || [0, 0])[1]; return Math.max(0, need - (o.got[item] || 0)); }
     const b = bp(o.bp);
     if (ref.slot === 'store') return o.mat && o.mat !== item ? 0 : par(o).cap - (o.n || 0);
-    if (ref.slot === 'in') { const r = rec(o); return r && r.in === item ? r.inCap - ((o.in || {})[item] || 0) : 0; }
+    if (ref.slot === 'in') { const r = rec(o); return r && hasIn(r, item) ? r.inCap - ((o.in || {})[item] || 0) : 0; }
     return 0;
   }
   function takeFrom(ref, item, n) {
@@ -214,7 +220,7 @@ AB.BaseSim = (() => {
       }
     }
     for (const u of w.jobs) {
-      const d = dev(u); if (!d || !d.built || !rec(d) || rec(d).in !== item) continue;
+      const d = dev(u); if (!d || !d.built || !rec(d) || !hasIn(rec(d), item)) continue;
       if (space({ uid: u, slot: 'in' }, item) - reserved(u, item) > 0) return { kind: 'op', label: `загружает ${nm(item)}`, res: { to: u, item, n: w.carry.n }, steps: [{ go: { uid: u } }, { put: { ref: { uid: u, slot: 'in' }, item } }] };
     }
     const r = rackFor(w, item, false);
@@ -242,15 +248,21 @@ AB.BaseSim = (() => {
       d.block = 'full';
       return null;
     }
-    if ((d.in[r.in] || 0) < r.inN) {
-      const want = r.inCap - (d.in[r.in] || 0) - reserved(d.uid, r.in);
-      if (want <= 0) return null;
-      const src = racks().filter((k) => k.mat === r.in && k.n > 0).map((k) => ({ uid: k.uid, slot: 'store' })).sort((a, b) => dist(w, a) - dist(w, b))[0];
-      if (!src) { d.block = 'noinput'; return null; }
+    // не хватает какого-то сырья — несут его (со стеллажа этого сырья, а если там нет — из шкафчиков экипажа)
+    let waiting = false;
+    for (const [item, need] of insOf(r)) {
+      if ((d.in[item] || 0) >= need) continue;
+      const want = r.inCap - (d.in[item] || 0) - reserved(d.uid, item);
+      if (want <= 0) { waiting = true; continue; }
+      const opts = racks().filter((k) => k.mat === item && k.n > 0).map((k) => ({ uid: k.uid, slot: 'store' })).sort((a, b) => dist(w, a) - dist(w, b));
+      if (!opts.length && ext.count(item) > 0) opts.push({ locker: true });
+      const src = opts[0];
+      if (!src) { d.block = 'noinput'; d.blockItem = item; return null; }
       d.block = null;
-      const n = Math.min(CARRY(), want, amount(src, r.in));
-      return haulTask(`несёт ${nm(r.in)} к станку`, src, r.in, n, { uid: d.uid, slot: 'in' }, { to: d.uid, item: r.in, n });
+      const n = Math.min(CARRY(), want, amount(src, item));
+      return haulTask(`несёт ${nm(item)} к станку`, src, item, n, { uid: d.uid, slot: 'in' }, { to: d.uid, item, n });
     }
+    if (waiting) return null;
     if (d.crafter && d.crafter !== id && S.crew[d.crafter] && S.crew[d.crafter].task && S.crew[d.crafter].task.kind === 'craft') return null;
     if (r.draw > 0 && !canPower(d)) { d.block = 'nopower'; return null; }
     d.block = null;
@@ -289,8 +301,16 @@ AB.BaseSim = (() => {
     }
     return null;
   }
+  function planEat(w) {
+    const F = FOOD(), f = w.food ?? 100;
+    if (f >= F.hungry) return null;
+    const src = racks().filter((k) => k.mat === F.item && k.n > 0).map((k) => ({ uid: k.uid, slot: 'store' })).sort((a, b) => dist(w, a) - dist(w, b))[0];
+    if (!src) return null;
+    return { kind: 'eat', label: 'идёт поесть', steps: [{ go: src }, { take: { ref: src, item: F.item, n: 1 } }, { eat: { secs: 3 } }] };
+  }
   function plan(id, w) {
     if (w.carry) return planDeposit(w);
+    const e = planEat(w); if (e) return e;
     const o = planOrder(id, w); if (o) return o;
     for (const j of w.jobs) {
       const t = j === 'build' ? planBuild(w) : j === 'haul' ? planHaul(w) : planOperate(id, w, dev(j));
@@ -317,7 +337,7 @@ AB.BaseSim = (() => {
     }
     if (s.craft) {
       const d = dev(s.craft.uid), r = rec(d);
-      if (!r || !d.built || (d.in[r.in] || 0) < r.inN || (d.out[r.out] || 0) >= r.outCap) { abort(w); return false; }
+      if (!r || !d.built || insOf(r).some(([i, n]) => (d.in[i] || 0) < n) || (d.out[r.out] || 0) >= r.outCap) { abort(w); return false; }
       d.crafter = w.id; d.prog = d.prog || 0;
     }
     return true;
@@ -370,19 +390,25 @@ AB.BaseSim = (() => {
       // №72: без энергии станок стоит; долго нет энергии — работник уходит к другим делам
       if (!d.powered) { d.dark = (d.dark || 0) + dt; if (d.dark > 4) { d.block = 'nopower'; d.dark = 0; abort(w, 'нет энергии'); } return; }
       d.dark = 0;
-      d.prog += dt;
+      d.prog += dt * eff(w);
       if (d.prog >= r.time) {
         d.prog = 0; d.crafter = null;
-        d.in[r.in] -= r.inN; d.out[r.out] = (d.out[r.out] || 0) + r.outN;
+        for (const [i, n] of insOf(r)) d.in[i] -= n;
+        d.out[r.out] = (d.out[r.out] || 0) + r.outN;
         d.made = (d.made || 0) + r.outN;
         next(w);
       }
     } else if (s.build) {
       const f = obj(s.build.uid);
       if (!f || f.built) { next(w); return; }
-      f.work -= dt;
+      f.work -= dt * eff(w);
       if (f.work <= 0) complete(f);
       if (f.built || w.el >= s.build.secs) next(w);
+    } else if (s.eat) {
+      // №73: поесть — съесть то, что принёс со стеллажа
+      if (w.el < s.eat.secs) return;
+      if (w.carry && w.carry.item === FOOD().item) { w.food = Math.min(100, (w.food ?? 100) + FOOD().per * w.carry.n); w.carry = null; w.ate = (w.ate || 0) + 1; }
+      next(w);
     } else if (s.idle) {
       if (w.el >= s.idle.secs) next(w);
     }
@@ -662,6 +688,7 @@ AB.BaseSim = (() => {
       if (w.away) { w.away = false; const p = D().core.enter; w.x = p.x; w.y = p.y; w.task = null; w.wait = 0; }
       // герой оказался на занятой клетке (поставили устройство) — шаг на свободную
       if (!w.task && !walkable(Math.floor(w.x), Math.floor(w.y))) { const n = nearestWalk(Math.floor(w.x), Math.floor(w.y)); if (n) { w.x = n[0] + 0.5; w.y = n[1] + 0.5; } }
+      w.food = Math.max(0, (w.food ?? 100) - dt * 100 / FOOD().period);   // №73: сытость тает, пока герой на базе
       stepWorker(w, dt);
     }
   }
@@ -710,7 +737,7 @@ AB.BaseSim = (() => {
   return {
     ensure, tick, catchUp, save, load, reset() { S = null; G = null; store.set(null); },
     setExt(e) { ext = { ...ext, ...e }; },
-    state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
+    insOf, eff, state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
     check, place, modify, remove, assign, workers, setJobs, worker, order, setRack, amount,
     receive(item, n) { ensure(); S.pile[item] = (S.pile[item] || 0) + n; },
     costOf, workOf,

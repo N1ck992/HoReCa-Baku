@@ -508,3 +508,9 @@ body.base-build #iso-party { display: none; }
   #bx-ghost .bx-chip { min-height: 30px; padding: 3px 8px; }
 }
 body.base-build #iso-hud { display: none; }
+.bx-food { font-size: 11px; color: #9ff0bb; }
+.bx-food.bad { color: #ff9a7a; }
+#bx-res { flex-wrap: wrap; max-width: calc(100vw - 24px); justify-content: center; }
+@media (max-width: 560px) { #bx-res { justify-content: flex-start; } }
+@media (max-width: 560px) { #bx-res { gap: 4px; } #bx-res span { padding: 1px 5px; font-size: 11px; gap: 3px; } #bx-res i { font-size: 9px; } }
+@media (max-width: 420px) { #bx-res span[data-k="ITEM-001"], #bx-res span[data-k="ITEM-002"] { display: none; } }

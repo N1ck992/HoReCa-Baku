@@ -66,8 +66,9 @@ AB.IsoBase = (() => {
   // подпись над героем — чем он занят
   const taskOf = (id) => {
     const S = AB.BaseSim.on() && AB.BaseSim.state(), w = S && S.crew[id];
-    if (!w || !w.task) return w && w.why ? `ждёт: ${w.why}` : '';
-    return w.task.label;
+    const hungry = w && (w.food ?? 100) < AB.BASE_DATA.food.hungry ? ' · голоден' : '';
+    if (!w || !w.task) return w && w.why ? `ждёт: ${w.why}${hungry}` : hungry.slice(3);
+    return w.task.label + hungry;
   };
 
   return { update, start, stop, active: () => on, taskOf };
