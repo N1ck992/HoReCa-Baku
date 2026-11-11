@@ -43,6 +43,14 @@
       <div class="inv-body"><div id="iso-inv-grid"></div><div id="iso-inv-detail"></div></div>
     </div>
   </div>
+  <!-- №71: база-капсула — ресурсы, стройка, экипаж, карточки устройств -->
+  <div id="bx" hidden>
+    <div id="bx-res" aria-label="Материалы базы"></div>
+    <div id="bx-bar"><button id="bx-build" title="Режим стройки">Стройка</button><button id="bx-crew" title="Экипаж и списки работ">Экипаж</button></div>
+    <div id="bx-cat" hidden></div>
+    <div id="bx-ghost" hidden></div>
+    <div id="bx-card" hidden></div>
+  </div>
   <div id="iso-dialog" hidden role="dialog" aria-live="polite">
     <canvas class="pt l" aria-hidden="true"></canvas><canvas class="pt r" aria-hidden="true"></canvas>
     <div class="tx"></div>
@@ -130,6 +138,7 @@
   <script src="js/data/iso-quests.js"></script>
   <script src="js/data/overworld.js"></script>
   <script src="js/data/iso-acts.js"></script>
+  <script src="js/data/base.js"></script>
   <!-- Из старых систем: ресурсы, анимации, персонажи и отряд, инвентарь, оборудование,
        состояние помещений (предметы, доступ к дверям), отрисовка составных персонажей -->
   <script src="js/systems/asset-manager.js"></script>
@@ -162,7 +171,11 @@
   <script src="js/iso/iso-overworld.js"></script>
   <script src="js/iso/iso-acts.js"></script>
   <script src="js/iso/iso-dev.js"></script>
+  <script src="js/base/grids.js"></script>
+  <script src="js/base/base-sim.js"></script>
   <script src="js/iso/iso-base.js"></script>
+  <script src="js/base/base-view.js"></script>
+  <script src="js/base/base-build.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>

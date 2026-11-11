@@ -185,7 +185,7 @@ AB.IsoActs = (() => {
       m.hidden = false; m.facing = -1;
       if (!AB.Chars.get(id) && AB.Chars.spawn) { const c = AB.Chars.spawn(id, { room: 'ROOM-021', x: 0 }); if (c) c.controllable = false; }
     }
-    toast('База-капсула. Пульт в кабине — вести капсулу; шкафчики — вещи; модульный отсек — гнёзда модулей', 'info');
+    toast('База-капсула. «Стройка» — проектировать отсеки и ставить устройства; «Экипаж» — кто чем занят; пульт — вести капсулу', 'info');
   }
   AB.Bus.on('iso:travel', ({ sector }) => { if (sector === 'SECTOR-005') placeCrew(); });
   function leaveBase() { AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); }

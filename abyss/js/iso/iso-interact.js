@@ -337,7 +337,7 @@ AB.IsoInteract = (() => {
   function click(cx, cy) {
     const t = at(cx, cy);
     // №68: в базе-капсуле приборами управляют нажатием — без подбегания
-    if (AB.IsoBase && AB.IsoBase.active()) { if (t) act(t, true); return true; }
+    if (AB.IsoBase && AB.IsoBase.active()) { if (AB.BaseView && AB.BaseView.tap(cx, cy)) return true; if (t) act(t, true); return true; }   // №71: устройства базы и стройка
     if (!t) { intent = null; return false; }
     const l = AB.IsoParty.lead();
     if (distTo(l, t) <= REACH) { intent = null; AB.IsoParty.stop(); act(t); return true; }

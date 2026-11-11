@@ -123,6 +123,7 @@ AB.IsoGame = (() => {
       AB.IsoBridge.sync();
       return;
     }
+    if (AB.BaseSim) AB.BaseSim.reset();                   // №71: новое прохождение — новая база
     const st = AB.ISO_START;
     sid = st.sector;
     AB.IsoWorld.build(sid);

@@ -50,7 +50,7 @@ AB.IsoInput = (() => {
         return;
       }
       // №69: в базе-капсуле камера свободна — перетаскивание двигает обзор, короткое нажатие — по прибору
-      if (AB.IsoBase && AB.IsoBase.active()) { baseDrag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, id: e.pointerId }; return; }
+      if (AB.IsoBase && AB.IsoBase.active()) { baseDrag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, id: e.pointerId, ghost: !!(AB.BaseBuild && AB.BaseBuild.grab(e.clientX, e.clientY)) }; return; }   // №71: в стройке палец на призраке тащит его
       // нажали на противника — атаковать; на объект — подойти и сделать; иначе — идти
       const foe = enemyAt(e.clientX, e.clientY);
       if (foe) { AB.IsoCombat.setTarget(foe); return; }
@@ -65,7 +65,7 @@ AB.IsoInput = (() => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (baseDrag && baseDrag.id === e.pointerId && pointers.size === 1) {
         if (!baseDrag.moved && Math.hypot(e.clientX - baseDrag.x, e.clientY - baseDrag.y) > 8) baseDrag.moved = true;
-        if (baseDrag.moved) AB.IsoRender.panBy(e.clientX - baseDrag.lx, e.clientY - baseDrag.ly);
+        if (baseDrag.moved) { if (baseDrag.ghost) AB.BaseBuild.dragTo(e.clientX, e.clientY); else AB.IsoRender.panBy(e.clientX - baseDrag.lx, e.clientY - baseDrag.ly); }
         baseDrag.lx = e.clientX; baseDrag.ly = e.clientY;
       }
       if (pinch && pointers.size >= 2) {
@@ -74,7 +74,7 @@ AB.IsoInput = (() => {
       }
     });
     const up = (e) => {
-      if (baseDrag && baseDrag.id === e.pointerId) { const d = baseDrag; baseDrag = null; if (!d.moved && e.type === 'pointerup') AB.IsoInteract.click(e.clientX, e.clientY); }
+      if (baseDrag && baseDrag.id === e.pointerId) { const d = baseDrag; baseDrag = null; if (d.ghost) AB.BaseBuild.drop(); if (!d.moved && e.type === 'pointerup') AB.IsoInteract.click(e.clientX, e.clientY); }
       pointers.delete(e.pointerId);
       if (hold === e.pointerId) hold = null;
       if (pointers.size < 2) pinch = null;

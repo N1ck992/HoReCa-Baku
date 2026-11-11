@@ -502,6 +502,9 @@ AB.ROOMS.push(
   // №69: «Отсек на склоне» изнутри — оторванный отсек чужого корабля, где живёт выживший
   ISO_ROOM({ id: 'ROOM-024', name: 'Отсек на склоне', desc: 'Оторванный отсек старого корабля. Аварийный свет, капсула жизнеобеспечения, ящики с припасами.', width: 900, height: 360, theme: 'tunnel', state: 'flooded', spawn: { x: 140 },
     equipment: ['EQUIP-015'], containers: [{ key: 'salvage', x: 300, prop: 'cabinet', label: 'Ящик с припасами', loot: [['ITEM-003', 2], ['ITEM-002', 1]] }] }),
+  // №71: помещения, которые игрок строит сам в капсуле (конструктор базы)
+  ISO_ROOM({ id: 'ROOM-025', name: 'Отсек', desc: 'Помещение, напечатанное экипажем из стройматериала.', width: 800, height: 360, theme: 'living', state: 'safe', spawn: { x: 140 } }),
+  ISO_ROOM({ id: 'ROOM-026', name: 'Коридор', desc: 'Узкий проход между отсеками.', width: 600, height: 360, theme: 'tunnel', state: 'safe', spawn: { x: 140 } }),
   ISO_ROOM({
     id: 'ROOM-019', name: 'Дно у «Абисса»', desc: 'Каменистое дно у обломков. Фонари костюма выхватывают из темноты метров десять.',
     width: 1800, height: 440, theme: 'tunnel', state: 'flooded', spawn: { x: 200 },

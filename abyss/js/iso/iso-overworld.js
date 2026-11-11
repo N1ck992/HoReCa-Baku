@@ -52,6 +52,34 @@ AB.IsoOverworld = (() => {
       for (const [dq, dr] of DIRS) { const c = cells.get(key(s.q + dq, s.r + dr)); if (c && c.kind === 'rock') c.kind = 'silt'; }
     }
     for (const s of D().sites) if (!route(D().start, s)) carve(D().start, s);
+    // №71: россыпи реголита — отряд встаёт на клетку и копает вручную
+    for (const d of D().deposits || []) {
+      const c = cells.get(key(d.q, d.r)); if (!c) continue;
+      if (c.kind === 'rock' || c.kind === 'trench') c.kind = 'silt';
+      c.dep = { left: d.amount, max: d.amount };
+      if (!route(D().start, d)) carve(D().start, d);
+    }
+  }
+  // №71: добыча реголита: отряд стоит на россыпи и копает, груз — в костюме; у базы сгружает в приёмник
+  function dig(dt) {
+    const R = D().dig; if (!R || mode !== 'capsule' || !AB.BaseSim) return;
+    for (const s of outSquads()) {
+      const c = cells.get(key(s.q, s.r));
+      if (!c || !c.dep || s.anim || s.path.length || s.target || s.atk || s.state !== 'out') { s.digT = 0; continue; }
+      s.cargo = s.cargo || 0;
+      if (c.dep.left <= 0) { if (!s.digSaid) { s.digSaid = 'empty'; say('Россыпь выбрана до камня — ищите другую'); } continue; }
+      if (s.cargo >= R.cargo) { if (s.digSaid !== 'full') { s.digSaid = 'full'; say(`${AB.ID.get(s.id).name}: костюм полон реголита (${s.cargo}) — верните отряд на базу`); } continue; }
+      if (!s.digT && s.digSaid !== 'dig') { s.digSaid = 'dig'; say(`${AB.ID.get(s.id).name} копает реголит`); }
+      s.digT = (s.digT || 0) + dt;
+      s.dig = time;
+      if (s.digT >= R.every) { s.digT -= R.every; s.cargo++; c.dep.left--; }
+    }
+  }
+  function unload(s) {
+    if (!s.cargo || !AB.BaseSim || !D().dig) return;
+    AB.BaseSim.receive(D().dig.item, s.cargo);
+    say(`Сгружено в приёмник базы: ${AB.ID.get(D().dig.item).name} ×${s.cargo}`);
+    s.cargo = 0; s.digSaid = null;
   }
   function carve(a, b) {
     let c = { ...a };
@@ -141,6 +169,7 @@ AB.IsoOverworld = (() => {
     else say('Путь к базе перекрыт');
   }
   function dock(s) {
+    unload(s);
     s.state = 'home'; s.path = []; s.anim = null; s.target = null; s.recall = false;
     s.q = base.q; s.r = base.r;
     if (sel === s.id && mode === 'capsule') sel = 'base';
@@ -363,6 +392,7 @@ AB.IsoOverworld = (() => {
     if (ascend) { ascendTick(dt); requestAnimationFrame(loop); return; }
     if (mode === 'capsule') stepUnit(base, dt, BASE_STEP);
     for (const s of outSquads()) { stepUnit(s, dt, STEP); if (!s.anim && loot.size) pickLoot(s); }
+    dig(dt);
     heal(dt);
     fight(dt);
     wildTick(dt);
@@ -577,6 +607,13 @@ AB.IsoOverworld = (() => {
       if (!lit) { g.fillStyle = 'rgba(0,0,0,.5)'; g.fill(); }
       g.strokeStyle = 'rgba(120,180,200,.08)'; g.lineWidth = 1; g.stroke();
       if (c.kind === 'crystal') for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(190,140,255,.7)'; g.fillRect(p.x - size * 0.3 + i * size * 0.25, p.y - size * 0.15 - (i % 2) * 6, 3, 8); }
+      if (c.dep) {          // №71: россыпь реголита
+        const k = c.dep.left / c.dep.max;
+        hex(p.x, p.y, size * 0.97); g.fillStyle = `rgba(190,120,60,${0.12 + k * 0.28})`; g.fill();
+        for (let i = 0; i < 5; i++) { g.fillStyle = `rgba(210,150,90,${0.3 + k * 0.5})`; g.beginPath(); g.ellipse(p.x + Math.cos(i * 2.4) * size * 0.4, p.y + Math.sin(i * 2.4) * size * 0.22, size * 0.12, size * 0.07, 0, 0, 7); g.fill(); }
+        g.font = `${10 * dpr}px "Share Tech Mono", monospace`; g.textAlign = 'center'; g.fillStyle = 'rgba(240,200,150,.9)';
+        g.fillText(`реголит ${c.dep.left}`, p.x, p.y + size * 0.62);
+      }
     }
     // пути отрядов и капсулы
     for (const u of [base, ...outSquads()]) {
@@ -632,6 +669,13 @@ AB.IsoOverworld = (() => {
     g.globalAlpha = 1;
     const hp = me ? me.hp / AB.ID.get(s.id).stats.maxHp : 1;
     if (hp < 0.999 || mobs.some((m) => m.hp > 0 && m.hunt)) bar(c.x, c.y - size * 1.25, hp, '#5ee6ff');
+    if (s.cargo) {        // №71: груз реголита в костюме
+      const R = D().dig;
+      g.font = `${10 * dpr}px "Share Tech Mono", monospace`; g.textAlign = 'center';
+      g.fillStyle = 'rgba(0,0,0,.65)'; g.fillRect(c.x - 26 * dpr, c.y - size * 1.62 - 10 * dpr, 52 * dpr, 13 * dpr);
+      g.fillStyle = s.cargo >= R.cargo ? '#ffb070' : '#f0d0a0'; g.fillText(`РГЛ ${s.cargo}/${R.cargo}`, c.x, c.y - size * 1.62);
+      if (s.dig && time - s.dig < 0.3) { g.fillStyle = 'rgba(210,150,90,.7)'; for (let i = 0; i < 3; i++) g.fillRect(c.x - 10 + Math.random() * 20, c.y + size * 0.2 - Math.random() * 14, 3, 3); }
+    }
   }
   function bar(x, y, f, col) {
     const w = size * 0.9;
@@ -740,7 +784,8 @@ AB.IsoOverworld = (() => {
     pos: () => ({ q: selU().q, r: selU().r }),
     goTo(q, r) { const u = selU(); if (u.kind === 'base' && mode !== 'capsule') return false; const p = route(at(u), { q, r }, u); if (p) u.path = p; return !!p; },
     select(id) { if (unit(id)) { sel = id; drive = id === 'base'; squadsSig = ''; return true; } return false; },
-    deploy, recall, surface, ascending: () => !!ascend, enterBuilding, selectedKind: () => selU().kind, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle })), base: () => ({ q: base.q, r: base.r }),
+    deploy, recall, surface, ascending: () => !!ascend, enterBuilding, selectedKind: () => selU().kind, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle, cargo: s.cargo || 0 })),
+    deposit: (q, r) => { const c = cells.get(key(q, r)); return c && c.dep ? { ...c.dep } : null; }, base: () => ({ q: base.q, r: base.r }),
     revealAll() { for (const c of cells.values()) c.seen = true; },
     // админ-панель: убрать бродячих тварей (сюжетные не трогаем)
     clearWild() { let n = 0; for (const m of mobs) if (m.hp > 0 && m.kind !== 'story') { m.hp = 0; m.anim = 'DEAD'; m.fade = 0; n++; } return n; },

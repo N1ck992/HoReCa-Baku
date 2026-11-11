@@ -101,7 +101,7 @@ AB.IsoParty = (() => {
   let scene = false;
   function update(dt, input) {
     if (!members.length) return;
-    if (scene) { for (const m of members) { const went = m.path ? walkPath(m, dt, m.scripted || 1.8) : 0; if (!m.path) { m.goal = null; m.scripted = null; } animate(m, went, dt); } return; }
+    if (scene) { for (const m of members) { if (m.ext) continue; const went = m.path ? walkPath(m, dt, m.scripted || 1.8) : 0; if (!m.path) { m.goal = null; m.scripted = null; } animate(m, went, dt); } return; }
     if (isDead(lead())) cycle();                   // ведущий погиб — управление следующему живому
     const l = lead();
     if (isDead(l)) return;
@@ -248,6 +248,7 @@ AB.IsoParty = (() => {
   }
   function npcTick(dt) {
     for (const m of npcs) {
+      if (m.ext) continue;                 // героем управляет симуляция базы (№71)
       const went = m.path ? walkPath(m, dt, m.scripted || 1.8) : 0;
       if (!m.path) { m.goal = null; m.scripted = null; }
       animate(m, went, dt);

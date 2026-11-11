@@ -30,6 +30,8 @@ AB.ASSET_MANIFEST = [
   // №55, акты II–III (черновик): картинок пока нет — заглушки
   { id: 'ASSET-ITEM014-01', owner: 'ITEM-014', type: 'icon', src: null, desc: 'Жетон экспедиции' },
   { id: 'ASSET-ITEM015-01', owner: 'ITEM-015', type: 'icon', src: null, desc: 'Кристалл' },
+  { id: 'ASSET-ITEM016-01', owner: 'ITEM-016', type: 'icon', src: null, desc: 'Реголит' },
+  { id: 'ASSET-ITEM017-01', owner: 'ITEM-017', type: 'icon', src: null, desc: 'Стройматериал' },
   { id: 'ASSET-ENEMY008-01', owner: 'ENEMY-008', type: 'sprite', src: null, desc: 'Глубинный хищник' },
   { id: 'ASSET-CHAR004-01', owner: 'CHAR-004', type: 'sprite', src: null, desc: 'Сайлас' },
   { id: 'ASSET-ENEMY009-01', owner: 'ENEMY-009', type: 'sprite', src: null, desc: 'Исполин' },

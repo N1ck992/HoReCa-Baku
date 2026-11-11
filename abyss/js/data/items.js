@@ -48,6 +48,11 @@ AB.ITEMS = [
     desc: 'Жетон члена экспедиции «Абисса». Обронил преследователь. Номер выбит тот же, что на жетоне Марка.' },
   { id: 'ITEM-015', name: 'Кристалл', short: 'КРС', category: 'resource', stack: 10, icon: 'ASSET-ITEM015-01', use: null, pending: true,
     desc: 'Фиолетовый кристалл с морского дна. Тёплый на ощупь и светится изнутри. Энергии в нём больше, чем в любой батарее.' },
+  // №71: конструктор базы — сырьё и продукт 3D-принтера (черновик)
+  { id: 'ITEM-016', name: 'Реголит', short: 'РГЛ', category: 'resource', stack: 30, icon: 'ASSET-ITEM016-01', use: null, pending: true, base: true,
+    desc: 'Донный грунт: песок, ил и каменная крошка. Сырьё для промышленного 3D-принтера.' },
+  { id: 'ITEM-017', name: 'Стройматериал', short: 'СТР', category: 'resource', stack: 30, icon: 'ASSET-ITEM017-01', use: null, pending: true, base: true,
+    desc: 'Спечённые 3D-принтером блоки из реголита. Из них печатают стены и перекрытия новых помещений.' },
 ];
 
 AB.ITEMS.forEach((i) => AB.ID.register(i.id, i));

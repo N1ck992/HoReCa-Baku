@@ -104,6 +104,10 @@ AB.IsoDev = (() => {
       let n = 0; for (const e of AB.IsoEnemies.alive()) if (!e.story && AB.ID.get(e.id).type !== 'pursuer') { AB.IsoEnemies.damage(e.id, 99999, null); n++; } return `Убито рядом: ${n}`;
     },
     map() { if (AB.IsoOverworld.revealAll) AB.IsoOverworld.revealAll(); return 'Карта дна открыта'; },
+    // №71: конструктор базы
+    regolith() { if (!AB.BaseSim.on()) return 'База ещё не отстыкована'; AB.BaseSim.receive('ITEM-016', 30); return 'Реголит ×30 — в приёмник шлюза'; },
+    hour() { if (!AB.BaseSim.on()) return 'База ещё не отстыкована'; AB.BaseSim.catchUp(3600); AB.BaseSim.save(); return 'База прожила час (как будто вас не было)'; },
+    baseReset() { AB.BaseSim.reset(); return 'База сброшена: при следующем входе — пустой корпус'; },
     terminal() { AB.IsoStash.add('ITEM-011', 1); return 'Наручный терминал — в вещах (или сразу в руках)'; },
   };
 
@@ -118,7 +122,8 @@ AB.IsoDev = (() => {
       <h3>Инструменты</h3><div class="dev-row">
         <button data-tool="god">${god ? 'Бессмертие: ВКЛ' : 'Бессмертие: выкл'}</button><button data-tool="heal">Вылечить отряд</button>
         <button data-tool="res">+ Ресурсы</button><button data-tool="terminal">+ Наручный терминал</button>
-        <button data-tool="kill">Убить врагов рядом</button><button data-tool="map">Открыть карту дна</button></div>
+        <button data-tool="kill">Убить врагов рядом</button><button data-tool="map">Открыть карту дна</button>
+        <button data-tool="regolith">База: + реголит ×30</button><button data-tool="hour">База: прожить час</button><button data-tool="baseReset">База: сбросить</button></div>
       <p class="muted">Переход перезагружает страницу и сразу ставит героев в выбранное место сюжета с нужными вещами.</p>` : '<p class="muted">Включите режим — появятся переходы по актам и инструменты.</p>'}
     </div>`;
   }
