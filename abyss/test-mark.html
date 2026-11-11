@@ -51,6 +51,7 @@
   <button id="who">Управляю: Марк A</button>
   <button id="anim">Анимация</button>
   <button id="runart" class="on">Рисунок бега: вкл</button>
+  <button id="meshbtn">Сетка</button>
 </div>
 <div id="stick"><i></i></div>
 <div id="ed" hidden>
@@ -86,7 +87,7 @@
     <span class="muted">Правки сохраняются в браузере сами. Тяни за кость — она поворачивается вокруг сустава.</span>
   </div>
 </div>
-<div id="hint">Компьютер: WASD или стрелки, Shift — бег, клик — идти туда · Телефон: джойстик слева или нажатие по полу.<br>Два варианта Марка: «Управляю» — переключить, второй идёт следом. Пока есть только ракурс спереди: вверх по экрану герои идут тем же ракурсом.</div>
+<div id="hint">Компьютер: WASD или стрелки, Shift — бег, клик — идти туда · Телефон: джойстик слева или нажатие по полу.<br>Три варианта: Марк A, Марк B и Марк B на сетке (гнётся как в Spine). «Управляю» — переключить, остальные идут следом. Пока есть только ракурс спереди: вверх по экрану герои идут тем же ракурсом.</div>
 <script>
 // =====================================================================
 // Тестовая комната (№75): Марк вполоборота, 15 частей на скелете, анимация кодом.
@@ -96,11 +97,18 @@
 // =====================================================================
 (async () => {
   // два варианта Марка для сравнения: A — реалистичный, B — рисованный
-  const KINDS = [{ id: 'A', name: 'Марк A', base: 'assets/char001/3q/front/' }, { id: 'B', name: 'Марк B', base: 'assets/char001/3q/front-b/', runBase: 'assets/char001/3q/run-b-1/' }];
+  const KINDS = [{ id: 'A', name: 'Марк A', base: 'assets/char001/3q/front/' }, { id: 'B', name: 'Марк B', base: 'assets/char001/3q/front-b/', runBase: 'assets/char001/3q/run-b-1/' },
+    { id: 'C', name: 'Марк B · сетка', base: 'assets/char001/3q/front-b/', mesh: true }];
   for (const k of KINDS) {
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
     await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));
+    // №78: сетки (как в Spine): рука, нога и тело — цельные куски, гнутся по весам костей
+    if (k.mesh) {
+      k.meshData = await (await fetch(k.base + 'mesh.json')).json();
+      k.meshImgs = {};
+      await Promise.all(Object.entries(k.meshData.groups).map(([g, d]) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + d.img; k.meshImgs[g] = im; })));
+    }
     // №77: отдельный рисунок для бега (пока одна поза из четырёх)
     if (k.runBase) {
       const r = { rig: await (await fetch(k.runBase + 'rig.json')).json(), imgs: {} };
@@ -129,7 +137,7 @@
   const TW = 64, TH = 32, N = 12;
   const iso = (x, y) => ({ x: (x - y) * TW / 2, y: (x + y) * TH / 2 });
   const crates = [{ x: 3, y: 8 }, { x: 8, y: 3 }, { x: 8, y: 9 }, { x: 4, y: 3 }];
-  const heroes = KINDS.map((k, i) => ({ kind: k, x: 6 - i * 1.2, y: 6 + i * 1.2, face: 1, phase: i * 1.3, speed: 0, wave: 0, goal: null, run: false }));
+  const heroes = KINDS.map((k, i) => ({ kind: k, x: 6.5 - i * 1.3, y: 6 + i * 0.5, face: 1, phase: i * 1.3, speed: 0, wave: 0, goal: null, run: false }));
   let lead = 0;
   let me = heroes[lead];
   let runArt = true;     // №77: бег по отдельному рисунку (кнопка «Рисунок бега»)
@@ -164,6 +172,7 @@
   B('zout').onclick = () => { zoom = Math.max(0.5, zoom / 1.15); };
   B('wave').onclick = () => { for (const h of heroes) h.wave = 2.2; };
   B('runart').onclick = () => { runArt = !runArt; B('runart').textContent = `Рисунок бега: ${runArt ? 'вкл' : 'выкл'}`; B('runart').classList.toggle('on', runArt); };
+  B('meshbtn').onclick = () => { showMesh = !showMesh; B('meshbtn').classList.toggle('on', showMesh); };
   B('who').onclick = () => { lead = (lead + 1) % heroes.length; me = heroes[lead]; B('who').textContent = `Управляю: ${me.kind.name}`; };
   addEventListener('wheel', (e) => { zoom = Math.max(0.5, Math.min(2.4, zoom * (e.deltaY > 0 ? 0.9 : 1.1))); }, { passive: true });
 
@@ -225,22 +234,23 @@
   function formulaPose(me, t) {
     const p = {}, s = Math.min(1, me.speed / 1.6), r = me.run ? 1 : 0, ph = me.phase;
     const sw = (k) => Math.sin(ph + k);
-    const amp = 1 + r * 0.6;
+    const amp = 1 + r * 0.85;
     const breathe = Math.sin(t * 2.2) * (1 - s);
     // ноги: бедро вперёд-назад, колено гнётся на выносе, стопа остаётся у пола
     for (const [side, off] of [['n', 0], ['f', Math.PI]]) {
       const a = sw(off), lift = Math.max(0, Math.sin(ph + off + 0.9));
-      const thigh = 16 * a * amp * s;
-      const knee = (14 + 22 * r) * lift * s;
-      p['thigh_' + side] = { a: thigh, k: 1 - 0.06 * lift * s };
-      p['shin_' + side] = { a: -knee, k: 1 - 0.05 * lift * s };
+      // вполоборота нога идёт вперёд «на камеру»: меньше размах в стороны, больше укорочение и сгиб колена
+      const thigh = (16 - 6 * r) * a * amp * s;
+      const knee = (14 + 62 * r) * lift * s;
+      p['thigh_' + side] = { a: thigh, k: 1 - (0.06 + 0.12 * r) * lift * s };
+      p['shin_' + side] = { a: -knee, k: 1 - (0.05 + 0.08 * r) * lift * s };
       p['foot_' + side] = { a: -(thigh - knee) * 0.7 + 4 * lift * s };
     }
     // руки: против ног; на бегу согнуты сильнее
     for (const [side, off, k] of [['n', Math.PI, 1], ['f', 0, 0.8]]) {
       const a = sw(off);
       p['uarm_' + side] = { a: (-13 * a * amp * s + breathe * 1.5) * k };
-      p['farm_' + side] = { a: (-6 - 10 * s - 28 * r * s - Math.max(0, a) * 10 * s) * (side === 'n' ? 1 : -0.6) };
+      p['farm_' + side] = { a: (-6 - 10 * s - 50 * r * s - Math.max(0, a) * 14 * s) * (side === 'n' ? 1 : -0.6) };
       p['hand_' + side] = { a: 4 * a * s };
     }
     if (me.wave > 0) {                                // помахать ближней рукой
@@ -249,7 +259,7 @@
       p.farm_n = { a: (40 + Math.sin(t * 12) * 22) * w };
       p.hand_n = { a: 10 * w };
     }
-    p.torso = { a: (2.2 * sw(0) * s) + 5 * r * s, k: 1 + breathe * 0.008 };
+    p.torso = { a: (2.2 * sw(0) * s) + 8 * r * s, k: 1 + breathe * 0.008 };
     p.head = { a: -1.2 * sw(0) * s - 3 * r * s };
     p.pelvis = { a: 1.5 * sw(0) * s };
     p.bob = -Math.abs(Math.cos(ph)) * (5 + 6 * r) * s + Math.abs(Math.sin(ph)) * 2 * s - breathe * 1.5;
@@ -271,7 +281,7 @@
       wave: { dur: 2.2, loop: false, only: ['uarm_n', 'farm_n', 'hand_n'], keys: [0, 0.12, 0.3, 0.45, 0.6, 0.75, 0.9, 1].map((u) => ({ t: u, pose: clean(formulaPose({ speed: 0, run: false, phase: 0, wave: Math.max(0.001, 2.2 * (1 - u)) }, u * 2.2)) })) },
     };
   }
-  const ANIM_KEY = 'abyss_anim_v1';
+  const ANIM_KEY = 'abyss_anim_v3';   // v2 (№78): новый бег по умолчанию — глубже сгибы
   let anims = (() => { try { const a = JSON.parse(localStorage.getItem(ANIM_KEY)); if (a && a.walk) return a; } catch (e) { /* нет сохранения */ } return bake(); })();
   const saveAnims = () => { try { localStorage.setItem(ANIM_KEY, JSON.stringify(anims)); } catch (e) { /* хранилище недоступно */ } };
   const ease = (x) => x * x * (3 - 2 * x);
@@ -325,6 +335,73 @@
     const m = new DOMMatrix(parent).translate(px, py).rotate(a * 180 / Math.PI).scale(1, k).translate(-px, -py);
     return m;
   }
+  // ---------- №78: отрисовка сеток через WebGL (в отдельный холст, потом — на сцену) ----------
+  const GL = (() => {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 1024;
+    const gl = c.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: true });
+    if (!gl) return null;
+    const sh = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+    const pr = gl.createProgram();
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, 'attribute vec2 p;attribute vec2 uv;uniform vec2 res;varying vec2 v;void main(){v=uv;vec2 q=p/res*2.0-1.0;gl_Position=vec4(q.x,-q.y,0,1);}'));
+    gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, 'precision mediump float;varying vec2 v;uniform sampler2D t;void main(){gl_FragColor=texture2D(t,v);}'));
+    gl.linkProgram(pr); gl.useProgram(pr);
+    const aP = gl.getAttribLocation(pr, 'p'), aU = gl.getAttribLocation(pr, 'uv'), uR = gl.getUniformLocation(pr, 'res');
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    const cache = new Map();   // группа → буферы и текстура
+    function prep(key, d, img) {
+      if (cache.has(key)) return cache.get(key);
+      const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      const uv = new Float32Array(d.verts.length * 2);
+      d.verts.forEach(([x, y], i) => { uv[i * 2] = (x - d.x) / d.w; uv[i * 2 + 1] = (y - d.y) / d.h; });
+      const ub = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ub); gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+      const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(d.tris.flat()), gl.STATIC_DRAW);
+      const o = { tex, ub, ib, n: d.tris.length * 3, pb: gl.createBuffer(), pos: new Float32Array(d.verts.length * 2) };
+      cache.set(key, o); return o;
+    }
+    // нарисовать героя сетками: M — матрицы костей (в пикселях сцены), out — 2D-контекст сцены
+    function draw(out, kind, M, bones) {
+      const md = kind.meshData;
+      // вершины → сцена (смесь костей по весам)
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      const skinned = {};
+      for (const g of md.order) {
+        const d = md.groups[g], o = prep(kind.id + g, d, kind.meshImgs[g]), pos = o.pos;
+        d.verts.forEach(([vx, vy], i) => {
+          let X = 0, Y = 0;
+          for (const [bi, w] of d.weights[i]) { const m = M[bones[bi]]; X += w * (m.a * vx + m.c * vy + m.e); Y += w * (m.b * vx + m.d * vy + m.f); }
+          pos[i * 2] = X; pos[i * 2 + 1] = Y;
+          if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
+        });
+        skinned[g] = o;
+      }
+      x0 = Math.floor(x0) - 2; y0 = Math.floor(y0) - 2;
+      const bw = Math.ceil(x1 - x0) + 4, bh = Math.ceil(y1 - y0) + 4;
+      if (bw > c.width || bh > c.height) { c.width = Math.max(c.width, 2 ** Math.ceil(Math.log2(bw))); c.height = Math.max(c.height, 2 ** Math.ceil(Math.log2(bh))); }
+      gl.viewport(0, c.height - bh, bw, bh);
+      gl.uniform2f(uR, bw, bh);
+      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      for (const g of md.order) {
+        const o = skinned[g], pos = o.pos;
+        for (let i = 0; i < pos.length; i += 2) { pos[i] -= x0; pos[i + 1] -= y0; }
+        gl.bindBuffer(gl.ARRAY_BUFFER, o.pb); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, o.ub); gl.enableVertexAttribArray(aU); gl.vertexAttribPointer(aU, 2, gl.FLOAT, false, 0, 0);
+        gl.bindTexture(gl.TEXTURE_2D, o.tex); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.ib);
+        gl.drawElements(gl.TRIANGLES, o.n, gl.UNSIGNED_SHORT, 0);
+      }
+      out.save(); out.setTransform(1, 0, 0, 1, 0, 0);
+      out.drawImage(c, 0, 0, bw, bh, x0, y0, bw, bh);
+      out.restore();
+      return { skinned, x0, y0 };
+    }
+    return { draw };
+  })();
+  let showMesh = false;
+
   // бег по рисунку бега: поза с картинки ↔ та же картинка с ногами и руками «наоборот»
   // две половины шага: рисунок как есть (ближняя нога сзади) и рисунок, где ноги и руки поменялись местами;
   // внутри половины — небольшой мах, чтобы смена была мягче
@@ -357,6 +434,16 @@
       M[n] = mat(parent, part, q[n]);
     }
     me._root = root;
+    if (me.kind.mesh && GL && !useRun) {
+      const r = GL.draw(ctx, me.kind, M, me.kind.meshData.bones);
+      if (showMesh) {                                   // сетка поверх — посмотреть, как она гнётся
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.strokeStyle = 'rgba(94,230,255,.35)'; ctx.lineWidth = 1;
+        for (const g of me.kind.meshData.order) { const d = me.kind.meshData.groups[g], pos = r.skinned[g].pos; ctx.beginPath(); for (const [a, b, c2] of d.tris) { ctx.moveTo(pos[a * 2] + r.x0, pos[a * 2 + 1] + r.y0); ctx.lineTo(pos[b * 2] + r.x0, pos[b * 2 + 1] + r.y0); ctx.lineTo(pos[c2 * 2] + r.x0, pos[c2 * 2 + 1] + r.y0); ctx.closePath(); } ctx.stroke(); }
+        ctx.restore();
+      }
+      if (showBones || ed.on) drawBones(me, rig, M, ORDER_);
+      return;
+    }
     const PAL = ['#e64545', '#4a63e6', '#f0c828', '#28c85a', '#c83cdc', '#3cdce6', '#fa821e', '#82fa3c', '#965a28', '#ffffff', '#7878ff', '#ff78be', '#1e783c', '#c8c878', '#5a288c'];
     const order = useRun && q.half ? ORDER_.map((n) => (LIMB.test(n) ? SWAP(n) : n)) : ORDER_;
     order.forEach((n) => {
@@ -367,7 +454,10 @@
       if (showParts) { ctx.globalAlpha = 0.35; ctx.fillStyle = PAL[Object.keys(rig.parts).indexOf(n) % PAL.length]; ctx.globalCompositeOperation = 'source-atop'; ctx.fillRect(part.x, part.y, part.w, part.h); }
       ctx.restore();
     });
-    if (showBones || ed.on) {
+    if (showBones || ed.on) drawBones(me, rig, M, ORDER_);
+  }
+  function drawBones(me, rig, M, ORDER_) {
+    {
       for (const n of ORDER_) {
         const part = rig.parts[n], m = M[n];
         const a = m.transformPoint(new DOMPoint(...part.pivot)), b = m.transformPoint(new DOMPoint(...part.end));
