@@ -515,7 +515,9 @@ AB.IsoOverworld = (() => {
     for (const s of D().sites) {
       const c = cells.get(key(s.q, s.r)); if (!c.seen || !shown(s)) continue;
       const p = px(s.q, s.r);
-      icon(s.kind, p.x, p.y);
+      // №67: в клетке стоит база или отряд — значок точки меньше и в углу клетки
+      const busy = cellUnits(s.q, s.r).length > 0;
+      icon(s.kind, p.x, p.y + (busy ? -size * 0.75 : 0), busy ? 0.6 : 1);
       g.font = `${11 * dpr}px "Oswald", sans-serif`; g.textAlign = 'center'; g.fillStyle = 'rgba(230,220,200,.85)';
       g.fillText(s.name, p.x, p.y + size * 0.85);
     }
@@ -525,7 +527,7 @@ AB.IsoOverworld = (() => {
       g.fillStyle = `rgba(${col},${0.6 + Math.sin(time * 4) * 0.3})`; g.beginPath(); g.moveTo(p.x, p.y - 14 * dpr); g.lineTo(p.x + 6 * dpr, p.y - 4 * dpr); g.lineTo(p.x, p.y + 4 * dpr); g.lineTo(p.x - 6 * dpr, p.y - 4 * dpr); g.closePath(); g.fill();
     }
     // выбранный — кольцо под ним
-    const su = selU(), sp = curPos(su);
+    const su = selU(), sp = slotPos(su);
     g.strokeStyle = `rgba(94,230,255,${0.55 + Math.sin(time * 4) * 0.2})`; g.lineWidth = 2 * dpr;
     g.beginPath(); g.ellipse(sp.x, sp.y + 2, size * 0.7, size * 0.7 * TILT, 0, 0, 7); g.stroke();
     // по глубине: твари, капсула, костюмы
@@ -541,7 +543,7 @@ AB.IsoOverworld = (() => {
     }
   }
   function drawBase() {
-    const c = curPos(base);
+    const c = slotPos(base);
     if (ascend) c.y -= size * 6 * Math.min(1, ascend.t / 5);          // капсула поднимается
     g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(c.x, c.y + 6, 20 * dpr, 5 * dpr, 0, 0, 7); g.fill();
     g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(c.x, c.y - 6, 18 * dpr, 10 * dpr, 0, 0, 7); g.fill();
@@ -549,7 +551,7 @@ AB.IsoOverworld = (() => {
     g.fillStyle = '#5ee6ff'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(c.x + i * 8 * dpr, c.y - 8, 2.6 * dpr, 0, 7); g.fill(); }
   }
   function drawSquad(s) {
-    const c = curPos(s), me = AB.Chars.get(s.id);
+    const c = slotPos(s), me = AB.Chars.get(s.id);
     const pose = { facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
     if (s.state === 'retreat') g.globalAlpha = 0.75;
     AB.IsoSuit.draw(g, pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height);
@@ -575,8 +577,22 @@ AB.IsoOverworld = (() => {
     g.globalAlpha = 1;
     if (m.hp > 0 && (m.hunt || m.hp < m.max)) bar(p.x, p.y - size * (m.kind === 'giants' ? 1.75 : 1.2), m.hp / m.max, m.kind === 'giants' ? '#ff9a3a' : '#ff5a4a');
   }
-  function icon(kind, x, y) {
-    const s = size * 0.42;
+  // №67: кто стоит в клетке (база и отряды, не на ходу) — чтобы разводить их внутри клетки, а не рисовать друг на друге
+  function cellUnits(q, r) {
+    const out = [];
+    if (mode === 'capsule' && !base.anim && base.q === q && base.r === r) out.push(base);
+    for (const s of outSquads()) if (!s.anim && s.q === q && s.r === r) out.push(s);
+    return out;
+  }
+  function slotPos(u) {
+    const c = curPos(u);
+    if (u.anim) return c;
+    const list = cellUnits(u.q, u.r), n = list.length, i = list.indexOf(u);
+    if (n < 2 || i < 0) return c;
+    return { x: c.x + (i - (n - 1) / 2) * size * 0.75, y: c.y + (i % 2 ? size * 0.12 : -size * 0.05) };
+  }
+  function icon(kind, x, y, sc = 1) {
+    const s = size * 0.42 * sc;
     g.save(); g.translate(x, y);
     const col = { ship: '#9fd4e6', wreck: '#b0a58f', crystal: '#c79bff', people: '#ffd27a', ancient: '#b48cff', machine: '#7fe0c0', swarm: '#ff6a5a' }[kind] || '#ddd';
     g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2 * dpr;

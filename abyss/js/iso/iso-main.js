@@ -164,11 +164,14 @@
     if (charId !== null || delta <= 0) return;
     const w = AB.ID.get(itemId).weapon;
     if (!w) return;
-    const held = AB.Inventory.weapon('CHAR-001'), heldDef = held && AB.ID.get(held.item);
-    if (w.ranged && !w.dart && AB.IsoParty.find('CHAR-001') && (!heldDef || !heldDef.weapon.ranged)) {
+    // №67: в руки ведущему (или первому в отряде без дальнобойного оружия) — не обязательно Марку
+    const noRanged = (m) => { const h = AB.Inventory.weapon(m.id), d = h && AB.ID.get(h.item); return !(AB.Chars.get(m.id) || {}).dead && (!d || !d.weapon.ranged); };
+    const lead = AB.IsoParty.lead(), to = lead && noRanged(lead) ? lead : AB.IsoParty.members().find(noRanged);
+    if (w.ranged && !w.dart && to) {
+      const held = AB.Inventory.weapon(to.id);
       setTimeout(() => {
         const i = AB.IsoStash.cells().findIndex((c) => c && c.item === itemId);
-        if (i >= 0 && AB.IsoStash.equip(i, 'CHAR-001')) toast(`Марк берёт в руки: ${itemName(itemId)}${held ? ` · ${itemName(held.item)} — в вещи` : ''}`, 'good');
+        if (i >= 0 && AB.IsoStash.equip(i, to.id)) toast(`${AB.ID.get(to.id).name} берёт в руки: ${itemName(itemId)}${held ? ` · ${itemName(held.item)} — в вещи` : ''}`, 'good');
       }, 0);
       return;
     }

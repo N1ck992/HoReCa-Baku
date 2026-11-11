@@ -141,7 +141,7 @@ AB.IsoInteract = (() => {
       return AB.IsoActs.canBuild(m.id) ? { label: `Пристыковать модуль «${m.name}» (${cost})`, ok: true } : { label: `Гнездо модуля «${m.name}»: нужно ${cost}`, ok: false };
     }
     if (t.kind === 'equip') {
-      const a = AB.Equip.action(t.ref.id, lid);
+      const a = AB.Equip.action(t.ref.id, actor(t.ref.id));
       return { label: a.ok ? a.label : `${t.name}: ${a.label.charAt(0).toLowerCase()}${a.label.slice(1)}`, ok: a.ok };
     }
     if (t.kind === 'door' && t.ref.state === 'jammed') {
@@ -191,7 +191,7 @@ AB.IsoInteract = (() => {
     if (ns && ld.repair) return { label: `${AB.IsoNest.config().stageWord || 'Починка'} — этап ${ns.stage + 1}…`, ok: true, progress: ns.prog };
     if (work && work.t.kind === 'container') return { label: `Обыск: ${work.t.name}…`, ok: true, progress: work.p / work.time };
     if (work && work.t.kind === 'doorfix') return { label: `Чинить дверь… ${Math.round((work.t.ref.hp / work.t.ref.max) * 100)}%`, ok: true, progress: work.p / work.time };
-    if (work) { return { label: `${AB.Equip.action(work.t.ref.id, AB.IsoParty.lead().id).label}…`, ok: true, progress: work.p / work.time }; }
+    if (work) { return { label: `${AB.Equip.action(work.t.ref.id, actor(work.t.ref.id)).label}…`, ok: true, progress: work.p / work.time }; }
     const t = nearest();
     return t ? { ...label(t), id: t.id } : null;
   }
@@ -210,10 +210,10 @@ AB.IsoInteract = (() => {
       return true;
     }
     if (t.kind === 'equip') {
-      const a = AB.Equip.action(t.ref.id, l.id);
+      const a = AB.Equip.action(t.ref.id, actor(t.ref.id));
       if (!a.ok) { AB.Bus.emit('equip:blocked', { id: t.ref.id, text: a.label }); return true; }
       if (a.time) { AB.IsoParty.stop(); work = { t, p: 0, time: a.time, x: l.x, y: l.y }; return true; }
-      AB.Equip.apply(t.ref.id, l.id);
+      AB.Equip.apply(t.ref.id, actor(t.ref.id));
       return true;
     }
     if (t.kind === 'door') return toggleDoor(t.ref);
@@ -306,6 +306,17 @@ AB.IsoInteract = (() => {
     if (it) dropPos.set(`${room}:${it.key}`, { x, y });
   }
 
+  // №67: оборудование делает отряд, а не конкретный герой — если ведущий не умеет (нужен навык),
+  // работу берёт на себя тот, кто в отряде умеет; анимация — у ведущего
+  function actor(eqId) {
+    const lid = AB.IsoParty.lead().id, d = AB.ID.get(eqId);
+    if (!d || !d.skill) return lid;
+    const can = (id) => !!((AB.ID.get(id) || {}).skills || {})[d.skill] && !(AB.Chars.get(id) || {}).dead;
+    if (can(lid)) return lid;
+    const m = AB.IsoParty.members().find((q) => can(q.id));
+    return m ? m.id : lid;
+  }
+
   // есть ли вещь у отряда: в руках у кого-то или в общих вещах
   function hasItem(id) {
     return AB.IsoStash.count(id) > 0 || AB.IsoParty.members().some((m) => { const w = AB.Inventory.weapon(m.id); return w && w.item === id; });
@@ -369,7 +380,7 @@ AB.IsoInteract = (() => {
           const t = work.t; work = null;
           if (t.kind === 'container') loot(t);
           else if (t.kind === 'doorfix') { AB.IsoNest.repairDoor(t.ref.key); if (t.ref.state === 'closed' && t.ref.hp < t.ref.max && !AB.IsoNest.underAttack(t.ref)) work = { t, p: 0, time: work0time(), x: l.x, y: l.y }; }
-          else AB.Equip.apply(t.ref.id, l.id);
+          else AB.Equip.apply(t.ref.id, actor(t.ref.id));
         }
       }
     }

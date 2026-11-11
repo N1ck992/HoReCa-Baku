@@ -44,6 +44,7 @@ AB.IsoParty = (() => {
   function goTo(x, y) {
     const l = lead();
     const p = W().path(l.x, l.y, x, y);
+    l.scripted = null; l.run = true;                 // приказ игрока: бегом (сценический шаг — только в сценах)
     l.path = p && p.length ? p : null;
     l.goal = l.path ? l.path[l.path.length - 1] : null;
     return !!l.path;
@@ -245,7 +246,7 @@ AB.IsoParty = (() => {
   function npcTick(dt) {
     for (const m of npcs) {
       const went = m.path ? walkPath(m, dt, m.scripted || 1.8) : 0;
-      if (!m.path) m.goal = null;
+      if (!m.path) { m.goal = null; m.scripted = null; }
       animate(m, went, dt);
     }
   }
