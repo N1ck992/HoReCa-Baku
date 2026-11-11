@@ -16,6 +16,27 @@
   #stick { position: fixed; left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(40px + env(safe-area-inset-bottom, 0px)); width: 120px; height: 120px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.04); display: none; }
   #stick i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(94,230,255,.25); border: 1px solid rgba(94,230,255,.6); }
   @media (pointer: coarse) { #stick { display: block; } }
+  /* редактор анимации */
+  #ed { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: grid; gap: 6px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(8,10,12,.94); border-top: 1px solid rgba(94,230,255,.3); max-height: 46vh; overflow: auto; touch-action: pan-y; }
+  #ed[hidden] { display: none; }
+  #ed .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #ed .muted { color: var(--muted); font-size: 11px; }
+  #ed button, #ed select, #ed input[type=number] { height: 30px; padding: 0 9px; font: 12px ui-monospace, monospace; color: var(--fg); background: #14181c; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+  #ed input[type=number] { width: 64px; }
+  #ed button.on { color: #0b1210; background: #ffd27a; border-color: #ffd27a; }
+  #ed button.big { width: 44px; font-size: 15px; color: #0b1210; background: #5ee6ff; border-color: #5ee6ff; }
+  #ed button.warn { border-color: rgba(255,120,90,.5); color: #ffb09a; }
+  #ed button:disabled { opacity: .4; }
+  #ed label { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; }
+  #ed .sl b { color: #ffd27a; min-width: 110px; }
+  #ed input[type=range] { width: 140px; accent-color: #ffd27a; }
+  #ed-bones button { height: 26px; padding: 0 7px; font-size: 11px; }
+  #ed-track { position: relative; height: 28px; background: #101418; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; touch-action: none; }
+  #ed-track i { position: absolute; top: 5px; width: 12px; height: 16px; margin-left: -6px; background: #5ee6ff; transform: rotate(45deg) scale(.7); border-radius: 2px; }
+  #ed-track i.cur { background: #ffd27a; }
+  #ed-head { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #ff5a4a; }
+  body.editing #hint, body.editing #stick { display: none !important; }
+  @media (max-width: 560px) { #ed input[type=range] { width: 110px; } #ed .sl b { min-width: 0; width: 100%; } }
 </style>
 </head>
 <body>
@@ -28,8 +49,40 @@
   <button id="zin">+</button><button id="zout">−</button>
   <button id="wave">Помахать</button>
   <button id="who">Управляю: Марк A</button>
+  <button id="anim">Анимация</button>
 </div>
 <div id="stick"><i></i></div>
+<div id="ed" hidden>
+  <div class="row">
+    <select id="ed-clip" aria-label="Анимация"></select>
+    <button id="ed-new">+ Новая</button>
+    <label>Длительность <input id="ed-dur" type="number" min="0.1" max="10" step="0.05"> с</label>
+    <label><input id="ed-loop" type="checkbox"> по кругу</label>
+    <button id="ed-play" class="big">▶</button>
+    <button id="ed-try">Проверить в комнате</button>
+  </div>
+  <div id="ed-track"><b id="ed-head"></b></div>
+  <div class="row muted" id="ed-tl"></div>
+  <div class="row">
+    <button id="ed-prev">◀ ключ</button><button id="ed-next">ключ ▶</button>
+    <button id="ed-add">+ Ключ</button><button id="ed-del">− Ключ</button>
+    <button id="ed-copy">Копировать позу</button><button id="ed-paste" disabled>Вставить</button>
+    <button id="ed-mirror">Отразить ⇄</button>
+  </div>
+  <div class="row" id="ed-bones"></div>
+  <div class="row sl">
+    <b id="ed-sel"></b>
+    <label>Угол <input id="ed-a" type="range" min="-180" max="180" step="0.5"> <span id="ed-av"></span></label>
+    <label>Длина <input id="ed-k" type="range" min="0.6" max="1.4" step="0.01"> <span id="ed-kv"></span></label>
+    <button id="ed-zero">0°</button>
+    <label>Подскок тела <input id="ed-bob" type="range" min="-30" max="30" step="0.5"> <span id="ed-bobv"></span></label>
+  </div>
+  <div class="row">
+    <button id="ed-save">Скачать анимацию</button><button id="ed-load">Загрузить</button><input id="ed-file" type="file" accept=".json,application/json" hidden>
+    <button id="ed-reset" class="warn">Сбросить эту анимацию</button>
+    <span class="muted">Правки сохраняются в браузере сами. Тяни за кость — она поворачивается вокруг сустава.</span>
+  </div>
+</div>
 <div id="hint">Компьютер: WASD или стрелки, Shift — бег, клик — идти туда · Телефон: джойстик слева или нажатие по полу.<br>Два варианта Марка: «Управляю» — переключить, второй идёт следом. Пока есть только ракурс спереди: вверх по экрану герои идут тем же ракурсом.</div>
 <script>
 // =====================================================================
@@ -63,7 +116,7 @@
 
   // ---------- управление ----------
   const keys = new Set();
-  addEventListener('keydown', (e) => { keys.add(e.key.toLowerCase()); if (e.key === 'Shift') run = true; syncUi(); });
+  addEventListener('keydown', (e) => { if (ed.on) return; keys.add(e.key.toLowerCase()); if (e.key === 'Shift') run = true; syncUi(); });
   addEventListener('keyup', (e) => { keys.delete(e.key.toLowerCase()); if (e.key === 'Shift') run = false; syncUi(); });
   const stick = { id: null, x: 0, y: 0, el: document.getElementById('stick') };
   stick.el.addEventListener('pointerdown', (e) => { stick.id = e.pointerId; stick.el.setPointerCapture(e.pointerId); setStick(e); e.stopPropagation(); });
@@ -76,6 +129,7 @@
     stick.el.firstElementChild.style.transform = `translate(${stick.x * 36}px, ${stick.y * 36}px)`;
   }
   cv.addEventListener('pointerdown', (e) => {
+    if (ed.on) return;
     // нажатие по полу — идти туда
     const p = toWorld(e.clientX, e.clientY);
     me.goal = { x: Math.max(0.6, Math.min(N - 0.6, p.x)), y: Math.max(0.6, Math.min(N - 0.6, p.y)) };
@@ -145,7 +199,8 @@
   }
 
   // ---------- анимация: углы суставов (градусы) и сжатие вдоль кости ----------
-  function pose(me, t) {
+  // исходные движения формулами — из них собираются ключевые позы по умолчанию
+  function formulaPose(me, t) {
     const p = {}, s = Math.min(1, me.speed / 1.6), r = me.run ? 1 : 0, ph = me.phase;
     const sw = (k) => Math.sin(ph + k);
     const amp = 1 + r * 0.6;
@@ -179,6 +234,67 @@
     return p;
   }
 
+  // ---------- анимации ключевыми позами (№76): их правит редактор ----------
+  // клип = { dur, loop, only?, keys: [{ t: 0..1, pose: { кость: { a, k }, bob } }] }
+  const BONES = ['pelvis', 'torso', 'head', 'uarm_n', 'farm_n', 'hand_n', 'uarm_f', 'farm_f', 'hand_f', 'thigh_n', 'shin_n', 'foot_n', 'thigh_f', 'shin_f', 'foot_f'];
+  const BONE_RU = { pelvis: 'Таз', torso: 'Торс', head: 'Голова', uarm_n: 'Плечо ближ.', farm_n: 'Предпл. ближ.', hand_n: 'Кисть ближ.', uarm_f: 'Плечо дальн.', farm_f: 'Предпл. дальн.', hand_f: 'Кисть дальн.', thigh_n: 'Бедро ближ.', shin_n: 'Голень ближ.', foot_n: 'Стопа ближ.', thigh_f: 'Бедро дальн.', shin_f: 'Голень дальн.', foot_f: 'Стопа дальн.' };
+  const CLIP_RU = { idle: 'Стоит', walk: 'Шаг', run: 'Бег', wave: 'Взмах' };
+  const clean = (p) => { const o = { bob: Math.round((p.bob || 0) * 10) / 10 }; for (const b of BONES) o[b] = { a: Math.round(((p[b] || {}).a || 0) * 10) / 10, k: Math.round(((p[b] || {}).k || 1) * 1000) / 1000 }; return o; };
+  function bake() {
+    const keys = (n, f) => Array.from({ length: n }, (_, i) => ({ t: i / n, pose: clean(f(i / n)) }));
+    return {
+      idle: { dur: 2.86, loop: true, keys: keys(4, (u) => formulaPose({ speed: 0, run: false, phase: 0, wave: 0 }, u * 2.86)) },
+      walk: { dur: 1.19, loop: true, keys: keys(8, (u) => formulaPose({ speed: 1.6, run: false, phase: u * Math.PI * 2, wave: 0 }, Math.PI / 4.4)) },
+      run: { dur: 0.8, loop: true, keys: keys(8, (u) => formulaPose({ speed: 1.6, run: true, phase: u * Math.PI * 2, wave: 0 }, Math.PI / 4.4)) },
+      wave: { dur: 2.2, loop: false, only: ['uarm_n', 'farm_n', 'hand_n'], keys: [0, 0.12, 0.3, 0.45, 0.6, 0.75, 0.9, 1].map((u) => ({ t: u, pose: clean(formulaPose({ speed: 0, run: false, phase: 0, wave: Math.max(0.001, 2.2 * (1 - u)) }, u * 2.2)) })) },
+    };
+  }
+  const ANIM_KEY = 'abyss_anim_v1';
+  let anims = (() => { try { const a = JSON.parse(localStorage.getItem(ANIM_KEY)); if (a && a.walk) return a; } catch (e) { /* нет сохранения */ } return bake(); })();
+  const saveAnims = () => { try { localStorage.setItem(ANIM_KEY, JSON.stringify(anims)); } catch (e) { /* хранилище недоступно */ } };
+  const ease = (x) => x * x * (3 - 2 * x);
+  function evalClip(c, u) {
+    const ks = c.keys.slice().sort((a, b) => a.t - b.t);
+    if (!ks.length) return clean({});
+    if (ks.length === 1) return ks[0].pose;
+    u = c.loop ? ((u % 1) + 1) % 1 : Math.max(0, Math.min(1, u));
+    let i = -1;
+    for (let j = 0; j < ks.length; j++) if (ks[j].t <= u) i = j;
+    let A, Bk, span, off;
+    if (i === -1) {                                  // до первого ключа
+      if (!c.loop) return ks[0].pose;
+      A = ks[ks.length - 1]; Bk = ks[0]; span = 1 - A.t + Bk.t; off = u + 1 - A.t;
+    } else if (i === ks.length - 1) {                // после последнего
+      if (!c.loop) return ks[i].pose;
+      A = ks[i]; Bk = ks[0]; span = 1 - A.t + Bk.t; off = u - A.t;
+    } else { A = ks[i]; Bk = ks[i + 1]; span = Bk.t - A.t; off = u - A.t; }
+    const f = ease(span > 0 ? Math.max(0, Math.min(1, off / span)) : 0);
+    return mix(A.pose, Bk.pose, f);
+  }
+  function mix(p, q, f) {
+    const o = { bob: (p.bob || 0) + ((q.bob || 0) - (p.bob || 0)) * f };
+    for (const b of BONES) { const x = p[b] || { a: 0, k: 1 }, y = q[b] || { a: 0, k: 1 }; o[b] = { a: x.a + (y.a - x.a) * f, k: (x.k ?? 1) + ((y.k ?? 1) - (x.k ?? 1)) * f }; }
+    return o;
+  }
+  // поза героя в комнате: стойка ↔ шаг/бег по скорости, поверх — взмах или проигрываемый клип
+  function pose(me, t) {
+    if (ed.on) return evalClip(anims[ed.clip], ed.t);
+    const idle = evalClip(anims.idle, t / anims.idle.dur);
+    const s = Math.min(1, me.speed / 1.6);
+    let p = idle;
+    if (s > 0.01) p = mix(idle, evalClip(me.run ? anims.run : anims.walk, me.phase / (Math.PI * 2)), s);
+    if (me.wave > 0) {
+      const w = Math.min(1, me.wave * 3, (anims.wave.dur - me.wave) * 4), wp = evalClip(anims.wave, 1 - me.wave / anims.wave.dur);
+      for (const b of anims.wave.only || BONES) p[b] = { a: p[b].a + (wp[b].a - p[b].a) * w, k: p[b].k + (wp[b].k - p[b].k) * w };
+    }
+    if (me.play) {
+      const c = anims[me.play.clip]; me.play.t += 1 / 60;
+      if (!c || (!c.loop && me.play.t > c.dur)) me.play = null; else { const cp = evalClip(c, me.play.t / c.dur); for (const b of c.only || BONES) p[b] = cp[b]; if (!c.only) p.bob = cp.bob; }
+    }
+    return p;
+  }
+  const ed = { on: false, clip: 'walk', t: 0, playing: false, sel: 'thigh_n', drag: null, clip_board: null };
+
   // ---------- отрисовка героя ----------
   const ORDER = ['uarm_f', 'farm_f', 'hand_f', 'thigh_f', 'shin_f', 'foot_f', 'pelvis', 'torso', 'head', 'thigh_n', 'shin_n', 'foot_n', 'uarm_n', 'farm_n', 'hand_n'];
   function mat(parent, part, q) {
@@ -189,12 +305,13 @@
   }
   function drawHero(me, sx, sy, sc, t) {
     const rig = me.kind.rig, imgs = me.kind.imgs, GROUND = rig.ground;
-    const q = pose(me, t), M = {};
+    const q = pose(me, t), M = {}; me._M = M;
     const root = new DOMMatrix().translate(sx, sy + q.bob * sc * 3).scale(sc * me.face, sc).translate(-GROUND[0], -GROUND[1]);
     for (const n of ['pelvis', 'torso', 'head', 'uarm_n', 'farm_n', 'hand_n', 'uarm_f', 'farm_f', 'hand_f', 'thigh_n', 'shin_n', 'foot_n', 'thigh_f', 'shin_f', 'foot_f']) {
       const part = rig.parts[n];
       M[n] = mat(part.parent ? M[part.parent] : root, part, q[n]);
     }
+    me._root = root;
     const PAL = ['#e64545', '#4a63e6', '#f0c828', '#28c85a', '#c83cdc', '#3cdce6', '#fa821e', '#82fa3c', '#965a28', '#ffffff', '#7878ff', '#ff78be', '#1e783c', '#c8c878', '#5a288c'];
     ORDER.forEach((n) => {
       const part = rig.parts[n], im = imgs[n];
@@ -204,13 +321,15 @@
       if (showParts) { ctx.globalAlpha = 0.35; ctx.fillStyle = PAL[Object.keys(rig.parts).indexOf(n) % PAL.length]; ctx.globalCompositeOperation = 'source-atop'; ctx.fillRect(part.x, part.y, part.w, part.h); }
       ctx.restore();
     });
-    if (showBones) {
+    if (showBones || ed.on) {
       for (const n of ORDER) {
         const part = rig.parts[n], m = M[n];
         const a = m.transformPoint(new DOMPoint(...part.pivot)), b = m.transformPoint(new DOMPoint(...part.end));
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-        ctx.fillStyle = '#ff4a3a'; ctx.beginPath(); ctx.arc(a.x, a.y, 4 * dpr, 0, 7); ctx.fill();
+        const on = ed.on && ed.sel === n;
+        ctx.fillStyle = on ? '#ffd27a' : '#ff4a3a'; ctx.beginPath(); ctx.arc(a.x, a.y, (on ? 8 : 5) * dpr, 0, 7); ctx.fill();
+        if (on) { ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 4 * dpr; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
       }
     }
   }
@@ -225,6 +344,7 @@
   let last = performance.now(), T = 0;
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
+    if (ed.on) { edFrame(dt); requestAnimationFrame(frame); return; }
     update(dt);
     const mp = iso(me.x, me.y);
     cam.x += (mp.x - cam.x) * Math.min(1, dt * 6); cam.y += (mp.y - 60 - cam.y) * Math.min(1, dt * 6);
@@ -263,6 +383,147 @@
     ctx.fillStyle = lg; ctx.fillRect(0, 0, cv.width, cv.height);
     requestAnimationFrame(frame);
   }
+  // =====================================================================
+  // РЕДАКТОР АНИМАЦИИ (№76). Тянешь за сустав — кость поворачивается; позы — ключевые кадры
+  // на шкале времени, промежутки досчитываются плавно. Сохраняется в браузере сам;
+  // «Скачать» — файл анимации, его ставим в игру.
+  // =====================================================================
+  const E = (id) => document.getElementById(id);
+  function edOpen(on) {
+    ed.on = on; E('ed').hidden = !on; document.body.classList.toggle('editing', on);
+    if (on) { keys.clear(); ed.t = 0; ed.playing = false; edRender(); }
+    E('anim').classList.toggle('on', on);
+  }
+  const clip = () => anims[ed.clip];
+  const keyAt = (t) => clip().keys.find((k) => Math.abs(k.t - t) < 0.004);
+  function ensureKey() {
+    let k = keyAt(ed.t);
+    if (!k) { k = { t: Math.round(ed.t * 1000) / 1000, pose: clean(evalClip(clip(), ed.t)) }; clip().keys.push(k); clip().keys.sort((a, b) => a.t - b.t); }
+    return k;
+  }
+  function changed() { saveAnims(); edRender(); }
+  function edFrame(dt) {
+    if (ed.playing) { ed.t += dt / clip().dur; if (ed.t >= 1) { if (clip().loop) ed.t %= 1; else { ed.t = 1; ed.playing = false; } } edTime(); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#07090b'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const panelH = E('ed').getBoundingClientRect().height * dpr;
+    const top = (document.getElementById('ui').getBoundingClientRect().bottom + 10) * dpr;   // под кнопками
+    const areaH = cv.height - panelH - top, h = me.kind.rig.height;
+    const sc = Math.max(0.05, areaH * 0.9 / h), sx = cv.width / 2, sy = top + areaH * 0.96;
+    // пол и сетка для оценки шага
+    ctx.strokeStyle = 'rgba(94,230,255,.25)'; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(cv.width, sy); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    for (let x = sx % (40 * dpr); x < cv.width; x += 40 * dpr) { ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, sy); ctx.stroke(); }
+    const keep = me.face; me.face = 1;
+    drawHero(me, sx, sy, sc, T);
+    me.face = keep;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  // нажатие по холсту в редакторе: ближайший сустав → выбрать и тянуть
+  function pivots() { const out = []; for (const n of BONES) { const part = me.kind.rig.parts[n], m = me._M && me._M[n]; if (m) { const p = m.transformPoint(new DOMPoint(...part.pivot)), q = m.transformPoint(new DOMPoint(...part.end)); out.push({ n, x: p.x / dpr, y: p.y / dpr, ex: q.x / dpr, ey: q.y / dpr }); } } return out; }
+  cv.addEventListener('pointerdown', (e) => {
+    if (!ed.on) return;
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    // ближе всего к кости (отрезку сустав → конец)
+    let best = null, bd = 40;
+    for (const p of pivots()) {
+      const vx = p.ex - p.x, vy = p.ey - p.y, t = Math.max(0, Math.min(1, ((x - p.x) * vx + (y - p.y) * vy) / (vx * vx + vy * vy || 1)));
+      const d = Math.hypot(x - (p.x + vx * t), y - (p.y + vy * t)) - (p.n === ed.sel ? 6 : 0);
+      if (d < bd) { bd = d; best = p; }
+    }
+    if (!best) return;
+    ed.sel = best.n; ed.playing = false;
+    const k = ensureKey();
+    ed.drag = { id: e.pointerId, px: best.x, py: best.y, a0: Math.atan2(y - best.y, x - best.x), base: k.pose[best.n].a, k };
+    cv.setPointerCapture(e.pointerId);
+    edRender();
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!ed.on || !ed.drag || e.pointerId !== ed.drag.id) return;
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    let d = (Math.atan2(y - ed.drag.py, x - ed.drag.px) - ed.drag.a0) * 180 / Math.PI;
+    while (d > 180) d -= 360; while (d < -180) d += 360;
+    ed.drag.k.pose[ed.sel].a = Math.round((ed.drag.base + d) * 10) / 10;
+    edSliders();
+  });
+  const endDrag = (e) => { if (ed.drag && e.pointerId === ed.drag.id) { ed.drag = null; changed(); } };
+  cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+  // ---------- панель ----------
+  function edRender() {
+    const sel = E('ed-clip');
+    sel.innerHTML = Object.keys(anims).map((n) => `<option value="${n}" ${n === ed.clip ? 'selected' : ''}>${CLIP_RU[n] || n}</option>`).join('');
+    E('ed-dur').value = clip().dur; E('ed-loop').checked = !!clip().loop;
+    E('ed-play').textContent = ed.playing ? '⏸' : '▶';
+    E('ed-bones').innerHTML = BONES.map((b) => `<button data-b="${b}" class="${b === ed.sel ? 'on' : ''}">${BONE_RU[b]}</button>`).join('');
+    edTime(); edSliders();
+  }
+  function edTime() {
+    const tr = E('ed-track');
+    tr.querySelectorAll('i').forEach((n) => n.remove());
+    for (const k of clip().keys) { const i = document.createElement('i'); i.style.left = `${k.t * 100}%`; if (Math.abs(k.t - ed.t) < 0.004) i.className = 'cur'; tr.appendChild(i); }
+    E('ed-head').style.left = `${ed.t * 100}%`;
+    E('ed-tl').textContent = `${(ed.t * clip().dur).toFixed(2)} с · кадр ${keyAt(ed.t) ? 'ключевой' : 'промежуточный'} · ключей: ${clip().keys.length}`;
+    edSliders();
+  }
+  function edSliders() {
+    const k = keyAt(ed.t), p = k ? k.pose : evalClip(clip(), ed.t), b = p[ed.sel] || { a: 0, k: 1 };
+    E('ed-a').value = b.a; E('ed-av').textContent = `${b.a.toFixed(1)}°`;
+    E('ed-k').value = b.k; E('ed-kv').textContent = `${Math.round(b.k * 100)}%`;
+    E('ed-bob').value = p.bob || 0; E('ed-bobv').textContent = (p.bob || 0).toFixed(1);
+    E('ed-sel').textContent = BONE_RU[ed.sel];
+  }
+  E('ed-clip').onchange = (e) => { ed.clip = e.target.value; ed.t = 0; ed.playing = false; edRender(); };
+  E('ed-new').onclick = () => {
+    const name = (prompt('Название новой анимации (латиницей или по-русски):', 'attack') || '').trim();
+    if (!name || anims[name]) return;
+    anims[name] = { dur: 1, loop: false, keys: [{ t: 0, pose: clean(evalClip(anims.idle, 0)) }, { t: 1, pose: clean(evalClip(anims.idle, 0)) }] };
+    ed.clip = name; ed.t = 0; changed();
+  };
+  E('ed-dur').onchange = (e) => { clip().dur = Math.max(0.1, Math.min(10, +e.target.value || 1)); changed(); };
+  E('ed-loop').onchange = (e) => { clip().loop = e.target.checked; changed(); };
+  E('ed-play').onclick = () => { ed.playing = !ed.playing; if (ed.playing && ed.t >= 1) ed.t = 0; edRender(); };
+  E('ed-track').addEventListener('pointerdown', (e) => {
+    const r = E('ed-track').getBoundingClientRect(), set = (cx) => { let t = Math.max(0, Math.min(1, (cx - r.left) / r.width)); const near = clip().keys.find((k) => Math.abs(k.t - t) < 0.025); if (near) t = near.t; ed.t = t; ed.playing = false; edTime(); };
+    set(e.clientX); E('ed-track').setPointerCapture(e.pointerId);
+    E('ed-track').onpointermove = (m) => set(m.clientX); E('ed-track').onpointerup = () => { E('ed-track').onpointermove = null; edRender(); };
+  });
+  const keysSorted = () => clip().keys.slice().sort((a, b) => a.t - b.t);
+  E('ed-prev').onclick = () => { const ks = keysSorted().filter((k) => k.t < ed.t - 0.004); ed.t = ks.length ? ks[ks.length - 1].t : keysSorted()[keysSorted().length - 1].t; ed.playing = false; edRender(); };
+  E('ed-next').onclick = () => { const k = keysSorted().find((q) => q.t > ed.t + 0.004); ed.t = k ? k.t : keysSorted()[0].t; ed.playing = false; edRender(); };
+  E('ed-add').onclick = () => { ensureKey(); changed(); };
+  E('ed-del').onclick = () => { const k = keyAt(ed.t); if (k && clip().keys.length > 1) { clip().keys.splice(clip().keys.indexOf(k), 1); changed(); } };
+  E('ed-copy').onclick = () => { ed.clip_board = JSON.parse(JSON.stringify(keyAt(ed.t) ? keyAt(ed.t).pose : clean(evalClip(clip(), ed.t)))); E('ed-paste').disabled = false; };
+  E('ed-paste').onclick = () => { if (!ed.clip_board) return; ensureKey().pose = JSON.parse(JSON.stringify(ed.clip_board)); changed(); };
+  E('ed-mirror').onclick = () => {
+    // ближняя ↔ дальняя сторона: вторая половина шага из первой
+    const k = ensureKey(), p = k.pose;
+    for (const [a, b] of [['uarm_n', 'uarm_f'], ['farm_n', 'farm_f'], ['hand_n', 'hand_f'], ['thigh_n', 'thigh_f'], ['shin_n', 'shin_f'], ['foot_n', 'foot_f']]) [p[a], p[b]] = [p[b], p[a]];
+    changed();
+  };
+  E('ed-zero').onclick = () => { const k = ensureKey(); k.pose[ed.sel] = { a: 0, k: 1 }; changed(); };
+  E('ed-bones').onclick = (e) => { const b = e.target.closest('[data-b]'); if (b) { ed.sel = b.dataset.b; edRender(); } };
+  E('ed-a').oninput = (e) => { ensureKey().pose[ed.sel].a = +e.target.value; edSliders(); saveAnims(); };
+  E('ed-k').oninput = (e) => { ensureKey().pose[ed.sel].k = +e.target.value; edSliders(); saveAnims(); };
+  E('ed-bob').oninput = (e) => { ensureKey().pose.bob = +e.target.value; edSliders(); saveAnims(); };
+  ['ed-a', 'ed-k', 'ed-bob'].forEach((id) => { E(id).onchange = () => edTime(); });
+  E('ed-save').onclick = () => {
+    const blob = new Blob([JSON.stringify({ format: 'abyss-anim-1', rig: '15 частей вполоборота', anims }, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mark-animations.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  E('ed-load').onclick = () => E('ed-file').click();
+  E('ed-file').onchange = async (e) => {
+    try { const j = JSON.parse(await e.target.files[0].text()); if (j.anims && j.anims.walk) { anims = j.anims; ed.clip = 'walk'; ed.t = 0; changed(); } else alert('Это не файл анимации'); } catch (er) { alert('Не удалось прочитать файл'); }
+    e.target.value = '';
+  };
+  E('ed-reset').onclick = () => {
+    if (!confirm(`Вернуть «${CLIP_RU[ed.clip] || ed.clip}» к исходному виду? Твои правки этой анимации пропадут.`)) return;
+    const d = bake(); if (d[ed.clip]) anims[ed.clip] = d[ed.clip]; else delete anims[ed.clip], ed.clip = 'walk';
+    ed.t = 0; changed();
+  };
+  E('ed-try').onclick = () => { edOpen(false); if (!['idle', 'walk', 'run'].includes(ed.clip)) { if (ed.clip === 'wave') me.wave = anims.wave.dur; else me.play = { clip: ed.clip, t: 0 }; } };
+  E('anim').onclick = () => edOpen(!ed.on);
+
   syncUi();
   requestAnimationFrame(frame);
   window.__mark = heroes;
