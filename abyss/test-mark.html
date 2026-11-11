@@ -507,8 +507,16 @@
   E('ed-k').oninput = (e) => { ensureKey().pose[ed.sel].k = +e.target.value; edSliders(); saveAnims(); };
   E('ed-bob').oninput = (e) => { ensureKey().pose.bob = +e.target.value; edSliders(); saveAnims(); };
   ['ed-a', 'ed-k', 'ed-bob'].forEach((id) => { E(id).onchange = () => edTime(); });
-  E('ed-save').onclick = () => {
-    const blob = new Blob([JSON.stringify({ format: 'abyss-anim-1', rig: '15 частей вполоборота', anims }, null, 1)], { type: 'application/json' });
+  // скачать файл анимации: в опубликованной странице — через окно сохранения claude.ai, локально — обычной ссылкой
+  let dl = null;
+  if (window.claude && window.claude.use) window.claude.use('downloads').then((d) => { dl = d; }).catch(() => {});
+  E('ed-save').onclick = async () => {
+    const text = JSON.stringify({ format: 'abyss-anim-1', rig: '15 частей вполоборота', anims }, null, 1);
+    if (dl) {
+      try { await dl.save({ filename: 'mark-animations.json', data: text }); } catch (e) { if (e && e.code !== 'declined') alert('Не удалось сохранить файл: ' + (e.message || e.code)); }
+      return;
+    }
+    const blob = new Blob([text], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mark-animations.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
   E('ed-load').onclick = () => E('ed-file').click();
