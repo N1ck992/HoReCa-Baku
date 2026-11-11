@@ -35,14 +35,27 @@ AB.IsoInventory = (() => {
   function toggle() { isOpen() ? close() : open(); }
 
   // ---------- Общий инвентарь ----------
+  // №65: отделения — оружие, медикаменты, ресурсы, особое (ключи, жетоны, боеприпасы)
+  const SECTIONS = [
+    { id: 'weapon', name: 'Оружие', cats: ['weapon'] },
+    { id: 'medical', name: 'Медикаменты', cats: ['medical'] },
+    { id: 'resource', name: 'Ресурсы', cats: ['resource'] },
+    { id: 'special', name: 'Особое', cats: ['key', 'ammo'] },
+  ];
+  const sectionOf = (def) => (SECTIONS.find((s) => s.cats.includes(def.category)) || SECTIONS[3]).id;
   function render() {
     const cells = S().cells();
-    const grid = cells.map((s, i) => {
-      if (!s) return `<button class="slot empty ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="Пусто"></button>`;
+    if (!cells[selected]) { const f = cells.findIndex(Boolean); if (f >= 0) selected = f; }
+    const slot = (s, i) => {
       const def = AB.ID.get(s.item), icon = AB.Assets.get(def.icon);
       const face = icon.status === 'ready' ? `<img src="${AB.ID.get(def.icon).src}" alt="">` : `<b>${def.short}</b>`;
       return `<button class="slot cat-${def.category} ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${def.name}${s.qty > 1 ? `, ${s.qty} шт.` : ''}">${face}${s.qty > 1 ? `<em>${s.qty}</em>` : ''}</button>`;
-    }).join('');
+    };
+    const free = cells.filter((c) => !c).length;
+    const grid = SECTIONS.map((sec) => {
+      const list = cells.map((s, i) => [s, i]).filter(([s]) => s && sectionOf(AB.ID.get(s.item)) === sec.id);
+      return `<div class="inv-sec"><span>${sec.name}</span><em>${list.length ? list.reduce((a, [s]) => a + 1, 0) : 'пусто'}</em></div>${list.map(([s, i]) => slot(s, i)).join('')}`;
+    }).join('') + `<div class="inv-sec free"><span>Свободных ячеек</span><em>${free} из ${S().SIZE}</em></div>`;
     const s = cells[selected];
     const alive = AB.IsoParty.members().filter((m) => !(AB.Chars.get(m.id) || {}).dead);
     let detail = '<p class="muted">Пустая ячейка. Всё найденное в бункере ложится сюда — в общий инвентарь отряда. У героев — только то, что надето: оружие и одежда (нажмите на героя внизу справа).</p>';

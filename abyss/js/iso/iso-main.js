@@ -159,9 +159,21 @@
   AB.Bus.on('iso:travel', ({ sector }) => toast(AB.IsoGame.sectorName(sector), 'info'));
   AB.Bus.on('enemy:retreat', ({ id }) => { if (AB.ID.get(id).type === 'pursuer') toast('Он отступил в темноту', 'info'); });
   AB.Bus.on('quest:done', ({ id }) => { if (id === 'QUEST-002') setTimeout(() => toast('Безопасная зона: переборки заблокированы изнутри', 'good'), 1400); });
-  // оружие, найденное при занятых руках, — в общий инвентарь: подсказать
+  // №65: огнестрельное (дальнобойное) оружие по сюжету сразу в руки Марку — прежнее уходит в вещи
   AB.Bus.on('inventory:changed', ({ charId, itemId, delta }) => {
-    if (charId === null && delta > 0 && AB.ID.get(itemId).weapon) setTimeout(() => toast(`${itemName(itemId)} — в вещах отряда: дайте в руки (I)`, 'info'), 900);
+    if (charId !== null || delta <= 0) return;
+    const w = AB.ID.get(itemId).weapon;
+    if (!w) return;
+    const held = AB.Inventory.weapon('CHAR-001'), heldDef = held && AB.ID.get(held.item);
+    if (w.ranged && !w.dart && AB.IsoParty.find('CHAR-001') && (!heldDef || !heldDef.weapon.ranged)) {
+      setTimeout(() => {
+        const i = AB.IsoStash.cells().findIndex((c) => c && c.item === itemId);
+        if (i >= 0 && AB.IsoStash.equip(i, 'CHAR-001')) toast(`Марк берёт в руки: ${itemName(itemId)}${held ? ` · ${itemName(held.item)} — в вещи` : ''}`, 'good');
+      }, 0);
+      return;
+    }
+    // остальное оружие при занятых руках — в общий инвентарь: подсказать
+    setTimeout(() => { if (AB.IsoStash.count(itemId)) toast(`${itemName(itemId)} — в вещах отряда: дайте в руки (I)`, 'info'); }, 900);
   });
   // конец акта: тот же текст, что в основной игре; остаться в бункере или начать сначала
   // №55: карточки актов I–III — js/data/iso-acts.js
@@ -216,6 +228,7 @@
     // дальше: следующий акт (после третьего — остаться на карте дна)
     $('#iso-act-out').addEventListener('click', () => { $('#iso-act').hidden = true; clearFade(); last = performance.now(); AB.IsoActs.next(actNow); });
     AB.IsoOverworld.init();
+    AB.IsoDev.init();
     $('#iso-act').addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#iso-perks').addEventListener('pointerdown', (e) => e.stopPropagation());
     $('#iso-perks').addEventListener('click', (e) => {

@@ -27,6 +27,7 @@
     <div id="iso-zoom" aria-label="Камера"><button data-z="-0.15" title="Отдалить (−, колесо, щипок)">−</button><button data-z="0.15" title="Приблизить (+, колесо, щипок)">+</button></div>
     <button id="iso-inv-btn" title="Инвентарь (I, Tab)">Вещи</button>
     <button id="iso-ids" title="Показать или скрыть ID заглушек">ID</button>
+    <button id="iso-dev-btn" data-dev-open title="Админ-панель: режим разработчика, переходы по актам">DEV</button>
     <button id="iso-restart-top" title="Начать прохождение бункера сначала">Заново</button>
     <a id="iso-back" href="index.html" title="Вернуться к игре (вид сбоку)">Вид сбоку</a>
   </div>
@@ -68,15 +69,17 @@
   <div id="ow" hidden>
     <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
     <div id="ow-top"><b>Дно океана</b><span>рядом с «Абиссом» · прототип</span></div>
-    <button id="ow-back" title="Вернуться на корабль (только у «Абисса»)">На корабль</button>
     <button id="ow-base-btn" hidden title="Войти в капсулу: экипаж, снаряжение, модули">Войти в капсулу</button>
     <div id="ow-base" hidden></div>
     <!-- №63: отряд — база и герои с транспортом (как в Warpath) -->
     <div id="ow-squads" aria-label="Отряд"></div>
+    <div id="ow-basecard" aria-label="База"></div>
+    <button id="ow-dev" data-dev-open title="Админ-панель">DEV</button>
     <div id="ow-card" hidden><b></b><p></p><button id="ow-act"></button></div>
     <div id="ow-hint">Выберите карточку справа внизу и нажмите на клетку — туда пойдёт отряд или капсула. Нажмите на тварь — отряд подойдёт и ударит.</div>
     <div id="ow-say"></div>
   </div>
+  <div id="iso-dev" hidden></div>
   <div id="iso-death" hidden role="dialog" aria-label="Гибель"><div class="death-card"><h2>Вы погибли</h2><p id="iso-death-text">Прохождение бункера начнётся сначала.</p><button id="iso-cp" hidden>С контрольной точки</button><button id="iso-restart">Начать заново</button></div></div>
   <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · I — вещи · нажмите на героя справа внизу — снаряжение · Q — следующий · колесо — масштаб</div>
 
@@ -143,6 +146,7 @@
   <script src="js/iso/iso-boss.js"></script>
   <script src="js/iso/iso-overworld.js"></script>
   <script src="js/iso/iso-acts.js"></script>
+  <script src="js/iso/iso-dev.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>

@@ -133,25 +133,51 @@ AB.IsoOverworld = (() => {
     cv = document.getElementById('ow-map'); g = cv.getContext('2d');
     build();
     base.q = D().start.q; base.r = D().start.r;
+    // №65: свободная камера — перетаскивание двигает обзор, колесо и щипок — масштаб;
+    // короткое нажатие без сдвига — приказ (идти / бить)
+    const ptrs = new Map();
+    let drag = null, pinch = null;
     cv.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      const t = pick(e.clientX, e.clientY);
-      if (!t || !cells.has(key(t.q, t.r))) return;
-      tapCell(t);
+      cv.setPointerCapture(e.pointerId);
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoomK }; drag = null; return; }
+      drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false };
     });
-    document.getElementById('ow-back').addEventListener('click', back);
+    cv.addEventListener('pointermove', (e) => {
+      if (!ptrs.has(e.pointerId)) return;
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; setZoom(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch.d)); return; }
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) > 8) drag.moved = true;
+      if (drag.moved) { fly = null; cam.x = drag.cx - dx * dpr; cam.y = drag.cy - dy * dpr; clampCam(); }
+    });
+    const up = (e) => {
+      ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinch = null;
+      if (drag && !drag.moved && e.type === 'pointerup') {
+        const t = pick(e.clientX, e.clientY);
+        if (t && cells.has(key(t.q, t.r))) tapCell(t);
+      }
+      drag = null;
+    };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(zoomK * (e.deltaY > 0 ? 0.9 : 1.1)); }, { passive: false });
     document.getElementById('ow-act').addEventListener('click', () => {
       if (!onSite) return;
       if (onSite.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(onSite);
     });
     document.getElementById('ow-base-btn').addEventListener('click', () => { for (const s of squads) if (s.state !== 'home') dock(s); AB.IsoActs.enterBase(); });
-    const sq = document.getElementById('ow-squads');
-    sq.addEventListener('pointerdown', (e) => e.stopPropagation());
-    sq.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
-      if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'surface') AB.IsoActs.surface(); else if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; return; }
-      if (c) { const u = unit(c.dataset.u); if (u && (u.kind === 'base' || u.state !== 'home')) sel = c.dataset.u; else if (u && u.vehicle) deploy(u.id); squadsSig = ''; }
-    });
+    // карточки: база — слева внизу, герои — справа внизу (№65); нажатие на карточку — выбрать и подлететь камерой
+    for (const sq of [document.getElementById('ow-squads'), document.getElementById('ow-basecard')]) {
+      sq.addEventListener('pointerdown', (e) => e.stopPropagation());
+      sq.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
+        if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'surface') AB.IsoActs.surface(); else if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; flyTo(unit(id)); return; }
+        if (c) { const u = unit(c.dataset.u); if (u && (u.kind === 'base' || u.state !== 'home')) sel = c.dataset.u; else if (u && u.vehicle) deploy(u.id); squadsSig = ''; flyTo(selU()); }
+      });
+    }
     window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { const s = siteAt(selU().q, selU().r); if (s && s.key === 'abyss') back(); } });
     window.addEventListener('resize', () => { if (open_) fit(); });
   }
@@ -182,7 +208,7 @@ AB.IsoOverworld = (() => {
     document.getElementById('ow').hidden = false;
     document.getElementById('ow-base-btn').hidden = mode !== 'capsule';
     fit(); last = performance.now();
-    const u = selU(), p = px(u.q, u.r); cam.x = p.x; cam.y = p.y;
+    const u = selU(), p = px(u.q, u.r); cam.x = p.x; cam.y = p.y; fly = null;
     requestAnimationFrame(loop);
     AB.Bus.emit('ow:enter', {});
   }
@@ -197,11 +223,28 @@ AB.IsoOverworld = (() => {
   function close() { open_ = false; document.getElementById('ow').hidden = true; }
   function say(t) { const el = document.getElementById('ow-say'); el.textContent = t; el.classList.add('show'); clearTimeout(say.t); say.t = setTimeout(() => el.classList.remove('show'), 2000 + t.length * 40); }
 
+  // масштаб и свободная камера (№65)
+  let zoomK = 1, baseSize = 34, fly = null;
   function fit() {
     dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(cv.clientWidth * dpr); cv.height = Math.round(cv.clientHeight * dpr);
-    size = Math.max(22, Math.min(40, Math.min(cv.clientWidth, cv.clientHeight) / 11)) * dpr;
+    baseSize = Math.max(22, Math.min(40, Math.min(cv.clientWidth, cv.clientHeight) / 11)) * dpr;
+    size = baseSize * zoomK;
   }
+  function setZoom(z) {
+    const k0 = zoomK;
+    zoomK = Math.max(0.55, Math.min(2, z));
+    size = baseSize * zoomK;
+    cam.x *= zoomK / k0; cam.y *= zoomK / k0;            // масштаб вокруг центра экрана
+    if (fly) { const p = curPos(fly); fly.tx = p.x; fly.ty = p.y; }
+    clampCam();
+  }
+  function clampCam() {
+    const R = D().radius + 1, lim = size * SQ3 * R;
+    cam.x = Math.max(-lim, Math.min(lim, cam.x)); cam.y = Math.max(-lim * TILT, Math.min(lim * TILT, cam.y));
+  }
+  // подлететь камерой к отряду или базе (один раз — дальше камера снова свободна)
+  function flyTo(u) { if (u) fly = u; }
   function pick(cx, cy) {
     const rc = cv.getBoundingClientRect();
     const x = ((cx - rc.left) * dpr - cv.width / 2 + cam.x) / size, y = ((cy - rc.top) * dpr - cv.height / 2 + cam.y) / size / TILT;
@@ -252,8 +295,11 @@ AB.IsoOverworld = (() => {
     heal(dt);
     fight(dt);
     wildTick(dt);
-    const c = curPos(selU());
-    cam.x += (c.x - cam.x) * Math.min(1, dt * 6); cam.y += (c.y - cam.y) * Math.min(1, dt * 6);
+    if (fly) {
+      const c = curPos(fly);
+      cam.x += (c.x - cam.x) * Math.min(1, dt * 5); cam.y += (c.y - cam.y) * Math.min(1, dt * 5);
+      if (Math.hypot(c.x - cam.x, c.y - cam.y) < 2 && !fly.anim) fly = null;
+    }
     draw();
     hud();
     requestAnimationFrame(loop);
@@ -371,7 +417,7 @@ AB.IsoOverworld = (() => {
           if (m.hit <= 0) {
             m.hit = null;
             const v = m.victim, c = v && AB.Chars.get(v.id);
-            if (v && c && v.state === 'out' && dist(at(v), m) <= 1) {
+            if (v && c && v.state === 'out' && dist(at(v), m) <= 1 && !(AB.IsoDev && AB.IsoDev.god())) {
               v.flash = 0.3;
               c.hp -= def.damage * SUIT().armor;
               AB.Bus.emit('char:hit', { charId: v.id, amount: def.damage * SUIT().armor });
@@ -566,7 +612,7 @@ AB.IsoOverworld = (() => {
   }
   const STATE = { home: 'на базе', out: 'снаружи', retreat: 'возвращается' };
   function squadPanel() {
-    const el = document.getElementById('ow-squads');
+    const el = document.getElementById('ow-squads'), bel = document.getElementById('ow-basecard');
     const rows = [];
     if (mode === 'capsule') {
       const up = AB.IsoActs && AB.IsoActs.canSurface();
@@ -582,7 +628,9 @@ AB.IsoOverworld = (() => {
     const sig = rows.map((r) => r.id + r.html).join('|') + sel;
     if (sig === squadsSig) return;
     squadsSig = sig;
-    el.innerHTML = rows.map((r) => `<div class="sq ${r.id === selU().id ? 'on' : ''} ${r.off ? 'off' : ''}" data-u="${r.id}">${r.html}</div>`).join('');
+    const card = (r) => `<div class="sq ${r.id === selU().id ? 'on' : ''} ${r.off ? 'off' : ''}" data-u="${r.id}">${r.html}</div>`;
+    bel.innerHTML = rows.filter((r) => r.id === 'base').map(card).join('');
+    el.innerHTML = rows.filter((r) => r.id !== 'base').map(card).join('');
     for (const c of el.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(c, c.dataset.pt, 1);
   }
 
@@ -595,6 +643,7 @@ AB.IsoOverworld = (() => {
     goTo(q, r) { const u = selU(); if (u.kind === 'base' && mode !== 'capsule') return false; const p = route(at(u), { q, r }); if (p) u.path = p; return !!p; },
     select(id) { if (unit(id)) { sel = id; squadsSig = ''; return true; } return false; },
     deploy, recall, surface, ascending: () => !!ascend, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle })), base: () => ({ q: base.q, r: base.r }),
+    revealAll() { for (const c of cells.values()) c.seen = true; },
     lootAt: (q, r) => loot.get(key(q, r)) || null, time: () => time, _sq: () => squads,
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
     moving: () => { const u = selU(); return !!u.anim || u.path.length > 0; }, route,

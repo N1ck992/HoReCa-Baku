@@ -78,7 +78,7 @@ AB.IsoActs = (() => {
   // что можно сделать в точке карты: { label, ok, why }
   function siteAction(site) {
     const d = AB.ISO_SITES[site.key];
-    if (site.key === 'abyss') return { label: AB.Flags.has('undocked') ? 'Причалить к «Абиссу» — на корабль' : 'Вернуться на корабль', ok: true };
+    if (site.key === 'abyss') return { label: 'Войти на «Абисс» через шлюз', ok: true };   // №65: «Абисс» — обычная локация
     if (!d) return { label: 'Исследовать — появится позже', ok: false };
     if (visited.has(site.key) && !d.repeat) return { label: 'Здесь уже всё сделано', ok: false };
     if (act < d.act) return { label: act === 2 ? 'Мира: «Не уходи далеко — сначала сигнал»' : 'Позже', ok: false };
@@ -167,6 +167,8 @@ AB.IsoActs = (() => {
   return {
     enterBase, leaveBase, surface, canSurface,
     act: () => act, next, run: (fn) => RUN[fn] && RUN[fn](), afterBack,
+    // админ-панель (№66): сразу выставить акт и экипаж
+    devSet({ act: a, crew: list, built: mods } = {}) { if (a) act = a; if (list) { crew.length = 0; crew.push(...list); } for (const m of mods || []) built.add(m); },
     siteAction, siteVisible, doSite, build, canBuild: (id) => { const m = AB.ISO_MODULES.find((q) => q.id === id); return !!m && !built.has(id) && has(m.cost); },
     built: (id) => built.has(id), crew: () => crew.slice(), visited: (k) => visited.has(k),
     view: () => (built.has('MOD-002') ? 4 : 2),

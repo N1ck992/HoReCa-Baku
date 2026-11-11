@@ -79,7 +79,37 @@ AB.IsoGame = (() => {
     setTimeout(() => AB.Bus.emit('iso:toast', { text: `Контрольная точка: ${CP[cp.id].name}`, kind: 'info' }), 300);
   }
 
+  // №66: собрать мир сразу в заданном состоянии (переходы админ-панели, js/iso/iso-dev.js)
+  function bootState(st) {
+    AB.IsoStash.adapt();
+    sid = st.sector;
+    AB.IsoWorld.build(sid);
+    const party = st.party.map((id, i) => ({ id, x: st.at.x + (i ? 1 : 0), y: st.at.y + (i ? 0.6 : 0) }));
+    AB.IsoParty.init(party);
+    AB.IsoBridge.setup(party, { story: st.story || [], equipment: (st.equipment || []).map((id) => [id, 'done']), power: !!st.power, weapons: [] });
+    for (const id of st.dead || []) AB.IsoEnemies.markDead(id);
+    load(sid);
+    for (const e of AB.IsoEnemies.alive()) if ((st.dead || []).includes(e.id)) AB.IsoEnemies.damage(e.id, 99999, null);
+    AB.IsoStash.reset();
+    for (const [item, qty] of st.stash || []) AB.IsoStash.add(item, qty);
+    for (const [id, item] of st.weapons || []) AB.Inventory.add(id, item, 1, { swap: false });
+    if (st.nestDone) AB.IsoNest.markDone();
+    for (const k of st.openDoors || []) { const d = AB.IsoInteract.doors().find((q) => q.key === k); if (d) { d.state = 'open'; if (d.def.hack) d.hacked = true; } }
+    AB.Quests.restore(st.quests || []);
+    for (const f of st.flags || []) AB.Flags.add(f);
+    for (const n of st.npcs || []) {
+      const m = AB.IsoParty.addNpc(n.id, n.x, n.y);
+      const c = AB.Chars.spawn(n.id, { room: AB.IsoWorld.room(n.x, n.y), x: 0 }); if (c) c.controllable = false;
+      if (n.weapon) AB.Inventory.add(n.id, n.weapon, 1, { swap: false });
+      if (n.hidden) m.hidden = true;
+    }
+    AB.IsoBridge.sync();
+    AB.IsoRender.snap();
+    if (st.after) setTimeout(st.after, 200);
+  }
+
   function start() {
+    if (!test() && AB.IsoDev && AB.IsoDev.pending()) { AB.IsoDev.boot(); return; }
     if (!test() && cpNow && ss.get(GO_KEY)) { ss.set(GO_KEY, null); bootCheckpoint(cpNow); return; }
     AB.IsoStash.adapt();                                  // вещи — в общий инвентарь профиля
     if (test()) {
@@ -135,7 +165,7 @@ AB.IsoGame = (() => {
     busy: () => !!travel_,
     restart() { ss.set(CP_KEY, null); ss.set(GO_KEY, null); location.reload(); },
     // контрольная точка: есть ли и начать с неё
-    checkpoint: () => (cpNow ? { id: cpNow.id, name: CP[cpNow.id].name } : null),
+    checkpoint: () => (cpNow ? { id: cpNow.id, name: CP[cpNow.id].name } : null), bootState,
     fromCheckpoint() { ss.set(GO_KEY, '1'); location.reload(); },
   };
 })();

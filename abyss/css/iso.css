@@ -299,3 +299,47 @@ body.quiet #iso-help { display: none; }
   #ow-card p { font-size: 11px; }
   #ow-hint { display: none; }
 }
+
+/* ---------- №65: база слева внизу, герои справа внизу, карточка точки — по центру ---------- */
+#ow-basecard { position: absolute; left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 1; }
+#ow-basecard:empty { display: none; }
+#ow-basecard .sq, #ow-squads .sq { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: center; width: 210px; padding: 5px 8px 5px 5px; background: rgba(8, 12, 14, .82); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+#ow-basecard .sq.on { border-color: rgba(255, 210, 120, .8); }
+#ow-basecard .sq-art { position: relative; width: 58px; height: 58px; border-radius: 6px; background: radial-gradient(circle at 50% 70%, #1d3038, #0b1114); overflow: hidden; }
+#ow-basecard .sq-art.capsule i { position: absolute; left: 9px; top: 20px; width: 40px; height: 20px; border-radius: 50%; background: #c9a24a; box-shadow: inset 0 -4px 0 #8a6e30; }
+#ow-basecard .sq-art.capsule i::after { content: '• • •'; position: absolute; left: 0; right: 0; top: 1px; text-align: center; color: #5ee6ff; font-size: 12px; letter-spacing: 1px; }
+#ow-basecard .sq-tx { display: grid; gap: 2px; min-width: 0; }
+#ow-basecard .sq-tx b { font: 600 13px var(--display); color: #ffe2a8; letter-spacing: .5px; }
+#ow-basecard .sq-tx span { font-size: 10px; color: var(--muted); }
+#ow-basecard .sq-tx button { justify-self: start; margin-top: 2px; font: 11px var(--mono); padding: 3px 8px; border-radius: 4px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid rgba(255, 210, 120, .5); }
+#ow-card { left: 50%; transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: min(420px, calc(100vw - 470px)); min-width: 240px; }
+#ow-hint { display: none; }
+#ow-map { cursor: grab; }
+@media (max-width: 760px) {
+  #ow-card { left: 12px; right: 12px; transform: none; width: auto; min-width: 0; top: calc(96px + env(safe-area-inset-top, 0px)); bottom: auto; }
+  #ow-basecard .sq { width: 168px; grid-template-columns: 48px minmax(0, 1fr); }
+  #ow-basecard .sq-art { width: 48px; height: 48px; }
+  #ow-basecard .sq-art.capsule i { left: 5px; top: 15px; }
+}
+#ow-base-btn { top: calc(12px + env(safe-area-inset-top, 0px)); }
+
+/* №65: отделения инвентаря */
+#iso-inv-grid .inv-sec { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; padding-bottom: 3px; border-bottom: 1px solid var(--line); font: 600 11px var(--display); letter-spacing: 2px; text-transform: uppercase; color: #9fb4bc; }
+#iso-inv-grid .inv-sec:first-child { margin-top: 0; }
+#iso-inv-grid .inv-sec em { font: 10px var(--mono); letter-spacing: 0; text-transform: none; color: var(--muted); font-style: normal; }
+#iso-inv-grid .inv-sec.free { border-bottom: 0; color: var(--muted); }
+#iso-inv-grid .slot.cat-weapon b { color: #ffd27a; }
+#iso-inv-grid .slot.cat-resource b { color: #c9d6c0; }
+#iso-inv-grid .slot.cat-key b, #iso-inv-grid .slot.cat-ammo b { color: #bfefff; }
+
+/* №66: админ-панель */
+#iso-dev { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .6); }
+#iso-dev[hidden] { display: none; }
+.dev-card { max-width: 620px; }
+.dev-card h3 { margin: 4px 0 0; font: 600 12px var(--display); letter-spacing: 3px; text-transform: uppercase; color: #ffd27a; }
+.dev-sw { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.dev-sw input { width: 20px; height: 20px; }
+.dev-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.dev-row button { font: 12px var(--mono); padding: 7px 10px; border-radius: 5px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid rgba(255, 210, 120, .4); text-align: left; }
+#iso-dev-btn { color: #ffd27a !important; }
+#ow-dev { position: absolute; right: calc(14px + env(safe-area-inset-right, 0px)); top: calc(52px + env(safe-area-inset-top, 0px)); font: 12px var(--mono); padding: 6px 10px; border-radius: 5px; cursor: pointer; background: rgba(10, 12, 14, .7); color: #ffd27a; border: 1px solid rgba(255, 210, 120, .4); }
