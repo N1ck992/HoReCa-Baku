@@ -40,7 +40,7 @@ fy, fx = np.nonzero(fig)
 os.makedirs(OUT, exist_ok=True)
 # опора на пол: самая нижняя точка подошв, по горизонтали — середина между стопами
 ground = [int((J['to_n'][0] + J['to_f'][0] + J['an_n'][0] + J['an_f'][0]) / 4), int(fy.max())]
-meta = {'scale': SCALE, 'size': [W, H], 'ground': ground, 'height': int(fy.max() - fy.min()), 'face': cfg.get('face', 1), 'parts': {}}
+meta = {'order': cfg.get('order'), 'scale': SCALE, 'size': [W, H], 'ground': ground, 'height': int(fy.max() - fy.min()), 'face': cfg.get('face', 1), 'parts': {}}
 for i, n in enumerate(names):
   piv, end, parent = P[n]
   m = fig & (owner == i)

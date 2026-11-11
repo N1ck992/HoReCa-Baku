@@ -50,6 +50,7 @@
   <button id="wave">Помахать</button>
   <button id="who">Управляю: Марк A</button>
   <button id="anim">Анимация</button>
+  <button id="runart" class="on">Рисунок бега: вкл</button>
 </div>
 <div id="stick"><i></i></div>
 <div id="ed" hidden>
@@ -95,11 +96,28 @@
 // =====================================================================
 (async () => {
   // два варианта Марка для сравнения: A — реалистичный, B — рисованный
-  const KINDS = [{ id: 'A', name: 'Марк A', base: 'assets/char001/3q/front/' }, { id: 'B', name: 'Марк B', base: 'assets/char001/3q/front-b/' }];
+  const KINDS = [{ id: 'A', name: 'Марк A', base: 'assets/char001/3q/front/' }, { id: 'B', name: 'Марк B', base: 'assets/char001/3q/front-b/', runBase: 'assets/char001/3q/run-b-1/' }];
   for (const k of KINDS) {
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
     await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));
+    // №77: отдельный рисунок для бега (пока одна поза из четырёх)
+    if (k.runBase) {
+      const r = { rig: await (await fetch(k.runBase + 'rig.json')).json(), imgs: {} };
+      await Promise.all(Object.keys(r.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.runBase + n + '.png'; r.imgs[n] = im; })));
+      // масштаб: длина «шея → пах» как у стоящего, чтобы рост совпал
+      const L = (rg) => Math.hypot(rg.parts.head.pivot[0] - rg.parts.pelvis.end[0], rg.parts.head.pivot[1] - rg.parts.pelvis.end[1]);
+      r.k = L(k.rig) / L(r.rig);
+      // вторая половина шага из той же картинки: ближние кости поворачиваются туда, где на рисунке дальние, и наоборот
+      const ang = (n) => { const p = r.rig.parts[n]; return Math.atan2(p.end[1] - p.pivot[1], p.end[0] - p.pivot[0]) * 180 / Math.PI; };
+      const wrap = (d) => { while (d > 180) d -= 360; while (d < -180) d += 360; return d; };
+      r.swap = {};
+      for (const chain of [['uarm', 'farm', 'hand'], ['thigh', 'shin', 'foot']]) for (const [me_, other] of [['n', 'f'], ['f', 'n']]) {
+        let prev = 0;
+        for (const b of chain) { const d = wrap(ang(`${b}_${other}`) - ang(`${b}_${me_}`)); r.swap[`${b}_${me_}`] = wrap(d - prev); prev = d; }
+      }
+      k.runKind = r;
+    }
   }
 
   const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -114,6 +132,7 @@
   const heroes = KINDS.map((k, i) => ({ kind: k, x: 6 - i * 1.2, y: 6 + i * 1.2, face: 1, phase: i * 1.3, speed: 0, wave: 0, goal: null, run: false }));
   let lead = 0;
   let me = heroes[lead];
+  let runArt = true;     // №77: бег по отдельному рисунку (кнопка «Рисунок бега»)
   let zoom = Math.min(1.4, Math.max(0.8, Math.min(W, H) / 600)), run = false, showBones = false, showParts = false;
 
   // ---------- управление ----------
@@ -144,6 +163,7 @@
   B('zin').onclick = () => { zoom = Math.min(2.4, zoom * 1.15); };
   B('zout').onclick = () => { zoom = Math.max(0.5, zoom / 1.15); };
   B('wave').onclick = () => { for (const h of heroes) h.wave = 2.2; };
+  B('runart').onclick = () => { runArt = !runArt; B('runart').textContent = `Рисунок бега: ${runArt ? 'вкл' : 'выкл'}`; B('runart').classList.toggle('on', runArt); };
   B('who').onclick = () => { lead = (lead + 1) % heroes.length; me = heroes[lead]; B('who').textContent = `Управляю: ${me.kind.name}`; };
   addEventListener('wheel', (e) => { zoom = Math.max(0.5, Math.min(2.4, zoom * (e.deltaY > 0 ? 0.9 : 1.1))); }, { passive: true });
 
@@ -305,17 +325,41 @@
     const m = new DOMMatrix(parent).translate(px, py).rotate(a * 180 / Math.PI).scale(1, k).translate(-px, -py);
     return m;
   }
+  // бег по рисунку бега: поза с картинки ↔ та же картинка с ногами и руками «наоборот»
+  // две половины шага: рисунок как есть (ближняя нога сзади) и рисунок, где ноги и руки поменялись местами;
+  // внутри половины — небольшой мах, чтобы смена была мягче
+  function runPose(me) {
+    const u = ((me.phase / (Math.PI * 2)) % 1 + 1) % 1, half = u >= 0.5, v = (u % 0.5) * 2;   // v: 0..1 внутри половины
+    const sw = Math.sin(v * Math.PI) - 0.5;                    // −0.5 → 0.5 → −0.5
+    const q = { bob: -Math.sin(v * Math.PI) * 14, half };
+    for (const b of BONES) q[b] = { a: 0, k: 1 };
+    q.thigh_n.a = -10 * sw; q.thigh_f.a = 10 * sw; q.uarm_n.a = 8 * sw; q.uarm_f.a = -8 * sw;
+    q.torso.a = Math.sin(v * Math.PI) * 1.5;
+    return q;
+  }
+  const SWAP = (n) => n.replace(/_n$/, '_X').replace(/_f$/, '_n').replace(/_X$/, '_f');
+  const LIMB = /^(uarm|farm|hand|thigh|shin|foot)_/;
   function drawHero(me, sx, sy, sc, t) {
-    const rig = me.kind.rig, imgs = me.kind.imgs, GROUND = rig.ground;
-    const q = pose(me, t), M = {}; me._M = M;
+    const useRun = !!(me.kind.runKind && me.run && me.speed > 2.2 && !ed.on && runArt);
+    const src = useRun ? me.kind.runKind : me.kind;
+    const rig = src.rig, imgs = src.imgs, GROUND = rig.ground;
+    if (useRun) sc *= me.kind.runKind.k;
+    const ORDER_ = rig.order || ORDER;
+    const q = useRun ? runPose(me) : pose(me, t), M = {}; me._M = useRun ? null : M;
     const root = new DOMMatrix().translate(sx, sy + q.bob * sc * 3).scale(sc * me.face, sc).translate(-GROUND[0], -GROUND[1]);
     for (const n of ['pelvis', 'torso', 'head', 'uarm_n', 'farm_n', 'hand_n', 'uarm_f', 'farm_f', 'hand_f', 'thigh_n', 'shin_n', 'foot_n', 'thigh_f', 'shin_f', 'foot_f']) {
       const part = rig.parts[n];
-      M[n] = mat(part.parent ? M[part.parent] : root, part, q[n]);
+      let parent = part.parent ? M[part.parent] : root;
+      // вторая половина бега: рука/нога этой стороны пристёгнута к суставу другой стороны
+      if (useRun && q.half && (n.startsWith('uarm_') || n.startsWith('thigh_'))) {
+        const o = rig.parts[SWAP(n)].pivot; parent = new DOMMatrix(parent).translate(o[0] - part.pivot[0], o[1] - part.pivot[1]);
+      }
+      M[n] = mat(parent, part, q[n]);
     }
     me._root = root;
     const PAL = ['#e64545', '#4a63e6', '#f0c828', '#28c85a', '#c83cdc', '#3cdce6', '#fa821e', '#82fa3c', '#965a28', '#ffffff', '#7878ff', '#ff78be', '#1e783c', '#c8c878', '#5a288c'];
-    ORDER.forEach((n) => {
+    const order = useRun && q.half ? ORDER_.map((n) => (LIMB.test(n) ? SWAP(n) : n)) : ORDER_;
+    order.forEach((n) => {
       const part = rig.parts[n], im = imgs[n];
       ctx.save();
       ctx.setTransform(M[n]);
@@ -324,7 +368,7 @@
       ctx.restore();
     });
     if (showBones || ed.on) {
-      for (const n of ORDER) {
+      for (const n of ORDER_) {
         const part = rig.parts[n], m = M[n];
         const a = m.transformPoint(new DOMPoint(...part.pivot)), b = m.transformPoint(new DOMPoint(...part.end));
         ctx.setTransform(1, 0, 0, 1, 0, 0);

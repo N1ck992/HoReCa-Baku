@@ -1,0 +1,15 @@
+{
+ "src": "assets/source/CHAR001-3Q-run-b-1.webp",
+ "out": "assets/char001/3q/run-b-1",
+ "face": 1,
+ "order": ["uarm_f", "thigh_f", "shin_f", "foot_f", "pelvis", "torso", "farm_f", "hand_f", "head", "thigh_n", "shin_n", "foot_n", "uarm_n", "farm_n", "hand_n"],
+ "joints": {
+  "neck": [650, 345], "crown": [690, 150], "chest": [620, 420], "waist": [560, 680], "crotch": [530, 840],
+  "sh_n": [440, 372], "el_n": [268, 442], "wr_n": [236, 565], "fi_n": [215, 692],
+  "sh_f": [790, 420], "el_f": [860, 620], "wr_f": [790, 662], "fi_f": [735, 668],
+  "hip_n": [470, 880], "kn_n": [330, 985], "an_n": [262, 935], "to_n": [150, 1105],
+  "hip_f": [570, 820], "kn_f": [615, 1060], "an_f": [690, 1300], "to_f": [880, 1372]
+ },
+ "thick": {"pelvis": 100, "torso": 140, "head": 100, "uarm_n": 50, "farm_n": 46, "hand_n": 50, "uarm_f": 46, "farm_f": 44, "hand_f": 50,
+  "thigh_n": 70, "shin_n": 60, "foot_n": 80, "thigh_f": 70, "shin_f": 62, "foot_f": 80}
+}
