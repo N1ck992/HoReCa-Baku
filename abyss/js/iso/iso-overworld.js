@@ -199,10 +199,22 @@ AB.IsoOverworld = (() => {
     bar.addEventListener('pointerdown', (e) => e.stopPropagation());
     bar.addEventListener('click', (e) => {
       const m = e.target.closest('[data-ow]'), b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
-      if (e.target.closest('#ow-mybase')) { if (mode !== 'capsule') { say('База появится вместе с капсулой'); return; } for (const s of squads) if (s.state !== 'home') dock(s); AB.IsoActs.enterBase(); return; }
+      // №70: «Моя база» — первое нажатие подлетает к базе; если она уже в центре (или нажали повторно) — войти внутрь
+      if (e.target.closest('#ow-mybase')) {
+        if (mode !== 'capsule') { say('База появится вместе с капсулой'); return; }
+        const c = curPos(base), centred = Math.hypot(c.x - cam.x, c.y - cam.y) < size * 0.6;
+        if (!centred && fly !== base) { flyTo(base); squadsSig = ''; return; }
+        for (const s of squads) if (s.state !== 'home') dock(s);
+        AB.IsoActs.enterBase(); return;
+      }
       if (m) {
         const k = m.dataset.ow;
-        if (k === 'drive') { selAll = false; sel = 'base'; flyTo(base); say('Капсула выбрана: нажмите на клетку — база поедет туда'); }
+        // «Вести базу» — переключатель: включён — нажатие на клетку ведёт капсулу; камеру не двигает
+        if (k === 'drive') {
+          drive = !drive; selAll = false;
+          if (drive) { sel = 'base'; say('Вести базу: вкл — нажмите на клетку, капсула поедет туда'); }
+          else { const s = outSquads()[0]; sel = s ? s.id : 'base'; say('Вести базу: выкл'); }
+        }
         if (k === 'items') AB.IsoInventory.open();
         if (k === 'all') { selAll = !selAll && outSquads().some((s) => s.state === 'out'); say(selAll ? 'Выбраны все отряды снаружи' : 'Выбор: один отряд'); }
         if (k === 'surface') AB.IsoActs.surface();
@@ -211,7 +223,7 @@ AB.IsoOverworld = (() => {
       if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; flyTo(unit(id)); return; }
       if (c) {
         const u = unit(c.dataset.u); if (!u) return;
-        selAll = false;
+        selAll = false; drive = false;
         if (u.state === 'home' && u.vehicle) deploy(u.id); else sel = u.id;
         squadsSig = ''; flyTo(selU());
       }
@@ -220,7 +232,7 @@ AB.IsoOverworld = (() => {
     window.addEventListener('resize', () => { if (open_) fit(); });
   }
   // нажали на клетку: выбранный отряд идёт туда (на тварь — подходит и бьёт); выбрана база — ведём капсулу
-  let selAll = false;
+  let selAll = false, drive = false;
   function tapCell(t) {
     // «Все отряды»: ведём всех снаружи разом
     if (selAll && !mobAt(t.q, t.r)) {
@@ -238,6 +250,7 @@ AB.IsoOverworld = (() => {
       if (dist(at(u), mb) <= SUIT().weapon.reachCells) { u.path = []; return; }
     } else if (u.kind === 'squad') u.target = null;
     if (u.kind === 'base' && mode !== 'capsule') { say('«Абисс» не сдвинуть — выберите отряд'); return; }
+    if (u.kind === 'base' && !drive) { say('Чтобы повести капсулу — включите «Вести базу»'); return; }
     if (u.kind === 'squad' && baseHere(t.q, t.r)) { recall(u.id); return; }        // нажали на свою базу — вернуться
     if (occupied(t.q, t.r, u)) { say('Клетка занята'); return; }
     if (u.kind === 'squad' && u.state === 'retreat') { say('Отряд отступает на базу'); return; }
@@ -264,7 +277,7 @@ AB.IsoOverworld = (() => {
     reveal(); onSite = undefined; squadsSig = '';
     document.getElementById('ow').hidden = false;
     document.getElementById('ow-mybase').hidden = mode !== 'capsule';
-    for (const b of document.querySelectorAll('#ow-menu [data-ow="drive"], #ow-menu [data-ow="all"]')) b.hidden = mode !== 'capsule';
+    drive = false;
     fit(); last = performance.now();
     const u = selU(), p = px(u.q, u.r); cam.x = p.x; cam.y = p.y; fly = null;
     requestAnimationFrame(loop);
@@ -691,10 +704,13 @@ AB.IsoOverworld = (() => {
   function squadPanel() {
     // слева: «Моя база» (подсвечена, если выбрана для движения) и меню; справа — ячейки отрядов
     const mb = document.getElementById('ow-mybase'), up = mode === 'capsule' && AB.IsoActs && AB.IsoActs.canSurface() && !ascend;
-    mb.classList.toggle('on', sel === 'base' && !selAll);
+    mb.classList.toggle('on', drive);
     mb.querySelector('span').textContent = ascend ? 'Всплывает' : base.anim || base.path.length ? 'База в пути' : 'Моя база';
-    document.querySelector('#ow-menu [data-ow="surface"]').hidden = !up;
-    document.querySelector('#ow-menu [data-ow="all"]').classList.toggle('on', selAll);
+    document.querySelector('#ow-above [data-ow="surface"]').hidden = !up;
+    const dr = document.querySelector('#ow-above [data-ow="drive"]');
+    dr.hidden = mode !== 'capsule'; dr.classList.toggle('on', drive); dr.querySelector('b').textContent = drive ? 'вкл' : 'выкл';
+    const allB = document.querySelector('#ow-right [data-ow="all"]');
+    allB.classList.toggle('on', selAll); allB.hidden = mode !== 'capsule';
     const slots = [];
     for (const s of squads) {
       if (!s.vehicle || (mode === 'suit' && s.id !== 'CHAR-001')) continue;
@@ -723,7 +739,7 @@ AB.IsoOverworld = (() => {
     attack(id) { const m = mobs.find((q) => q.id === id), s = selU(); if (m && s.kind === 'squad') s.target = m; },
     pos: () => ({ q: selU().q, r: selU().r }),
     goTo(q, r) { const u = selU(); if (u.kind === 'base' && mode !== 'capsule') return false; const p = route(at(u), { q, r }, u); if (p) u.path = p; return !!p; },
-    select(id) { if (unit(id)) { sel = id; squadsSig = ''; return true; } return false; },
+    select(id) { if (unit(id)) { sel = id; drive = id === 'base'; squadsSig = ''; return true; } return false; },
     deploy, recall, surface, ascending: () => !!ascend, enterBuilding, selectedKind: () => selU().kind, squads: () => squads.map((s) => ({ id: s.id, state: s.state, q: s.q, r: s.r, vehicle: s.vehicle })), base: () => ({ q: base.q, r: base.r }),
     revealAll() { for (const c of cells.values()) c.seen = true; },
     // админ-панель: убрать бродячих тварей (сюжетные не трогаем)

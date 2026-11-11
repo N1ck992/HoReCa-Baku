@@ -411,3 +411,44 @@ body.in-base #iso-stick, body.in-base #iso-prompt { display: none !important; }
   #ow-menu { flex-wrap: wrap; }
   #ow-card { bottom: calc(190px + env(safe-area-inset-bottom, 0px)) !important; }
 }
+
+/* ---------- №70: раскладка нижней панели — база слева в углу, отряд справа в углу ---------- */
+#ow-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 0; padding: 0; background: none; display: block; }
+#ow-left { position: absolute; left: calc(6px + env(safe-area-inset-left, 0px)); bottom: calc(6px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#ow-row { display: flex; align-items: flex-end; gap: 6px; }
+#ow-above { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+#ow-right { position: absolute; right: calc(6px + env(safe-area-inset-right, 0px)); bottom: calc(6px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+#ow-left, #ow-right { pointer-events: auto; }
+.ow-mini { font: 11px var(--mono); padding: 5px 9px; border-radius: 14px; cursor: pointer; background: rgba(8, 14, 18, .88); color: #cfe6ee; border: 1px solid rgba(94, 230, 255, .35); white-space: nowrap; }
+.ow-mini[hidden] { display: none; }
+.ow-mini.on { border-color: #ffd27a; color: #ffe2a8; box-shadow: 0 0 8px rgba(255, 210, 120, .35); }
+.ow-mini b { font-weight: 700; }
+.ow-mini.up { border-color: rgba(255, 210, 120, .6); color: #ffe2a8; }
+#ow-menu { padding: 3px; }
+#ow-slots { display: flex; gap: 5px; }
+/* ячейки героев: ширина считается от экрана, чтобы правая группа всегда помещалась в правом нижнем углу */
+.ow-slot { width: clamp(64px, calc((100vw - 200px) / 4), 108px); height: clamp(64px, calc((100vw - 200px) / 4 * .85), 92px); }
+@media (max-width: 760px) {
+  #ow-bar { flex-direction: row; }
+  #ow-mybase { width: 64px; height: 64px; }
+  #ow-mybase .cap { width: 32px; height: 16px; }
+  #ow-menu button { min-width: 0; padding: 4px 5px; }
+  #ow-menu button span { font-size: 9px; }
+  .ow-slot { width: clamp(56px, calc((100vw - 170px) / 3), 82px); height: clamp(56px, calc((100vw - 170px) / 3 * .9), 74px); }
+  .ow-slot.lock:last-child { display: none; }
+  .ow-slot img { height: 70%; }
+  .ow-slot canvas { width: 40%; height: 60%; }
+  .ow-slot b { font-size: 10px; bottom: 14px; }
+  #ow-card { bottom: calc(150px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+@media (max-width: 380px) {
+  #ow-mybase { width: 54px; height: 54px; font-size: 8px; }
+  #ow-mybase .cap { width: 26px; height: 13px; }
+  #ow-mybase .cap::after { font-size: 9px; }
+  #ow-menu button span { display: none; }
+  #ow-menu button i { font-size: 16px; }
+  .ow-slot { width: clamp(48px, calc((100vw - 140px) / 3), 64px); height: clamp(48px, calc((100vw - 140px) / 3), 64px); }
+  .ow-slot b { font-size: 9px; }
+  .ow-slot span { display: none; }
+  .ow-mini { font-size: 10px; padding: 4px 7px; }
+}
