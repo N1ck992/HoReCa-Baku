@@ -109,4 +109,11 @@ AB.EQUIPMENT.push(
   },
 );
 
+// №69: капсула жизнеобеспечения выжившего в «Отсеке на склоне»
+AB.EQUIPMENT.push({
+  id: 'EQUIP-015', name: 'Капсула жизнеобеспечения', room: 'ROOM-024', asset: null, x: 700, y: -100, w: 160, h: 200,
+  time: 1.5, pending: true,
+  text: { ready: 'Подать питание на капсулу выжившего', done: 'Выживший очнулся' },
+});
+
 AB.EQUIPMENT.forEach((e) => AB.ID.register(e.id, e));

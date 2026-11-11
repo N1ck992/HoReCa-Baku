@@ -393,3 +393,21 @@ body.quiet #iso-help { display: none; }
 }
 body.in-base #iso-stick, body.in-base #iso-prompt { display: none !important; }
 .ow-slot.lock span { position: static; font-size: 10px; } .ow-slot.lock em { display: block; margin-top: 2px; }
+
+/* №69: вкладки инвентаря */
+#iso-inv-grid .inv-tabs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+#iso-inv-grid .inv-tabs button { font: 12px var(--mono); padding: 6px 10px; border-radius: 5px; cursor: pointer; background: #10161a; color: #cfe6ee; border: 1px solid var(--line); }
+#iso-inv-grid .inv-tabs button.on { border-color: #5ee6ff; color: #bfefff; box-shadow: 0 0 0 1px rgba(94, 230, 255, .3) inset; }
+#iso-inv-grid .inv-tabs em { margin-left: 5px; font-style: normal; color: var(--muted); font-size: 10px; }
+#iso-inv-grid .inv-empty { grid-column: 1 / -1; padding: 16px 0; color: var(--muted); font-size: 12px; }
+#iso-inv-grid { max-height: 52dvh; overflow-y: auto; align-content: start; }
+
+/* №69: «Моя база» — в самом углу слева внизу, сразу за ней «Инвентарь»; на телефоне ячейки отрядов — над ними */
+#ow-bar { padding-left: calc(4px + env(safe-area-inset-left, 0px)); padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px)); }
+#ow-left { align-items: flex-end; }
+#ow-mybase { margin: 0; }
+@media (max-width: 760px) {
+  #ow-bar { flex-direction: column-reverse; align-items: stretch; }
+  #ow-menu { flex-wrap: wrap; }
+  #ow-card { bottom: calc(190px + env(safe-area-inset-bottom, 0px)) !important; }
+}

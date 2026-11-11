@@ -337,3 +337,21 @@ AB.ISO_LAYOUTS['SECTOR-005'] = {
 AB.ID.register('SECTOR-005', { id: 'SECTOR-005', name: 'База-капсула', iso: true, pending: true, doors: [] });
 
 AB.ID.register('SECTOR-004', { id: 'SECTOR-004', name: AB.ISO_LAYOUTS['SECTOR-004'].name, iso: true, pending: true, doors: [] });
+
+// №69: «Отсек на склоне» изнутри (черновик). Транспорт остаётся у входа на карте дна.
+AB.ISO_LAYOUTS['SECTOR-006'] = {
+  name: 'Отсек на склоне',
+  areas: [{ room: 'ROOM-024', x: 2, y: 2, w: 10, h: 7 }],
+  props: [
+    { kind: 'cryopod', x: 9, y: 2, w: 2, h: 2, equip: 'EQUIP-015' },
+    { kind: 'locker', x: 3, y: 2, w: 2, h: 1, container: 'salvage' },
+    { kind: 'crate', x: 6, y: 7, w: 2, h: 1 }, { kind: 'console', x: 6, y: 2, w: 2, h: 1 }, { kind: 'pipe', x: 11, y: 7, w: 1, h: 1 },
+  ],
+  doors: [],
+  exits: [{ room: 'ROOM-024', door: 'out', x: 2, y: 5, wall: 'w', toName: 'дно — к транспорту', to: { overworld: true } }],
+  items: {},
+  enter: { x: 3.5, y: 5.5 },
+  survivor: { x: 9.5, y: 4.8 },
+  lights: [{ x: 5, y: 5, color: [255, 60, 40], radius: 5 }, { x: 10, y: 4, color: [120, 200, 255], radius: 4 }],
+};
+AB.ID.register('SECTOR-006', { id: 'SECTOR-006', name: 'Отсек на склоне', iso: true, pending: true, doors: [] });

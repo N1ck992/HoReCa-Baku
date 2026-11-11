@@ -11,29 +11,24 @@
 // =====================================================================
 
 AB.IsoStash = (() => {
-  const SIZE = 12;
-  let cells = new Array(SIZE).fill(null);       // { item, qty }
+  // №69: инвентарь безразмерный (решение автора) — ячеек сколько нужно; пустые переиспользуются
+  const SIZE = Infinity;
+  let cells = [];                               // { item, qty } | null
   const stackOf = (id) => Math.max(1, AB.ID.get(id).stack || 1);
 
-  function room(itemId) {
-    let free = 0;
-    for (const c of cells) {
-      if (!c) free += stackOf(itemId);
-      else if (c.item === itemId) free += stackOf(itemId) - c.qty;
-    }
-    return free;
-  }
+  function room() { return Infinity; }
   // положить; возвращает, сколько поместилось
   function add(itemId, qty = 1) {
     let left = qty;
     for (const c of cells) if (left && c && c.item === itemId && c.qty < stackOf(itemId)) { const t = Math.min(left, stackOf(itemId) - c.qty); c.qty += t; left -= t; }
-    for (let i = 0; i < SIZE && left; i++) if (!cells[i]) { const t = Math.min(left, stackOf(itemId)); cells[i] = { item: itemId, qty: t }; left -= t; }
+    for (let i = 0; i < cells.length && left; i++) if (!cells[i]) { const t = Math.min(left, stackOf(itemId)); cells[i] = { item: itemId, qty: t }; left -= t; }
+    while (left) { const t = Math.min(left, stackOf(itemId)); cells.push({ item: itemId, qty: t }); left -= t; }
     if (qty - left) AB.Bus.emit('inventory:changed', { charId: null, itemId, delta: qty - left });
     return qty - left;
   }
   function remove(itemId, qty = 1) {
     let left = qty;
-    for (let i = SIZE - 1; i >= 0 && left; i--) {
+    for (let i = cells.length - 1; i >= 0 && left; i--) {
       const c = cells[i];
       if (!c || c.item !== itemId) continue;
       const t = Math.min(left, c.qty); c.qty -= t; left -= t;
@@ -116,6 +111,6 @@ AB.IsoStash = (() => {
   return {
     SIZE, add, remove, count, room, use, useBlock, equip, unequip, drop, adapt,
     cells: () => cells.slice(), slot: (i) => cells[i] || null,
-    reset() { cells = new Array(SIZE).fill(null); },
+    reset() { cells = []; },
   };
 })();

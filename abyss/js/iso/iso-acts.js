@@ -67,6 +67,14 @@ AB.IsoActs = (() => {
     }
   });
   const RUN = {
+    // выживший в «Отсеке на склоне» — в экипаже базы (№69)
+    recruit() {
+      if (!crew.includes('CHAR-004')) crew.push('CHAR-004');
+      AB.Flags.add('recruit');
+      const m = AB.IsoParty.find('CHAR-004'); if (m) { m.hidden = true; m.sector = 'SECTOR-005'; }
+      toast('Сайлас идёт к капсуле — теперь он в экипаже базы', 'good');
+      checkEnd();
+    },
     // капсула отстыкована: экипаж на борту, дальше — карта дна в режиме базы
     undock() {
       AB.Flags.add('undocked');
@@ -85,12 +93,30 @@ AB.IsoActs = (() => {
     if (d.mob) return { label: AB.Enemies.isDead(d.mob) ? 'Здесь уже всё сделано' : d.label, ok: false };
     if (act === 2) return { label: 'Мира: «Не уходи далеко — сначала сигнал»', ok: false };
     if (d.act === 3 && !AB.Flags.has('undocked')) return { label: 'Сначала — капсула', ok: false };
+    if (d.interior && AB.IsoOverworld.selectedKind() !== 'squad') return { label: 'Подведите отряд в транспорте ко входу', ok: false };
     return { label: d.label, ok: true };
   }
+  // войти в здание: транспорт у входа, внутрь — только герой этого отряда; остальной экипаж — на базе
+  function enterInterior(sector) {
+    const hero = AB.IsoOverworld.enterBuilding();
+    if (!hero) { AB.IsoOverworld.say('Подведите отряд в транспорте ко входу (выберите героя)'); return; }
+    Object.assign(AB.IsoStory.fx, { fade: 0, fadeTo: 0, fadeDur: 0, fadeFrom: 0, actEnd: 0 });
+    for (const m of [...AB.IsoParty.members()]) if (m.id !== hero && AB.IsoParty.leave(m.id)) { const n = AB.IsoParty.allNpcs().find((q) => q.id === m.id); if (n) n.sector = 'SECTOR-005'; }
+    const i = AB.IsoParty.members().findIndex((m) => m.id === hero); if (i >= 0) AB.IsoParty.setLeader(i);
+    const L = AB.ISO_LAYOUTS[sector];
+    AB.IsoGame.travel(sector, L.enter.x, L.enter.y);
+  }
+  AB.Bus.on('iso:travel', ({ sector }) => {
+    if (sector !== 'SECTOR-006' || AB.Flags.has('recruit')) return;
+    const p = AB.ISO_LAYOUTS['SECTOR-006'].survivor;
+    const m = AB.IsoParty.addNpc('CHAR-004', p.x, p.y); m.hidden = false; m.facing = -1;
+    if (!AB.Chars.get('CHAR-004') && AB.Chars.spawn) { const c = AB.Chars.spawn('CHAR-004', { room: 'ROOM-024', x: 0 }); if (c) c.controllable = false; }
+  });
   function siteVisible(site) { const d = AB.ISO_SITES[site.key]; return !d || !d.act || site.key !== 'contact' || act >= 2; }
   function doSite(site) {
     const d = AB.ISO_SITES[site.key], a = siteAction(site);
     if (!a.ok || !d) return;
+    if (d.interior) { enterInterior(d.interior); return; }
     if (d.say) AB.IsoOverworld.say(d.say);
     if (d.repeat) return;
     visited.add(site.key);

@@ -60,7 +60,7 @@ AB.IsoRender = (() => {
     'ROOM-014': [48, 46, 46], 'ROOM-015': [50, 48, 44], 'ROOM-016': [38, 50, 52],
     'ROOM-001': [42, 50, 58], 'ROOM-011': [50, 46, 44], 'ROOM-003': [54, 50, 42], 'ROOM-012': [36, 44, 46],
     'ROOM-008': [44, 52, 60], 'ROOM-007': [46, 54, 52], 'ROOM-006': [52, 50, 46], 'ROOM-009': [44, 48, 50], 'ROOM-010': [46, 50, 56],
-    'ROOM-004': [52, 50, 44], 'ROOM-017': [44, 50, 58], 'ROOM-018': [42, 48, 54], 'ROOM-019': [26, 38, 44],
+    'ROOM-004': [52, 50, 44], 'ROOM-017': [44, 50, 58], 'ROOM-018': [42, 48, 54], 'ROOM-019': [26, 38, 44], 'ROOM-024': [40, 38, 40],
   };
 
   function init(canvas) {
@@ -672,7 +672,14 @@ AB.IsoRender = (() => {
 
   return {
     TW, TH, init, frame, pick, screenOf, toScreen, toWorld, portrait,
-    focus(p) { focusPt = p || null; },
+    focus(p) { focusPt = p ? { ...p } : null; },
+    // №69: свободная камера в базе — сдвиг обзора на (dx, dy) CSS-пикселей
+    panBy(dx, dy) {
+      if (!focusPt) return;
+      const k = dpr / S(), w0 = toWorld(0, 0), w1 = toWorld(-dx * k, -dy * k), sz = AB.IsoWorld.size();
+      focusPt.x = U.clamp(focusPt.x + w1.x - w0.x, 0, sz.w); focusPt.y = U.clamp(focusPt.y + w1.y - w0.y, 0, sz.h);
+      const t = toScreen(focusPt.x, focusPt.y - 0.4); cam.x = t.x; cam.y = t.y;
+    },
     zoom(dz) { if (dz) { cam.z = U.clamp(Math.round((cam.z + dz) * 100) / 100, ZMIN, ZMAX); try { localStorage.setItem('abyss_iso_zoom', String(cam.z)); } catch (e) { /* хранилище недоступно */ } } return cam.z; },
     setZoom(z) { cam.z = U.clamp(z, ZMIN, ZMAX); return cam.z; },
     camera: () => ({ ...cam }),

@@ -12,7 +12,7 @@ AB.IsoStory = (() => {
   // весь акт I (№49–50); порядок и шаги — из events.js
   // №55: акт I кончается на внешних камерах (EVENT-012); экзокостюм — акт II (EVENT-010 не используется)
   const SUPPORTED = ['EVENT-001', 'EVENT-014', 'EVENT-003', 'EVENT-004', 'EVENT-002', 'EVENT-005', 'EVENT-006', 'EVENT-007', 'EVENT-008', 'EVENT-009', 'EVENT-011', 'EVENT-012',
-    'EVENT-015', 'EVENT-016', 'EVENT-017', 'EVENT-018', 'EVENT-019', 'EVENT-020', 'EVENT-021', 'EVENT-022'];
+    'EVENT-015', 'EVENT-016', 'EVENT-017', 'EVENT-018', 'EVENT-019', 'EVENT-020', 'EVENT-021', 'EVENT-022', 'EVENT-023'];
   // триггер события в изометрии (js/data/iso-acts.js может заменить триггер из events.js)
   const trig = (def) => (AB.ISO_TRIGGER && AB.ISO_TRIGGER[def.id]) || def.trigger;
   const done = new Set();

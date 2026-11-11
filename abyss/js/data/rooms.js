@@ -499,6 +499,9 @@ AB.ROOMS.push(
   ISO_ROOM({ id: 'ROOM-021', name: 'Жилой отсек', desc: 'Койки экипажа, стол, шкафчики со снаряжением. Здесь живут герои.', width: 1200, height: 360, theme: 'living', state: 'safe', spawn: { x: 140 } }),
   ISO_ROOM({ id: 'ROOM-022', name: 'Шлюз капсулы', desc: 'Тесный шлюз: выход на дно и стойка для экзокостюма.', width: 500, height: 360, theme: 'airlock', state: 'safe', spawn: { x: 140 } }),
   ISO_ROOM({ id: 'ROOM-023', name: 'Модульный отсек', desc: 'Стыковочные гнёзда: сюда пристыковывают новые модули базы.', width: 1200, height: 360, theme: 'armory', state: 'safe', spawn: { x: 140 } }),
+  // №69: «Отсек на склоне» изнутри — оторванный отсек чужого корабля, где живёт выживший
+  ISO_ROOM({ id: 'ROOM-024', name: 'Отсек на склоне', desc: 'Оторванный отсек старого корабля. Аварийный свет, капсула жизнеобеспечения, ящики с припасами.', width: 900, height: 360, theme: 'tunnel', state: 'flooded', spawn: { x: 140 },
+    equipment: ['EQUIP-015'], containers: [{ key: 'salvage', x: 300, prop: 'cabinet', label: 'Ящик с припасами', loot: [['ITEM-003', 2], ['ITEM-002', 1]] }] }),
   ISO_ROOM({
     id: 'ROOM-019', name: 'Дно у «Абисса»', desc: 'Каменистое дно у обломков. Фонари костюма выхватывают из темноты метров десять.',
     width: 1800, height: 440, theme: 'tunnel', state: 'flooded', spawn: { x: 200 },

@@ -49,6 +49,8 @@ AB.IsoInput = (() => {
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: AB.IsoRender.zoom() };
         return;
       }
+      // №69: в базе-капсуле камера свободна — перетаскивание двигает обзор, короткое нажатие — по прибору
+      if (AB.IsoBase && AB.IsoBase.active()) { baseDrag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, id: e.pointerId }; return; }
       // нажали на противника — атаковать; на объект — подойти и сделать; иначе — идти
       const foe = enemyAt(e.clientX, e.clientY);
       if (foe) { AB.IsoCombat.setTarget(foe); return; }
@@ -61,12 +63,18 @@ AB.IsoInput = (() => {
       if (e.pointerType === 'mouse') { hoverFoe = enemyAt(e.clientX, e.clientY); canvas.style.cursor = hoverFoe ? 'pointer' : AB.IsoInteract.hoverAt(e.clientX, e.clientY) ? 'pointer' : 'crosshair'; }
       if (!pointers.has(e.pointerId)) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (baseDrag && baseDrag.id === e.pointerId && pointers.size === 1) {
+        if (!baseDrag.moved && Math.hypot(e.clientX - baseDrag.x, e.clientY - baseDrag.y) > 8) baseDrag.moved = true;
+        if (baseDrag.moved) AB.IsoRender.panBy(e.clientX - baseDrag.lx, e.clientY - baseDrag.ly);
+        baseDrag.lx = e.clientX; baseDrag.ly = e.clientY;
+      }
       if (pinch && pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         AB.IsoRender.setZoom(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch.d));
       }
     });
     const up = (e) => {
+      if (baseDrag && baseDrag.id === e.pointerId) { const d = baseDrag; baseDrag = null; if (!d.moved && e.type === 'pointerup') AB.IsoInteract.click(e.clientX, e.clientY); }
       pointers.delete(e.pointerId);
       if (hold === e.pointerId) hold = null;
       if (pointers.size < 2) pinch = null;
@@ -76,7 +84,7 @@ AB.IsoInput = (() => {
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); AB.IsoRender.zoom(e.deltaY > 0 ? -0.1 : 0.1); }, { passive: false });
   }
 
-  let hoverFoe = null;
+  let hoverFoe = null, baseDrag = null;
   // противник под указателем (по фигуре, не только по ногам)
   function enemyAt(cx, cy) {
     let best = null, bd = 34;

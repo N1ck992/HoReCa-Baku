@@ -1,6 +1,6 @@
 // =====================================================================
 // ISO INVENTORY (дополнения №48–49). Два окна:
-//   • «Вещи» (I, Tab) — общий инвентарь профиля: 12 ячеек (AB.IsoStash).
+//   • «Инвентарь» (I, Tab) — общий инвентарь профиля: без ограничения места, вкладки (AB.IsoStash).
 //     Использовать на выбранном герое, дать оружие в руки, выбросить.
 //   • Окно героя — нажатие на карточку героя внизу справа: здоровье,
 //     надето (оружие в руках, одежда — текущий облик), «Вести отряд».
@@ -10,7 +10,7 @@
 AB.IsoInventory = (() => {
   const $ = (s) => document.querySelector(s);
   const isTouch = matchMedia('(pointer: coarse)').matches;
-  let ui = null, selected = 0, hero = null, lastHtml = '';
+  let ui = null, selected = 0, hero = null, lastHtml = '', tab = 'all';
   const itemName = (id) => AB.ID.get(id).name;
   const S = () => AB.IsoStash;
 
@@ -51,14 +51,16 @@ AB.IsoInventory = (() => {
       const face = icon.status === 'ready' ? `<img src="${AB.ID.get(def.icon).src}" alt="">` : `<b>${def.short}</b>`;
       return `<button class="slot cat-${def.category} ${i === selected ? 'sel' : ''}" data-slot="${i}" aria-label="${def.name}${s.qty > 1 ? `, ${s.qty} шт.` : ''}">${face}${s.qty > 1 ? `<em>${s.qty}</em>` : ''}</button>`;
     };
-    const free = cells.filter((c) => !c).length;
-    const grid = SECTIONS.map((sec) => {
-      const list = cells.map((s, i) => [s, i]).filter(([s]) => s && sectionOf(AB.ID.get(s.item)) === sec.id);
-      return `<div class="inv-sec"><span>${sec.name}</span><em>${list.length ? list.reduce((a, [s]) => a + 1, 0) : 'пусто'}</em></div>${list.map(([s, i]) => slot(s, i)).join('')}`;
-    }).join('') + `<div class="inv-sec free"><span>Свободных ячеек</span><em>${free} из ${S().SIZE}</em></div>`;
-    const s = cells[selected];
+    // №69: вкладки — что где лежит
+    const tabs = [{ id: 'all', name: 'Все' }, ...SECTIONS];
+    const cnt = (id) => cells.filter((c) => c && (id === 'all' || sectionOf(AB.ID.get(c.item)) === id)).length;
+    const tabBar = `<div class="inv-tabs">${tabs.map((t) => `<button data-tab="${t.id}" class="${tab === t.id ? 'on' : ''}">${t.name}<em>${cnt(t.id)}</em></button>`).join('')}</div>`;
+    const list = cells.map((c, i) => [c, i]).filter(([c]) => c && (tab === 'all' || sectionOf(AB.ID.get(c.item)) === tab));
+    if (list.length && !list.some(([, i]) => i === selected)) selected = list[0][1];
+    const grid = tabBar + (list.length ? list.map(([c, i]) => slot(c, i)).join('') : '<div class="inv-empty">Здесь пока пусто</div>');
+    const s = list.some(([, i]) => i === selected) ? cells[selected] : null;
     const alive = AB.IsoParty.members().filter((m) => !(AB.Chars.get(m.id) || {}).dead);
-    let detail = '<p class="muted">Пустая ячейка. Всё найденное в бункере ложится сюда — в общий инвентарь отряда. У героев — только то, что надето: оружие и одежда (нажмите на героя внизу справа).</p>';
+    let detail = '<p class="muted">Выберите вещь. Всё найденное ложится сюда — в общий инвентарь отряда, места не ограничены. У героев — только то, что надето: оружие и одежда (нажмите на героя внизу справа).</p>';
     if (s) {
       const def = AB.ID.get(s.item);
       let acts = '';
@@ -72,10 +74,12 @@ AB.IsoInventory = (() => {
     const html = grid + '|' + detail;
     if (html !== lastHtml) { ui.grid.innerHTML = grid; ui.detail.innerHTML = detail; lastHtml = html; }
     const used = cells.filter(Boolean).length;
-    ui.owner.textContent = `Общий инвентарь отряда · занято ${used} из ${S().SIZE} · на это прохождение`;
+    ui.owner.textContent = `Общий инвентарь отряда · ${used} ячеек · без ограничения места`;
   }
 
   function onClick(e) {
+    const tb = e.target.closest('[data-tab]');
+    if (tb) { tab = tb.dataset.tab; render(); return; }
     const slot = e.target.closest('[data-slot]');
     if (slot) { selected = Number(slot.dataset.slot); render(); return; }
     const act = e.target.closest('[data-inv]');

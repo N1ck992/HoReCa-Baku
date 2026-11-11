@@ -221,6 +221,29 @@ AB.EVENTS.push(
   },
 );
 
+// №69: выживший в «Отсеке на склоне» (черновик)
+AB.EVENTS.push({
+  id: 'EVENT-023', name: 'Выживший', chapter: 3, room: 'ROOM-024', trigger: 'equip:EQUIP-015', once: true, pending: true,
+  steps: [
+    { at: 0.0, action: 'lock_input' },
+    { at: 0.2, action: 'flicker', duration: 0.8 },
+    { at: 0.6, action: 'face', char: 'CHAR-001', target: 'CHAR-004' },
+    { at: 0.7, action: 'dialog', id: 'DIALOG-016' },
+    { at: 0.8, action: 'run', fn: 'recruit' },
+    { at: 0.8, action: 'unlock_input' },
+  ],
+});
+AB.DIALOGS.push({
+  id: 'DIALOG-016', name: 'Выживший', event: 'EVENT-023', pending: true,
+  lines: [
+    { speaker: 'CHAR-004', text: 'Свет… Значит, батареи ещё держат. Кто вы?' },
+    { speaker: 'CHAR-001', text: 'Экипаж «Абисса». Нас подняли из криосна. Ты — с другого корабля?' },
+    { speaker: 'CHAR-004', text: 'Мой корабль упал сюда задолго до вашего. Я — то, что от экипажа осталось: наполовину машина.' },
+    { speaker: 'CHAR-004', text: 'Возьмите меня с собой. Я знаю это дно — и знаю, кого здесь стоит бояться.' },
+    { speaker: 'CHAR-001', text: 'У нас есть капсула. Места хватит.' },
+  ],
+});
+
 AB.DIALOGS.push(
   {
     id: 'DIALOG-014', name: 'Капсула', event: 'EVENT-021', pending: true,
@@ -314,9 +337,9 @@ AB.ISO_SITES = {
   'wreck-a': { act: 3, loot: [['ITEM-001', 6], ['ITEM-002', 3]], label: 'Разобрать обломки', say: 'Обшивка чужого корабля: металлолом и электроника' },
   crystals: { act: 3, loot: [['ITEM-015', 2]], label: 'Собрать кристаллы', say: 'Два кристалла — тёплые, светятся изнутри' },
   beacon: { act: 3, loot: [['ITEM-002', 2], ['ITEM-003', 2]], label: 'Снять оборудование', say: 'Старый маяк машин: электроника и провода' },
-  'wreck-b': { act: 3, building: true, recruit: 'CHAR-004', loot: [['ITEM-003', 2]], label: 'Оставить транспорт у входа — войти в отсек',
-    say: 'В отсеке — живой. Наполовину машина: «Мой корабль упал сюда задолго до вашего. Возьмите меня с собой — я знаю это дно»' },
-  settlement: { act: 3, building: true, label: 'Оставить транспорт у шлюза купола', say: 'Из динамиков: «Люди с нового корабля? Уходите. Древние не любят чужих»', repeat: true },
+  // №69: здание с комнатой внутри — транспорт остаётся у входа, герой заходит (SECTOR-006)
+  'wreck-b': { act: 3, building: true, interior: 'SECTOR-006', repeat: true, label: 'Оставить транспорт у входа — войти в отсек' },
+  settlement: { act: 3, building: true, label: 'Связаться с куполом по радио', say: 'Из динамиков: «Люди с нового корабля? Уходите. Древние не любят чужих»', repeat: true },
 };
 
 // точка, которую засёк сонар Миры (акт II): к северо-востоку от «Абисса»
@@ -324,9 +347,9 @@ AB.OVERWORLD.sites.push({ key: 'contact', q: 2, r: -2, kind: 'swarm', name: 'С�
   desc: 'Мира: «Крупная цель у обломков. Почти не двигается — будто ждёт».' });
 
 // регистрация новых ID
-['EVENT-015', 'EVENT-016', 'EVENT-017', 'EVENT-018', 'EVENT-019', 'EVENT-020', 'EVENT-021', 'EVENT-022']
+['EVENT-015', 'EVENT-016', 'EVENT-017', 'EVENT-018', 'EVENT-019', 'EVENT-020', 'EVENT-021', 'EVENT-022', 'EVENT-023']
   .forEach((id) => AB.ID.register(id, AB.EVENTS.find((e) => e.id === id)));
-['DIALOG-009', 'DIALOG-010', 'DIALOG-011', 'DIALOG-012', 'DIALOG-013', 'DIALOG-014', 'DIALOG-015']
+['DIALOG-009', 'DIALOG-010', 'DIALOG-011', 'DIALOG-012', 'DIALOG-013', 'DIALOG-014', 'DIALOG-015', 'DIALOG-016']
   .forEach((id) => AB.ID.register(id, AB.DIALOGS.find((d) => d.id === id)));
 ['QUEST-006', 'QUEST-007', 'QUEST-008', 'QUEST-009'].forEach((id) => AB.ID.register(id, AB.QUESTS.find((q) => q.id === id)));
 AB.ISO_MODULES.forEach((m) => AB.ID.register(m.id, { ...m, pending: true }));

@@ -25,7 +25,7 @@
   <div id="iso-tools">
     <button id="iso-fs" title="На весь экран (временно, пока игра не стала приложением)">⛶</button>
     <div id="iso-zoom" aria-label="Камера"><button data-z="-0.15" title="Отдалить (−, колесо, щипок)">−</button><button data-z="0.15" title="Приблизить (+, колесо, щипок)">+</button></div>
-    <button id="iso-inv-btn" title="Инвентарь (I, Tab)">Вещи</button>
+    <button id="iso-inv-btn" title="Инвентарь (I, Tab)">Инвентарь</button>
     <button id="iso-ids" title="Показать или скрыть ID заглушек">ID</button>
     <button id="iso-dev-btn" data-dev-open title="Админ-панель: режим разработчика, переходы по актам">DEV</button>
     <button id="iso-restart-top" title="Начать прохождение бункера сначала">Заново</button>
@@ -37,7 +37,7 @@
   <div id="iso-inv" hidden>
     <div class="inv-card" role="dialog" aria-label="Инвентарь">
       <div class="inv-head">
-        <div><h2>Вещи отряда</h2><div class="muted" id="iso-inv-owner"></div></div>
+        <div><h2>Инвентарь</h2><div class="muted" id="iso-inv-owner"></div></div>
         <button class="inv-x" data-inv-close aria-label="Закрыть">✕</button>
       </div>
       <div class="inv-body"><div id="iso-inv-grid"></div><div id="iso-inv-detail"></div></div>
@@ -76,8 +76,8 @@
       <div id="ow-left">
         <button id="ow-mybase" title="Войти в базу-капсулу"><i class="cap"></i><span>Моя база</span></button>
         <div id="ow-menu">
+          <button data-ow="items" title="Инвентарь отряда"><i>▤</i><span>Инвентарь</span></button>
           <button data-ow="drive" title="Вести капсулу по дну (5 с на клетку)"><i>⇄</i><span>Вести базу</span></button>
-          <button data-ow="items" title="Вещи отряда"><i>▤</i><span>Вещи</span></button>
           <button data-ow="all" title="Выбрать все отряды снаружи: нажатие на клетку ведёт всех"><i>◎</i><span>Все отряды</span></button>
           <button data-ow="surface" hidden title="Всплыть на поверхность"><i>⇧</i><span>Всплыть</span></button>
         </div>

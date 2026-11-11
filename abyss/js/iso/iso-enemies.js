@@ -235,7 +235,11 @@ AB.IsoEnemies = (() => {
     if (from) { e.target = from.id || e.target; e.loseT = 0; }
     if (e.hp <= 0) {
       setState(e, 'DEAD');
+      e.deadAt = performance.now();
       if (!id.includes('~')) dead.add(id);
+      // №69: в секторе не больше 5 тел — самые старые убираем (память и отрисовка)
+      const bodies = here().filter((q) => q.state === 'DEAD').sort((a, b) => (a.deadAt || 0) - (b.deadAt || 0));
+      while (bodies.length > 5) list.delete(bodies.shift().id);
       AB.Bus.emit('enemy:dead', { id, name: d.name });
       return true;
     }
@@ -250,7 +254,14 @@ AB.IsoEnemies = (() => {
     return true;
   }
 
-  function update(dt) { for (const e of here()) tick(e, dt); }
+  // №69: далёкие спокойные противники (больше 18 клеток от отряда) не думают — экономим на расчётах
+  function update(dt) {
+    const l = AB.IsoParty.lead();
+    for (const e of here()) {
+      if (l && !e.nest && ['PATROL', 'IDLE', 'DORMANT', 'DEAD'].includes(e.state) && Math.hypot(e.x - l.x, e.y - l.y) > 18) continue;
+      tick(e, dt);
+    }
+  }
   // противники сектора — при первом заходе в него (по данным помещений и местам планировки)
   const spawned = new Set();
   function spawnSector(sectorId, layout, extra = []) {
