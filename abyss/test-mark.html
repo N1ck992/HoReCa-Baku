@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Марк — тестовая комната</title>
+<style>
+  :root { --fg: #e8e2d8; --muted: #8a8580; --line: rgba(255,255,255,.14); --cyan: #5ee6ff; --bg: #050608; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; font: 13px/1.4 ui-monospace, Menlo, monospace; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; }
+  #ui { position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
+  #ui b { font: 700 16px "Arial Narrow", sans-serif; letter-spacing: 2px; text-transform: uppercase; margin-right: 8px; }
+  #ui button { pointer-events: auto; height: 32px; padding: 0 10px; font: 12px ui-monospace, monospace; color: var(--fg); background: rgba(12,14,16,.85); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+  #ui button.on { color: #0b1210; background: #7fe6a2; border-color: #7fe6a2; }
+  #hint { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); text-align: center; color: var(--muted); font-size: 11px; pointer-events: none; }
+  #stick { position: fixed; left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(40px + env(safe-area-inset-bottom, 0px)); width: 120px; height: 120px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.04); display: none; }
+  #stick i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(94,230,255,.25); border: 1px solid rgba(94,230,255,.6); }
+  @media (pointer: coarse) { #stick { display: block; } }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="ui">
+  <b>Марк · тест</b>
+  <button id="run">Бег: выкл</button>
+  <button id="bones">Кости</button>
+  <button id="parts">Части</button>
+  <button id="zin">+</button><button id="zout">−</button>
+  <button id="wave">Помахать</button>
+</div>
+<div id="stick"><i></i></div>
+<div id="hint">Компьютер: WASD или стрелки, Shift — бег, клик — идти туда · Телефон: джойстик слева или нажатие по полу.<br>Пока есть только ракурс спереди: вверх по экрану Марк идёт тем же ракурсом (нужна картинка со спины).</div>
+<script>
+// =====================================================================
+// Тестовая комната (№75): Марк вполоборота, 15 частей на скелете, анимация кодом.
+// Части и суставы — assets/char001/3q/front/ (нарезка tools/cut_mark3q.py).
+// Каждая часть вращается вокруг своего сустава; поза покоя = исходная картинка,
+// поэтому в покое фигура совпадает с рисунком один в один.
+// =====================================================================
+(async () => {
+  const BASE = 'assets/char001/3q/front/';
+  const rig = await (await fetch(BASE + 'rig.json')).json();
+  const imgs = {};
+  await Promise.all(Object.keys(rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = BASE + n + '.png'; imgs[n] = im; })));
+
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  let dpr = 1, W = 0, H = 0;
+  function resize() { dpr = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; }
+  addEventListener('resize', resize); resize();
+
+  // ---------- комната ----------
+  const TW = 64, TH = 32, N = 12;
+  const iso = (x, y) => ({ x: (x - y) * TW / 2, y: (x + y) * TH / 2 });
+  const crates = [{ x: 3, y: 8 }, { x: 8, y: 3 }, { x: 8, y: 9 }, { x: 4, y: 3 }];
+  const me = { x: 6, y: 6, vx: 0, vy: 0, face: 1, phase: 0, speed: 0, wave: 0, goal: null };
+  let zoom = Math.min(1.4, Math.max(0.8, Math.min(W, H) / 600)), run = false, showBones = false, showParts = false;
+
+  // ---------- управление ----------
+  const keys = new Set();
+  addEventListener('keydown', (e) => { keys.add(e.key.toLowerCase()); if (e.key === 'Shift') run = true; syncUi(); });
+  addEventListener('keyup', (e) => { keys.delete(e.key.toLowerCase()); if (e.key === 'Shift') run = false; syncUi(); });
+  const stick = { id: null, x: 0, y: 0, el: document.getElementById('stick') };
+  stick.el.addEventListener('pointerdown', (e) => { stick.id = e.pointerId; stick.el.setPointerCapture(e.pointerId); setStick(e); e.stopPropagation(); });
+  stick.el.addEventListener('pointermove', (e) => { if (e.pointerId === stick.id) setStick(e); });
+  const endStick = (e) => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; stick.el.firstElementChild.style.transform = ''; };
+  stick.el.addEventListener('pointerup', endStick); stick.el.addEventListener('pointercancel', endStick);
+  function setStick(e) {
+    const r = stick.el.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), m = Math.hypot(dx, dy), k = Math.min(1, m / 50);
+    stick.x = m ? dx / m * k : 0; stick.y = m ? dy / m * k : 0;
+    stick.el.firstElementChild.style.transform = `translate(${stick.x * 36}px, ${stick.y * 36}px)`;
+  }
+  cv.addEventListener('pointerdown', (e) => {
+    // нажатие по полу — идти туда
+    const p = toWorld(e.clientX, e.clientY);
+    me.goal = { x: Math.max(0.6, Math.min(N - 0.6, p.x)), y: Math.max(0.6, Math.min(N - 0.6, p.y)) };
+  });
+  const B = (id) => document.getElementById(id);
+  function syncUi() { B('run').textContent = `Бег: ${run ? 'вкл' : 'выкл'}`; B('run').classList.toggle('on', run); B('bones').classList.toggle('on', showBones); B('parts').classList.toggle('on', showParts); }
+  B('run').onclick = () => { run = !run; syncUi(); };
+  B('bones').onclick = () => { showBones = !showBones; syncUi(); };
+  B('parts').onclick = () => { showParts = !showParts; syncUi(); };
+  B('zin').onclick = () => { zoom = Math.min(2.4, zoom * 1.15); };
+  B('zout').onclick = () => { zoom = Math.max(0.5, zoom / 1.15); };
+  B('wave').onclick = () => { me.wave = 2.2; };
+  addEventListener('wheel', (e) => { zoom = Math.max(0.5, Math.min(2.4, zoom * (e.deltaY > 0 ? 0.9 : 1.1))); }, { passive: true });
+
+  // камера: по центру — Марк
+  const cam = { x: 0, y: 0 };
+  function toWorld(cx, cy) {
+    const sx = (cx - W / 2) / zoom + cam.x, sy = (cy - H / 2) / zoom + cam.y;
+    return { x: sy / TH + sx / TW, y: sy / TH - sx / TW };
+  }
+
+  // ---------- движение ----------
+  function update(dt) {
+    let ix = 0, iy = 0;                                // экранное направление
+    if (keys.has('a') || keys.has('arrowleft') || keys.has('ф')) ix -= 1;
+    if (keys.has('d') || keys.has('arrowright') || keys.has('в')) ix += 1;
+    if (keys.has('w') || keys.has('arrowup') || keys.has('ц')) iy -= 1;
+    if (keys.has('s') || keys.has('arrowdown') || keys.has('ы')) iy += 1;
+    let mag = Math.hypot(ix, iy);
+    if (stick.id != null && Math.hypot(stick.x, stick.y) > 0.15) { ix = stick.x; iy = stick.y; mag = Math.hypot(ix, iy); }
+    let running = run || (stick.id != null && mag > 0.85);
+    let wx = 0, wy = 0;
+    if (mag > 0.1) {
+      me.goal = null;
+      const n = Math.min(1, mag); ix /= mag; iy /= mag;
+      // экран → мир изометрии (вправо по экрану = +x −y, вниз = +x +y)
+      wx = (ix + iy * 2) / 2; wy = (iy * 2 - ix) / 2;
+      const l = Math.hypot(wx, wy); wx = wx / l * n; wy = wy / l * n;
+    } else if (me.goal) {
+      const dx = me.goal.x - me.x, dy = me.goal.y - me.y, d = Math.hypot(dx, dy);
+      if (d < 0.08) me.goal = null; else { wx = dx / d; wy = dy / d; running = run || d > 3; }
+    }
+    const sp = (running ? 3.4 : 1.6) * Math.hypot(wx, wy);
+    me.speed += (sp - me.speed) * Math.min(1, dt * 10);
+    me.run = running && sp > 0;
+    if (sp > 0) {
+      const l = Math.hypot(wx, wy);
+      let nx = me.x + wx / l * sp * dt, ny = me.y + wy / l * sp * dt;
+      nx = Math.max(0.5, Math.min(N - 0.5, nx)); ny = Math.max(0.5, Math.min(N - 0.5, ny));
+      for (const c of crates) if (nx > c.x - 0.25 && nx < c.x + 1.25 && ny > c.y - 0.25 && ny < c.y + 1.25) { nx = me.x; ny = me.y; me.goal = null; }
+      me.x = nx; me.y = ny;
+      const sx = wx - wy;                               // экранная горизонталь
+      if (Math.abs(sx) > 0.05) me.face = sx > 0 ? -1 : 1;   // исходник смотрит влево
+    }
+    me.phase += dt * me.speed * (me.run ? 2.3 : 3.3);
+    me.wave = Math.max(0, me.wave - dt);
+  }
+
+  // ---------- анимация: углы суставов (градусы) и сжатие вдоль кости ----------
+  function pose(t) {
+    const p = {}, s = Math.min(1, me.speed / 1.6), r = me.run ? 1 : 0, ph = me.phase;
+    const sw = (k) => Math.sin(ph + k);
+    const amp = 1 + r * 0.6;
+    const breathe = Math.sin(t * 2.2) * (1 - s);
+    // ноги: бедро вперёд-назад, колено гнётся на выносе, стопа остаётся у пола
+    for (const [side, off] of [['n', 0], ['f', Math.PI]]) {
+      const a = sw(off), lift = Math.max(0, Math.sin(ph + off + 0.9));
+      const thigh = 16 * a * amp * s;
+      const knee = (14 + 22 * r) * lift * s;
+      p['thigh_' + side] = { a: thigh, k: 1 - 0.06 * lift * s };
+      p['shin_' + side] = { a: -knee, k: 1 - 0.05 * lift * s };
+      p['foot_' + side] = { a: -(thigh - knee) * 0.7 + 4 * lift * s };
+    }
+    // руки: против ног; на бегу согнуты сильнее
+    for (const [side, off, k] of [['n', Math.PI, 1], ['f', 0, 0.8]]) {
+      const a = sw(off);
+      p['uarm_' + side] = { a: (-13 * a * amp * s + breathe * 1.5) * k };
+      p['farm_' + side] = { a: (-6 - 10 * s - 28 * r * s - Math.max(0, a) * 10 * s) * (side === 'n' ? 1 : -0.6) };
+      p['hand_' + side] = { a: 4 * a * s };
+    }
+    if (me.wave > 0) {                                // помахать ближней рукой
+      const w = Math.min(1, me.wave * 2, (2.2 - me.wave) * 3);
+      p.uarm_n = { a: 150 * w };
+      p.farm_n = { a: (40 + Math.sin(t * 12) * 22) * w };
+      p.hand_n = { a: 10 * w };
+    }
+    p.torso = { a: (2.2 * sw(0) * s) + 5 * r * s, k: 1 + breathe * 0.008 };
+    p.head = { a: -1.2 * sw(0) * s - 3 * r * s };
+    p.pelvis = { a: 1.5 * sw(0) * s };
+    p.bob = -Math.abs(Math.cos(ph)) * (5 + 6 * r) * s + Math.abs(Math.sin(ph)) * 2 * s - breathe * 1.5;
+    return p;
+  }
+
+  // ---------- отрисовка героя ----------
+  const ORDER = ['uarm_f', 'farm_f', 'hand_f', 'thigh_f', 'shin_f', 'foot_f', 'pelvis', 'torso', 'head', 'thigh_n', 'shin_n', 'foot_n', 'uarm_n', 'farm_n', 'hand_n'];
+  const GROUND = [440, 1655];                         // точка между подошвами на исходнике
+  function mat(parent, part, q) {
+    // M = parent · T(pivot) · R(a) · S(1,k) · T(−pivot)
+    const [px, py] = part.pivot, a = (q && q.a || 0) * Math.PI / 180, k = q && q.k || 1;
+    const m = new DOMMatrix(parent).translate(px, py).rotate(a * 180 / Math.PI).scale(1, k).translate(-px, -py);
+    return m;
+  }
+  function drawHero(sx, sy, sc, t) {
+    const q = pose(t), M = {};
+    const root = new DOMMatrix().translate(sx, sy + q.bob * sc * 3).scale(sc * me.face, sc).translate(-GROUND[0], -GROUND[1]);
+    for (const n of ['pelvis', 'torso', 'head', 'uarm_n', 'farm_n', 'hand_n', 'uarm_f', 'farm_f', 'hand_f', 'thigh_n', 'shin_n', 'foot_n', 'thigh_f', 'shin_f', 'foot_f']) {
+      const part = rig.parts[n];
+      M[n] = mat(part.parent ? M[part.parent] : root, part, q[n]);
+    }
+    const PAL = ['#e64545', '#4a63e6', '#f0c828', '#28c85a', '#c83cdc', '#3cdce6', '#fa821e', '#82fa3c', '#965a28', '#ffffff', '#7878ff', '#ff78be', '#1e783c', '#c8c878', '#5a288c'];
+    ORDER.forEach((n) => {
+      const part = rig.parts[n], im = imgs[n];
+      ctx.save();
+      ctx.setTransform(M[n]);
+      if (im && im.width) ctx.drawImage(im, part.x, part.y, part.w, part.h);
+      if (showParts) { ctx.globalAlpha = 0.35; ctx.fillStyle = PAL[Object.keys(rig.parts).indexOf(n) % PAL.length]; ctx.globalCompositeOperation = 'source-atop'; ctx.fillRect(part.x, part.y, part.w, part.h); }
+      ctx.restore();
+    });
+    if (showBones) {
+      for (const n of ORDER) {
+        const part = rig.parts[n], m = M[n];
+        const a = m.transformPoint(new DOMPoint(...part.pivot)), b = m.transformPoint(new DOMPoint(...part.end));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.fillStyle = '#ff4a3a'; ctx.beginPath(); ctx.arc(a.x, a.y, 4 * dpr, 0, 7); ctx.fill();
+      }
+    }
+  }
+
+  // ---------- кадр ----------
+  function block(x, y, h, top, l, r) {
+    const p = iso(x, y), A = { x: p.x, y: p.y }, Bp = iso(x + 1, y), C = iso(x + 1, y + 1), D = iso(x, y + 1);
+    ctx.fillStyle = l; ctx.beginPath(); ctx.moveTo(D.x, D.y - h); ctx.lineTo(C.x, C.y - h); ctx.lineTo(C.x, C.y); ctx.lineTo(D.x, D.y); ctx.fill();
+    ctx.fillStyle = r; ctx.beginPath(); ctx.moveTo(Bp.x, Bp.y - h); ctx.lineTo(C.x, C.y - h); ctx.lineTo(C.x, C.y); ctx.lineTo(Bp.x, Bp.y); ctx.fill();
+    ctx.fillStyle = top; ctx.beginPath(); ctx.moveTo(A.x, A.y - h); ctx.lineTo(Bp.x, Bp.y - h); ctx.lineTo(C.x, C.y - h); ctx.lineTo(D.x, D.y - h); ctx.fill();
+  }
+  let last = performance.now(), T = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
+    update(dt);
+    const mp = iso(me.x, me.y);
+    cam.x += (mp.x - cam.x) * Math.min(1, dt * 6); cam.y += (mp.y - 60 - cam.y) * Math.min(1, dt * 6);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#050608'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const S = dpr * zoom, world = () => ctx.setTransform(S, 0, 0, S, cv.width / 2 - cam.x * S, cv.height / 2 - cam.y * S);
+    world();
+    // пол
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const a = iso(x, y), b = iso(x + 1, y), c = iso(x + 1, y + 1), d = iso(x, y + 1), v = ((x * 7 + y * 13) % 5) * 2;
+      ctx.fillStyle = `rgb(${46 + v},${48 + v},${50 + v})`; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+    // задние стены
+    for (let i = 0; i < N; i++) { block(i, -1, 110, '#23262b', '#3a3f47', '#2c3036'); block(-1, i, 110, '#23262b', '#3a3f47', '#2c3036'); }
+    // по глубине: ящики и Марк
+    const list = crates.map((c) => ({ d: c.x + c.y + 1, f: () => block(c.x, c.y, 40, '#5a4a32', '#433722', '#382e1c') }));
+    list.push({ d: me.x + me.y, f: () => {
+      // тень
+      const g = ctx.createRadialGradient(mp.x, mp.y, 0, mp.x, mp.y, 34); g.addColorStop(0, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.save(); ctx.translate(mp.x, mp.y); ctx.scale(1, 0.5); ctx.beginPath(); ctx.arc(0, 0, 34, 0, 7); ctx.fill(); ctx.restore();
+      // рост Марка на экране ~ 2,7 клетки по высоте
+      const sc = (TH * 5.2) / 1600;
+      const p = new DOMPoint(mp.x, mp.y);
+      ctx.save(); drawHero(p.x * S + cv.width / 2 - cam.x * S, p.y * S + cv.height / 2 - cam.y * S, sc * S, T); ctx.restore(); world();
+    } });
+    list.sort((a, b) => a.d - b.d).forEach((o) => o.f());
+    // цель нажатия
+    if (me.goal) { const g = iso(me.goal.x, me.goal.y); ctx.strokeStyle = 'rgba(94,230,255,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(g.x, g.y, 14, 7, 0, 0, 7); ctx.stroke(); }
+    // мягкий свет
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const lg = ctx.createRadialGradient(cv.width / 2, cv.height / 2, 0, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.7);
+    lg.addColorStop(0, 'rgba(0,0,0,0)'); lg.addColorStop(1, 'rgba(0,0,0,.65)');
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, cv.width, cv.height);
+    requestAnimationFrame(frame);
+  }
+  syncUi();
+  requestAnimationFrame(frame);
+  window.__mark = me;
+})();
+</script>
+</body>
+</html>
