@@ -27,9 +27,10 @@
   <button id="parts">Части</button>
   <button id="zin">+</button><button id="zout">−</button>
   <button id="wave">Помахать</button>
+  <button id="who">Управляю: Марк A</button>
 </div>
 <div id="stick"><i></i></div>
-<div id="hint">Компьютер: WASD или стрелки, Shift — бег, клик — идти туда · Телефон: джойстик слева или нажатие по полу.<br>Пока есть только ракурс спереди: вверх по экрану Марк идёт тем же ракурсом (нужна картинка со спины).</div>
+<div id="hint">Компьютер: WASD или стрелки, Shift — бег, клик — идти туда · Телефон: джойстик слева или нажатие по полу.<br>Два варианта Марка: «Управляю» — переключить, второй идёт следом. Пока есть только ракурс спереди: вверх по экрану герои идут тем же ракурсом.</div>
 <script>
 // =====================================================================
 // Тестовая комната (№75): Марк вполоборота, 15 частей на скелете, анимация кодом.
@@ -38,10 +39,13 @@
 // поэтому в покое фигура совпадает с рисунком один в один.
 // =====================================================================
 (async () => {
-  const BASE = 'assets/char001/3q/front/';
-  const rig = await (await fetch(BASE + 'rig.json')).json();
-  const imgs = {};
-  await Promise.all(Object.keys(rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = BASE + n + '.png'; imgs[n] = im; })));
+  // два варианта Марка для сравнения: A — реалистичный, B — рисованный
+  const KINDS = [{ id: 'A', name: 'Марк A', base: 'assets/char001/3q/front/' }, { id: 'B', name: 'Марк B', base: 'assets/char001/3q/front-b/' }];
+  for (const k of KINDS) {
+    k.rig = await (await fetch(k.base + 'rig.json')).json();
+    k.imgs = {};
+    await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));
+  }
 
   const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
   let dpr = 1, W = 0, H = 0;
@@ -52,7 +56,9 @@
   const TW = 64, TH = 32, N = 12;
   const iso = (x, y) => ({ x: (x - y) * TW / 2, y: (x + y) * TH / 2 });
   const crates = [{ x: 3, y: 8 }, { x: 8, y: 3 }, { x: 8, y: 9 }, { x: 4, y: 3 }];
-  const me = { x: 6, y: 6, vx: 0, vy: 0, face: 1, phase: 0, speed: 0, wave: 0, goal: null };
+  const heroes = KINDS.map((k, i) => ({ kind: k, x: 6 - i * 1.2, y: 6 + i * 1.2, face: 1, phase: i * 1.3, speed: 0, wave: 0, goal: null, run: false }));
+  let lead = 0;
+  let me = heroes[lead];
   let zoom = Math.min(1.4, Math.max(0.8, Math.min(W, H) / 600)), run = false, showBones = false, showParts = false;
 
   // ---------- управление ----------
@@ -81,7 +87,8 @@
   B('parts').onclick = () => { showParts = !showParts; syncUi(); };
   B('zin').onclick = () => { zoom = Math.min(2.4, zoom * 1.15); };
   B('zout').onclick = () => { zoom = Math.max(0.5, zoom / 1.15); };
-  B('wave').onclick = () => { me.wave = 2.2; };
+  B('wave').onclick = () => { for (const h of heroes) h.wave = 2.2; };
+  B('who').onclick = () => { lead = (lead + 1) % heroes.length; me = heroes[lead]; B('who').textContent = `Управляю: ${me.kind.name}`; };
   addEventListener('wheel', (e) => { zoom = Math.max(0.5, Math.min(2.4, zoom * (e.deltaY > 0 ? 0.9 : 1.1))); }, { passive: true });
 
   // камера: по центру — Марк
@@ -112,24 +119,33 @@
       const dx = me.goal.x - me.x, dy = me.goal.y - me.y, d = Math.hypot(dx, dy);
       if (d < 0.08) me.goal = null; else { wx = dx / d; wy = dy / d; running = run || d > 3; }
     }
+    moveHero(me, wx, wy, running, dt);
+    // второй идёт следом — чтобы сравнивать обоих в движении
+    for (const h of heroes) if (h !== me) {
+      const dx = me.x - h.x, dy = me.y - h.y, d = Math.hypot(dx, dy);
+      if (d > 1.6) moveHero(h, dx / d, dy / d, d > 3 || me.run, dt); else moveHero(h, 0, 0, false, dt);
+    }
+  }
+  function moveHero(h, wx, wy, running, dt) {
     const sp = (running ? 3.4 : 1.6) * Math.hypot(wx, wy);
-    me.speed += (sp - me.speed) * Math.min(1, dt * 10);
-    me.run = running && sp > 0;
+    h.speed += (sp - h.speed) * Math.min(1, dt * 10);
+    h.run = running && sp > 0;
     if (sp > 0) {
       const l = Math.hypot(wx, wy);
-      let nx = me.x + wx / l * sp * dt, ny = me.y + wy / l * sp * dt;
+      let nx = h.x + wx / l * sp * dt, ny = h.y + wy / l * sp * dt;
       nx = Math.max(0.5, Math.min(N - 0.5, nx)); ny = Math.max(0.5, Math.min(N - 0.5, ny));
-      for (const c of crates) if (nx > c.x - 0.25 && nx < c.x + 1.25 && ny > c.y - 0.25 && ny < c.y + 1.25) { nx = me.x; ny = me.y; me.goal = null; }
-      me.x = nx; me.y = ny;
+      for (const c of crates) if (nx > c.x - 0.25 && nx < c.x + 1.25 && ny > c.y - 0.25 && ny < c.y + 1.25) { nx = h.x; ny = h.y; h.goal = null; }
+      h.x = nx; h.y = ny;
       const sx = wx - wy;                               // экранная горизонталь
-      if (Math.abs(sx) > 0.05) me.face = sx > 0 ? -1 : 1;   // исходник смотрит влево
+      // на картинке герой смотрит вправо: идёт вправо — как нарисован, влево — отражён
+      if (Math.abs(sx) > 0.05) h.face = (sx > 0 ? 1 : -1) * (h.kind.rig.face || 1);
     }
-    me.phase += dt * me.speed * (me.run ? 2.3 : 3.3);
-    me.wave = Math.max(0, me.wave - dt);
+    h.phase += dt * h.speed * (h.run ? 2.3 : 3.3);
+    h.wave = Math.max(0, h.wave - dt);
   }
 
   // ---------- анимация: углы суставов (градусы) и сжатие вдоль кости ----------
-  function pose(t) {
+  function pose(me, t) {
     const p = {}, s = Math.min(1, me.speed / 1.6), r = me.run ? 1 : 0, ph = me.phase;
     const sw = (k) => Math.sin(ph + k);
     const amp = 1 + r * 0.6;
@@ -165,15 +181,15 @@
 
   // ---------- отрисовка героя ----------
   const ORDER = ['uarm_f', 'farm_f', 'hand_f', 'thigh_f', 'shin_f', 'foot_f', 'pelvis', 'torso', 'head', 'thigh_n', 'shin_n', 'foot_n', 'uarm_n', 'farm_n', 'hand_n'];
-  const GROUND = [440, 1655];                         // точка между подошвами на исходнике
   function mat(parent, part, q) {
     // M = parent · T(pivot) · R(a) · S(1,k) · T(−pivot)
     const [px, py] = part.pivot, a = (q && q.a || 0) * Math.PI / 180, k = q && q.k || 1;
     const m = new DOMMatrix(parent).translate(px, py).rotate(a * 180 / Math.PI).scale(1, k).translate(-px, -py);
     return m;
   }
-  function drawHero(sx, sy, sc, t) {
-    const q = pose(t), M = {};
+  function drawHero(me, sx, sy, sc, t) {
+    const rig = me.kind.rig, imgs = me.kind.imgs, GROUND = rig.ground;
+    const q = pose(me, t), M = {};
     const root = new DOMMatrix().translate(sx, sy + q.bob * sc * 3).scale(sc * me.face, sc).translate(-GROUND[0], -GROUND[1]);
     for (const n of ['pelvis', 'torso', 'head', 'uarm_n', 'farm_n', 'hand_n', 'uarm_f', 'farm_f', 'hand_f', 'thigh_n', 'shin_n', 'foot_n', 'thigh_f', 'shin_f', 'foot_f']) {
       const part = rig.parts[n];
@@ -226,15 +242,17 @@
     for (let i = 0; i < N; i++) { block(i, -1, 110, '#23262b', '#3a3f47', '#2c3036'); block(-1, i, 110, '#23262b', '#3a3f47', '#2c3036'); }
     // по глубине: ящики и Марк
     const list = crates.map((c) => ({ d: c.x + c.y + 1, f: () => block(c.x, c.y, 40, '#5a4a32', '#433722', '#382e1c') }));
-    list.push({ d: me.x + me.y, f: () => {
+    for (const h of heroes) { const mp = iso(h.x, h.y); list.push({ d: h.x + h.y, f: () => {
       // тень
       const g = ctx.createRadialGradient(mp.x, mp.y, 0, mp.x, mp.y, 34); g.addColorStop(0, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.save(); ctx.translate(mp.x, mp.y); ctx.scale(1, 0.5); ctx.beginPath(); ctx.arc(0, 0, 34, 0, 7); ctx.fill(); ctx.restore();
       // рост Марка на экране ~ 2,7 клетки по высоте
-      const sc = (TH * 5.2) / 1600;
-      const p = new DOMPoint(mp.x, mp.y);
-      ctx.save(); drawHero(p.x * S + cv.width / 2 - cam.x * S, p.y * S + cv.height / 2 - cam.y * S, sc * S, T); ctx.restore(); world();
-    } });
+      const sc = (TH * 5.2) / h.kind.rig.height;       // оба героя одного роста на экране
+      ctx.save(); drawHero(h, mp.x * S + cv.width / 2 - cam.x * S, mp.y * S + cv.height / 2 - cam.y * S, sc * S, T); ctx.restore(); world();
+      // подпись
+      ctx.font = '11px ui-monospace, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = h === me ? 'rgba(94,230,255,.95)' : 'rgba(230,220,200,.7)';
+      ctx.fillText(h.kind.name, mp.x, mp.y - TH * 5.6);
+    } }); }
     list.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // цель нажатия
     if (me.goal) { const g = iso(me.goal.x, me.goal.y); ctx.strokeStyle = 'rgba(94,230,255,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(g.x, g.y, 14, 7, 0, 0, 7); ctx.stroke(); }
@@ -247,7 +265,7 @@
   }
   syncUi();
   requestAnimationFrame(frame);
-  window.__mark = me;
+  window.__mark = heroes;
 })();
 </script>
 </body>
