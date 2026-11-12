@@ -218,6 +218,7 @@ AB.IsoRender = (() => {
     // пол
     ctx.drawImage(floorCv, -floorOX, -TH / 2);
     drawFloorMarks();
+    if (AB.IsoReward) AB.IsoReward.drawGround(ctx, toScreen, time, AB.IsoInteract.targets().filter((t) => t.kind === 'item'));   // №81: лучи над наградой
     drawMarker();
 
     // видимая область в клетках (с запасом на высоту стен)
@@ -302,6 +303,7 @@ AB.IsoRender = (() => {
     drawTrueForm(fx);
     updateFx(dt);
     drawFx();
+    if (AB.IsoReward) AB.IsoReward.drawFx(ctx, toScreen, dt);   // №81: вспышка награды
     lighting(sc, party);
     for (const m of party) if (!m.hidden) nameTag(m, m === l);
     for (const m of AB.IsoParty.npcs()) if (!m.hidden) nameTag(m, false);

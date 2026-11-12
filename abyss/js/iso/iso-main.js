@@ -22,6 +22,7 @@
   const itemName = (id) => AB.ID.get(id).name;
   // сообщения тех же систем, что в основной игре
   AB.Bus.on('item:pickup', ({ charId, by, itemId, added }) => {
+    if (AB.IsoReward && AB.IsoReward.just === itemId) { AB.IsoReward.just = null; return; }   // №81: показана карточка награды
     if (added) toast(`${AB.ID.get(itemId).weapon && AB.Inventory.weapon(charId) && AB.Inventory.weapon(charId).item === itemId ? `В руках у ${AB.ID.get(charId).name}` : 'В инвентаре'}: ${itemName(itemId)}`, 'good');
     else toast('Не помещается');
   });
