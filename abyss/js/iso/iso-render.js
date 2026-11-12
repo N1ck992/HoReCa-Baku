@@ -194,7 +194,7 @@ AB.IsoRender = (() => {
 
   // ---------- Кадр ----------
   function frame(dt) {
-    WALL_H = AB.IsoBase && AB.IsoBase.active() ? 26 : WALL_FULL;
+    WALL_H = WALL_FULL;               // №80: передние стены теперь — бортик везде, задние снова в полный рост и в базе
     time += dt;
     if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
     if (!floorCv) buildFloor();
@@ -258,10 +258,14 @@ AB.IsoRender = (() => {
 
     for (const o of list) {
       if (o.k === 'w') {
-        const hid = occludes(o.x, o.y, WALL_H, party);
+        // №80: передние (нижние, ближние к камере) стены не рисуем во весь рост — только низкий бортик,
+        // чтобы не закрывали обзор; задние стены — как раньше. Столкновения не меняются.
+        const W = AB.IsoWorld, fl = (x, y) => { const c = W.cell(x, y); return c === W.FLOOR || c === W.PROP || c === W.DOOR; };
+        const back = fl(o.x + 1, o.y) || fl(o.x, o.y + 1) || fl(o.x + 1, o.y + 1);
+        const hgt = back ? WALL_H : 7;
+        const hid = back && occludes(o.x, o.y, hgt, party);
         const a = alphaFor(`w${o.x},${o.y}`, hid, dt);
-        const W = AB.IsoWorld;
-        block(o.x, o.y, WALL_H, WALL_LOOK, a, { l: W.cell(o.x, o.y + 1) !== W.WALL, r: W.cell(o.x + 1, o.y) !== W.WALL });
+        block(o.x, o.y, hgt, WALL_LOOK, a, { l: W.cell(o.x, o.y + 1) !== W.WALL, r: W.cell(o.x + 1, o.y) !== W.WALL });
       } else if (o.k === 'p') {
         const look = o.p.bay && AB.IsoActs.built(o.p.bay) ? PROP_LOOK.baybuilt : PROP_LOOK[o.p.kind] || PROP_LOOK.crate;
         const hid = occludes(o.x, o.y, look.h, party);
