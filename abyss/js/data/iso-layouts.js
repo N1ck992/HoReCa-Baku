@@ -304,19 +304,12 @@ AB.ISO_LAYOUTS['SECTOR-004'] = {
 AB.ISO_LAYOUTS['SECTOR-005'] = {
   name: 'База-капсула',
   areas: [
-    { room: 'ROOM-020', x: 2, y: 4, w: 7, h: 6 },       // кабина
-    { room: 'ROOM-021', x: 9, y: 6, w: 1, h: 2 },       // проход
-    { room: 'ROOM-021', x: 10, y: 3, w: 12, h: 8 },     // жилой отсек
-    { room: 'ROOM-022', x: 22, y: 6, w: 1, h: 2 },      // проход
-    { room: 'ROOM-022', x: 23, y: 5, w: 5, h: 4 },      // шлюз
+    { room: 'ROOM-027', x: 2, y: 3, w: 26, h: 8 },      // №79: открытый трюм
   ],
   props: [
-    { kind: 'console', x: 3, y: 4, w: 3, h: 1, pilot: true },
-    { kind: 'table', x: 5, y: 7, w: 1, h: 1 },
-    { kind: 'bunk', x: 11, y: 3, w: 3, h: 1 }, { kind: 'bunk', x: 15, y: 3, w: 3, h: 1 }, { kind: 'bunk', x: 19, y: 3, w: 2, h: 1 },
-    { kind: 'table', x: 15, y: 6, w: 2, h: 2 },
-    { kind: 'locker', x: 11, y: 9, w: 2, h: 1, stash: true },
-    { kind: 'exorack', x: 24, y: 5, w: 2, h: 1 },
+    { kind: 'console', x: 3, y: 3, w: 3, h: 1, pilot: true },
+    { kind: 'locker', x: 7, y: 3, w: 2, h: 1, stash: true },
+    { kind: 'exorack', x: 25, y: 3, w: 2, h: 1 },
   ],
   doors: [],
   exits: [

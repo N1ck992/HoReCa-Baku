@@ -73,7 +73,7 @@ AB.BaseSim = (() => {
   // ---------- геометрия: где пол, проходы, что занято ----------
   function geom() {
     if (G) return G;
-    const { w, h } = hull(), walk = new Uint8Array(w * h), roomAt = new Array(w * h).fill(null);
+    const HH = hull(), w = HH.x + HH.w + 1, h = HH.y + HH.h + 1, walk = new Uint8Array(w * h), roomAt = new Array(w * h).fill(null);
     const set = (x, y, v) => { if (x >= 0 && y >= 0 && x < w && y < h) walk[y * w + x] = v; };
     for (const r of S.rooms) if (r.built) for (const [x, y] of cellsOf(r)) { set(x, y, 1); roomAt[y * w + x] = r.uid; }
     const doors = [];
@@ -85,7 +85,15 @@ AB.BaseSim = (() => {
     }
     for (const p of D().core.props) for (const [x, y] of rcells(p)) set(x, y, 0);
     for (const d of S.devs) for (const [x, y] of rcells(d)) set(x, y, 0);
-    G = { w, h, walk, roomAt, doors };
+    // №79: клетки стен — вокруг пола помещений (туда можно класть кабель)
+    const wall = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (roomAt[y * w + x]) continue;
+      let near = false;
+      for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < w && Y < h && roomAt[Y * w + X] && walk[Y * w + X] !== undefined) { near = true; break; } }
+      if (near) wall[y * w + x] = 1;
+    }
+    G = { w, h, walk, roomAt, doors, wall };
     return G;
   }
   const walkable = (x, y) => { const g = geom(); return x >= 0 && y >= 0 && x < g.w && y < g.h && g.walk[y * g.w + x] === 1; };
@@ -508,7 +516,8 @@ AB.BaseSim = (() => {
     if (b.kind === 'cable') {
       if (Math.min(r.w, r.h) !== 1 || Math.max(r.w, r.h) > b.size.long[1]) return res(false, `Кабель — линия в 1 клетку, до ${b.size.long[1]} клеток`);
       for (const [x, y] of rcells(r)) {
-        if (!walkable(x, y)) return res(false, 'Кабель — по свободному полу и через проходы');
+        const gm_ = geom(), inWall = x >= 0 && y >= 0 && x < gm_.w && y < gm_.h && gm_.wall[y * gm_.w + x];
+        if (!walkable(x, y) && !inWall) return res(false, 'Кабель — по полу, через проходы или внутри стен');
         if (S.cables.some((c2) => c2 !== self && x >= c2.x && y >= c2.y && x < c2.x + c2.w && y < c2.y + c2.h)) return res(false, 'Здесь уже кабель');
       }
       return res(true, null);
@@ -518,6 +527,12 @@ AB.BaseSim = (() => {
     const host = cells.length && gm.roomAt[cells[0][1] * gm.w + cells[0][0]];
     const hostRoom = host && room(host);
     if (!hostRoom || !hostRoom.built) return res(false, 'Ставится внутри построенного помещения');
+    // №79: оборудование ставится только вдоль проводки — к нему должен примыкать кабель (по полу или в стене)
+    if (!b.core) {
+      const own = new Set(cells.map(([x, y]) => `${x},${y}`));
+      const along = S.cables.some((c2) => rcells(c2).some(([cx, cy]) => !own.has(`${cx},${cy}`) && cells.some(([x, y]) => Math.abs(cx - x) + Math.abs(cy - y) === 1)));
+      if (!along) return res(false, 'Только вдоль проводки: сначала проложите кабель (можно внутри стены)');
+    }
     for (const [x, y] of cells) {
       if (x < 0 || y < 0 || x >= gm.w || y >= gm.h || gm.roomAt[y * gm.w + x] !== host) return res(false, 'Не помещается в помещение');
       if (!walkable(x, y) && !(self && x >= self.x && y >= self.y && x < self.x + self.w && y < self.y + self.h)) return res(false, 'Место занято');
@@ -624,6 +639,24 @@ AB.BaseSim = (() => {
     if ('mat' in patch) { if (r.n > 0 && patch.mat !== r.mat) return false; r.mat = patch.mat; if (!r.mat) r.auto = false; }
     if ('auto' in patch) { if (!r.mat) return false; r.auto = !!patch.auto; }
     return true;
+  }
+
+  // №79: где показывать сетку стройки — только там, где можно что-то поставить:
+  // пол построенных помещений (устройства) и свободные клетки корпуса, куда может встать помещение
+  function buildable() {
+    const g = geom(), H = hull(), out = [];
+    const near = (x, y) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < g.w && Y < g.h && (g.roomAt[Y * g.w + X] || roomCell(X, Y))) return true; } return false; };
+    const frameCells = new Set(); for (const r of S.rooms) if (!r.built) for (const [x, y] of cellsOf(r)) frameCells.add(y * g.w + x);
+    const roomCell = (x, y) => frameCells.has(y * g.w + x);
+    const res = D().reserved || [];
+    for (let y = H.y + 1; y < H.y + H.h - 1; y++) for (let x = H.x + 1; x < H.x + H.w - 1; x++) {
+      if (res.some((z) => x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h)) continue;
+      const k = y * g.w + x;
+      if (g.roomAt[k]) { out.push([x, y, 1]); continue; }          // внутри помещения
+      if (g.wall[k] || roomCell(x, y)) continue;                   // стена или каркас
+      if (!near(x, y)) out.push([x, y, 0]);                         // свободно под новое помещение
+    }
+    return out;
   }
 
   // ---------- №72: энергия и электросеть ----------
@@ -807,6 +840,12 @@ AB.BaseSim = (() => {
   // старые сохранения (до №72): кабелей и реактора не было
   function migrate() {
     S.cables = S.cables || [];
+    // №79: три помещения ядра → один открытый трюм; убранная обстановка освобождает клетки
+    if (S.rooms.some((r) => r.uid === 'core-cab')) {
+      S.rooms = S.rooms.filter((r) => !r.uid.startsWith('core-'));
+      S.rooms.unshift({ ...D().core.rooms[0], bp: null, core: true, built: true });
+      for (const d of S.devs) if (d.room && d.room.startsWith('core-')) d.room = 'core';
+    }
     S.grids = S.grids || AB.BaseGrids.all().filter((g) => g.start).map((g) => g.id);
     S.tech = S.tech || { done: [], cur: null };
     for (const b of D().blueprints) if (b.start && !S.unlocked.includes(b.id)) S.unlocked.push(b.id);   // новые стартовые чертежи
@@ -830,7 +869,7 @@ AB.BaseSim = (() => {
   return {
     ensure, tick, catchUp, save, load, reset() { S = null; G = null; store.set(null); },
     setExt(e) { ext = { ...ext, ...e }; },
-    insOf, eff, hull, fx, research, techState, techCost, techName, stockOf, cellsOf, state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
+    insOf, eff, hull, fx, buildable, research, techState, techCost, techName, stockOf, cellsOf, state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
     check, place, modify, remove, assign, workers, setJobs, worker, order, setRack, amount,
     receive(item, n) { ensure(); S.pile[item] = (S.pile[item] || 0) + n; },
     costOf, workOf,

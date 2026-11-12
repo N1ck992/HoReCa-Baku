@@ -8,7 +8,8 @@
 // =====================================================================
 
 AB.IsoRender = (() => {
-  const TW = 64, TH = 32, WALL_H = 86;
+  const TW = 64, TH = 32, WALL_FULL = 86;
+  let WALL_H = WALL_FULL;                 // №79: в базе-капсуле стены низкие, чтобы не закрывать обзор
   const ZMIN = 0.45, ZMAX = 2.2;
   const FIG_K = 0.62;                 // масштаб фигур вида сбоку в изометрии
   const U = AB.util;
@@ -193,6 +194,7 @@ AB.IsoRender = (() => {
 
   // ---------- Кадр ----------
   function frame(dt) {
+    WALL_H = AB.IsoBase && AB.IsoBase.active() ? 26 : WALL_FULL;
     time += dt;
     if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
     if (!floorCv) buildFloor();

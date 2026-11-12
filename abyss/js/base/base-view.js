@@ -76,8 +76,15 @@ AB.BaseView = (() => {
       const b = sim().bp(d.bp);
       L.props.push({ kind: d.built || d.upTo ? b.prop : 'devframe', x: d.x, y: d.y, w: d.w, h: d.h, dev: d.uid });
     }
-    L.lights = S.rooms.filter((r) => r.built).map((r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2, color: r.core ? [255, 214, 170] : [190, 220, 255], radius: Math.max(4, Math.min(8, Math.max(r.w, r.h))) }));
-    L.lights.push({ x: 25, y: 7, color: [120, 200, 255], radius: 5 });
+    // свет: в длинных помещениях — несколько ламп по длине
+    L.lights = [];
+    for (const r of S.rooms.filter((q) => q.built)) {
+      const n = Math.max(1, Math.round(Math.max(r.w, r.h) / 8)), long = r.w >= r.h;
+      for (let i = 0; i < n; i++) {
+        const f = (i + 0.5) / n;
+        L.lights.push({ x: long ? r.x + r.w * f : r.x + r.w / 2, y: long ? r.y + r.h / 2 : r.y + r.h * f, color: r.core ? [255, 214, 170] : [190, 220, 255], radius: Math.max(5, Math.min(8, Math.min(r.w, r.h) + 2)) });
+      }
+    }
   }
   AB.Bus.on('base:plan', () => { if (!sim().on()) return; layout(); rebuild = true; });
   AB.Bus.on('base:new', () => setTimeout(() => toast('В шкафчиках капсулы — ремкомплект: металлолом ×6, электроника ×2. Хватит на 3D-принтер и стеллаж', 'good'), 2500));
@@ -157,13 +164,15 @@ AB.BaseView = (() => {
     if (!sim().on() || AB.IsoGame.sector() !== SEC) return;
     const S = sim().state(), build = AB.BaseBuild && AB.BaseBuild.on();
     if (build) {
-      const H = sim().hull();
-      ctx.strokeStyle = 'rgba(94,230,255,.07)'; ctx.lineWidth = 1;
-      for (let x = H.x + 1; x <= H.x + H.w - 1; x++) { const a = toScreen(x, H.y + 1), b = toScreen(x, H.y + H.h - 1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
-      for (let y = H.y + 1; y <= H.y + H.h - 1; y++) { const a = toScreen(H.x + 1, y), b = toScreen(H.x + H.w - 1, y); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
-      poly(ctx, toScreen, rectPts({ x: H.x + 1, y: H.y + 1, w: H.w - 2, h: H.h - 2 }));
-      ctx.strokeStyle = 'rgba(94,230,255,.35)'; ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]);
-      for (const z of D().reserved || []) { poly(ctx, toScreen, rectPts(z)); ctx.fillStyle = 'rgba(255,120,90,.06)'; ctx.fill(); }
+      // №79: сетка — только на клетках, где можно что-то поставить (без пустых полос и запретной зоны)
+      const gb = AB.BaseBuild.ghost && AB.BaseBuild.ghost(), cableMode = gb && sim().bp(gb.bp).kind === 'cable';
+      for (const [x, y, inside] of sim().buildable()) {
+        poly(ctx, toScreen, rectPts({ x, y, w: 1, h: 1 }));
+        ctx.strokeStyle = inside ? 'rgba(255,226,168,.10)' : 'rgba(94,230,255,.12)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      // в режиме кабеля — подсветить стены: кабель можно класть и в них
+      if (cableMode) { const g = sim().geom(); for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) if (g.wall[y * g.w + x]) { poly(ctx, toScreen, rectPts({ x, y, w: 1, h: 1 })); ctx.fillStyle = 'rgba(255,200,90,.10)'; ctx.fill(); } }
+      for (const z of D().reserved || []) { poly(ctx, toScreen, rectPts(z)); ctx.strokeStyle = 'rgba(255,120,90,.25)'; ctx.setLineDash([4, 6]); ctx.stroke(); ctx.setLineDash([]); }
     }
     for (const r of S.rooms) if (!r.built) {
       if (r.grid === 'GRID-002') { for (const [x, y] of AB.BaseGrids.cellsOf(r)) { poly(ctx, toScreen, rectPts({ x, y, w: 1, h: 1 })); ctx.fillStyle = `rgba(94,230,255,${0.08 + Math.sin(time * 2) * 0.03})`; ctx.fill(); ctx.strokeStyle = 'rgba(94,230,255,.25)'; ctx.lineWidth = 1; ctx.stroke(); } continue; }
