@@ -196,6 +196,36 @@ Joint ends rounded so parts overlap at joints. Even neutral lighting, no shadow,
 realistic dark sci-fi horror, muted palette, high detail.
 ```
 
+## Преследователь `ENEMY-002` (`ASSET-ENEMY002-01`) — киборг-скелет (дополнение №95)
+
+Концепт автора: `assets/source/enemy002/concept.png`. Первый лист деталей от генератора —
+`assets/source/enemy002/parts-sheet-1.png`: **тело с него не годится** (руки и ноги нарисованы дважды — целиком
+и по частям, нет отдельных бёдер и голеней, кисти не в масштабе), **ткань и оружие годятся** — капюшон с шарфом,
+накидка на спину, полы на поясе, винтовка.
+
+Вывод: генератор плохо считает детали. Тело — **одной фигурой в «позе для нарезки»** (детали вырезает программа),
+ткань и оружие — отдельными предметами.
+
+**1. Тело целиком** (1024×2048, зелёный фон `#00FF00`, вид 3/4, без плаща и оружия):
+```
+Use the attached images as the exact character reference: the skeletal cyborg with cracked ivory-white armor plates, dark bronze/brass joints, exposed black cables and pistons, skull face with a round brass optical device over the left eye and a plain red right eye.
+Draw ONE single full-body figure of this cyborg for 2D cutout animation rigging. NOTHING else in the image: no cloak, no hood, no scarf, no cloth skirt, no rifle, no extra parts, no second figure, no labels.
+FORMAT: vertical image 1024×2048, solid flat pure green background #00FF00, no floor, no shadow, no gradient. The whole figure fits inside the frame from the top of the skull to the soles with margin; figure about 1800 px tall.
+VIEW: 3/4 front view, body turned about 30° to the viewer's right, no perspective distortion.
+POSE ("rigging pose"): standing straight, head straight, looking forward; BOTH arms held slightly away from the body (about 20°), elbows almost straight, hands open and relaxed — the arms must NOT cover the torso or the pelvis; legs apart in a half step, near leg slightly forward, far leg slightly back — legs, shins and boots must NOT overlap; the far arm and far leg clearly visible.
+LIGHTING: soft even front light, no rim light, no colored light, no glow — the red eye is plain red without halo.
+STYLE: realistic dark industrial sci-fi, painterly game concept quality, crisp clean silhouette with sharp edges against the green.
+```
+Если генератор добавит плащ или оружие: «Remove the cloak, hood and rifle completely. Only the bare cyborg body on green background, same pose.»
+
+**2. Красный клинок** (1024×512):
+```
+Use the attached concept art as reference. Draw ONLY the cyborg's energy blade weapon, alone, nothing else: a long straight blade with a dark steel hilt and brass details, the blade edge is plain deep red (no glow, no halo, no sparks). Horizontal, pointing right. Solid flat pure green background #00FF00, no shadow, no text. Same painterly dark industrial sci-fi style and lighting as the reference. Image 1024×512.
+```
+
+**Движения:** стойка, бег (плащ и полы развеваются), удар клинком (рывок к спутнице), толчок (Марк на пути),
+вздрагивание, отступление и исчезновение (красные помехи — эффект игры).
+
 ## Экзокостюм `EQUIP-005` — транспорт снаружи корабля (дополнение №56)
 
 Снаружи «Абисса» Марка не видно: по дну ходит сам костюм. Он занимает **одну клетку**
