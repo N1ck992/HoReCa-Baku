@@ -307,6 +307,8 @@ AB.QUESTS.push(
     stages: [
       { id: 'out', objectives: [{ id: 'out', text: 'Выйти за борт через внешний люк шлюза', done: { flag: 'ow-out' }, target: { room: 'ROOM-010', x: 1430 } }] },
       { id: 'hunt', objectives: [{ id: 'hunt', text: 'Найти то, что засёк сонар, — и убить', done: { enemyDead: 'ENEMY-008' } }] },
+      // №86: дрон-спутник находится в конце акта II, при первом выходе наружу
+      { id: 'drone', objectives: [{ id: 'drone', text: 'Второй сигнал: «Отсек на склоне» — войти и проверить', done: { flag: 'recruit' } }] },
       { id: 'home', objectives: [{ id: 'home', text: 'Вернуться на «Абисс»', done: { flag: 'ow-back' } }] },
     ],
     reward: {}, next: [],
@@ -318,7 +320,7 @@ AB.QUESTS.push(
     stages: [
       { id: 'hangar', objectives: [{ id: 'hangar', text: 'Спуститься в нижний ангар (через мастерскую и архив)', done: { room: 'ROOM-018' }, target: { room: 'ROOM-018', x: 400 } }] },
       { id: 'reactor', objectives: [{ id: 'reactor', text: 'Зарядить реактор капсулы кристаллом', done: { equip: 'EQUIP-013', state: 'done' }, target: { equip: 'EQUIP-013' } }] },
-      { id: 'undock', objectives: [{ id: 'undock', text: 'Отстыковать капсулу с пульта', done: { equip: 'EQUIP-014', state: 'done' }, target: { equip: 'EQUIP-014' } }] },
+      { id: 'undock', objectives: [{ id: 'undock', text: 'Пульт стыковки: Мира готовит капсулу к отплытию — прикрой её', done: { equip: 'EQUIP-014', state: 'done' }, target: { equip: 'EQUIP-014' } }] },
     ],
     reward: {}, next: [],
   },
@@ -328,7 +330,6 @@ AB.QUESTS.push(
     start: { event: 'EVENT-022' }, requires: [], items: [], skills: [], rooms: [],
     stages: [
       { id: 'base', objectives: [
-        { id: 'crew', text: 'Найти источник сигнала в «Отсеке на склоне»', done: { flag: 'recruit' } },   // №85: там спит дрон ЭХО
         { id: 'module', text: 'Построить в капсуле 3D-принтер: «Стройка» → каркас → строители', done: { flag: 'module' } },   // №71: вместо готовых модулей — конструктор базы
       ] },
       { id: 'up', objectives: [
@@ -363,7 +364,7 @@ AB.ISO_SITES = {
   crystals: { act: 3, loot: [['ITEM-015', 2]], label: 'Собрать кристаллы', say: 'Два кристалла — тёплые, светятся изнутри' },
   beacon: { act: 3, loot: [['ITEM-002', 2], ['ITEM-003', 2]], label: 'Снять оборудование', say: 'Старый маяк машин: электроника и провода' },
   // №69: здание с комнатой внутри — транспорт остаётся у входа, герой заходит (SECTOR-006)
-  'wreck-b': { act: 3, building: true, interior: 'SECTOR-006', repeat: true, label: 'Оставить транспорт у входа — войти в отсек' },
+  'wreck-b': { act: 2, building: true, interior: 'SECTOR-006', repeat: true, label: 'Оставить транспорт у входа — войти в отсек' },
   settlement: { act: 3, building: true, label: 'Связаться с куполом по радио', say: 'Из динамиков: «Люди с нового корабля? Уходите. Древние не любят чужих»', repeat: true },
 };
 

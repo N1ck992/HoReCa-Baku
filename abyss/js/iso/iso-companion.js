@@ -9,7 +9,10 @@
 
 AB.IsoCompanion = (() => {
   const ID = 'EQUIP-016';
-  const BONUS = { heal: 1.5, calm: 8, view: 1 };   // здоровья в секунду вне боя; «бой» — враг ближе 8 клеток; +1 клетка обзора на карте дна
+  const BONUS = { heal: 1.5, calm: 8, view: 1 };
+  // №86: цепная молния — сама, когда рядом враги и способность перезарядилась
+  const ZAP = { cooldown: 7, reach: 7, hop: 3.5, targets: 5, damage: [55, 48, 42, 36, 30] };
+  let zapCd = 3, zaps = [], zapStats = { casts: 0, hits: 0, kills: 0 };   // здоровья в секунду вне боя; «бой» — враг ближе 8 клеток; +1 клетка обзора на карте дна
   let has = false;
   const pos = { x: 0, y: 0, ok: false };
   let bubble = null;                                 // { text, t, life }
@@ -33,10 +36,11 @@ AB.IsoCompanion = (() => {
     if (AB.IsoOverworld && AB.IsoOverworld.isOpen()) AB.IsoOverworld.say(`ЭХО: ${t}`);
   }
 
-  function give() {
+  function give(silent) {
     if (has) return;
     has = true;
     AB.Flags && AB.Flags.add('drone');
+    if (silent) { told.add('hello'); return; }
     const l = AB.IsoParty.lead(); if (l) { pos.x = l.x + 0.6; pos.y = l.y - 0.6; pos.ok = true; }
     AB.Bus.emit('iso:reward', { id: ID, kind: 'companion', name: 'ЭХО', stats: 'Подсказки · вне боя подлатывает ведущего (+1,5 здоровья в секунду)', hint: 'Летает рядом с тем, кто ведёт отряд' });
     setTimeout(() => say('hello'), 3800);
@@ -72,7 +76,44 @@ AB.IsoCompanion = (() => {
     const fight = AB.IsoEnemies.alive().some((e) => e.state !== 'DEAD' && e.state !== 'DORMANT' && Math.hypot(e.x - l.x, e.y - l.y) < BONUS.calm);
     if (c && !c.dead && c.hp < max && !fight) { c.hp = Math.min(max, c.hp + BONUS.heal * dt); pos.heal = 0.4; }
     if (pos.heal) pos.heal = Math.max(0, pos.heal - dt);
+    zapTick(dt, l);
   }
+  // №86: цепная молния: бьёт ближайшего врага и перескакивает на соседних, урон падает с каждым прыжком
+  function zapTick(dt, l) {
+    zaps = zaps.filter((z) => (z.t += dt) < 0.45);
+    zapCd -= dt;
+    if (zapCd > 0) return;
+    const foes = AB.IsoEnemies.alive().filter((e) => e.state !== 'DEAD' && e.state !== 'DORMANT' && !AB.ID.get(e.id).type?.startsWith('pursuer'));
+    const first = foes.filter((e) => Math.hypot(e.x - l.x, e.y - l.y) < ZAP.reach).sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))[0];
+    if (!first) { zapCd = 0.5; return; }
+    const chain = [first];
+    while (chain.length < ZAP.targets) {
+      const c = chain[chain.length - 1];
+      const n = foes.filter((e) => !chain.includes(e) && Math.hypot(e.x - c.x, e.y - c.y) < ZAP.hop).sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y))[0];
+      if (!n) break; chain.push(n);
+    }
+    let from = { x: pos.x, y: pos.y, up: true }, killed = 0;
+    chain.forEach((e, i) => {
+      zaps.push({ a: from, b: { x: e.x, y: e.y }, t: 0, seed: Math.random() * 99 });
+      from = { x: e.x, y: e.y };
+      AB.IsoEnemies.damage(e.id, ZAP.damage[i], 'CHAR-001', 'ranged');
+      if (!AB.IsoEnemies.get(e.id) || AB.IsoEnemies.get(e.id).state === 'DEAD' || AB.IsoEnemies.get(e.id).hp <= 0) killed++;
+    });
+    zapCd = ZAP.cooldown;
+    zapStats.casts++; zapStats.hits += chain.length; zapStats.kills += killed;
+    bubble = { text: `Цепная молния: ${chain.length} ${chain.length === 1 ? 'цель' : chain.length < 5 ? 'цели' : 'целей'}${killed ? ` · убито ${killed}` : ''}`, t: 0, life: 2.2, zap: true };
+    AB.Bus.emit('echo:zap', { n: chain.length, killed });
+    if (!told.has('zap')) { told.add('zap'); setTimeout(() => say(null, 'Цепная молния заряжается сама — раз в несколько секунд бьёт ближайшего врага и перескакивает на соседних. Держись в гуще — я накрою всех.'), 2400); }
+  }
+  // сообщение ЭХО «как в диалоге» — внизу экрана (подсказки стройки и т. п.)
+  let msgT = null;
+  function message(text) {
+    const el = document.getElementById('echo-msg'); if (!el) return;
+    el.innerHTML = `<b>ЭХО</b><span>${text}</span>`;
+    el.hidden = false; el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+    clearTimeout(msgT); msgT = setTimeout(() => { el.hidden = true; }, Math.max(4500, text.length * 70));
+  }
+  document.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('#echo-msg')) { e.target.closest('#echo-msg').hidden = true; } });
 
   // ---------- рисование: шестигранный корпус-«гайка», глаз, створки, огонь двигателя ----------
   function draw(ctx, toScreen, time) {
@@ -86,6 +127,18 @@ AB.IsoCompanion = (() => {
     ctx.fillStyle = g; ctx.fillRect(x - 30, y - 30, 60, 60);
     // луч лечения к ведущему
     if (pos.heal) { const q = toScreen(l.x, l.y); ctx.strokeStyle = `rgba(120,255,170,${0.5 * pos.heal / 0.4})`; ctx.lineWidth = 2; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(q.x, q.y - 50); ctx.stroke(); ctx.setLineDash([]); }
+    // молнии
+    for (const z of zaps) {
+      const a = toScreen(z.a.x, z.a.y), b = toScreen(z.b.x, z.b.y), ay = z.a.up ? y : a.y - 40, by = b.y - 40, k = 1 - z.t / 0.45;
+      ctx.strokeStyle = `rgba(160,235,255,${k})`; ctx.lineWidth = 3 * k + 1; ctx.shadowColor = '#5ee6ff'; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.moveTo(z.a.up ? x : a.x, ay);
+      for (let i = 1; i < 7; i++) { const f = i / 7, j = Math.sin(z.seed + i * 2.3 + time * 40) * 9; ctx.lineTo((z.a.up ? x : a.x) + (b.x - (z.a.up ? x : a.x)) * f + j, ay + (by - ay) * f - j * 0.5); }
+      ctx.lineTo(b.x, by); ctx.stroke(); ctx.shadowBlur = 0;
+      ctx.fillStyle = `rgba(200,245,255,${k})`; ctx.beginPath(); ctx.arc(b.x, by, 9 * k + 3, 0, 7); ctx.fill();
+    }
+    // заряд молнии — тонкое кольцо вокруг дрона
+    ctx.strokeStyle = 'rgba(94,230,255,.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, 15, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, 1 - zapCd / ZAP.cooldown))); ctx.stroke();
     // огонёк двигателя
     ctx.fillStyle = `rgba(255,200,120,${0.5 + Math.sin(time * 18) * 0.2})`; ctx.beginPath(); ctx.ellipse(x, y + 12, 3, 5, 0, 0, 7); ctx.fill();
     // корпус: шесть створок вокруг ядра, медленно поворачиваются
@@ -115,13 +168,16 @@ AB.IsoCompanion = (() => {
       for (const w of words) { const t = cur ? `${cur} ${w}` : w; if (ctx.measureText(t).width > 230 && cur) { lines.push(cur); cur = w; } else cur = t; }
       lines.push(cur);
       const bw = Math.max(...lines.map((s) => ctx.measureText(s).width)) + 16, bh = lines.length * 14 + 10, by = y - 24 - bh;
+      // не вылезать за край экрана: сдвинуть пузырь внутрь
+      const tf = ctx.getTransform(), sx = tf.a, left = (-tf.e) / sx, right = (ctx.canvas.width - tf.e) / sx;
+      const cxB = Math.max(left + bw / 2 + 6, Math.min(right - bw / 2 - 6, x));
       ctx.fillStyle = 'rgba(6,12,16,.9)'; ctx.strokeStyle = 'rgba(94,230,255,.6)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.rect(x - bw / 2, by, bw, bh); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#5ee6ff'; ctx.fillText('ЭХО', x - bw / 2 + 16, by - 3);
-      ctx.fillStyle = '#d9f6ff'; lines.forEach((s, i) => ctx.fillText(s, x, by + 17 + i * 14));
+      ctx.beginPath(); ctx.rect(cxB - bw / 2, by, bw, bh); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#5ee6ff'; ctx.fillText('ЭХО', cxB - bw / 2 + 16, by - 3);
+      ctx.fillStyle = '#d9f6ff'; lines.forEach((s, i) => ctx.fillText(s, cxB, by + 17 + i * 14));
       ctx.restore();
     }
   }
 
-  return { give, update, draw, say, has: () => has, viewBonus: () => (has ? BONUS.view : 0), BONUS };
+  return { give, message, ZAP, stats: () => ({ ...zapStats }), update, draw, say, has: () => has, viewBonus: () => (has ? BONUS.view : 0), BONUS };
 })();

@@ -94,6 +94,19 @@ AB.BaseBuild = (() => {
   }
   function rotate() { if (!ghost) return; [ghost.w, ghost.h] = [ghost.h, ghost.w]; render(); }
 
+  // №86: выбрал чертёж — игра сама ставит его и тянет проводку; не хватает материалов — говорит ЭХО
+  function auto(bpId) {
+    const r = sim().autoPlace(bpId), b = sim().bp(bpId);
+    if (r.ok) {
+      AB.Bus.emit('iso:toast', { text: `${b.name}: каркас поставлен${r.cables ? `, проводка проложена (${r.cells} кл.)` : ''} — строители принесут материалы`, kind: 'good' });
+      const o = sim().obj(r.uid); if (o) AB.IsoRender.focus({ x: o.x + o.w / 2, y: o.y + o.h / 2 });
+      sel = null; sim().save(); render(); return;
+    }
+    const nm2 = (i) => (AB.ID.get(i) || {}).name || i;
+    const text = r.miss ? `Для «${b.name}» не хватает: ${r.miss.map(([i, n, h]) => `${nm2(i).toLowerCase()} — нужно ${n}, есть ${h}`).join('; ')}.${r.miss.some(([i]) => i === 'ITEM-017') ? ' Стройматериал печатает 3D-принтер из реголита.' : ''}${r.miss.some(([i]) => i === 'ITEM-003' || i === 'ITEM-001' || i === 'ITEM-002') ? ' Металлолом, электронику и провода ищите на карте дна.' : ''}` : `${b.name}: ${r.why}`;
+    if (AB.IsoCompanion && AB.IsoCompanion.has()) AB.IsoCompanion.message(text); else AB.Bus.emit('iso:toast', { text, kind: 'info' });
+  }
+
   // ---------- касания ----------
   function objAt(x, y) {
     const S = sim().state(), inR = (o) => x >= o.x && y >= o.y && x < o.x + o.w && y < o.y + o.h;
@@ -165,7 +178,7 @@ AB.BaseBuild = (() => {
     if (!on) return;
     if (!ghost && !sel) {
       const S = sim().state();
-      cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Выберите чертёж · нажмите на постройку, чтобы изменить</span><button class="bx-x" data-b="exit" aria-label="Выйти из стройки">✕</button></div>
+      cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Нажмите на чертёж — встанет сам, с проводкой · нажмите на постройку, чтобы передвинуть или снести</span><button class="bx-x" data-b="exit" aria-label="Выйти из стройки">✕</button></div>
         <div class="bx-cat-list">${S.unlocked.map((id) => sim().bp(id)).filter((b) => b && !b.core).map((b) => {
           const size = b.kind === 'cable' ? `линия до ${b.size.long[1]} клеток` : b.kind === 'room' ? `${b.size.short[0]}×${b.size.long[0]} … ${b.size.short[1]}×${b.size.long[1]}` : `${b.w}×${b.h}`;
           const cost = b.kind === 'cable' ? `${nm(b.costPer.item)} 1 на ${b.costPer.cells} клетки` : b.kind === 'room' ? b.costPerCell.map(([i, n]) => `${nm(i)} ${n} за клетку`).join(', ') : (b.cost || []).map(([i, n]) => `${nm(i)} ${n}`).join(', ');
@@ -206,7 +219,7 @@ AB.BaseBuild = (() => {
     const btn = e.target.closest('[data-b]'); if (!btn || btn.disabled) return;
     const [a, v] = btn.dataset.b.split('|');
     if (a === 'exit') toggle(false);
-    else if (a === 'new') startNew(v);
+    else if (a === 'new') auto(v);
     else if (a === 'w') resize(+v, 0);
     else if (a === 'h') resize(0, +v);
     else if (a === 'rot') rotate();
@@ -225,5 +238,5 @@ AB.BaseBuild = (() => {
   AB.Bus.on('base:view', ({ on: v }) => { if (!v && on) toggle(false); });
   AB.Bus.on('base:plan', () => { if (on) render(); });
 
-  return { toggle, on: () => on, tap, grab, dragTo, drop, drawFloor, startNew, startEdit, confirm, ghost: () => ghost, render };
+  return { auto, toggle, on: () => on, tap, grab, dragTo, drop, drawFloor, startNew, startEdit, confirm, ghost: () => ghost, render };
 })();

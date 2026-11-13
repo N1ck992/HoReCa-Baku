@@ -44,12 +44,13 @@ AB.IsoActs = (() => {
     if (id !== 'ENEMY-008') return;
     visited.add('contact');
     if (q != null) AB.IsoOverworld.dropLoot(q, r, 'ITEM-015', 1);
-    setTimeout(() => AB.IsoOverworld.say('Мира: «Цель не двигается… Ты цел? Там что-то светится — подбери и возвращайся на «Абисс»»'), 900);
+    setTimeout(() => AB.IsoOverworld.say('Мира: «Цель не двигается… Ты цел? Подбери, что светится. И ещё: сонар ловит слабый сигнал из «Отсека на склоне» — проверь, потом домой»'), 900);
   });
   // вернулись на корабль с карты (iso-main.js переносит отряд в шлюз)
   AB.Bus.on('ow:exit', () => {
     const mira = AB.IsoParty.allNpcs().find((m) => m.id === 'CHAR-002'); if (mira) mira.hidden = false;
-    if (AB.Quests.status('QUEST-007') === 'active' && AB.Enemies.isDead('ENEMY-008')) { AB.Flags.add('ow-back'); pendingBack = true; setTimeout(afterBack, 500); }
+    if (AB.Quests.status('QUEST-007') === 'active' && AB.Enemies.isDead('ENEMY-008') && AB.Flags.has('recruit')) { AB.Flags.add('ow-back'); pendingBack = true; setTimeout(afterBack, 500); }
+    else if (AB.Quests.status('QUEST-007') === 'active' && AB.Enemies.isDead('ENEMY-008')) setTimeout(() => toast('Мира: «Сигнал из «Отсека на склоне» ещё не проверен»', 'info'), 800);
   });
   AB.Bus.on('iso:travel', ({ sector }) => {
     const mira = AB.IsoParty.allNpcs().find((m) => m.id === 'CHAR-002');
@@ -90,6 +91,12 @@ AB.IsoActs = (() => {
     if (visited.has(site.key) && !d.repeat) return { label: 'Здесь уже всё сделано', ok: false };
     if (act < d.act) return { label: act === 2 ? 'Мира: «Не уходи далеко — сначала сигнал»' : 'Позже', ok: false };
     if (d.mob) return { label: AB.Enemies.isDead(d.mob) ? 'Здесь уже всё сделано' : d.label, ok: false };
+    // №86: акт II — второй сигнал (дрон ЭХО в «Отсеке на склоне»), после твари у сонара
+    if (act === 2 && site.key === 'wreck-b') {
+      if (!AB.Enemies.isDead('ENEMY-008')) return { label: 'Мира: «Сначала — то, что засёк сонар»', ok: false };
+      if (AB.Flags.has('recruit')) return { label: 'Здесь уже всё сделано — возвращайся на «Абисс»', ok: false };
+      return { label: d.label, ok: true };
+    }
     if (act === 2) return { label: 'Мира: «Не уходи далеко — сначала сигнал»', ok: false };
     if (d.act === 3 && !AB.Flags.has('undocked')) return { label: 'Сначала — капсула', ok: false };
     if (d.interior && AB.IsoOverworld.selectedKind() !== 'squad') return { label: 'Подведите отряд в транспорте ко входу', ok: false };

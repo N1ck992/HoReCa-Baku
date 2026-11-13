@@ -61,21 +61,21 @@ AB.IsoDev = (() => {
       weapons: ARMS, stash: [['ITEM-005', 2], ['ITEM-009', 1], ['ITEM-014', 1], ['ITEM-015', 1], ['ITEM-001', 3], ['ITEM-002', 1]],
       dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V'],
       quests: [...Q1END, done('QUEST-006'), done('QUEST-007')],
-      after: () => { AB.IsoActs.devSet({ act: 2 }); AB.IsoActs.next(2); },
+      after: () => { AB.IsoActs.devSet({ act: 2 }); AB.Flags.add('recruit'); AB.IsoCompanion.give(true); AB.IsoActs.next(2); },
     }) },
     { id: 'a3-base', group: 'Акт III', name: 'База-капсула (отстыкована, карта дна)', st: () => ({
       sector: 'SECTOR-003', at: { x: 72.5, y: 28.5 }, party: ['CHAR-001', 'CHAR-002'], story: A3, equipment: EQ3, power: true,
       weapons: ARMS, stash: [['ITEM-005', 2], ['ITEM-009', 1], ['ITEM-014', 1], ...RES],
       dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked'],
       quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), ['QUEST-009', { stage: 0, status: 'active' }]],
-      after: () => { AB.IsoActs.devSet({ act: 3 }); AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); },
+      after: () => { AB.IsoActs.devSet({ act: 3 }); AB.Flags.add('recruit'); AB.IsoCompanion.give(true); AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); },
     }) },
     { id: 'a3-up', group: 'Акт III', name: 'Перед всплытием (экипаж и модуль есть)', st: () => ({
       sector: 'SECTOR-003', at: { x: 72.5, y: 28.5 }, party: ['CHAR-001', 'CHAR-002'], story: A3, equipment: EQ3, power: true,
       weapons: ARMS, stash: [['ITEM-005', 2], ['ITEM-009', 1], ...RES],
       dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked', 'recruit', 'module'],
       quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), ['QUEST-009', { stage: 1, status: 'active' }]],
-      after: () => { AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-002'], built: ['MOD-003'] }); AB.IsoCompanion.give(); AB.Flags.add('surface-ready'); AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); },
+      after: () => { AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-002'], built: ['MOD-003'] }); AB.IsoCompanion.give(true); AB.Flags.add('surface-ready'); AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); },
     }) },
   ];
 

@@ -474,6 +474,9 @@ AB.BaseView = (() => {
     const c = el('bx-card');
     if (c) c.addEventListener('click', onCard);
     const b = el('bx-build'); if (b) b.addEventListener('click', () => { close(); AB.BaseBuild.toggle(); });
+    // №86: «Моя база» — камера на всю капсулу; «Выйти с базы» — на карту дна (вместо пульта капсулы)
+    const mb = el('bx-mybase'); if (mb) mb.addEventListener('click', () => { AB.IsoRender.focus({ x: 14.5, y: 8.5 }); AB.IsoRender.snap(); });
+    const lv = el('bx-leave'); if (lv) lv.addEventListener('click', () => { close(); if (AB.BaseBuild) AB.BaseBuild.toggle(false); AB.IsoActs.leaveBase(); });
     const k = el('bx-crew'); if (k) k.addEventListener('click', () => { if (card && card.crew !== undefined) close(); else openCrew(); });
     const sc = el('bx-sci'); if (sc) sc.addEventListener('click', () => { AB.BaseBuild.toggle(false); if (card && card.science) close(); else openScience(); });
   }

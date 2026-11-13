@@ -528,7 +528,7 @@ AB.BaseSim = (() => {
     const hostRoom = host && room(host);
     if (!hostRoom || !hostRoom.built) return res(false, 'Ставится внутри построенного помещения');
     // №79: оборудование ставится только вдоль проводки — к нему должен примыкать кабель (по полу или в стене)
-    if (!b.core) {
+    if (!b.core && !spec.skipWire) {
       const own = new Set(cells.map(([x, y]) => `${x},${y}`));
       const along = S.cables.some((c2) => rcells(c2).some(([cx, cy]) => !own.has(`${cx},${cy}`) && cells.some(([x, y]) => Math.abs(cx - x) + Math.abs(cy - y) === 1)));
       if (!along) return res(false, 'Только вдоль проводки: сначала проложите кабель (можно внутри стены)');
@@ -639,6 +639,104 @@ AB.BaseSim = (() => {
     if ('mat' in patch) { if (r.n > 0 && patch.mat !== r.mat) return false; r.mat = patch.mat; if (!r.mat) r.auto = false; }
     if ('auto' in patch) { if (!r.mat) return false; r.auto = !!patch.auto; }
     return true;
+  }
+
+  // ---------- №86: стройка в одно нажатие ----------
+  // Игрок выбирает чертёж — игра сама ищет свободное место; устройству — сама тянет проводку от сети с питанием.
+  // Если не хватает материалов (с учётом проводов на кабель) — возвращает, чего именно.
+  const K2 = (x, y) => `${x},${y}`;
+  function wirePath(rect) {
+    const g = geom();
+    const ok = (x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h && (g.walk[y * g.w + x] === 1 || g.wall[y * g.w + x] === 1) && !(x >= rect.x && y >= rect.y && x < rect.x + rect.w && y < rect.y + rect.h);
+    // источники: клетки кабелей сети, где есть выработка, и клетки рядом с реактором/генераторами
+    const nets = networks(), live = new Set();
+    for (const d of S.devs) if (d.built && par(d).gen) { const n = nets.of.get(d.uid); if (n != null) live.add(n); }
+    const src = new Set(), wired = new Set();          // wired — клетки, где кабель уже лежит
+    for (const c of S.cables) if (live.has(nets.of.get(c.uid)) || !c.built) for (const [x, y] of rcells(c)) { src.add(K2(x, y)); wired.add(K2(x, y)); }
+    for (const d of S.devs) if (par(d).gen) for (let x = d.x - 1; x <= d.x + d.w; x++) for (let y = d.y - 1; y <= d.y + d.h; y++) {
+      if (((x < d.x || x >= d.x + d.w) !== (y < d.y || y >= d.y + d.h)) && ok(x, y)) src.add(K2(x, y));
+    }
+    // цели: клетки, примыкающие к стороне устройства
+    const goal = new Set();
+    for (let x = rect.x - 1; x <= rect.x + rect.w; x++) for (let y = rect.y - 1; y <= rect.y + rect.h; y++) {
+      if (((x < rect.x || x >= rect.x + rect.w) !== (y < rect.y || y >= rect.y + rect.h)) && ok(x, y)) goal.add(K2(x, y));
+    }
+    if (!src.size || !goal.size) return null;
+    for (const k of goal) if (wired.has(k)) return [];             // уже у кабеля — тянуть не нужно
+    for (const k of goal) if (src.has(k)) return [k.split(',').map(Number)];   // рядом с реактором — одна клетка кабеля
+    const prev = new Map(), q = [];
+    for (const k of src) { prev.set(k, null); q.push(k); }
+    let hit = null;
+    for (let i = 0; i < q.length && !hit; i++) {
+      const [x, y] = q[i].split(',').map(Number);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, k = K2(nx, ny);
+        if (prev.has(k) || !ok(nx, ny)) continue;
+        prev.set(k, q[i]); q.push(k);
+        if (goal.has(k)) { hit = k; break; }
+      }
+    }
+    if (!hit) return null;
+    const cells = [];
+    for (let k = hit; k && !wired.has(k); k = prev.get(k)) cells.push(k.split(',').map(Number));   // до уже лежащего кабеля (клетку у реактора — тоже кладём)
+    return cells.reverse();
+  }
+  // прямые отрезки пути (до 12 клеток) → кабели
+  function runs(cells) {
+    const out = []; let cur = null;
+    for (const [x, y] of cells) {
+      if (cur && cur.len < 12 && ((cur.dir === 'x' && y === cur.y && x === cur.x + cur.len) || (cur.dir === 'y' && x === cur.x && y === cur.y + cur.len) || (!cur.dir && ((y === cur.y && x === cur.x + 1) || (x === cur.x && y === cur.y + 1))))) {
+        if (!cur.dir) cur.dir = y === cur.y ? 'x' : 'y'; cur.len++; continue;
+      }
+      // идём назад по оси — начать новый отрезок с меньшей координаты
+      if (cur && cur.len < 12 && ((cur.dir !== 'y' && y === cur.y && x === cur.x - 1) || (cur.dir !== 'x' && x === cur.x && y === cur.y - 1))) {
+        cur.dir = y === cur.y ? 'x' : 'y'; if (cur.dir === 'x') cur.x = x; else cur.y = y; cur.len++; continue;
+      }
+      cur = { x, y, len: 1, dir: null }; out.push(cur);
+    }
+    return out.map((c) => ({ x: c.x, y: c.y, w: c.dir === 'y' ? 1 : c.len, h: c.dir === 'y' ? c.len : 1 }));
+  }
+  function lack(cost) { return cost.filter(([i, n]) => stockOf(i) < n).map(([i, n]) => [i, n, stockOf(i)]); }
+  function autoPlace(bpId) {
+    const b = bp(bpId); if (!b) return { ok: false, why: 'Нет такого чертежа' };
+    if (!S.unlocked.includes(bpId)) return { ok: false, why: 'Чертёж не изучен' };
+    const g = geom(), core = D().core.rooms[0], cx = core.x + core.w / 2, cy = core.y + core.h / 2;
+    if (b.kind === 'room') {
+      const sizes = b.size.short[0] === 1 ? [[1, 4], [4, 1]] : [[Math.max(4, b.size.short[0]), Math.max(4, b.size.long[0])]];
+      const H = hull(); let best = null, bd = 1e9;
+      for (const [w, h] of sizes) for (let y = H.y + 1; y + h <= H.y + H.h - 1; y++) for (let x = H.x + 1; x + w <= H.x + H.w - 1; x++) {
+        const d = Math.hypot(x + w / 2 - cx, y + h / 2 - cy); if (d >= bd) continue;
+        if (check({ bp: bpId, x, y, w, h }).ok) { bd = d; best = { x, y, w, h }; }
+      }
+      if (!best) return { ok: false, why: 'Нет места под помещение — расширьте корпус в «Науке»' };
+      const cost = costOf(b, best), miss = lack(cost);
+      if (miss.length) return { ok: false, miss };
+      const r = place({ bp: bpId, ...best }); return { ...r, cables: 0 };
+    }
+    // устройство: места в построенных помещениях, ближе к питанию; проводка — кратчайшая
+    const cand = [];
+    const dims = b.w === b.h ? [[b.w, b.h]] : [[b.w, b.h], [b.h, b.w]];
+    for (const r of S.rooms.filter((q) => q.built)) for (const [w, h] of dims) for (let y = r.y; y + h <= r.y + r.h; y++) for (let x = r.x; x + w <= r.x + r.w; x++) {
+      if (check({ bp: bpId, x, y, w, h, skipWire: true }).ok) cand.push({ x, y, w, h, d: Math.hypot(x - cx, y - cy) });
+      if (cand.length > 120) break;
+    }
+    if (!cand.length) return { ok: false, why: 'Нет свободного места в помещениях — постройте ещё отсек' };
+    cand.sort((a, c) => a.d - c.d);
+    let best = null;
+    for (const c of cand.slice(0, 40)) {
+      const p = wirePath(c); if (!p) continue;
+      if (!best || p.length < best.path.length) best = { ...c, path: p };
+      if (best.path.length === 0) break;
+    }
+    if (!best) return { ok: false, why: 'Нет пути для проводки к источнику питания' };
+    const cab = runs(best.path), wires = cab.reduce((a, r) => a + Math.ceil((r.w * r.h) / bp('BLD-110').costPer.cells), 0);
+    const cost = costOf(b, best).map(([i, n]) => [i, n]);
+    if (wires) { const w = cost.find(([i]) => i === 'ITEM-003'); if (w) w[1] += wires; else cost.push(['ITEM-003', wires]); }
+    const miss = lack(cost);
+    if (miss.length) return { ok: false, miss };
+    for (const r of cab) place({ bp: 'BLD-110', ...r });
+    const res = place({ bp: bpId, x: best.x, y: best.y, w: best.w, h: best.h });
+    return { ...res, cables: cab.length, cells: best.path.length };
   }
 
   // №79: где показывать сетку стройки — только там, где можно что-то поставить:
@@ -869,7 +967,7 @@ AB.BaseSim = (() => {
   return {
     ensure, tick, catchUp, save, load, reset() { S = null; G = null; store.set(null); },
     setExt(e) { ext = { ...ext, ...e }; },
-    insOf, eff, hull, fx, buildable, research, techState, techCost, techName, stockOf, cellsOf, state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
+    insOf, eff, hull, fx, buildable, autoPlace, research, techState, techCost, techName, stockOf, cellsOf, state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
     check, place, modify, remove, assign, workers, setJobs, worker, order, setRack, amount,
     receive(item, n) { ensure(); S.pile[item] = (S.pile[item] || 0) + n; },
     costOf, workOf,

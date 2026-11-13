@@ -307,8 +307,7 @@ AB.ISO_LAYOUTS['SECTOR-005'] = {
     { room: 'ROOM-027', x: 2, y: 3, w: 26, h: 8 },      // №79: открытый трюм
   ],
   props: [
-    { kind: 'console', x: 3, y: 3, w: 3, h: 1, pilot: true },
-    { kind: 'locker', x: 7, y: 3, w: 2, h: 1, stash: true },
+    { kind: 'locker', x: 7, y: 3, w: 2, h: 1, stash: true },   // №86: пульта нет — «Выйти с базы» внизу
     { kind: 'exorack', x: 25, y: 3, w: 2, h: 1 },
   ],
   doors: [],

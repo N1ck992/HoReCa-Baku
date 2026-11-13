@@ -34,6 +34,12 @@
   <div id="iso-prompt" role="button" aria-live="polite"></div>
   <div id="iso-toast" aria-live="polite"></div>
   <div id="iso-reward" hidden aria-live="polite"></div>
+  <div id="echo-msg" hidden role="status" aria-live="polite"></div>
+  <!-- №87: на телефоне игра — горизонтально -->
+  <div id="iso-rotate" hidden role="dialog" aria-label="Поверните телефон">
+    <div class="rt-card"><i class="rt-phone"></i><b>Поверните телефон горизонтально</b><span>Игра рассчитана на широкий экран: так помещаются все кнопки и удобнее управлять</span>
+      <button id="rt-go">На весь экран и повернуть</button><button id="rt-skip" class="rt-skip">Играть вертикально</button></div>
+  </div>
   <div id="iso-inv" hidden>
     <div class="inv-card" role="dialog" aria-label="Инвентарь">
       <div class="inv-head">
@@ -46,7 +52,7 @@
   <!-- №71: база-капсула — ресурсы, стройка, экипаж, карточки устройств -->
   <div id="bx" hidden>
     <div id="bx-res" aria-label="Материалы базы"></div>
-    <div id="bx-bar"><button id="bx-build" title="Режим стройки">Стройка</button><button id="bx-crew" title="Экипаж и списки работ">Экипаж</button><button id="bx-sci" title="Исследования">Наука</button></div>
+    <div id="bx-bar"><div id="bx-home"><button id="bx-mybase" title="Моя база: камера — на всю капсулу"><i class="cap"></i><span>Моя база</span></button><button id="bx-leave" title="Выйти из капсулы на карту дна">Выйти с базы</button></div><button id="bx-build" title="Режим стройки">Стройка</button><button id="bx-crew" title="Экипаж и списки работ">Экипаж</button><button id="bx-sci" title="Исследования">Наука</button></div>
     <div id="bx-cat" hidden></div>
     <div id="bx-ghost" hidden></div>
     <div id="bx-card" hidden></div>
@@ -178,6 +184,7 @@
   <script src="js/base/base-build.js"></script>
   <script src="js/iso/iso-reward.js"></script>
   <script src="js/iso/iso-companion.js"></script>
+  <script src="js/iso/iso-guard.js"></script>
   <script src="js/iso/iso-render.js"></script>
   <script src="js/iso/iso-input.js"></script>
   <script src="js/iso/iso-main.js"></script>

@@ -42,6 +42,7 @@ AB.Equip = (() => {
       return AB.Inventory.partyHasRoom(charId, d.gives) ? { label: d.text.ready, ok: true, time: d.time, kind: 'work' } : { label: d.text.full, ok: false, kind: 'blocked' };
     }
     if (s === 'done') return { label: d.text.done, ok: false, kind: 'done' };
+    if (d.guard && AB.IsoGuard && AB.IsoGuard.state()) return { label: 'Мира настраивает капсулу — прикрывай её', ok: false, kind: 'blocked' };
     if (d.after && !d.after.every((r) => st(r) === 'done')) return { label: d.text.after || d.text.missing, ok: false, kind: 'blocked' };
     if (d.enemyDead && !AB.Enemies.isDead(d.enemyDead)) return { label: d.text.missing, ok: false, kind: 'blocked' };
     if (d.inspect && s === 'broken') return { label: d.text.inspect, ok: true, kind: 'inspect' };
@@ -61,6 +62,8 @@ AB.Equip = (() => {
     const d = def(id), a = action(id, charId);
     if (!a.ok) return a;
     if (a.kind === 'info') { AB.Bus.emit('equip:info', { id, text: a.label }); return a; }
+    // №86: сначала оборона (Мира настраивает капсулу), отстыковка — после неё
+    if (d.guard && AB.IsoGuard && !AB.IsoGuard.isDone()) { AB.IsoGuard.start(); return { ...a, kind: 'guard' }; }
     if (d.gives) {
       AB.Inventory.addShared(charId, d.gives, 1, { swap: false });
       AB.Bus.emit('equip:info', { id, text: d.text.gave });

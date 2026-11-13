@@ -88,14 +88,17 @@
     ui.skip.hidden = !AB.IsoStory.isRunning();
     // испытание «Гнездо»: время, этапы прохода, убито, уровень и опыт
     // оборона оружейной и бой с Колоссом (№57): полоса сверху
-    const ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
-    $('#iso-nest').hidden = !ns && !bs;
-    document.body.classList.toggle('nest-on', !!(ns || bs));
+    const ns = AB.IsoNest.state(), bs = AB.IsoBoss.state(), gs = AB.IsoGuard.state();
+    $('#iso-nest').hidden = !ns && !bs && !gs;
+    document.body.classList.toggle('nest-on', !!(ns || bs || gs));
     let nh = '';
     if (ns) {
       nh = `<b>Гнездо</b><span class="t">${ns.over ? 'Затихли' : `${Math.floor(ns.t / 60)}:${String(Math.floor(ns.t % 60)).padStart(2, '0')}`}</span>`
         + `<span class="rp">Взлом <u><s style="width:${Math.round(ns.prog * 100)}%"></s></u> ${Math.round(ns.prog * 100)}%</span>`
         + `<span class="k">Волна ${ns.wave}</span>`;   // №84: только главное — время, взлом, волна
+    } else if (gs) {
+      nh = `<b>Ангар</b><span class="t">${Math.floor(gs.t / 60)}:${String(Math.floor(gs.t % 60)).padStart(2, '0')}</span>`
+        + `<span class="rp">Капсула <u><s style="width:${Math.round(gs.prog * 100)}%"></s></u> ${Math.round(gs.prog * 100)}%</span><span class="k">Волна ${gs.wave}</span>`;
     } else if (bs) {
       const L = AB.IsoBoss.config(), col = AB.IsoEnemies.get(L.enemy), hp = col ? Math.round((col.hp / AB.ID.get(L.enemy).hp) * 100) : 0;
       nh = `<b>Колосс</b><span class="rp">Броня <u><s style="width:${hp}%"></s></u> ${hp}%</span>`
@@ -105,6 +108,10 @@
 
   }
   let lastQuest = '', lastNest = '';
+  AB.Bus.on('guard:start', () => toast('Мира настраивает капсулу. Из воды лезут твари — не подпускай их к ней!', 'bad'));
+  AB.Bus.on('guard:hit', ({ prog }) => toast(`Миру ударили — настройка откатилась до ${Math.round(prog * 100)}%`, 'bad'));
+  AB.Bus.on('guard:wave', ({ n, brutes }) => toast(`Волна ${n}!${brutes && n === 2 ? ' Громилы!' : ''}`, 'bad'));
+  AB.Bus.on('guard:won', () => toast('Капсула готова к отплытию!', 'good'));
   AB.Bus.on('nest:wave', ({ n }) => toast(`Волна ${n}!${n === AB.IsoNest.RULES.brute.from ? ' Идут громилы — они ломают турели' : ''}`, 'bad'));
   AB.Bus.on('nest:full', () => toast(`Больше ${AB.IsoNest.RULES.carryMax} био не унести — отнеси к турели`, 'info'));
   AB.Bus.on('nest:turretDown', ({ name }) => toast(`${name} разрушена! Принеси биоматериал — запустится снова`, 'bad'));
@@ -262,6 +269,22 @@
     });
     const fsSync = () => { fsBtn.textContent = fsEl() ? '✕⛶' : '⛶'; fsBtn.title = fsEl() ? 'Выйти из полноэкранного режима' : 'На весь экран'; setTimeout(() => window.dispatchEvent(new Event('resize')), 120); };
     document.addEventListener('fullscreenchange', fsSync); document.addEventListener('webkitfullscreenchange', fsSync);
+    // №87: телефон держат вертикально — просим повернуть (и пробуем сами: полный экран + горизонтально)
+    let rtSkip = false;
+    try { rtSkip = sessionStorage.getItem('abyss_rt_skip') === '1'; } catch (e) { /* нет хранилища */ }
+    const rt = $('#iso-rotate');
+    const rtSync = () => { rt.hidden = !(isTouch && innerHeight > innerWidth * 1.05 && !rtSkip); };
+    addEventListener('resize', rtSync); addEventListener('orientationchange', () => setTimeout(rtSync, 200)); rtSync();
+    rt.addEventListener('pointerdown', (e) => e.stopPropagation());
+    $('#rt-go').addEventListener('click', async () => {
+      try {
+        const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req && !fsEl()) await req.call(el, { navigationUI: 'hide' });
+        if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
+      } catch (e) { toast('Браузер не даёт повернуть сам — поверните телефон боком (включите автоповорот)', 'info'); }
+      setTimeout(rtSync, 300);
+    });
+    $('#rt-skip').addEventListener('click', () => { rtSkip = true; try { sessionStorage.setItem('abyss_rt_skip', '1'); } catch (e) { /* нет хранилища */ } rtSync(); });
     $('#iso-restart-top').addEventListener('pointerdown', (e) => e.stopPropagation());
     for (const el of [ui.party, ui.zoom]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
     ui.prompt.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); AB.IsoInteract.actNearest(); });
@@ -284,6 +307,7 @@
       AB.IsoBoss.update(dt);
       AB.IsoBase.update(dt);
       AB.IsoCompanion.update(dt);   // №85: дрон-спутник
+      AB.IsoGuard.update(dt);       // №86: оборона ангара
       if (!busy) AB.IsoCombat.update(dt, input);
       if (Math.random() < 0.1) AB.Quests.check();
       AB.Anim.update(dt);
