@@ -81,10 +81,9 @@ AB.IsoRender = (() => {
   // №89: текстуры пола (вид сверху, бесшовные) — натягиваются на ромбы изометрии.
   // Набор по помещению; без набора — прежняя ровная заливка ROOM_TINT. cells — сколько клеток на одну плитку текстуры.
   const FLOOR_TEX = { F1: { src: 'assets/tiles/F1-a.jpg', cells: 4 } };
-  const ROOM_FLOOR = {
-    'ROOM-011': 'F1', 'ROOM-003': 'F1', 'ROOM-012': 'F1', 'ROOM-014': 'F1', 'ROOM-004': 'F1',
-    'ROOM-026': 'F1', 'ROOM-009': 'F1', 'ROOM-005': 'F1',
-  };
+  // решение автора: «Абисс» — один корабль, один общий пол на все его помещения (ROOM-001…018)
+  const ROOM_FLOOR = {};
+  for (let i = 1; i <= 18; i++) ROOM_FLOOR[`ROOM-${String(i).padStart(3, '0')}`] = 'F1';
   const texImg = {};
   for (const [k, t] of Object.entries(FLOOR_TEX)) {
     const im = new Image(); im.onload = () => { texImg[k] = im; floorCv = null; }; im.src = t.src;
