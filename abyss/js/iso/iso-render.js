@@ -85,7 +85,7 @@ AB.IsoRender = (() => {
   const ROOM_FLOOR = {};
   for (let i = 1; i <= 18; i++) ROOM_FLOOR[`ROOM-${String(i).padStart(3, '0')}`] = 'F1';
   // №91: стены корабля — W1 (вид спереди, бесшовно по горизонтали; низ картинки = пол) и верх стены WT
-  const WALL_TEX = { face: { src: 'assets/tiles/W1-a.jpg', cells: 2.5 }, top: { src: 'assets/tiles/WT-a.jpg', cells: 2 }, door: { src: 'assets/tiles/D1-a.jpg' }, grate: { src: 'assets/tiles/D2-a.png' } };   // №93: grate — решётка-баррикада D2   // №92: door — гермодверь D1
+  const WALL_TEX = { face: { src: 'assets/tiles/W1-a.jpg', cells: 2.5 }, top: { src: 'assets/tiles/WT-a.jpg', cells: 2 }, door: { src: 'assets/tiles/D1-a.jpg' }, grate: { src: 'assets/tiles/D2-a.png' }, exit: { src: 'assets/tiles/D3-a.jpg' } };   // №94: exit — проход/лифт D3 в стене   // №93: grate — решётка-баррикада D2   // №92: door — гермодверь D1
   const SHIP_SECTORS = new Set(['SECTOR-001', 'SECTOR-002', 'SECTOR-003', 'SECTOR-004']);
   const wallImg = {}, wallPat = {};
   for (const [k, t] of Object.entries(WALL_TEX)) { const im = new Image(); im.onload = () => { wallImg[k] = im; }; im.src = t.src; }
@@ -251,6 +251,23 @@ AB.IsoRender = (() => {
     ctx.globalAlpha = 1;
   }
 
+  // №94: выход в стене (лифт, проход в другой сектор) — картинка D3 ровно на одну клетку по обеим граням
+  function texExit(x, y, alpha) {
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    const im = wallImg.exit, p = pat('exit'), k = 1 / im.width, vs = WALL_FULL / im.height, h = WALL_H;
+    ctx.globalAlpha = alpha;
+    const face = (pts, mat, shade) => {
+      p.setTransform(new DOMMatrix(mat));
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y); ctx.closePath();
+      ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = `rgba(6,9,14,${shade})`; ctx.fill();
+    };
+    face([w, s, { x: s.x, y: s.y - h }, { x: w.x, y: w.y - h }], [TW / 2 * k, TH / 2 * k, 0, vs, w.x, w.y - WALL_FULL], 0.25);
+    face([s, e, { x: e.x, y: e.y - h }, { x: s.x, y: s.y - h }], [TW / 2 * k, -TH / 2 * k, 0, vs, s.x, s.y - WALL_FULL], 0.45);
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - h); ctx.lineTo(e.x, e.y - h); ctx.lineTo(s.x, s.y - h); ctx.lineTo(w.x, w.y - h); ctx.closePath();
+    ctx.fillStyle = '#23262b'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   function block(x, y, hgt, look, alpha, faces) {
     if (look === WALL_LOOK && wallTextured()) { texBlock(x, y, hgt, alpha, faces); return; }
     const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
@@ -392,7 +409,7 @@ AB.IsoRender = (() => {
         if (o.x === dr.tiles[dr.tiles.length - 1][0] && o.y === dr.tiles[dr.tiles.length - 1][1]) doorLamp(dr);
       } else if (o.k === 'x') {
         const a = alphaFor(`w${o.x},${o.y}`, occludes(o.x, o.y, WALL_H, party), dt);
-        block(o.x, o.y, WALL_H, EXIT_LOOK, a, { l: true, r: true });
+        if (wallImg.exit && wallTextured()) texExit(o.x, o.y, a); else block(o.x, o.y, WALL_H, EXIT_LOOK, a, { l: true, r: true });
         exitLamp(o.e, o.x, o.y);
       } else if (o.k === 'i') drawItem(o.t);
       else if (o.k === 'g') drawGun(o.g, o.on, o.big);
