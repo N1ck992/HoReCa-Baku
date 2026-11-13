@@ -664,7 +664,8 @@ AB.IsoRender = (() => {
     const L = lctx, k = 0.5;
     L.setTransform(1, 0, 0, 1, 0, 0);
     L.globalCompositeOperation = 'source-over';
-    L.fillStyle = `rgba(3,4,7,${AB.World && AB.World.hasPower() ? 0.5 : 0.72})`;   // с питанием светлее
+    const dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.72, lit: 0.5 }, AB.World && AB.World.hasPower()) : (AB.World && AB.World.hasPower() ? 0.5 : 0.72);
+    L.fillStyle = `rgba(3,4,7,${Math.max(0, dk)})`;   // с питанием светлее (№82: плавно, со вспышкой)
     L.fillRect(0, 0, lightCv.width, lightCv.height);
     L.setTransform(sc * k, 0, 0, sc * k, (cv.width / 2 - cam.x * sc) * k, (cv.height / 2 - cam.y * sc) * k);
     L.globalCompositeOperation = 'destination-out';

@@ -11,11 +11,23 @@ AB.ISO_REWARDS = {
   'ITEM-009': { kind: 'weapon', stats: 'Урон 26 · удар вплотную', hint: 'Бить: F, J, пробел или нажать на врага · на телефоне — кнопка ⚔' },
   'ITEM-011': { kind: 'weapon', stats: 'Плазма без боезапаса · взлом электронных замков', hint: 'Стрелять: нажать на врага · перегрев после 5 выстрелов подряд' },
   'ITEM-012': { kind: 'weapon', stats: 'Дротики без боезапаса', hint: '' },
+  // №82: детали генератора — маленькая награда со счётчиком; броня — в шкафу техника, когда есть питание
+  'ITEM-004': { kind: 'part', stats: () => partLine(), hint: 'Предохранитель для электрощита генератора' },
+  'ITEM-006': { kind: 'part', stats: () => partLine(), hint: 'Канистра топлива для генератора' },
+  'ITEM-021': { kind: 'armor', stats: 'Защита +10% · шлем, перчатки и ботинки', hint: 'Надевается сразу. Получаемый урон меньше на десятую часть' },
 };
+// сколько деталей генератора уже найдено
+function partLine() {
+  const parts = ['ITEM-004', 'ITEM-006'];
+  const n = parts.filter((i) => (AB.IsoStash && AB.IsoStash.count(i) > 0) || AB.Chars.all().some((c) => AB.Inventory.count(c.id, i) > 0)).length;
+  return `Деталь генератора ${n}/${parts.length}${n >= parts.length ? ' — всё собрано, к генератору!' : ''}`;
+}
 const REWARD_KIND = {
   weapon: { title: 'Новое оружие', col: '255,200,90' },
   armor: { title: 'Новая броня', col: '120,220,255' },
   crew: { title: 'Новый член отряда', col: '140,255,170' },
+  part: { title: 'Найдена деталь', col: '120,220,255' },
+  power: { title: 'Питание восстановлено', col: '255,240,170' },
   item: { title: 'Ценная находка', col: '255,214,120' },
 };
 
@@ -32,8 +44,9 @@ AB.IsoReward = (() => {
     if (m) { fx = { x: m.x, y: m.y, t: 0, col: k.col }; AB.Anim.play(m.id, 'interact', { restart: true }); }
     const box = el(); if (!box) return;
     box.style.setProperty('--rw', `rgb(${k.col})`);
-    box.innerHTML = `<div class="rw-card"><div class="rw-kind">${k.title}</div><div class="rw-name">${def.name || id}</div>
-      ${rw.stats ? `<div class="rw-stats">${rw.stats}</div>` : ''}${rw.hint ? `<div class="rw-hint">${rw.hint}</div>` : ''}</div>`;
+    const stats = typeof rw.stats === 'function' ? rw.stats() : rw.stats;
+    box.innerHTML = `<div class="rw-card"><div class="rw-kind">${k.title}</div><div class="rw-name">${rw.name || def.name || id}</div>
+      ${stats ? `<div class="rw-stats">${stats}</div>` : ''}${rw.hint ? `<div class="rw-hint">${rw.hint}</div>` : ''}</div>`;
     box.hidden = false;
     box.classList.remove('go'); void box.offsetWidth; box.classList.add('go');
     clearTimeout(show.t); show.t = setTimeout(hide, 3600);
@@ -45,8 +58,19 @@ AB.IsoReward = (() => {
     const rw = AB.ISO_REWARDS[itemId];
     if (rw && !got.has(itemId)) { show(itemId, rw, by || charId); api.just = itemId; }   // обычную строку-подсказку о находке не дублируем
   });
+  // находки из шкафов и ящиков — тоже награды
+  AB.Bus.on('container:looted', ({ found }) => {
+    for (const [item] of found || []) { const rw = AB.ISO_REWARDS[item]; if (rw && !got.has(item)) { show(item, rw); api.just = item; break; } }
+  });
+  // №82: питание восстановлено — свет зажигается, карточка, подсказка про шкаф техника
+  let powerT = -1;
+  AB.Bus.on('equip:changed', ({ id, state }) => {
+    if (id !== 'EQUIP-003' || state !== 'done' || got.has('power')) return;   // только когда генератор запустили сами
+    powerT = 0;
+    setTimeout(() => show('power', { kind: 'power', name: 'Свет на палубе', stats: 'Свет, пульты и электронные двери корабля работают', hint: 'Шкаф техника у генератора открылся — загляни' }), 600);
+  });
   // новые награды других видов (броня, герой) вызывают это напрямую
-  AB.Bus.on('iso:reward', ({ id, kind, stats, hint, by }) => show(id, { kind, stats, hint }, by));
+  AB.Bus.on('iso:reward', ({ id, kind, stats, hint, by, name }) => show(id, { kind, stats, hint, name }, by));
   document.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('#iso-reward')) hide(); });
 
   // ---------- рисование: лучи над ещё не подобранной наградой, вспышка у героя ----------
@@ -69,6 +93,14 @@ AB.IsoReward = (() => {
       ctx.fillStyle = g; ctx.fillRect(p.x - 10, p.y - h, 20, h);
     }
   }
+  // темнота сцены: при включении питания плавно светлеет (с белой вспышкой в начале)
+  function darkness(base, lit) {
+    if (powerT < 0) return lit ? base.lit : base.dark;
+    powerT += 1 / 60;
+    const k = Math.min(1, powerT / 2.5);
+    if (k >= 1) powerT = -1;
+    return base.dark + (base.lit - base.dark) * (k * k * (3 - 2 * k)) - (powerT < 0.25 ? (0.25 - powerT) * 1.2 : 0);
+  }
   function drawFx(ctx, toScreen, dt) {
     if (!fx) return;
     fx.t += dt;
@@ -88,6 +120,19 @@ AB.IsoReward = (() => {
     ctx.fillStyle = g; ctx.fillRect(-90, -90, 180, 180);
     ctx.restore();
   }
-  const api = { drawGround, drawFx, show, hide, has: (id) => got.has(id), reset: () => got.clear(), just: null };
+  const api = { darkness, drawGround, drawFx, show, hide, has: (id) => got.has(id), reset: () => got.clear(), just: null };
   return api;
+})();
+
+// №82: броня. Пока одна — «Комплект техника» (+10% защиты). Носит Марк, если комплект есть у отряда.
+AB.IsoArmor = (() => {
+  const LIST = ['ITEM-021'];
+  const has = (i) => (AB.IsoStash && AB.IsoStash.count(i) > 0) || AB.Chars.all().some((c) => AB.Inventory.count(c.id, i) > 0);
+  function of(id) {
+    if (id !== 'CHAR-001') return 0;
+    let best = 0;
+    for (const i of LIST) if (has(i)) best = Math.max(best, (AB.ID.get(i) || {}).armor || 0);
+    return best;
+  }
+  return { of };
 })();

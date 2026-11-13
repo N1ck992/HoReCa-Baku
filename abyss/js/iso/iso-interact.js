@@ -170,6 +170,7 @@ AB.IsoInteract = (() => {
     }
     if (t.kind === 'container') {
       const empty = AB.Rooms.isSearched(t.room, t.ref.key);
+      if (!empty && t.ref.power && !AB.World.hasPower()) return { label: `${t.name}: замок обесточен`, ok: false };   // №82
       return { label: empty ? `${t.name}: пусто` : `Обыскать: ${t.name}`, ok: !empty };
     }
     if (t.kind === 'link') {
@@ -222,6 +223,7 @@ AB.IsoInteract = (() => {
     if (t.kind === 'bay') { if (!AB.IsoActs.build(t.ref.id)) AB.Bus.emit('door:denied', { reason: label(t).label }); return true; }
     if (t.kind === 'container') {
       if (AB.Rooms.isSearched(t.room, t.ref.key)) { AB.Bus.emit('container:empty', { label: t.name }); return true; }
+      if (t.ref.power && !AB.World.hasPower()) { AB.Bus.emit('door:denied', { reason: `${t.name}: замок на электрике — нужно питание` }); return true; }   // №82
       AB.IsoParty.stop(); work = { t, p: 0, time: 1.2, x: l.x, y: l.y };
       return true;
     }

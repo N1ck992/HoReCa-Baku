@@ -26,7 +26,8 @@ AB.Equip = (() => {
   const state = new Map(); // EQUIP-ID → 'broken' | 'inspected' | 'done'
 
   const st = (id) => state.get(id) || 'broken';
-  const def = (id) => AB.ID.get(id);
+  // №82: дополнения поверх замороженных записей (изометрия меняет генератор: одно действие, две детали)
+  const def = (id) => { const d = AB.ID.get(id), x = AB.EQUIP_EXTRA && AB.EQUIP_EXTRA[id]; if (!x) return d; const o = { ...d, ...x }; if (x.noInspect) delete o.inspect; return o; };
 
   function inRoom(roomId) {
     const r = AB.ID.get(roomId);
@@ -50,6 +51,8 @@ AB.Equip = (() => {
       if (!c.skills || !c.skills[d.skill]) return { label: 'Нужен инженер', ok: false, kind: 'blocked' };
     }
     if (d.needs && !AB.Inventory.holderOf(charId, d.needs)) return { label: d.text.missing, ok: false, kind: 'blocked' };
+    // №82: нужно сразу несколько вещей (генератор: предохранитель и топливо) — ставятся за одно действие
+    if (d.needsAll && !d.needsAll.every((i) => AB.Inventory.holderOf(charId, i))) return { label: d.text.missing, ok: false, kind: 'blocked' };
     return { label: d.text.ready, ok: true, time: d.time, kind: 'work' };
   }
 
@@ -74,6 +77,8 @@ AB.Equip = (() => {
       AB.Inventory.remove(holder, d.needs, 1);
       if (holder !== charId) AB.Bus.emit('equip:shared', { id, from: holder, itemId: d.needs });
     }
+    for (const i of d.needsAll || []) { const h = AB.Inventory.holderOf(charId, i); if (h) AB.Inventory.remove(h, i, 1); }
+    for (const o of d.alsoDone || []) state.set(o, 'done');
     state.set(id, 'done');
     AB.Bus.emit('equip:changed', { id, state: 'done', text: d.text.done });
     return a;

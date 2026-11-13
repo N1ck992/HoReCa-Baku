@@ -46,7 +46,28 @@ AB.ISO_TRIGGER = { 'EVENT-005': 'after:EVENT-002' };
   // Мира: генераторная теперь за гидропоникой
   const d1 = AB.ID.get('DIALOG-001').lines;
   d1[4].text = 'Неважно. Без света мы здесь не выживем. Генераторная — внизу, за гидропоникой. Я знаю код от её двери.';
-  d1[5].text = 'Генератору нужны предохранитель, провода и топливо. Топливо — на складе, провода — в гидропонике. Всё по пути.';
+  d1[5].text = 'Генератору нужны две вещи: предохранитель и топливо — канистра на складе. А дверь в командный центр электронная: без света не откроется.';
+  // №82: генератор без лишних шагов — две детали, одно действие «Починить и запустить»
+  {
+    const q = AB.ID.get('QUEST-001');
+    // записи ID заморожены: название — через AB.QUEST_NAMES, этапы и вещи — правкой вложенных массивов
+    AB.QUEST_NAMES = { ...(AB.QUEST_NAMES || {}), 'QUEST-001': 'Свет на палубе' };
+    q.items.splice(0, q.items.length, 'ITEM-004', 'ITEM-006');
+    q.stages.splice(1, q.stages.length - 1,
+      { id: 'parts', objectives: [{ id: 'parts', text: 'Детали генератора: {n}/{total} — предохранитель и канистра топлива (склад)', done: { items: ['ITEM-004', 'ITEM-006'], usedBy: 'EQUIP-003' }, target: { room: 'ROOM-005', x: 1100 } }] },
+      { id: 'start', objectives: [{ id: 'start', text: 'Починить и запустить генератор', done: { equip: 'EQUIP-003', state: 'done' }, target: { equip: 'EQUIP-003' } }] },
+    );
+    AB.EQUIP_EXTRA = { ...(AB.EQUIP_EXTRA || {}), 'EQUIP-003': {
+      noInspect: true, requires: [], needsAll: ['ITEM-004', 'ITEM-006'], alsoDone: ['EQUIP-001', 'EQUIP-002', 'EQUIP-010'], time: 3.0,
+      text: { ready: 'Починить и запустить генератор', missing: 'Не хватает деталей: предохранитель и топливо', done: 'Генератор работает' },
+    } };
+    // щит, кабельный узел и бак — теперь просто обстановка генераторной
+    for (const p of AB.ISO_LAYOUTS['SECTOR-001'].props) if (['EQUIP-001', 'EQUIP-002', 'EQUIP-010'].includes(p.equip)) delete p.equip;
+    // шкаф техника: замок на электрике, откроется, когда будет питание; внутри — первая броня
+    const r3 = AB.ID.get('ROOM-003');
+    r3.containers.push({ key: 'tech-locker', x: 900, prop: 'cabinet', label: 'Шкаф техника', power: true, loot: [['ITEM-021', 1]] });
+    AB.ISO_LAYOUTS['SECTOR-001'].props.push({ kind: 'locker', x: 10, y: 23, w: 1, h: 2, container: 'tech-locker' });
+  }
   AB.ID.get('DIALOG-005').lines[3].text = 'Там гнездо. И замок там электронный — без наручного терминала из оружейной не открыть. Держись рядом: мои дротики подлатают тебя в бою.';
   // задания акта I
   const q1 = AB.ID.get('QUEST-001').stages.flatMap((s) => s.objectives).find((o) => o.id === 'door');

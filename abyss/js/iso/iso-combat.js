@@ -87,6 +87,7 @@ AB.IsoCombat = (() => {
     if (!c || c.dead) return;
     amount *= mod('damageTaken');
     if (AB.IsoSuit && AB.IsoSuit.suited(m)) amount *= AB.IsoSuit.rig().armor;   // корпус костюма держит удар
+    if (AB.IsoArmor) amount *= 1 - AB.IsoArmor.of(id);                          // №82: надетая броня
     c.hp = Math.max(0, c.hp - amount);
     swings.delete(id);
     AB.Bus.emit('char:hp', { charId: id, hp: c.hp, delta: -amount });
