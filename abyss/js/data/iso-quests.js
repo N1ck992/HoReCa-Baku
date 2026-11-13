@@ -17,7 +17,7 @@ AB.QUESTS.push({
   rooms: ['ROOM-006', 'ROOM-007'],
   stages: [
     { id: 'go', objectives: [
-      { id: 'go', text: 'Мира взламывает замок — защищайте её; биоматериал с мутантов несите ей на приёмник: турели', done: { enemyDead: 'ARENA-001' }, target: { room: 'ROOM-006', x: 1130 } },
+      { id: 'go', text: 'Мира взламывает замок — защищайте её; биоматериал с мутантов несите ей — на её терминале включаются турели', done: { enemyDead: 'ARENA-001' }, target: { room: 'ROOM-006', x: 1130 } },
     ] },
   ],
   reward: {},

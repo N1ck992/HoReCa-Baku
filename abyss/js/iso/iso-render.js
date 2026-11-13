@@ -253,7 +253,7 @@ AB.IsoRender = (() => {
     for (const t of AB.IsoInteract.targets()) if (t.kind === 'item') list.push({ d: t.x + t.y, k: 'i', t });
     // №57: турели оружейной и пушки в зале Колосса
     const lay0 = AB.IsoWorld.layout(), ns0 = AB.IsoNest.state(), bs0 = AB.IsoBoss.state();
-    if (lay0.nest && lay0.nest.turrets) lay0.nest.turrets.forEach((g, i) => list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!ns0 && i < ns0.turrets, big: false }));
+    if (lay0.nest && lay0.nest.turrets) lay0.nest.turrets.forEach((g, i) => list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!ns0 && !!ns0.tur && ns0.tur[i].on, big: g.type === 'heavy' }));
     if (lay0.boss) lay0.boss.cannons.forEach((g, i) => list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!bs0 && bs0.on[i], big: true }));
     list.sort((a, b) => a.d - b.d);
 
@@ -338,7 +338,29 @@ AB.IsoRender = (() => {
   }
   function defenseMarks() {
     const L = AB.IsoWorld.layout(), ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
-    if (ns && !ns.over && L.nest) drawPad(L.nest.pad, `Приёмник: ${AB.IsoStash.count('ITEM-007')} био`, '120,255,170');
+    if (ns && !ns.over && L.nest) {
+      // №83: передать Мире — кольцо вокруг неё, когда Марк несёт биоматериал
+      const carry = AB.IsoStash.count('ITEM-007'), mr = AB.IsoParty.find('CHAR-002'), ld = AB.IsoParty.lead();
+      if (mr && carry) drawPad({ x: mr.x, y: mr.y }, `Отдать Мире: ${carry} био`, '120,255,170');
+      // Марк несёт: светящийся мешок над плечом
+      if (ld && carry) {
+        const c = toScreen(ld.x, ld.y), a = 0.7 + Math.sin(time * 6) * 0.2;
+        ctx.fillStyle = `rgba(120,255,170,${a * 0.35})`; ctx.beginPath(); ctx.arc(c.x - 10, c.y - 70, 13, 0, 7); ctx.fill();
+        ctx.fillStyle = `rgba(80,190,110,${a})`; ctx.beginPath(); ctx.ellipse(c.x - 10, c.y - 70, 8, 7, 0, 0, 7); ctx.fill();
+        ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#c6ffd8'; ctx.fillText(`${carry}/${AB.IsoNest.RULES.carryMax}`, c.x - 10, c.y - 82);
+      }
+      // прочность турелей
+      if (ns.tur) L.nest.turrets.forEach((g, i) => {
+        const t = ns.tur[i], T = AB.IsoNest.RULES.turretTypes[t.type], p = toScreen(g.x + 0.5, g.y + 0.5), w = 30;
+        if (t.on) {
+          ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(p.x - w / 2, p.y - 58, w, 4);
+          ctx.fillStyle = t.hitT ? '#ff6a4a' : '#7fe6a2'; ctx.fillRect(p.x - w / 2, p.y - 58, w * t.hp / T.hp, 4);
+        } else {
+          ctx.font = '600 9px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = t.broken ? '#ff7a5a' : 'rgba(220,220,220,.75)';
+          ctx.fillText(t.broken ? 'РАЗРУШЕНА' : `${T.cost} био`, p.x, p.y - 52);
+        }
+      });
+    }
     if (bs && L.boss) L.boss.cannons.forEach((c, i) => { if (!bs.on[i]) drawPad(c.pad, `Пушка ${bs.bank[i]}/${L.boss.cost}`, '255,200,90'); });
     // прочность дверей лаборатории
     for (const d of AB.IsoInteract.doors()) {

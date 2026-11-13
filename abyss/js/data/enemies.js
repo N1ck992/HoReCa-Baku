@@ -140,4 +140,19 @@ AB.ENEMIES.push({
   spawn: { room: 'ROOM-019', x: 900, patrol: [700, 1100], requires: [] },
 });
 
+// ENEMY-010 — мутант-громила (№83, черновик): медленный и крепкий, бьёт по турелям; с него — 2 биоматериала
+AB.ENEMIES.push({
+  ...MUTANT,
+  id: 'ENEMY-010', name: 'Мутант-громила', pending: true,
+  asset: 'ASSET-ENEMY010-01',
+  scale: 1.35,
+  tint: { flesh: '#6a5a3a', dark: '#2a2014', plate: '#5a4a2a' },
+  hp: 170, damage: 24,
+  speed: { patrol: 45, investigate: 70, chase: 115, retreat: 0 },
+  attack: { range: 64, windup: 0.7, cooldown: 1.4 },
+  behavior: { ...MUTANT.behavior, retreatBelow: 0 },
+  bio: 2, brute: true,
+  carry: null, spawn: null,
+});
+
 AB.ENEMIES.forEach((e) => AB.ID.register(e.id, e));

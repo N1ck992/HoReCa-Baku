@@ -244,7 +244,7 @@ AB.ISO_LAYOUTS['SECTOR-003'] = {
   nest: {
     door: 'K', repairAt: { x: 50.5, y: 18.4 }, pad: { x: 48.5, y: 17.5 },
     doors: ['N2'], flank: 'N1',
-    turrets: [{ x: 44, y: 12 }, { x: 44, y: 16 }],
+    turrets: [{ x: 44, y: 12, type: 'light' }, { x: 44, y: 16, type: 'heavy' }],   // №83: тип турели — RULES.turretTypes
     spawns: [{ x: 22.5, y: 15.5 }, { x: 30.5, y: 16.5 }, { x: 24.5, y: 8.5 }, { x: 36.5, y: 7.5 }],
     start: 'Из лаборатории ломятся мутанты! Мира взламывает замок — держите двери',
     done: 'Замок взломан!',

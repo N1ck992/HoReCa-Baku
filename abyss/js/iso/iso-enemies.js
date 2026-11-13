@@ -175,6 +175,13 @@ AB.IsoEnemies = (() => {
         if (e.nest) {
           e.blockT = (e.blockT || 0) - dt;
           if (e.blockT <= 0) { e.blockT = 0.5; e.blocked = !W().path(e.x, e.y, tg.x, tg.y); }
+          // №83: работающая турель рядом (громила — любая) — ломать её
+          const tu = !e.blocked && AB.IsoNest.turretTarget(e, tg);
+          if (tu) {
+            if (Math.hypot(tu.x - e.x, tu.y - e.y) < d.attack.range / T + 0.7 && e.cooldown <= 0) { e.turret = tu.i; e.hx = tu.x - e.x; e.hy = tu.y - e.y; setState(e, 'ATTACK'); break; }
+            went = stepTo(e, tu.x, tu.y, d.speed.chase / T, dt);
+            break;
+          }
           const b = e.blocked && AB.IsoNest.breach(e);
           if (b) {
             if (Math.hypot(b.x - e.x, b.y - e.y) < 0.6 && e.cooldown <= 0) { e.door = b.key; e.hx = (b.x < e.x ? -1 : 1); e.hy = 0; setState(e, 'ATTACK'); break; }
@@ -186,6 +193,11 @@ AB.IsoEnemies = (() => {
         break;
       }
       case 'ATTACK':
+        if (e.turret != null) {
+          if (!e.hitDone && e.t >= d.attack.windup) { e.hitDone = true; AB.IsoNest.hitTurret(e.turret, d.damage); AB.Bus.emit('iso:enemyStrike', { id: e.id }); }
+          if (e.t > 1.0) { e.cooldown = d.attack.cooldown; e.turret = null; setState(e, 'CHASE'); }
+          break;
+        }
         if (e.door) {
           if (!e.hitDone && e.t >= d.attack.windup) { e.hitDone = true; AB.IsoNest.hitDoor(e.door, d.damage); AB.Bus.emit('iso:enemyStrike', { id: e.id, door: e.door }); }
           if (e.t > 1.0) { e.cooldown = d.attack.cooldown; e.door = null; e.blockT = 0; setState(e, 'CHASE'); }

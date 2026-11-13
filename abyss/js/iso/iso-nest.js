@@ -23,8 +23,17 @@ AB.IsoNest = (() => {
     hackTime: 85,                         // секунд работы Миры у замка
     doorHp: 170,                          // прочность двери из лаборатории
     repairHp: 70, repairTime: 1.5,        // одна починка Марком: +70 за 1,5 с
-    turretCost: 4,                        // биоматериала на одну турель
-    turret: { damage: 34, every: 0.75, range: 10 },
+    turretCost: 3,                        // самая дешёвая турель (для подписей)
+    // №83: биоматериал — типы (ценность в единицах); сколько Марк уносит за раз
+    bioTypes: { 'ITEM-007': { name: 'Биоматериал', value: 1 } },
+    carryMax: 8,
+    // №83: турели — обнаружение, дальность, скорострельность (раз в сек.), урон, прочность, стоимость
+    turretTypes: {
+      light: { name: 'Лёгкая турель', cost: 3, detect: 9, range: 8, every: 0.45, damage: 15, hp: 110 },
+      heavy: { name: 'Тяжёлая турель', cost: 5, detect: 12, range: 11, every: 1.0, damage: 48, hp: 200 },
+    },
+    waveLen: 16,                          // секунд на волну (номер волны — для игрока)
+    brute: { enemy: 'ENEMY-010', from: 3, chance: 0.3 },   // с 3-й волны часть — громилы
     waves: { first: 2, interval: [5, 1.6], batch: [1, 3], alive: [6, 24], ramp: 80 },
   };
   let A = null, done = false, seq = 0;
@@ -45,7 +54,8 @@ AB.IsoNest = (() => {
   function start() {
     if (A || done) return;
     const L = lay();
-    A = { t: 0, prog: 0, kills: 0, next: RULES.waves.first, foes: new Set(), over: false, bank: 0, turrets: 0, resets: 0, fireT: L.turrets.map(() => 0) };
+    A = { t: 0, prog: 0, kills: 0, next: RULES.waves.first, foes: new Set(), over: false, bank: 0, turrets: 0, resets: 0, wave: 1,
+      tur: L.turrets.map((t) => ({ type: t.type || 'light', on: false, broken: false, hp: 0, fireT: 0, hitT: 0 })) };
     // двери лаборатории захлопываются: решётку ломают (у неё прочность), служебная — просто закрыта
     for (const k of [...L.doors, L.flank].filter(Boolean)) {
       const d = doorOf(k);
@@ -66,7 +76,8 @@ AB.IsoNest = (() => {
     const batch = Math.round(w.batch[0] + (w.batch[1] - w.batch[0]) * p), cap = Math.round(w.alive[0] + (w.alive[1] - w.alive[0]) * Math.min(1, A.t / (w.ramp * 1.3)));
     for (let i = 0; i < batch && aliveFoes().length < cap; i++) {
       const sp = L.spawns[Math.floor(Math.random() * L.spawns.length)];
-      const id = `${def().enemy}~n${++seq}`;
+      const B = RULES.brute, brute = A.wave >= B.from && Math.random() < B.chance;
+      const id = `${brute ? B.enemy : def().enemy}~n${++seq}`;
       const e = AB.IsoEnemies.spawn(id, sp.x + (Math.random() - 0.5), sp.y + (Math.random() - 0.5));
       if (!e) continue;
       // половина идёт за Мирой, половина — за Марком; дорогу знают и сквозь двери
@@ -113,37 +124,70 @@ AB.IsoNest = (() => {
   AB.Bus.on('enemy:dead', ({ id }) => {
     if (!A || A.over || !A.foes.has(id)) return;
     A.kills++; AB.Progress.add(def().xp.kill);
-    const e = AB.IsoEnemies.get(id);
-    if (e) AB.IsoInteract.dropAt(AB.IsoWorld.room(e.x, e.y), BIO, 1, e.x, e.y);
+    const e = AB.IsoEnemies.get(id), n = (AB.ID.get(id) || {}).bio || 1;
+    if (e) AB.IsoInteract.dropAt(AB.IsoWorld.room(e.x, e.y), BIO, n, e.x, e.y);
   });
+  // №83: панель Миры — включить турель за биоматериал (или снова запустить разрушенную)
+  const tt = (i) => RULES.turretTypes[A.tur[i].type];
+  function activate(i) {
+    if (!A || A.over) return { ok: false, why: 'Оборона не идёт' };
+    const t = A.tur[i]; if (!t) return { ok: false, why: 'Нет такой турели' };
+    if (t.on) return { ok: false, why: 'Уже работает' };
+    const c = tt(i).cost;
+    if (A.bank < c) return { ok: false, why: `У Миры ${A.bank} био, нужно ${c}` };
+    A.bank -= c; t.on = true; t.broken = false; t.hp = tt(i).hp; t.fireT = 0.3;
+    A.turrets = A.tur.filter((q) => q.on).length;
+    AB.Bus.emit('nest:turret', { n: A.turrets, of: A.tur.length, i, name: tt(i).name });
+    return { ok: true };
+  }
+  // кого из турелей бить мутанту: громила — ближнюю работающую; обычный — если она рядом и ближе героя
+  function turretTarget(e, tg) {
+    if (!A || A.over) return null;
+    const L = lay(), brute = (AB.ID.get(e.id) || {}).brute;
+    let best = null, bd = 1e9;
+    A.tur.forEach((t, i) => {
+      if (!t.on) return;
+      const p = { x: L.turrets[i].x + 0.5, y: L.turrets[i].y + 0.5, i }, d = Math.hypot(p.x - e.x, p.y - e.y);
+      if (!brute && (d > 2.5 || (tg && Math.hypot(tg.x - e.x, tg.y - e.y) < d))) return;
+      if (d < bd) { bd = d; best = p; }
+    });
+    return best;
+  }
+  function hitTurret(i, amount) {
+    const t = A && A.tur[i]; if (!t || !t.on) return;
+    t.hp = Math.max(0, t.hp - amount); t.hitT = 0.25;
+    if (t.hp <= 0) { t.on = false; t.broken = true; A.turrets = A.tur.filter((q) => q.on).length; AB.Bus.emit('nest:turretDown', { i, name: tt(i).name }); }
+  }
   function bioTick() {
     const l = AB.IsoParty.lead(), L = lay();
-    // подобрать биоматериал, просто пройдя рядом
+    // подобрать биоматериал, просто пройдя рядом (Марк несёт не больше carryMax)
     for (const t of AB.IsoInteract.targets()) {
-      if (t.kind === 'item' && t.ref.item === BIO && Math.hypot(t.x - l.x, t.y - l.y) < 0.9) AB.IsoInteract.act(t);
-    }
-    // приёмник у Миры: встал — весь биоматериал ей
-    const n = AB.IsoStash.count(BIO);
-    if (n && Math.hypot(l.x - L.pad.x, l.y - L.pad.y) < 0.75) {
-      AB.IsoStash.remove(BIO, n);
-      A.bank += n;
-      AB.Bus.emit('nest:bio', { n, bank: A.bank });
-      while (A.turrets < L.turrets.length && A.bank >= RULES.turretCost) {
-        A.bank -= RULES.turretCost; A.turrets++;
-        AB.Bus.emit('nest:turret', { n: A.turrets, of: L.turrets.length });
+      if (t.kind === 'item' && RULES.bioTypes[t.ref.item] && Math.hypot(t.x - l.x, t.y - l.y) < 0.9) {
+        if (AB.IsoStash.count(t.ref.item) >= RULES.carryMax) { if (!A.fullSaid) { A.fullSaid = true; AB.Bus.emit('nest:full', {}); } continue; }
+        AB.IsoInteract.act(t); A.fullSaid = false;
       }
     }
+    // передать Мире: подойти к ней (или встать на приёмник у замка)
+    const m = mira(), near = (m && Math.hypot(l.x - m.x, l.y - m.y) < 1.7) || Math.hypot(l.x - L.pad.x, l.y - L.pad.y) < 0.75;
+    let n = 0;
+    for (const [item, bt] of Object.entries(RULES.bioTypes)) { const k = AB.IsoStash.count(item); if (k && near) { AB.IsoStash.remove(item, k); n += k * bt.value; } }
+    if (n) { A.bank += n; AB.Bus.emit('nest:bio', { n, bank: A.bank }); }
   }
   function turretTick(dt) {
-    const L = lay(), T = RULES.turret;
-    for (let i = 0; i < A.turrets; i++) {
-      A.fireT[i] -= dt;
-      if (A.fireT[i] > 0) continue;
+    const L = lay();
+    for (let i = 0; i < A.tur.length; i++) {
+      const t = A.tur[i], T = tt(i);
+      t.hitT = Math.max(0, t.hitT - dt);
+      if (!t.on) continue;
+      t.fireT -= dt;
+      if (t.fireT > 0) continue;
       const tp = { x: L.turrets[i].x + 0.5, y: L.turrets[i].y + 0.5 };
-      let best = null, bd = T.range;
+      // замечает в радиусе обнаружения, стреляет в пределах дальности
+      let best = null, bd = T.detect;
       for (const e of aliveFoes()) { const d = Math.hypot(e.x - tp.x, e.y - tp.y); if (d < bd && AB.IsoWorld.see(tp.x, tp.y, e.x, e.y, 0.05)) { bd = d; best = e; } }
-      if (!best) { A.fireT[i] = 0.2; continue; }
-      A.fireT[i] = T.every;
+      t.aim = best ? best.id : null;
+      if (!best || bd > T.range) { t.fireT = 0.2; continue; }
+      t.fireT = T.every;
       AB.IsoEnemies.damage(best.id, T.damage, null, 'ranged');
       AB.Bus.emit('iso:shot', { from: { x: tp.x, y: tp.y - 0.4 }, to: { x: best.x, y: best.y }, landed: true, energy: true });
     }
@@ -201,6 +245,8 @@ AB.IsoNest = (() => {
     if (!A.over) flankTick();
     if (A.over) return;
     A.t += dt; A.next -= dt;
+    const w = 1 + Math.floor(A.t / RULES.waveLen);
+    if (w !== A.wave) { A.wave = w; AB.Bus.emit('nest:wave', { n: w }); }
     if (A.next <= 0) spawnWave();
     hackTick(dt);
     bioTick();
@@ -208,7 +254,7 @@ AB.IsoNest = (() => {
   }
 
   return {
-    update, start, breach, hitDoor, repairDoor, underAttack, RULES,
+    update, start, breach, hitDoor, repairDoor, underAttack, RULES, activate, turretTarget, hitTurret,
     markDone() { done = true; },   // контрольная точка после обороны (iso-game.js)
     config: () => lay() || {},
     active: () => !!A && !A.over, state: () => A, isDone: () => done,

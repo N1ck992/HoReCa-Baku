@@ -93,10 +93,10 @@
     document.body.classList.toggle('nest-on', !!(ns || bs));
     let nh = '';
     if (ns) {
-      const P = AB.Progress, bio = AB.IsoStash.count('ITEM-007'), cost = AB.IsoNest.RULES.turretCost, tn = AB.IsoNest.config().turrets.length;
+      const P = AB.Progress, bio = AB.IsoStash.count('ITEM-007'), tn = AB.IsoNest.config().turrets.length;
       nh = `<b>Гнездо</b><span class="t">${ns.over ? 'Затихли' : `${Math.floor(ns.t / 60)}:${String(Math.floor(ns.t % 60)).padStart(2, '0')}`}</span>`
         + `<span class="rp">Взлом <u><s style="width:${Math.round(ns.prog * 100)}%"></s></u> ${Math.round(ns.prog * 100)}%</span>`
-        + `<span class="k">Био: ${bio} · у Миры ${ns.bank}/${cost} · турели ${ns.turrets}/${tn}</span>`
+        + `<span class="k">Волна ${ns.wave} · несу био ${bio}/${AB.IsoNest.RULES.carryMax} · у Миры ${ns.bank} · турели ${ns.turrets}/${tn}</span>`
         + `<span class="k">Убито: ${ns.kills}</span><span class="xp">Ур. ${P.level()} <em><i style="width:${Math.round((P.xp() / P.need()) * 100)}%"></i></em></span>`;
     } else if (bs) {
       const L = AB.IsoBoss.config(), col = AB.IsoEnemies.get(L.enemy), hp = col ? Math.round((col.hp / AB.ID.get(L.enemy).hp) * 100) : 0;
@@ -104,14 +104,37 @@
         + `<span class="k">Био: ${AB.IsoStash.count('ITEM-007')} · пушки ${bs.on.filter(Boolean).length}/${L.cannons.length} (${bs.bank.map((b, i) => (bs.on[i] ? '✓' : `${b}/${L.cost}`)).join(' · ')})</span>`;
     }
     if (nh && nh !== lastNest) { $('#iso-nest').innerHTML = nh; lastNest = nh; }
+    turretPanel(ns);
   }
-  let lastQuest = '', lastNest = '';
+  let lastQuest = '', lastNest = '', lastTur = '';
+  // №83: терминал Миры — турели: что даёт каждая, сколько стоит, кнопка включить
+  function turretPanel(ns) {
+    const box = $('#iso-tur'); if (!box) return;
+    box.hidden = !ns || ns.over;
+    if (box.hidden) return;
+    const R = AB.IsoNest.RULES;
+    const rows = ns.tur.map((t, i) => {
+      const T = R.turretTypes[t.type], hp = t.on ? Math.round((t.hp / T.hp) * 100) : 0;
+      const st = t.on ? `<span class="ok">работает · ${hp}%</span><u><s style="width:${hp}%"></s></u>` : t.broken ? '<span class="bad">разрушена</span>' : '<span class="off">выключена</span>';
+      const btn = t.on ? '' : `<button data-tur="${i}" ${ns.bank >= T.cost ? '' : 'disabled'}>${t.broken ? 'Запустить снова' : 'Включить'} · ${T.cost} био</button>`;
+      return `<div class="tu"><b>${T.name}</b>${st}<i>урон ${T.damage} · ${(1 / T.every).toFixed(1)}/с · дальность ${T.range} · видит ${T.detect} · прочность ${T.hp}</i>${btn}</div>`;
+    }).join('');
+    const h = `<div class="th">Терминал Миры <span>био: <b>${ns.bank}</b></span></div>${rows}<div class="tn">Убивай мутантов, собирай биоматериал и неси Мире — подойди к ней</div>`;
+    if (h !== lastTur) { box.innerHTML = h; lastTur = h; }
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-tur]'); if (!b) return;
+    const r = AB.IsoNest.activate(+b.dataset.tur); if (!r.ok) toast(r.why, 'info');
+  });
+  AB.Bus.on('nest:wave', ({ n }) => toast(`Волна ${n}!${n === AB.IsoNest.RULES.brute.from ? ' Идут громилы — они ломают турели' : ''}`, 'bad'));
+  AB.Bus.on('nest:full', () => toast(`Руки заняты: больше ${AB.IsoNest.RULES.carryMax} био не унести — отнеси Мире`, 'info'));
+  AB.Bus.on('nest:turretDown', ({ name }) => toast(`${name} разрушена! Мира может запустить её снова`, 'bad'));
   AB.Bus.on('nest:start', () => toast(AB.IsoNest.config().start || 'Гнездо проснулось!', 'bad'));
   AB.Bus.on('nest:won', () => toast(`${AB.IsoNest.config().done || ''} Гнездо затихло`, 'good'));
   AB.Bus.on('nest:reset', () => toast('Миру ударили — взлом сброшен, всё заново!', 'bad'));
   AB.Bus.on('nest:breach', () => toast('Дверь выбита! Теперь они идут без остановки', 'bad'));
-  AB.Bus.on('nest:bio', ({ n, bank }) => toast(`Мира: биоматериал +${n} (${bank}/${AB.IsoNest.RULES.turretCost})`, 'good'));
-  AB.Bus.on('nest:turret', ({ n, of }) => toast(`Турель ${n} из ${of} включена!`, 'good'));
+  AB.Bus.on('nest:bio', ({ n, bank }) => toast(`Мира: биоматериал +${n} — всего ${bank}. Включай турели на её терминале`, 'good'));
+  AB.Bus.on('nest:turret', ({ name, n, of }) => toast(`${name || 'Турель'} включена (${n}/${of})`, 'good'));
   AB.Bus.on('boss:start', () => toast('Плазма его почти не берёт! Биоматериал с выводка — на приёмники у пушек', 'bad'));
   AB.Bus.on('boss:bio', ({ bank, cost }) => toast(`Пушка: биоматериал ${bank}/${cost}`, 'info'));
   AB.Bus.on('boss:cannon', ({ n, of }) => toast(`Пушка ${n} из ${of} ожила!`, 'good'));
