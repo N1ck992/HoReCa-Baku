@@ -13,8 +13,8 @@ AB.IsoGuard = (() => {
     hitBack: 0.12,                          // удар по Мире — минус 12% настройки
     at: { x: 79.5, y: 46.6 },               // где стоит Мира (у пульта стыковки)
     spawns: [{ x: 63.5, y: 55.5 }, { x: 70.5, y: 56.3 }, { x: 77.5, y: 56.3 }, { x: 85.0, y: 50.5 }, { x: 63.0, y: 47.5 }],
-    waves: { first: 3, interval: [6, 3.2], batch: [1, 2], alive: [3, 8], ramp: 70 },
-    brute: { enemy: 'ENEMY-010', from: 25, chance: 0.25 },
+    waves: { first: 4, interval: [7, 4.5], batch: [1, 2], alive: [3, 6], ramp: 70 },
+    brute: { enemy: 'ENEMY-010', from: 35, chance: 0.2 },
     waveLen: 15,
   };
   let G = null, done = false, seq = 0;
