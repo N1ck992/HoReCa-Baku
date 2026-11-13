@@ -120,9 +120,206 @@
     { id: 'D', name: 'Преследователь', base: 'assets/enemy002/3q/front/' },
     { id: 'E', name: 'Преследователь · сетка', base: 'assets/enemy002/3q/front/', mesh: true },
     // №100: 3D-манекен без графики — объёмные детали на скелете, поворачивается в любую сторону
-    { id: 'F', name: '3D-манекен', three: true }];
+    { id: 'F', name: '3D-манекен', three: true },
+    // №101: 3D-модель преследователя (GLB автора) — детали привязаны к скелету манекена по названиям
+    { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb', height: 2.0 }];
+  // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
+  // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
+  // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
+  // Грани, повёрнутые от камеры, не рисуются; остальные — от дальних к ближним, с освещением.
+  const Mini3D = (() => {
+    const ZT = 39, PER_M = 2.36;                       // клеток на метр: рост ~1,85 м = рост 2D-героев на экране
+    const VIEW = [0.612, 0.612, 0.5];                  // к камере (изометрия 2:1)
+    const LIGHT = (() => { const v = [-0.35, 0.55, 0.76], l = Math.hypot(...v); return v.map((c) => c / l); })();
+    const COL = { body: [178, 184, 194], joint: [120, 128, 140], head: [196, 202, 210], visor: [60, 210, 235], dark: [90, 96, 106] };
+    // 4×4 по столбцам не нужно — храним 3×4 (поворот + сдвиг)
+    const I = () => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+    const mul = (a, b) => [
+      a[0] * b[0] + a[1] * b[4] + a[2] * b[8], a[0] * b[1] + a[1] * b[5] + a[2] * b[9], a[0] * b[2] + a[1] * b[6] + a[2] * b[10], a[0] * b[3] + a[1] * b[7] + a[2] * b[11] + a[3],
+      a[4] * b[0] + a[5] * b[4] + a[6] * b[8], a[4] * b[1] + a[5] * b[5] + a[6] * b[9], a[4] * b[2] + a[5] * b[6] + a[6] * b[10], a[4] * b[3] + a[5] * b[7] + a[6] * b[11] + a[7],
+      a[8] * b[0] + a[9] * b[4] + a[10] * b[8], a[8] * b[1] + a[9] * b[5] + a[10] * b[9], a[8] * b[2] + a[9] * b[6] + a[10] * b[10], a[8] * b[3] + a[9] * b[7] + a[10] * b[11] + a[11]];
+    const Tr = (x, y, z) => [1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z];
+    const Rz = (t) => { const c = Math.cos(t), s = Math.sin(t); return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0]; };
+    const Ry = (t) => { const c = Math.cos(t), s = Math.sin(t); return [c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0]; };
+    const Rx = (t) => { const c = Math.cos(t), s = Math.sin(t); return [1, 0, 0, 0, 0, c, -s, 0, 0, s, c, 0]; };
+    const ap = (m, p) => [m[0] * p[0] + m[1] * p[1] + m[2] * p[2] + m[3], m[4] * p[0] + m[5] * p[1] + m[6] * p[2] + m[7], m[8] * p[0] + m[9] * p[1] + m[10] * p[2] + m[11]];
+    const D = Math.PI / 180;
+    // вперёд по ходу = минус поворот вокруг Y (так конечность, висящая вниз, уходит носком вперёд)
+    const fwd = (deg) => Ry(-deg * D);
+    // скелет: сустав → [родитель, сдвиг от родителя]
+    const SK = {
+      pelvis: [null, [0, 0, 0.95]], spine: ['pelvis', [0, 0, 0.08]], neck: ['spine', [0, 0, 0.52]],
+      sh_l: ['spine', [0, 0.23, 0.44]], el_l: ['sh_l', [0, 0, -0.3]], wr_l: ['el_l', [0, 0, -0.27]],
+      sh_r: ['spine', [0, -0.23, 0.44]], el_r: ['sh_r', [0, 0, -0.3]], wr_r: ['el_r', [0, 0, -0.27]],
+      hip_l: ['pelvis', [0, 0.11, -0.03]], kn_l: ['hip_l', [0, 0, -0.44]], an_l: ['kn_l', [0, 0, -0.43]],
+      hip_r: ['pelvis', [0, -0.11, -0.03]], kn_r: ['hip_r', [0, 0, -0.44]], an_r: ['kn_r', [0, 0, -0.43]],
+    };
+    // коробки: сустав, центр, размеры (вперёд, вбок, вверх), цвет
+    const BOX = [
+      ['pelvis', [0, 0, 0.02], [0.2, 0.32, 0.16], 'dark'],
+      ['spine', [0, 0, 0.27], [0.22, 0.38, 0.42], 'body'],
+      ['neck', [0, 0, 0.04], [0.08, 0.08, 0.08], 'joint'],
+      ['neck', [0.005, 0, 0.17], [0.2, 0.18, 0.24], 'head'],
+      ['neck', [0.1, 0, 0.19], [0.03, 0.14, 0.05], 'visor'],
+      ['sh_l', [0, 0, -0.14], [0.1, 0.1, 0.3], 'body'], ['el_l', [0, 0, -0.13], [0.085, 0.085, 0.27], 'body'], ['wr_l', [0.01, 0, -0.06], [0.07, 0.04, 0.12], 'joint'],
+      ['sh_r', [0, 0, -0.14], [0.1, 0.1, 0.3], 'body'], ['el_r', [0, 0, -0.13], [0.085, 0.085, 0.27], 'body'], ['wr_r', [0.01, 0, -0.06], [0.07, 0.04, 0.12], 'joint'],
+      ['hip_l', [0, 0, -0.21], [0.13, 0.13, 0.44], 'body'], ['kn_l', [0, 0, -0.21], [0.11, 0.11, 0.43], 'body'], ['an_l', [0.06, 0, -0.04], [0.24, 0.1, 0.08], 'dark'],
+      ['hip_r', [0, 0, -0.21], [0.13, 0.13, 0.44], 'body'], ['kn_r', [0, 0, -0.21], [0.11, 0.11, 0.43], 'body'], ['an_r', [0.06, 0, -0.04], [0.24, 0.1, 0.08], 'dark'],
+    ];
+    // поза (градусы): ходьба/бег формулами; колено гнётся назад голенью = вперёд коленом
+    function pose(h, t) {
+      const s = Math.min(1, h.speed / 1.6), r = h.run ? 1 : 0, ph = h.phase, P = {};
+      const breathe = Math.sin(t * 2.2) * (1 - s);
+      for (const [sd, off] of [['l', 0], ['r', Math.PI]]) {
+        const sw = Math.sin(ph + off), swing = Math.max(0, Math.cos(ph + off));     // нога идёт вперёд — колено согнуто
+        const thigh = (24 + 14 * r) * sw * s;
+        const knee = (6 + (26 + 50 * r) * swing) * s;
+        P['hip_' + sd] = fwd(thigh);
+        P['kn_' + sd] = fwd(-knee);
+        P['an_' + sd] = fwd(-(thigh - knee) * 0.6);
+        const arm = -(20 + 16 * r) * sw * s;
+        P['sh_' + sd] = mul(fwd(arm + breathe * 1.5), Rx((sd === 'l' ? 1 : -1) * 6 * D));
+        P['el_' + sd] = fwd(14 + 18 * s + 55 * r * s);
+      }
+      if (h.wave > 0) { const w = Math.min(1, h.wave * 2, (2.2 - h.wave) * 3); P.sh_r = mul(Rx(-150 * w * D), fwd(10)); P.el_r = Rx((-30 - Math.sin(t * 12) * 25) * w * D); }
+      P.spine = fwd((3 + 9 * r) * s + Math.sin(t * 2.2) * 0.6);
+      P.neck = fwd(-(2 + 6 * r) * s);
+      P.pelvis = Rz(Math.sin(ph) * 5 * D * s);
+      P.bob = -Math.abs(Math.cos(ph)) * (0.025 + 0.03 * r) * s + breathe * 0.004;
+      return P;
+    }
+    function draw(ctx, h, t, dt) {
+      if (h.kind.glb && !h.kind.model) return;
+      if (h.yaw == null) h.yaw = h.yawT == null ? Math.PI / 4 : h.yawT;
+      if (h.yawT != null) { let d = h.yawT - h.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; h.yaw += d * Math.min(1, dt * 12); }
+      const P = pose(h, t);
+      const root = mul(Tr(h.x, h.y, P.bob * PER_M), mul(Rz(h.yaw), [PER_M, 0, 0, 0, 0, PER_M, 0, 0, 0, 0, PER_M, 0]));
+      const M = {};
+      const md = h.kind.model, sk = md ? md.SK : SK;
+      if (md) P.cloak = fwd(-((5 + 22 * (h.run ? 1 : 0)) * Math.min(1, h.speed / 1.6) + Math.sin(t * 3.1) * 2.5 + Math.sin(h.phase * 2) * 3 * Math.min(1, h.speed / 1.6)));   // плащ отлетает назад
+      for (const [j, [par, off]] of Object.entries(sk)) M[j] = mul(mul(par ? M[par] : root, Tr(...off)), P[j] || I());
+      if (md) { drawModel(ctx, md, M); return; }
+      const faces = [];
+      for (const [j, c, sz, col] of BOX) {
+        const m = M[j], hx = sz[0] / 2, hy = sz[1] / 2, hz = sz[2] / 2;
+        const v = [];
+        for (const dx of [-1, 1]) for (const dy of [-1, 1]) for (const dz of [-1, 1]) v.push(ap(m, [c[0] + dx * hx, c[1] + dy * hy, c[2] + dz * hz]));
+        // индексы углов: (dx,dy,dz) → ((dx+1)/2)*4 + ((dy+1)/2)*2 + (dz+1)/2
+        for (const q of [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]) {
+          const [a, b, cc] = [v[q[0]], v[q[1]], v[q[2]]];
+          const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [cc[0] - a[0], cc[1] - a[1], cc[2] - a[2]];
+          let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+          const ln = Math.hypot(...n) || 1; n = n.map((x) => x / ln);
+          // наружу от центра коробки
+          const ctr = q.reduce((acc, i) => acc.map((x, k) => x + v[i][k] / 4), [0, 0, 0]), bc = ap(m, c);
+          if ((ctr[0] - bc[0]) * n[0] + (ctr[1] - bc[1]) * n[1] + (ctr[2] - bc[2]) * n[2] < 0) n = n.map((x) => -x);
+          if (n[0] * VIEW[0] + n[1] * VIEW[1] + n[2] * VIEW[2] <= 0.001) continue;
+          faces.push({ pts: q.map((i) => v[i]), d: ctr[0] * VIEW[0] + ctr[1] * VIEW[1] + ctr[2] * VIEW[2], n, col });
+        }
+      }
+      faces.sort((a, b) => a.d - b.d);
+      for (const f of faces) {
+        const k = 0.42 + 0.58 * Math.max(0, f.n[0] * LIGHT[0] + f.n[1] * LIGHT[1] + f.n[2] * LIGHT[2]);
+        const [r, g, b] = COL[f.col], glow = f.col === 'visor';
+        ctx.fillStyle = glow ? `rgb(${r},${g},${b})` : `rgb(${r * k | 0},${g * k | 0},${b * k | 0})`;
+        ctx.beginPath();
+        f.pts.forEach((p, i) => { const x = (p[0] - p[1]) * TW / 2, y = (p[0] + p[1]) * TH / 2 - p[2] * ZT; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 0.6; ctx.stroke();
+      }
+    }
+    // ---------- №101: модель GLB — чтение без библиотек, детали жёстко на костях ----------
+    // Оси файла: Z — вверх, вперёд — −Y, детали «_L» — на −X. В наших осях: вперёд = −y, влево = +x, вверх = z.
+    const RULES = [
+      [/^(boot|boot_toecap)_([LR])$/, 'an'], [/^(shin|shin_armor|shin_trim)_([LR])$/, 'kn'], [/^knee_([LR])$/, 'kn'], [/^(thigh|thigh_plate|thigh_edge)_([LR])$/, 'hip'],
+      [/^(shoulder_joint|shoulder_plate|upper_arm|upper_arm_plate)_([LR])$/, 'sh'], [/^elbow_([LR])$/, 'el'], [/^(forearm|forearm_plate)_([LR])$/, 'el'], [/^(hand|finger)_([LR])\d?$/, 'wr'],
+      [/^(pelvis_core|belt|belt_pouch)/, 'pelvis'], [/^(neck|skull|jaw|eye_socket|red_eye|other_socket|teeth|ear_)/, 'neck'],
+      [/^(cloak_tatter|cloak_side)/, 'cloak'], [/^rifle_/, 'wr_l'],
+    ];
+    const side = (L) => (L === 'L' ? 'r' : 'l');      // «_L» файла (−X) — у нас правая сторона (−Y)
+    function boneOf(name) {
+      for (const [re, b] of RULES) { const m = name.match(re); if (m) { if (b.includes('_')) return b; const sd = m[m.length - 1]; return ['pelvis', 'neck', 'cloak'].includes(b) ? b : `${b}_${side(sd)}`; } }
+      return 'spine';                                  // торс, грудь, рёбра, ремни, накидка, заклёпки
+    }
+    async function load(url, height) {
+      const buf = await (await fetch(url)).arrayBuffer(), dv = new DataView(buf);
+      const jl = dv.getUint32(12, true), J = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl)));
+      const binOff = 20 + jl + 8;
+      const acc = (i) => {
+        const a = J.accessors[i], bv = J.bufferViews[a.bufferView], off = binOff + (bv.byteOffset || 0) + (a.byteOffset || 0);
+        const n = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[a.type] * a.count;
+        const T = { 5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5121: Uint8Array }[a.componentType];
+        return new T(buf.slice(off, off + n * T.BYTES_PER_ELEMENT));
+      };
+      let top = -1e9, bot = 1e9;
+      const meshes = J.meshes.map((m) => { const p = m.primitives[0], pos = acc(p.attributes.POSITION); for (let i = 2; i < pos.length; i += 3) { top = Math.max(top, pos[i]); bot = Math.min(bot, pos[i]); } return { name: m.name, pos, col: p.attributes.COLOR_0 != null ? acc(p.attributes.COLOR_0) : null, idx: p.indices != null ? acc(p.indices) : null }; });
+      const k = height / (top - bot);
+      const conv = (x, y, z) => [-y * k, x * k, (z - bot) * k];
+      const box = {};
+      for (const m of meshes) {
+        let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+        for (let i = 0; i < m.pos.length; i += 3) { const v = conv(m.pos[i], m.pos[i + 1], m.pos[i + 2]); for (let c = 0; c < 3; c++) { mn[c] = Math.min(mn[c], v[c]); mx[c] = Math.max(mx[c], v[c]); } }
+        box[m.name] = { mn, mx, c: mn.map((v, c) => (v + mx[c]) / 2) };
+      }
+      // суставы — по габаритам деталей
+      const R = {};
+      const B = (n) => box[n];
+      R.pelvis = B('pelvis_core').c;
+      R.spine = [B('torso_frame').c[0], B('torso_frame').c[1], B('torso_frame').mn[2] + 0.04];
+      R.neck = [B('neck').c[0], B('neck').c[1], B('neck').mn[2]];
+      R.cloak = [B('mantle').c[0], B('mantle').c[1], B('mantle').mx[2] - 0.05];
+      for (const [F, sd] of [['L', 'r'], ['R', 'l']]) {
+        R['hip_' + sd] = [B('thigh_' + F).c[0], B('thigh_' + F).c[1], B('thigh_' + F).mx[2] - 0.04];
+        R['kn_' + sd] = B('knee_' + F).c;
+        R['an_' + sd] = [B('shin_' + F).c[0], B('shin_' + F).c[1], B('shin_' + F).mn[2] + 0.02];
+        R['sh_' + sd] = B('shoulder_joint_' + F).c;
+        R['el_' + sd] = B('elbow_' + F).c;
+        R['wr_' + sd] = [B('forearm_' + F).c[0], B('forearm_' + F).c[1], B('forearm_' + F).mn[2] + 0.02];
+      }
+      const PAR = { pelvis: null, spine: 'pelvis', neck: 'spine', cloak: 'spine', sh_l: 'spine', el_l: 'sh_l', wr_l: 'el_l', sh_r: 'spine', el_r: 'sh_r', wr_r: 'el_r', hip_l: 'pelvis', kn_l: 'hip_l', an_l: 'kn_l', hip_r: 'pelvis', kn_r: 'hip_r', an_r: 'kn_r' };
+      const SKm = {};
+      for (const [j, p] of Object.entries(PAR)) SKm[j] = [p, p ? R[j].map((v, c) => v - R[p][c]) : R[j]];
+      // треугольники: кость, вершины относительно сустава, цвет
+      const tris = [];
+      for (const m of meshes) {
+        const bn = boneOf(m.name), o = R[bn], n = m.idx ? m.idx.length : m.pos.length / 3;
+        for (let t = 0; t < n; t += 3) {
+          const ids = m.idx ? [m.idx[t], m.idx[t + 1], m.idx[t + 2]] : [t, t + 1, t + 2];
+          const v = ids.map((i) => { const p = conv(m.pos[i * 3], m.pos[i * 3 + 1], m.pos[i * 3 + 2]); return [p[0] - o[0], p[1] - o[1], p[2] - o[2]]; });
+          let col = [150, 150, 150];
+          if (m.col) col = [0, 1, 2].map((c) => ids.reduce((a, i) => a + m.col[i * 4 + c], 0) / 3);
+          tris.push({ bn, v, col, glow: /red_eye|red_lamp/.test(m.name) });
+        }
+      }
+      return { SK: SKm, tris, count: tris.length };
+    }
+    function drawModel(ctx, md, M) {
+      const out = [];
+      for (const t of md.tris) {
+        const m = M[t.bn]; if (!m) continue;
+        const a = ap(m, t.v[0]), b = ap(m, t.v[1]), c = ap(m, t.v[2]);
+        const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], ln = Math.hypot(n[0], n[1], n[2]) || 1;
+        const vis = (n[0] * VIEW[0] + n[1] * VIEW[1] + n[2] * VIEW[2]) / ln;
+        if (vis <= 0) continue;
+        const d = (a[0] + b[0] + c[0]) * VIEW[0] + (a[1] + b[1] + c[1]) * VIEW[1] + (a[2] + b[2] + c[2]) * VIEW[2];
+        out.push({ a, b, c, d, l: (n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]) / ln, t });
+      }
+      out.sort((p, q) => p.d - q.d);
+      const X = (p) => (p[0] - p[1]) * TW / 2, Y = (p) => (p[0] + p[1]) * TH / 2 - p[2] * ZT;
+      ctx.lineJoin = 'round'; ctx.lineWidth = 0.7;
+      for (const f of out) {
+        const k = f.t.glow ? 1.25 : 0.4 + 0.75 * Math.max(0, f.l), [r, g, b] = f.t.col;
+        const st = `rgb(${Math.min(255, r * k) | 0},${Math.min(255, g * k) | 0},${Math.min(255, b * k) | 0})`;
+        ctx.fillStyle = st; ctx.strokeStyle = st;
+        ctx.beginPath(); ctx.moveTo(X(f.a), Y(f.a)); ctx.lineTo(X(f.b), Y(f.b)); ctx.lineTo(X(f.c), Y(f.c)); ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+    }
+    return { draw, load };
+  })();
+
   for (const k of KINDS) {
-    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; continue; }
+    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); continue; }
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
     await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));
@@ -586,110 +783,6 @@
     ctx.fillStyle = top; ctx.beginPath(); ctx.moveTo(A.x, A.y - h); ctx.lineTo(Bp.x, Bp.y - h); ctx.lineTo(C.x, C.y - h); ctx.lineTo(D.x, D.y - h); ctx.fill();
   }
   let last = performance.now(), T = 0;
-  // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
-  // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
-  // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
-  // Грани, повёрнутые от камеры, не рисуются; остальные — от дальних к ближним, с освещением.
-  const Mini3D = (() => {
-    const ZT = 39, PER_M = 2.36;                       // клеток на метр: рост ~1,85 м = рост 2D-героев на экране
-    const VIEW = [0.612, 0.612, 0.5];                  // к камере (изометрия 2:1)
-    const LIGHT = (() => { const v = [-0.35, 0.55, 0.76], l = Math.hypot(...v); return v.map((c) => c / l); })();
-    const COL = { body: [178, 184, 194], joint: [120, 128, 140], head: [196, 202, 210], visor: [60, 210, 235], dark: [90, 96, 106] };
-    // 4×4 по столбцам не нужно — храним 3×4 (поворот + сдвиг)
-    const I = () => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
-    const mul = (a, b) => [
-      a[0] * b[0] + a[1] * b[4] + a[2] * b[8], a[0] * b[1] + a[1] * b[5] + a[2] * b[9], a[0] * b[2] + a[1] * b[6] + a[2] * b[10], a[0] * b[3] + a[1] * b[7] + a[2] * b[11] + a[3],
-      a[4] * b[0] + a[5] * b[4] + a[6] * b[8], a[4] * b[1] + a[5] * b[5] + a[6] * b[9], a[4] * b[2] + a[5] * b[6] + a[6] * b[10], a[4] * b[3] + a[5] * b[7] + a[6] * b[11] + a[7],
-      a[8] * b[0] + a[9] * b[4] + a[10] * b[8], a[8] * b[1] + a[9] * b[5] + a[10] * b[9], a[8] * b[2] + a[9] * b[6] + a[10] * b[10], a[8] * b[3] + a[9] * b[7] + a[10] * b[11] + a[11]];
-    const Tr = (x, y, z) => [1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z];
-    const Rz = (t) => { const c = Math.cos(t), s = Math.sin(t); return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0]; };
-    const Ry = (t) => { const c = Math.cos(t), s = Math.sin(t); return [c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0]; };
-    const Rx = (t) => { const c = Math.cos(t), s = Math.sin(t); return [1, 0, 0, 0, 0, c, -s, 0, 0, s, c, 0]; };
-    const ap = (m, p) => [m[0] * p[0] + m[1] * p[1] + m[2] * p[2] + m[3], m[4] * p[0] + m[5] * p[1] + m[6] * p[2] + m[7], m[8] * p[0] + m[9] * p[1] + m[10] * p[2] + m[11]];
-    const D = Math.PI / 180;
-    // вперёд по ходу = минус поворот вокруг Y (так конечность, висящая вниз, уходит носком вперёд)
-    const fwd = (deg) => Ry(-deg * D);
-    // скелет: сустав → [родитель, сдвиг от родителя]
-    const SK = {
-      pelvis: [null, [0, 0, 0.95]], spine: ['pelvis', [0, 0, 0.08]], neck: ['spine', [0, 0, 0.52]],
-      sh_l: ['spine', [0, 0.23, 0.44]], el_l: ['sh_l', [0, 0, -0.3]], wr_l: ['el_l', [0, 0, -0.27]],
-      sh_r: ['spine', [0, -0.23, 0.44]], el_r: ['sh_r', [0, 0, -0.3]], wr_r: ['el_r', [0, 0, -0.27]],
-      hip_l: ['pelvis', [0, 0.11, -0.03]], kn_l: ['hip_l', [0, 0, -0.44]], an_l: ['kn_l', [0, 0, -0.43]],
-      hip_r: ['pelvis', [0, -0.11, -0.03]], kn_r: ['hip_r', [0, 0, -0.44]], an_r: ['kn_r', [0, 0, -0.43]],
-    };
-    // коробки: сустав, центр, размеры (вперёд, вбок, вверх), цвет
-    const BOX = [
-      ['pelvis', [0, 0, 0.02], [0.2, 0.32, 0.16], 'dark'],
-      ['spine', [0, 0, 0.27], [0.22, 0.38, 0.42], 'body'],
-      ['neck', [0, 0, 0.04], [0.08, 0.08, 0.08], 'joint'],
-      ['neck', [0.005, 0, 0.17], [0.2, 0.18, 0.24], 'head'],
-      ['neck', [0.1, 0, 0.19], [0.03, 0.14, 0.05], 'visor'],
-      ['sh_l', [0, 0, -0.14], [0.1, 0.1, 0.3], 'body'], ['el_l', [0, 0, -0.13], [0.085, 0.085, 0.27], 'body'], ['wr_l', [0.01, 0, -0.06], [0.07, 0.04, 0.12], 'joint'],
-      ['sh_r', [0, 0, -0.14], [0.1, 0.1, 0.3], 'body'], ['el_r', [0, 0, -0.13], [0.085, 0.085, 0.27], 'body'], ['wr_r', [0.01, 0, -0.06], [0.07, 0.04, 0.12], 'joint'],
-      ['hip_l', [0, 0, -0.21], [0.13, 0.13, 0.44], 'body'], ['kn_l', [0, 0, -0.21], [0.11, 0.11, 0.43], 'body'], ['an_l', [0.06, 0, -0.04], [0.24, 0.1, 0.08], 'dark'],
-      ['hip_r', [0, 0, -0.21], [0.13, 0.13, 0.44], 'body'], ['kn_r', [0, 0, -0.21], [0.11, 0.11, 0.43], 'body'], ['an_r', [0.06, 0, -0.04], [0.24, 0.1, 0.08], 'dark'],
-    ];
-    // поза (градусы): ходьба/бег формулами; колено гнётся назад голенью = вперёд коленом
-    function pose(h, t) {
-      const s = Math.min(1, h.speed / 1.6), r = h.run ? 1 : 0, ph = h.phase, P = {};
-      const breathe = Math.sin(t * 2.2) * (1 - s);
-      for (const [sd, off] of [['l', 0], ['r', Math.PI]]) {
-        const sw = Math.sin(ph + off), swing = Math.max(0, Math.cos(ph + off));     // нога идёт вперёд — колено согнуто
-        const thigh = (24 + 14 * r) * sw * s;
-        const knee = (6 + (26 + 50 * r) * swing) * s;
-        P['hip_' + sd] = fwd(thigh);
-        P['kn_' + sd] = fwd(-knee);
-        P['an_' + sd] = fwd(-(thigh - knee) * 0.6);
-        const arm = -(20 + 16 * r) * sw * s;
-        P['sh_' + sd] = mul(fwd(arm + breathe * 1.5), Rx((sd === 'l' ? 1 : -1) * 6 * D));
-        P['el_' + sd] = fwd(14 + 18 * s + 55 * r * s);
-      }
-      if (h.wave > 0) { const w = Math.min(1, h.wave * 2, (2.2 - h.wave) * 3); P.sh_r = mul(Rx(-150 * w * D), fwd(10)); P.el_r = Rx((-30 - Math.sin(t * 12) * 25) * w * D); }
-      P.spine = fwd((3 + 9 * r) * s + Math.sin(t * 2.2) * 0.6);
-      P.neck = fwd(-(2 + 6 * r) * s);
-      P.pelvis = Rz(Math.sin(ph) * 5 * D * s);
-      P.bob = -Math.abs(Math.cos(ph)) * (0.025 + 0.03 * r) * s + breathe * 0.004;
-      return P;
-    }
-    function draw(ctx, h, t, dt) {
-      if (h.yaw == null) h.yaw = h.yawT == null ? Math.PI / 4 : h.yawT;
-      if (h.yawT != null) { let d = h.yawT - h.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; h.yaw += d * Math.min(1, dt * 12); }
-      const P = pose(h, t);
-      const root = mul(Tr(h.x, h.y, P.bob * PER_M), mul(Rz(h.yaw), [PER_M, 0, 0, 0, 0, PER_M, 0, 0, 0, 0, PER_M, 0]));
-      const M = {};
-      for (const [j, [par, off]] of Object.entries(SK)) M[j] = mul(mul(par ? M[par] : root, Tr(...off)), P[j] || I());
-      const faces = [];
-      for (const [j, c, sz, col] of BOX) {
-        const m = M[j], hx = sz[0] / 2, hy = sz[1] / 2, hz = sz[2] / 2;
-        const v = [];
-        for (const dx of [-1, 1]) for (const dy of [-1, 1]) for (const dz of [-1, 1]) v.push(ap(m, [c[0] + dx * hx, c[1] + dy * hy, c[2] + dz * hz]));
-        // индексы углов: (dx,dy,dz) → ((dx+1)/2)*4 + ((dy+1)/2)*2 + (dz+1)/2
-        for (const q of [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]) {
-          const [a, b, cc] = [v[q[0]], v[q[1]], v[q[2]]];
-          const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [cc[0] - a[0], cc[1] - a[1], cc[2] - a[2]];
-          let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
-          const ln = Math.hypot(...n) || 1; n = n.map((x) => x / ln);
-          // наружу от центра коробки
-          const ctr = q.reduce((acc, i) => acc.map((x, k) => x + v[i][k] / 4), [0, 0, 0]), bc = ap(m, c);
-          if ((ctr[0] - bc[0]) * n[0] + (ctr[1] - bc[1]) * n[1] + (ctr[2] - bc[2]) * n[2] < 0) n = n.map((x) => -x);
-          if (n[0] * VIEW[0] + n[1] * VIEW[1] + n[2] * VIEW[2] <= 0.001) continue;
-          faces.push({ pts: q.map((i) => v[i]), d: ctr[0] * VIEW[0] + ctr[1] * VIEW[1] + ctr[2] * VIEW[2], n, col });
-        }
-      }
-      faces.sort((a, b) => a.d - b.d);
-      for (const f of faces) {
-        const k = 0.42 + 0.58 * Math.max(0, f.n[0] * LIGHT[0] + f.n[1] * LIGHT[1] + f.n[2] * LIGHT[2]);
-        const [r, g, b] = COL[f.col], glow = f.col === 'visor';
-        ctx.fillStyle = glow ? `rgb(${r},${g},${b})` : `rgb(${r * k | 0},${g * k | 0},${b * k | 0})`;
-        ctx.beginPath();
-        f.pts.forEach((p, i) => { const x = (p[0] - p[1]) * TW / 2, y = (p[0] + p[1]) * TH / 2 - p[2] * ZT; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
-        ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 0.6; ctx.stroke();
-      }
-    }
-    return { draw };
-  })();
-
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
     if (ed.on) { edFrame(dt); requestAnimationFrame(frame); return; }
