@@ -78,6 +78,18 @@ AB.IsoRender = (() => {
     'ROOM-025': [50, 52, 54], 'ROOM-026': [42, 44, 48],   // №71: помещения, построенные игроком
   };
 
+  // №89: текстуры пола (вид сверху, бесшовные) — натягиваются на ромбы изометрии.
+  // Набор по помещению; без набора — прежняя ровная заливка ROOM_TINT. cells — сколько клеток на одну плитку текстуры.
+  const FLOOR_TEX = { F1: { src: 'assets/tiles/F1-a.jpg', cells: 4 } };
+  const ROOM_FLOOR = {
+    'ROOM-011': 'F1', 'ROOM-003': 'F1', 'ROOM-012': 'F1', 'ROOM-014': 'F1', 'ROOM-004': 'F1',
+    'ROOM-026': 'F1', 'ROOM-009': 'F1', 'ROOM-005': 'F1',
+  };
+  const texImg = {};
+  for (const [k, t] of Object.entries(FLOOR_TEX)) {
+    const im = new Image(); im.onload = () => { texImg[k] = im; floorCv = null; }; im.src = t.src;
+  }
+
   function init(canvas) {
     cv = canvas; ctx = cv.getContext('2d');
     lightCv = document.createElement('canvas'); lctx = lightCv.getContext('2d');
@@ -129,6 +141,24 @@ AB.IsoRender = (() => {
       const v = (rng() - 0.5) * 6;
       g.fillStyle = `rgb(${t[0] + v | 0},${t[1] + v | 0},${t[2] + v | 0})`;
       diamond(x, y, 0.6); g.fill();
+    }
+    // №89: текстурные полы — один путь на набор, заливка узором в изометрической проекции
+    for (const [k, t] of Object.entries(FLOOR_TEX)) {
+      const im = texImg[k]; if (!im) continue;
+      g.beginPath(); let any = false;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const c = AB.IsoWorld.cell(x, y);
+        if (c !== AB.IsoWorld.FLOOR && c !== AB.IsoWorld.PROP && c !== AB.IsoWorld.DOOR) continue;
+        if (ROOM_FLOOR[AB.IsoWorld.room(x + 0.5, y + 0.5)] !== k) continue;
+        const p = toScreen(x, y), cx = p.x + floorOX, cy = p.y + TH / 2, gr = 0.6;
+        g.moveTo(cx, cy - TH / 2 - gr); g.lineTo(cx + TW / 2 + gr * 2, cy); g.lineTo(cx, cy + TH / 2 + gr); g.lineTo(cx - TW / 2 - gr * 2, cy); g.closePath();
+        any = true;
+      }
+      if (!any) continue;
+      const pat = g.createPattern(im, 'repeat'), s = t.cells / im.width;   // пиксель текстуры → доля клетки
+      pat.setTransform(new DOMMatrix([TW / 2 * s, TH / 2 * s, -TW / 2 * s, TH / 2 * s, floorOX, 0]));
+      g.fillStyle = pat; g.fill();
+      g.fillStyle = 'rgba(8,12,18,.22)'; g.fill();   // чуть темнее — под общую гамму корабля
     }
     // грязь, пятна, потёртости — крупнее клетки, чтобы сетка не читалась
     for (let i = 0; i < w * h * 0.35; i++) {
