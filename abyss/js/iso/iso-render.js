@@ -85,7 +85,7 @@ AB.IsoRender = (() => {
   const ROOM_FLOOR = {};
   for (let i = 1; i <= 18; i++) ROOM_FLOOR[`ROOM-${String(i).padStart(3, '0')}`] = 'F1';
   // №91: стены корабля — W1 (вид спереди, бесшовно по горизонтали; низ картинки = пол) и верх стены WT
-  const WALL_TEX = { face: { src: 'assets/tiles/W1-a.jpg', cells: 2.5 }, top: { src: 'assets/tiles/WT-a.jpg', cells: 2 }, door: { src: 'assets/tiles/D1-a.jpg' } };   // №92: door — гермодверь D1
+  const WALL_TEX = { face: { src: 'assets/tiles/W1-a.jpg', cells: 2.5 }, top: { src: 'assets/tiles/WT-a.jpg', cells: 2 }, door: { src: 'assets/tiles/D1-a.jpg' }, grate: { src: 'assets/tiles/D2-a.png' } };   // №93: grate — решётка-баррикада D2   // №92: door — гермодверь D1
   const SHIP_SECTORS = new Set(['SECTOR-001', 'SECTOR-002', 'SECTOR-003', 'SECTOR-004']);
   const wallImg = {}, wallPat = {};
   for (const [k, t] of Object.entries(WALL_TEX)) { const im = new Image(); im.onload = () => { wallImg[k] = im; }; im.src = t.src; }
@@ -221,17 +221,18 @@ AB.IsoRender = (() => {
   // №92: гермодверь D1 — одна картинка на всю ширину двери (3–4 клетки) по лицевой грани;
   // при открытии створка уходит в пол: верх картинки едет вниз вместе с краем, ниже пола — не видно.
   const DOOR_H = 74;
-  function texDoor(x, y, hgt, alpha, dr, faces) {
+  function texDoor(x, y, hgt, alpha, dr, faces, key = 'door') {
     if (hgt < 0.5) return;
+    const see = key === 'grate';   // №93: решётка прозрачная — без затемняющей заливки, торца и верха
     const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
-    const im = wallImg.door, p = pat('door'), len = dr.tiles.length, vs = DOOR_H / im.height, k = len / im.width;
+    const im = wallImg[key], p = pat(key), len = dr.tiles.length, vs = DOOR_H / im.height, k = len / im.width;
     const alongY = dr.axis !== 'y';   // axis 'x' — проход вдоль x, створка тянется вдоль y
     const x0 = Math.min(...dr.tiles.map((t) => t[0])), y0 = Math.min(...dr.tiles.map((t) => t[1]));
     ctx.globalAlpha = alpha;
     const face = (pts, mat, shade) => {
       p.setTransform(new DOMMatrix(mat));
       ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y); ctx.closePath();
-      ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = `rgba(6,9,14,${shade})`; ctx.fill();
+      ctx.fillStyle = p; ctx.fill(); if (!see) { ctx.fillStyle = `rgba(6,9,14,${shade})`; ctx.fill(); }
     };
     if (alongY && faces.r) {
       const o = toScreen(x + 1, y0);
@@ -240,6 +241,7 @@ AB.IsoRender = (() => {
       const o = toScreen(x0, y + 1);
       face([w, s, { x: s.x, y: s.y - hgt }, { x: w.x, y: w.y - hgt }], [TW / 2 * k, TH / 2 * k, 0, vs, o.x, o.y - hgt], 0.2);
     }
+    if (see) { ctx.globalAlpha = 1; return; }
     // торец и верх створки — тёмная сталь
     ctx.fillStyle = '#2a2e34';
     if (alongY && faces.l) { ctx.beginPath(); ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.fill(); }
@@ -378,9 +380,10 @@ AB.IsoRender = (() => {
         const a = alphaFor(`d${o.x},${o.y}`, hid, dt);
         const dr = o.dr, along = (xx, yy) => dr.tiles.some(([tx, ty]) => tx === xx && ty === yy);
         const grate = dr.barricade && dr.state === 'closed';   // №59: решётка — сквозь неё видно
-        if (wallImg.door && wallTextured()) texDoor(o.x, o.y, 74 * o.dr.anim, grate ? a * 0.35 : a, dr, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
+        if (grate && wallImg.grate && wallTextured()) texDoor(o.x, o.y, 74 * o.dr.anim, a, dr, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) }, 'grate');
+        else if (wallImg.door && wallTextured()) texDoor(o.x, o.y, 74 * o.dr.anim, grate ? a * 0.35 : a, dr, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
         else block(o.x, o.y, 74 * o.dr.anim, DOOR_LOOK, grate ? a * 0.35 : a, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
-        if (grate) {
+        if (grate && !(wallImg.grate && wallTextured())) {
           const b0 = toScreen(o.x + 0.5, o.y), b1 = toScreen(o.x + 0.5, o.y + 1);
           ctx.strokeStyle = 'rgba(190,190,180,.85)'; ctx.lineWidth = 2;
           for (let i = 0; i <= 4; i++) { const t = i / 4, x = b0.x + (b1.x - b0.x) * t, y = b0.y + (b1.y - b0.y) * t; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 70); ctx.stroke(); }
