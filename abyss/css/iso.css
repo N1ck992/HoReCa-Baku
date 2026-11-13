@@ -575,3 +575,20 @@ body.base-build #iso-hud { display: none; }
 #iso-rotate .rt-skip { height: 36px; font: 12px var(--mono); color: var(--muted); background: transparent; border: 1px solid var(--line); }
 #iso-rotate .rt-phone { display: block; width: 46px; height: 80px; border: 3px solid #5ee6ff; border-radius: 9px; animation: rtTurn 2.2s ease-in-out infinite; }
 @keyframes rtTurn { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+
+/* №88: окошко у точки на карте дна — маленькое, над точкой */
+#ow-pop { position: absolute; z-index: 4; transform: translate(-50%, calc(-100% - 26px)); display: grid; grid-template-columns: 1fr auto; gap: 5px 8px; align-items: center; max-width: 260px; padding: 7px 9px; background: rgba(6, 12, 16, .92); border: 1px solid rgba(94, 230, 255, .5); border-radius: 7px; box-shadow: 0 4px 14px rgba(0, 0, 0, .5); }
+#ow-pop[hidden] { display: none; }
+#ow-pop::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -6px; border: 6px solid transparent; border-top-color: rgba(94, 230, 255, .5); border-bottom: 0; }
+#ow-pop b { font: 600 13px var(--display); color: #ffe2a8; }
+#ow-pop #ow-act { grid-column: 1 / 2; min-height: 30px; padding: 3px 10px; font: 12px var(--mono); color: #0b1410; background: #5ee6ff; border: 0; border-radius: 5px; cursor: pointer; }
+#ow-pop #ow-act:disabled { color: var(--muted); background: #1a2226; cursor: default; }
+#ow-pop-x { grid-row: 1 / 3; grid-column: 2; align-self: start; width: 26px; height: 26px; font: 12px var(--mono); color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+/* №88: ячейки героев меньше */
+.ow-slot { width: 76px; height: 64px; }
+.ow-slot canvas { width: 28px; height: 36px; }
+.ow-slot img { height: 44px; }
+.ow-slot b { font-size: 10px; bottom: 14px; }
+.ow-slot span { font-size: 8px; bottom: 4px; }
+.ow-slot button { width: 22px; height: 18px; font-size: 11px; bottom: 4px; }
+.ow-slot.add { font-size: 28px; }

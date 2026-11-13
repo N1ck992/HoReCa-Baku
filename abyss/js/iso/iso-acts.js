@@ -86,7 +86,7 @@ AB.IsoActs = (() => {
   // что можно сделать в точке карты: { label, ok, why }
   function siteAction(site) {
     const d = AB.ISO_SITES[site.key];
-    if (site.key === 'abyss') return { label: 'Войти на «Абисс» через шлюз', ok: true };   // №65: «Абисс» — обычная локация
+    if (site.key === 'abyss') return { label: AB.IsoOverworld.mode() === 'capsule' ? 'Пристыковаться?' : 'Войти через шлюз?', ok: true };   // №65: «Абисс» — обычная локация
     if (!d) return { label: 'Исследовать — появится позже', ok: false };
     if (visited.has(site.key) && !d.repeat) return { label: 'Здесь уже всё сделано', ok: false };
     if (act < d.act) return { label: act === 2 ? 'Мира: «Не уходи далеко — сначала сигнал»' : 'Позже', ok: false };

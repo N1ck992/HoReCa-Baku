@@ -78,7 +78,7 @@ AB.IsoCombat = (() => {
         landed = AB.IsoEnemies.damage(e.id, dmg, m, 'melee') || landed;
       }
     }
-    AB.Bus.emit('combat:swing', { charId: m.id, landed });
+    AB.Bus.emit('combat:swing', { charId: m.id, landed, damage: sw.shot ? w.damage * mod('rangedDamage') : (w.ranged ? w.bash : w.damage) * mod('meleeDamage') });   // №88: урон удара — для дрона
   }
 
   // урон персонажу (от противника e)

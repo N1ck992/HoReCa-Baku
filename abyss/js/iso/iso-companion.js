@@ -10,9 +10,9 @@
 AB.IsoCompanion = (() => {
   const ID = 'EQUIP-016';
   const BONUS = { heal: 1.5, calm: 8, view: 1 };
-  // №86: цепная молния — сама, когда рядом враги и способность перезарядилась
-  const ZAP = { cooldown: 7, reach: 7, hop: 3.5, targets: 5, damage: [55, 48, 42, 36, 30] };
-  let zapCd = 3, zaps = [], zapStats = { casts: 0, hits: 0, kills: 0 };   // здоровья в секунду вне боя; «бой» — враг ближе 8 клеток; +1 клетка обзора на карте дна
+  // №88: цепная молния — на каждую 5-ю атаку героя, урон каждой цели = 70% урона его удара
+  const ZAP = { every: 5, share: 0.7, reach: 7, hop: 3.5, targets: 5 };
+  let zapN = 0, zapDmg = 0, zapReady = false, zaps = [], zapStats = { casts: 0, hits: 0, kills: 0 };   // здоровья в секунду вне боя; «бой» — враг ближе 8 клеток; +1 клетка обзора на карте дна
   let has = false;
   const pos = { x: 0, y: 0, ok: false };
   let bubble = null;                                 // { text, t, life }
@@ -46,6 +46,13 @@ AB.IsoCompanion = (() => {
     setTimeout(() => say('hello'), 3800);
   }
 
+  // №88: удары героя, за которым летит дрон, заряжают молнию
+  AB.Bus.on('combat:swing', ({ charId, damage }) => {
+    if (!has) return;
+    const l = host(); if (!l || l.id !== charId) return;
+    zapN = Math.min(ZAP.every, zapN + 1);
+    if (zapN >= ZAP.every) { zapReady = true; zapDmg = Math.round((damage || 20) * ZAP.share); }
+  });
   // ---------- подсказки по событиям ----------
   AB.Bus.on('quest:start', ({ name }) => setTimeout(() => say(null, LINES.quest.replace('{q}', name)), 1500));
   AB.Bus.on('enemy:dead', () => say('kill'));
@@ -81,11 +88,10 @@ AB.IsoCompanion = (() => {
   // №86: цепная молния: бьёт ближайшего врага и перескакивает на соседних, урон падает с каждым прыжком
   function zapTick(dt, l) {
     zaps = zaps.filter((z) => (z.t += dt) < 0.45);
-    zapCd -= dt;
-    if (zapCd > 0) return;
+    if (!zapReady) return;
     const foes = AB.IsoEnemies.alive().filter((e) => e.state !== 'DEAD' && e.state !== 'DORMANT' && !AB.ID.get(e.id).type?.startsWith('pursuer'));
     const first = foes.filter((e) => Math.hypot(e.x - l.x, e.y - l.y) < ZAP.reach).sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))[0];
-    if (!first) { zapCd = 0.5; return; }
+    if (!first) return;
     const chain = [first];
     while (chain.length < ZAP.targets) {
       const c = chain[chain.length - 1];
@@ -96,14 +102,14 @@ AB.IsoCompanion = (() => {
     chain.forEach((e, i) => {
       zaps.push({ a: from, b: { x: e.x, y: e.y }, t: 0, seed: Math.random() * 99 });
       from = { x: e.x, y: e.y };
-      AB.IsoEnemies.damage(e.id, ZAP.damage[i], 'CHAR-001', 'ranged');
+      AB.IsoEnemies.damage(e.id, zapDmg, 'CHAR-001', 'ranged');
       if (!AB.IsoEnemies.get(e.id) || AB.IsoEnemies.get(e.id).state === 'DEAD' || AB.IsoEnemies.get(e.id).hp <= 0) killed++;
     });
-    zapCd = ZAP.cooldown;
+    zapReady = false; zapN = 0;
     zapStats.casts++; zapStats.hits += chain.length; zapStats.kills += killed;
     bubble = { text: `Цепная молния: ${chain.length} ${chain.length === 1 ? 'цель' : chain.length < 5 ? 'цели' : 'целей'}${killed ? ` · убито ${killed}` : ''}`, t: 0, life: 2.2, zap: true };
     AB.Bus.emit('echo:zap', { n: chain.length, killed });
-    if (!told.has('zap')) { told.add('zap'); setTimeout(() => say(null, 'Цепная молния заряжается сама — раз в несколько секунд бьёт ближайшего врага и перескакивает на соседних. Держись в гуще — я накрою всех.'), 2400); }
+    if (!told.has('zap')) { told.add('zap'); setTimeout(() => say(null, 'Каждый твой пятый удар заряжает мою цепную молнию: она бьёт ближайшего врага и перескакивает на соседних — до пяти целей.'), 2400); }
   }
   // сообщение ЭХО «как в диалоге» — внизу экрана (подсказки стройки и т. п.)
   let msgT = null;
@@ -138,7 +144,7 @@ AB.IsoCompanion = (() => {
     }
     // заряд молнии — тонкое кольцо вокруг дрона
     ctx.strokeStyle = 'rgba(94,230,255,.55)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(x, y, 15, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, 1 - zapCd / ZAP.cooldown))); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 15, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, zapN / ZAP.every)); ctx.stroke();
     // огонёк двигателя
     ctx.fillStyle = `rgba(255,200,120,${0.5 + Math.sin(time * 18) * 0.2})`; ctx.beginPath(); ctx.ellipse(x, y + 12, 3, 5, 0, 0, 7); ctx.fill();
     // корпус: шесть створок вокруг ядра, медленно поворачиваются

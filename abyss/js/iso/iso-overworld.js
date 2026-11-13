@@ -32,7 +32,10 @@ AB.IsoOverworld = (() => {
   const TILT = 0.6, STEP = 0.75, BASE_STEP = 5;
   const px = (q, r) => ({ x: size * SQ3 * (q + r / 2), y: size * 1.5 * r * TILT });
   const siteAt = (q, r) => D().sites.find((s) => s.q === q && s.r === r) || null;
-  const passable = (q, r) => { const c = cells.get(key(q, r)); return !!c && c.kind !== 'rock' && c.kind !== 'trench'; };
+  // №88: точки-объекты («Абисс», обломки, поселение…) занимают свою клетку — на неё не встать, к ним подходят вплотную.
+  // Точка с тварью (сигнал сонара) — не объект: там стоит сама тварь.
+  const blocked = (q, r) => { const s = D().sites.find((x) => x.q === q && x.r === r); return !!s && !(AB.ISO_SITES && AB.ISO_SITES[s.key] && AB.ISO_SITES[s.key].mob); };
+  const passable = (q, r) => { const c = cells.get(key(q, r)); return !!c && c.kind !== 'rock' && c.kind !== 'trench' && !blocked(q, r); };
 
   // ---------- рельеф ----------
   function build() {
@@ -142,7 +145,6 @@ AB.IsoOverworld = (() => {
   }
   // путь до соседней с базой клетки (в саму базу не заходят — стыкуются рядом)
   function routeHome(s) {
-    if (mode !== 'capsule') return route(at(s), base) || [];
     if (dist(at(s), base) <= 1) return [];
     const c = DIRS.map(([dq, dr]) => ({ q: base.q + dq, r: base.r + dr })).filter((x) => passable(x.q, x.r) && !occupied(x.q, x.r, s))
       .map((x) => route(at(s), x, s)).filter(Boolean).sort((a, b) => a.length - b.length)[0];
@@ -151,7 +153,7 @@ AB.IsoOverworld = (() => {
   function deploy(id) {
     const s = unit(id);
     if (!s || !s.vehicle || s.state !== 'home') return false;
-    const c = mode === 'capsule' ? besideBase(s) : { q: base.q, r: base.r };
+    const c = besideBase(s);   // №88: и в акте II — из шлюза «Абисса» на соседнюю клетку
     if (!c) { say('Вокруг базы нет свободной клетки'); return false; }
     s.state = 'out'; s.q = c.q; s.r = c.r; s.path = []; s.anim = null;
     sel = id; reveal();
@@ -220,8 +222,11 @@ AB.IsoOverworld = (() => {
     cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(zoomK * (e.deltaY > 0 ? 0.9 : 1.1)); }, { passive: false });
     document.getElementById('ow-act').addEventListener('click', () => {
       if (!onSite) return;
-      if (onSite.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(onSite);
+      const s = onSite; pend = null; onSite = undefined;
+      if (s.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(s);
     });
+    document.getElementById('ow-pop-x').addEventListener('click', () => { pend = null; onSite = undefined; });
+    document.getElementById('ow-pop').addEventListener('pointerdown', (e) => e.stopPropagation());
     // №68: нижняя панель как в Warpath. «Моя база» — войти в капсулу; меню — вести базу, вещи, все отряды, всплыть;
     // ячейки отрядов: нажатие — выйти из базы / выбрать и подлететь; у выбранного — «Отозвать»
     const bar = document.getElementById('ow-bar');
@@ -257,12 +262,28 @@ AB.IsoOverworld = (() => {
         squadsSig = ''; flyTo(selU());
       }
     });
-    window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { const s = siteAt(selU().q, selU().r); if (s && s.key === 'abyss') back(); } });
+    window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { pend = null; onSite = undefined; } });
     window.addEventListener('resize', () => { if (open_) fit(); });
   }
   // нажали на клетку: выбранный отряд идёт туда (на тварь — подходит и бьёт); выбрана база — ведём капсулу
   let selAll = false, drive = false;
+  // №88: нажали на точку-объект — выбранный (капсула или отряд) подходит вплотную; рядом — маленькое окошко действия
+  let pend = null;                                   // { site, u }
+  function goSite(s) {
+    let u = selU();
+    if (u.kind === 'base' && mode !== 'capsule') { const m = unit('CHAR-001'); if (m && m.state === 'out') { u = m; sel = m.id; } }
+    if (u.kind === 'squad' && u.state === 'retreat') { say('Отряд отступает на базу'); return; }
+    pend = { site: s, u: u.id || 'base' }; onSite = undefined;
+    if (!u.anim && dist(at(u), s) <= 1) { u.path = []; return; }
+    const best = DIRS.map(([dq, dr]) => ({ q: s.q + dq, r: s.r + dr })).filter((c) => passable(c.q, c.r) && !occupied(c.q, c.r, u))
+      .map((c) => route(at(u), c, u)).filter(Boolean).sort((a, b) => a.length - b.length)[0];
+    if (!best) { say('К этой точке сейчас не подойти'); pend = null; return; }
+    if (u.kind === 'squad') u.target = null;
+    u.path = best;
+  }
   function tapCell(t) {
+    const st = siteAt(t.q, t.r);
+    if (st && blocked(t.q, t.r) && shown(st) && cells.get(key(t.q, t.r)).seen) { goSite(st); return; }
     // «Все отряды»: ведём всех снаружи разом
     if (selAll && !mobAt(t.q, t.r)) {
       let any = false;
@@ -300,7 +321,7 @@ AB.IsoOverworld = (() => {
     syncSquads();
     for (const s of squads) if (s.state === 'inside') { s.state = 'out'; sel = s.id; }   // вышли из здания — транспорт снова на карте
     // акт II: базы-капсулы нет, Марк выходит из «Абисса» сразу в костюме
-    if (mode === 'suit') { const m = unit('CHAR-001'); if (m && m.state === 'home') { m.state = 'out'; m.q = base.q; m.r = base.r; } sel = 'CHAR-001'; }
+    if (mode === 'suit') { const m = unit('CHAR-001'); if (m && m.state === 'home') { const c = besideBase(m) || { q: base.q + 1, r: base.r }; m.state = 'out'; m.q = c.q; m.r = c.r; } sel = 'CHAR-001'; }
     else if (!unit(sel)) sel = 'base';
     spawnMobs();
     reveal(); onSite = undefined; squadsSig = '';
@@ -314,8 +335,8 @@ AB.IsoOverworld = (() => {
   }
   // вернуться на корабль: выбранный (отряд или капсула) — у «Абисса»
   function back() {
-    const u = selU(), s = siteAt(u.q, u.r);
-    if (!s || s.key !== 'abyss') { say('Вернуться на корабль можно только у «Абисса»'); return; }
+    const u = selU(), ab = D().sites.find((x) => x.key === 'abyss');
+    if (!ab || u.anim || dist(at(u), ab) > 1) { say('Вернуться на корабль можно только у «Абисса» — нажмите на него'); return; }
     if (mode === 'suit') { const m = unit('CHAR-001'); if (m) dock(m); }
     close();
     AB.Bus.emit('ow:exit', {});
@@ -377,7 +398,7 @@ AB.IsoOverworld = (() => {
       u.q = u.anim.to.q; u.r = u.anim.to.r; u.anim = null; reveal();
       if (u.kind === 'squad') {
         pickLoot(u);
-        if (u.state === 'retreat' && !u.path.length && dist(u, base) <= (mode === 'capsule' ? 1 : 0)) { if (mode === 'capsule') dock(u); else u.state = 'out'; }
+        if (u.state === 'retreat' && !u.path.length && dist(u, base) <= 1) { if (mode === 'capsule') dock(u); else u.state = 'out'; }
       } else for (const s of squads) if (s.state === 'home') { s.q = base.q; s.r = base.r; }
     }
   }
@@ -435,7 +456,7 @@ AB.IsoOverworld = (() => {
     for (const s of squads) {
       const c = AB.Chars.get(s.id), d = AB.ID.get(s.id);
       if (!c || c.dead) continue;
-      const home = s.state === 'home' || (dist(s, base) <= (mode === 'capsule' ? 1 : 0) && !s.anim);
+      const home = s.state === 'home' || (dist(s, base) <= 1 && !s.anim);
       if (home) c.hp = Math.min(d.stats.maxHp, c.hp + dt * (AB.IsoActs && AB.IsoActs.built('MOD-003') ? 12 : 4));
     }
   }
@@ -730,16 +751,16 @@ AB.IsoOverworld = (() => {
     const th = `<b>Дно океана</b><span>${mode === 'capsule' ? `База-капсула · экипаж: ${AB.IsoActs.crew().length}` : 'Марк в экзокостюме · Мира на связи'}</span>${q ? `<em>▸ ${q.text}</em>` : ''}`;
     if (th !== topHtml) { document.getElementById('ow-top').innerHTML = th; topHtml = th; }
     squadPanel();
-    const u = selU();
-    let s = u.anim ? null : siteAt(u.q, u.r);
-    if (s && !shown(s)) s = null;
+    // окошко у точки: выбранный стоит вплотную к ней
+    const pop = document.getElementById('ow-pop');
+    const pu = pend && (pend.u === 'base' ? base : unit(pend.u));
+    const s = pu && !pu.anim && !pu.path.length && dist(at(pu), pend.site) <= 1 ? pend.site : null;
+    if (s) { const p = px(s.q, s.r); pop.style.left = `${(p.x - cam.x + cv.width / 2) / dpr}px`; pop.style.top = `${(p.y - cam.y + cv.height / 2) / dpr}px`; }
     if (s === onSite) return;
     onSite = s;
-    const card = document.getElementById('ow-card');
-    card.hidden = !s;
+    pop.hidden = !s;
     if (!s) return;
-    card.querySelector('b').textContent = s.name;
-    card.querySelector('p').textContent = s.desc;
+    pop.querySelector('b').textContent = s.name;
     const act = document.getElementById('ow-act'), a = AB.IsoActs ? AB.IsoActs.siteAction(s) : { label: 'Исследовать — появится позже', ok: false };
     act.textContent = a.label;
     act.disabled = !a.ok;
@@ -778,7 +799,8 @@ AB.IsoOverworld = (() => {
 
   return {
     init, enter, back, close, say, isOpen: () => open_,
-    setMode(m) { mode = m; if (m === 'capsule') { for (const s of squads) if (s.state !== 'home') dock(s); sel = 'base'; } }, mode: () => mode, refresh() { onSite = undefined; },
+    setMode(m) { mode = m; if (m === 'capsule') { for (const s of squads) if (s.state !== 'home') dock(s); sel = 'base'; if (blocked(base.q, base.r)) { const c = DIRS.map(([dq, dr]) => ({ q: base.q + dq, r: base.r + dr })).find((x) => passable(x.q, x.r)); if (c) { base.q = c.q; base.r = c.r; for (const s of squads) if (s.state === 'home') { s.q = c.q; s.r = c.r; } } } } }, mode: () => mode, refresh() { onSite = undefined; },
+    goSite(q, r) { const s = siteAt(q, r); if (s) goSite(s); return !!s; }, popVisible: () => !document.getElementById('ow-pop').hidden,
     mobs: () => mobs.filter((m) => m.hp > 0).map((m) => ({ id: m.id, kind: m.kind, q: m.q, r: m.r, hp: m.hp, hunt: m.hunt })), dropLoot,
     attack(id) { const m = mobs.find((q) => q.id === id), s = selU(); if (m && s.kind === 'squad') s.target = m; },
     pos: () => ({ q: selU().q, r: selU().r }),
