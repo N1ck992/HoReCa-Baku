@@ -122,7 +122,7 @@
     // №100: 3D-манекен без графики — объёмные детали на скелете, поворачивается в любую сторону
     { id: 'F', name: '3D-манекен', three: true },
     // №101: 3D-модель преследователя (GLB автора) — детали привязаны к скелету манекена по названиям
-    { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb', height: 2.0 }];
+    { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb.json', height: 2.0 }];
   // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
   // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
   // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
@@ -242,7 +242,9 @@
       return 'spine';                                  // торс, грудь, рёбра, ремни, накидка, заклёпки
     }
     async function load(url, height) {
-      const buf = await (await fetch(url)).arrayBuffer(), dv = new DataView(buf);
+      // .glb.json — тот же GLB в base64 (публикация не отдаёт .glb)
+      const res = await fetch(url);
+      const buf = url.endsWith('.json') ? Uint8Array.from(atob((await res.json()).glb), (c) => c.charCodeAt(0)).buffer : await res.arrayBuffer(), dv = new DataView(buf);
       const jl = dv.getUint32(12, true), J = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl)));
       const binOff = 20 + jl + 8;
       const acc = (i) => {
