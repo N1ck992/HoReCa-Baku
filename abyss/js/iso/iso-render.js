@@ -339,9 +339,7 @@ AB.IsoRender = (() => {
   function defenseMarks() {
     const L = AB.IsoWorld.layout(), ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
     if (ns && !ns.over && L.nest) {
-      // №83: передать Мире — кольцо вокруг неё, когда Марк несёт биоматериал
-      const carry = AB.IsoStash.count('ITEM-007'), mr = AB.IsoParty.find('CHAR-002'), ld = AB.IsoParty.lead();
-      if (mr && carry) drawPad({ x: mr.x, y: mr.y }, `Отдать Мире: ${carry} био`, '120,255,170');
+      const carry = AB.IsoStash.count('ITEM-007'), ld = AB.IsoParty.lead();
       // Марк несёт: светящийся мешок над плечом
       if (ld && carry) {
         const c = toScreen(ld.x, ld.y), a = 0.7 + Math.sin(time * 6) * 0.2;
@@ -356,8 +354,8 @@ AB.IsoRender = (() => {
           ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(p.x - w / 2, p.y - 58, w, 4);
           ctx.fillStyle = t.hitT ? '#ff6a4a' : '#7fe6a2'; ctx.fillRect(p.x - w / 2, p.y - 58, w * t.hp / T.hp, 4);
         } else {
-          ctx.font = '600 9px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = t.broken ? '#ff7a5a' : 'rgba(220,220,220,.75)';
-          ctx.fillText(t.broken ? 'РАЗРУШЕНА' : `${T.cost} био`, p.x, p.y - 52);
+          // №84: сюда нести биоматериал — кольцо у турели и сколько ещё нужно
+          drawPad({ x: g.x + 0.5, y: g.y + 0.5 }, `${t.broken ? 'Разрушена · ' : ''}био ${t.bank}/${T.cost}`, carry ? '120,255,170' : '200,200,200');
         }
       });
     }

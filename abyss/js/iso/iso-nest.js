@@ -55,7 +55,7 @@ AB.IsoNest = (() => {
     if (A || done) return;
     const L = lay();
     A = { t: 0, prog: 0, kills: 0, next: RULES.waves.first, foes: new Set(), over: false, bank: 0, turrets: 0, resets: 0, wave: 1,
-      tur: L.turrets.map((t) => ({ type: t.type || 'light', on: false, broken: false, hp: 0, fireT: 0, hitT: 0 })) };
+      tur: L.turrets.map((t) => ({ type: t.type || 'light', on: false, broken: false, hp: 0, fireT: 0, hitT: 0, bank: 0 })) };
     // двери лаборатории захлопываются: решётку ломают (у неё прочность), служебная — просто закрыта
     for (const k of [...L.doors, L.flank].filter(Boolean)) {
       const d = doorOf(k);
@@ -167,11 +167,18 @@ AB.IsoNest = (() => {
         AB.IsoInteract.act(t); A.fullSaid = false;
       }
     }
-    // передать Мире: подойти к ней (или встать на приёмник у замка)
-    const m = mira(), near = (m && Math.hypot(l.x - m.x, l.y - m.y) < 1.7) || Math.hypot(l.x - L.pad.x, l.y - L.pad.y) < 0.75;
-    let n = 0;
-    for (const [item, bt] of Object.entries(RULES.bioTypes)) { const k = AB.IsoStash.count(item); if (k && near) { AB.IsoStash.remove(item, k); n += k * bt.value; } }
-    if (n) { A.bank += n; AB.Bus.emit('nest:bio', { n, bank: A.bank }); }
+    // №84: отнести к турели — подойти к выключенной турели, биоматериал кладётся в неё; набралось — включается сама
+    A.tur.forEach((t, i) => {
+      if (t.on) return;
+      const g = L.turrets[i];
+      if (Math.hypot(l.x - (g.x + 0.5), l.y - (g.y + 0.5)) > 2.0) return;
+      const need = tt(i).cost - t.bank;
+      for (const [item, bt] of Object.entries(RULES.bioTypes)) {
+        const k = Math.min(AB.IsoStash.count(item), Math.ceil(need / bt.value));
+        if (k > 0 && t.bank < tt(i).cost) { AB.IsoStash.remove(item, k); t.bank += k * bt.value; AB.Bus.emit('nest:bio', { n: k, bank: t.bank, cost: tt(i).cost }); }
+      }
+      if (t.bank >= tt(i).cost) { t.bank = 0; A.bank += tt(i).cost; activate(i); }
+    });
   }
   function turretTick(dt) {
     const L = lay();
