@@ -84,6 +84,11 @@ AB.IsoRender = (() => {
   // решение автора: «Абисс» — один корабль, один общий пол на все его помещения (ROOM-001…018)
   const ROOM_FLOOR = {};
   for (let i = 1; i <= 18; i++) ROOM_FLOOR[`ROOM-${String(i).padStart(3, '0')}`] = 'F1';
+  // №91: стены корабля — W1 (вид спереди, бесшовно по горизонтали; низ картинки = пол) и верх стены WT
+  const WALL_TEX = { face: { src: 'assets/tiles/W1-a.jpg', cells: 2.5 }, top: { src: 'assets/tiles/WT-a.jpg', cells: 2 } };
+  const SHIP_SECTORS = new Set(['SECTOR-001', 'SECTOR-002', 'SECTOR-003', 'SECTOR-004']);
+  const wallImg = {}, wallPat = {};
+  for (const [k, t] of Object.entries(WALL_TEX)) { const im = new Image(); im.onload = () => { wallImg[k] = im; }; im.src = t.src; }
   const texImg = {};
   for (const [k, t] of Object.entries(FLOOR_TEX)) {
     const im = new Image(); im.onload = () => { texImg[k] = im; floorCv = null; }; im.src = t.src;
@@ -183,7 +188,38 @@ AB.IsoRender = (() => {
   }
 
   // ---------- Блоки: стена или часть предмета ----------
+  // №91: текстурная стена корабля. Грань — параллелограмм; текстура идёт вдоль стены,
+  // её низ совпадает с полом (у низкого бортика видна только жёлто-чёрная полоса плинтуса).
+  function wallTextured() { return wallImg.face && SHIP_SECTORS.has(AB.IsoGame.sector()); }
+  function pat(k) { if (!wallPat[k]) wallPat[k] = ctx.createPattern(wallImg[k], 'repeat'); return wallPat[k]; }
+  function texBlock(x, y, hgt, alpha, faces) {
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    const im = wallImg.face, k = WALL_TEX.face.cells / im.width, vs = WALL_FULL / im.height, p = pat('face');
+    ctx.globalAlpha = alpha;
+    if (faces.l) {   // юго-западная грань: вдоль x
+      const o = toScreen(0, y + 1);
+      p.setTransform(new DOMMatrix([TW / 2 * k, TH / 2 * k, 0, vs, o.x, o.y - WALL_FULL]));
+      ctx.beginPath(); ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath();
+      ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.30)'; ctx.fill();
+    }
+    if (faces.r) {   // юго-восточная грань: вдоль y (в другую сторону) — темнее
+      const o = toScreen(x + 1, 0);
+      p.setTransform(new DOMMatrix([-TW / 2 * k, TH / 2 * k, 0, vs, o.x, o.y - WALL_FULL]));
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.closePath();
+      ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.50)'; ctx.fill();
+    }
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath();
+    if (wallImg.top) {
+      const t = pat('top'), kt = WALL_TEX.top.cells / wallImg.top.width;
+      t.setTransform(new DOMMatrix([TW / 2 * kt, TH / 2 * kt, -TW / 2 * kt, TH / 2 * kt, 0, -hgt]));
+      ctx.fillStyle = t; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.35)'; ctx.fill();
+    } else { ctx.fillStyle = WALL_LOOK.top; ctx.fill(); }
+    ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   function block(x, y, hgt, look, alpha, faces) {
+    if (look === WALL_LOOK && wallTextured()) { texBlock(x, y, hgt, alpha, faces); return; }
     const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
     ctx.globalAlpha = alpha;
     if (faces.l) {   // юго-западная грань
