@@ -47,6 +47,10 @@
   #cast button.del { border-color: rgba(255,120,90,.5); color: #ffb09a; }
   #cast button:disabled { opacity: .35; cursor: default; }
   #cast .c-tip { color: var(--muted); font-size: 11px; }
+  #cast .c-head { display: flex; justify-content: space-between; align-items: center; }
+  #cast .c-head b { color: #9fefff; letter-spacing: 1px; }
+  #cast .c-x { border-color: rgba(255,255,255,.3); }
+  #cast { max-height: calc(100vh - 80px); overflow: auto; }
   @media (max-width: 560px) { #ed input[type=range] { width: 110px; } #ed .sl b { min-width: 0; width: 100%; } }
 </style>
 </head>
@@ -217,16 +221,21 @@
   function castUi() {
     B('who').textContent = `Управляю: ${me.kind.name}`;
     const box = B('cast'); if (box.hidden) return;
-    box.innerHTML = '<div class="c-tip">Кто в комнате. Остальные идут за тем, кем управляете, и не встают друг в друга.</div>' + roster.map((h) => {
+    box.innerHTML = '<div class="c-head"><b>Персонажи</b><button class="c-x" data-close="1" aria-label="Закрыть">✕ Закрыть</button></div><div class="c-tip">Кто в комнате. Остальные идут за тем, кем управляете, и не встают друг в друга.</div>' + roster.map((h) => {
       const on = present.has(h.kind.id), cur = h === me;
       return `<div class="c-row ${on ? '' : 'off'}"><span>${h.kind.name}</span>`
         + `<button data-ctl="${h.kind.id}" class="${cur ? 'on' : ''}" ${on ? '' : 'disabled'}>${cur ? 'управляю' : 'управлять'}</button>`
         + (on ? `<button class="del" data-del="${h.kind.id}" ${present.size <= 1 ? 'disabled' : ''}>убрать</button>` : `<button class="add" data-add="${h.kind.id}">добавить</button>`) + '</div>';
     }).join('');
   }
-  B('castbtn').onclick = () => { B('cast').hidden = !B('cast').hidden; B('castbtn').classList.toggle('on', !B('cast').hidden); castUi(); };
+  // панель — под строкой кнопок (на телефоне кнопки в несколько строк); закрыть: ✕, «Персонажи», Esc или нажатие мимо
+  function closeCast() { B('cast').hidden = true; B('castbtn').classList.remove('on'); }
+  B('castbtn').onclick = (e) => { e.stopPropagation(); if (!B('cast').hidden) { closeCast(); return; } B('cast').style.top = `${Math.round(B('ui').getBoundingClientRect().bottom + 6)}px`; B('cast').hidden = false; B('castbtn').classList.add('on'); castUi(); };
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !B('cast').hidden) closeCast(); });
+  addEventListener('pointerdown', (e) => { if (!B('cast').hidden && !e.target.closest('#cast') && !e.target.closest('#castbtn')) closeCast(); }, true);
   B('cast').addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t || t.disabled) return;
+    if (t.dataset.close) { closeCast(); return; }
     if (t.dataset.add) { present.add(t.dataset.add); syncCast(t.dataset.add); }
     else if (t.dataset.del) { present.delete(t.dataset.del); syncCast(); }
     else if (t.dataset.ctl) { me = roster.find((q) => q.kind.id === t.dataset.ctl); syncCast(); }
@@ -324,8 +333,9 @@
       const thigh = (16 - 6 * r) * a * amp * s;
       const knee = (14 + 62 * r) * lift * s;
       p['thigh_' + side] = { a: thigh, k: 1 - (0.06 + 0.12 * r) * lift * s };
-      p['shin_' + side] = { a: -knee, k: 1 - (0.05 + 0.08 * r) * lift * s };
-      p['foot_' + side] = { a: -(thigh - knee) * 0.7 + 4 * lift * s };
+      // №99: колено гнётся вперёд (голень и стопа уходят назад); раньше было наоборот — «колено назад»
+      p['shin_' + side] = { a: knee, k: 1 - (0.05 + 0.08 * r) * lift * s };
+      p['foot_' + side] = { a: -(thigh + knee) * 0.7 + 4 * lift * s };
     }
     // руки: против ног; на бегу согнуты сильнее
     for (const [side, off, k] of [['n', Math.PI, 1], ['f', 0, 0.8]]) {
@@ -363,7 +373,19 @@
     };
   }
   const ANIM_KEY = 'abyss_anim_v3';   // v2 (№78): новый бег по умолчанию — глубже сгибы
-  let anims = (() => { try { const a = JSON.parse(localStorage.getItem(ANIM_KEY)); if (a && a.walk) return a; } catch (e) { /* нет сохранения */ } return bake(); })();
+  // №99: сохранённые раньше анимации — колени гнулись назад; переворачиваем сгиб голени, остальные правки сохраняются
+  function fixKnees(a) {
+    if (!a || a.knees === 2) return a;
+    for (const c of Object.values(a)) if (c && c.keys) for (const key of c.keys) for (const sd of ['n', 'f']) {
+      const sh = key.pose['shin_' + sd], ft = key.pose['foot_' + sd];
+      if (!sh) continue;
+      const old = sh.a || 0; sh.a = Math.round(-old * 10) / 10;
+      if (ft) ft.a = Math.round(((ft.a || 0) + 1.4 * old) * 10) / 10;
+    }
+    a.knees = 2;
+    return a;
+  }
+  let anims = (() => { try { const a = JSON.parse(localStorage.getItem(ANIM_KEY)); if (a && a.walk) { const had = a.knees === 2; fixKnees(a); if (!had) try { localStorage.setItem(ANIM_KEY, JSON.stringify(a)); } catch (e) { /* без хранилища */ } return a; } } catch (e) { /* нет сохранения */ } const b = bake(); b.knees = 2; return b; })();
   const saveAnims = () => { try { localStorage.setItem(ANIM_KEY, JSON.stringify(anims)); } catch (e) { /* хранилище недоступно */ } };
   const ease = (x) => x * x * (3 - 2 * x);
   function evalClip(c, u) {
@@ -759,7 +781,7 @@
   };
   E('ed-defaults').onclick = () => {
     if (!confirm('Вернуть ВСЕ анимации к исходному виду? Свои новые анимации тоже пропадут. (Можно будет отменить кнопкой «Отменить».)')) return;
-    snap(); anims = bake(); ed.clip = 'walk'; ed.t = 0; changed();
+    snap(); anims = bake(); anims.knees = 2; ed.clip = 'walk'; ed.t = 0; changed();
   };
   E('ed-try').onclick = () => { edOpen(false); if (!['idle', 'walk', 'run'].includes(ed.clip)) { if (ed.clip === 'wave') me.wave = anims.wave.dur; else me.play = { clip: ed.clip, t: 0 }; } };
   E('anim').onclick = () => edOpen(!ed.on);
