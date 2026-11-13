@@ -98,7 +98,10 @@
 (async () => {
   // два варианта Марка для сравнения: A — реалистичный, B — рисованный
   const KINDS = [{ id: 'A', name: 'Марк A', base: 'assets/char001/3q/front/' }, { id: 'B', name: 'Марк B', base: 'assets/char001/3q/front-b/', runBase: 'assets/char001/3q/run-b-1/' },
-    { id: 'C', name: 'Марк B · сетка', base: 'assets/char001/3q/front-b/', mesh: true }];
+    { id: 'C', name: 'Марк B · сетка', base: 'assets/char001/3q/front-b/', mesh: true },
+    // №96: преследователь ENEMY-002 — киборг-скелет (тело без плаща; плащ и клинок — следующим шагом)
+    { id: 'D', name: 'Преследователь', base: 'assets/enemy002/3q/front/' },
+    { id: 'E', name: 'Преследователь · сетка', base: 'assets/enemy002/3q/front/', mesh: true }];
   for (const k of KINDS) {
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};

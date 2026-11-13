@@ -1,0 +1,17 @@
+{
+ "src": "assets/source/enemy002/body-3q.png",
+ "out": "assets/enemy002/3q/front",
+ "joints": {
+  "neck": [443, 250], "crown": [452, 35], "chest": [462, 390], "waist": [462, 600], "crotch": [462, 770],
+  "sh_n": [272, 330], "el_n": [205, 545], "wr_n": [160, 735], "fi_n": [152, 880],
+  "sh_f": [598, 335], "el_f": [645, 565], "wr_f": [742, 745], "fi_f": [768, 875],
+  "hip_n": [372, 735], "kn_n": [300, 1075], "an_n": [245, 1560], "to_n": [255, 1715],
+  "hip_f": [540, 745], "kn_f": [572, 1085], "an_f": [565, 1560], "to_f": [670, 1690]
+ },
+ "thick": {
+  "pelvis": 120, "torso": 150, "head": 88,
+  "uarm_n": 52, "farm_n": 50, "hand_n": 52, "uarm_f": 50, "farm_f": 48, "hand_f": 50,
+  "thigh_n": 78, "shin_n": 68, "foot_n": 92, "thigh_f": 74, "shin_f": 66, "foot_f": 92
+ },
+ "face": 1
+}
