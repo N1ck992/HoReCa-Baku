@@ -21,6 +21,17 @@ P = {
 }
 OVERLAP = 22
 
+
+# №97: «force» в конфиге — многоугольники, пиксели внутри которых принудительно отходят указанной кости
+# (например, пояс и пах — тазу, а не торсу). Формат: "force": {"pelvis": [[x, y], ...]}
+from PIL import ImageDraw as _ID
+def force_masks(cfg, W, H):
+  out = {}
+  for bn, poly in (cfg.get('force') or {}).items():
+    mk = Image.new('L', (W, H), 0); _ID.Draw(mk).polygon([tuple(p) for p in poly], fill=255)
+    out[bn] = np.asarray(mk) > 0
+  return out
+
 im = np.asarray(Image.open(SRC).convert('RGB')).astype(np.float32)
 H, W, _ = im.shape
 r, g, b = im[..., 0], im[..., 1], im[..., 2]
@@ -35,6 +46,7 @@ def segdist(a, c):
   return np.hypot(xs - (ax + t * vx), ys - (ay + t * vy))
 names = list(P)
 owner = np.argmin(np.stack([segdist(J[P[n][0]], J[P[n][1]]) - TH[n] for n in names]), 0)
+for bn, fm in force_masks(cfg, W, H).items(): owner[fm] = names.index(bn)
 fig = alpha > 0
 fy, fx = np.nonzero(fig)
 os.makedirs(OUT, exist_ok=True)

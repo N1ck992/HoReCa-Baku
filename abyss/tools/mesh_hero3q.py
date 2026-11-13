@@ -29,6 +29,17 @@ ORDER = cfg.get('mesh_order', ['arm_f', 'leg_f', 'body', 'leg_n', 'arm_n'])
 CELL = 26          # шаг сетки, px исходника
 SIGMA = cfg.get('sigma', 30)   # ширина плавного перехода веса у сустава, px
 
+
+# №97: «force» в конфиге — многоугольники, пиксели внутри которых принудительно отходят указанной кости
+# (например, пояс и пах — тазу, а не торсу). Формат: "force": {"pelvis": [[x, y], ...]}
+from PIL import ImageDraw as _ID
+def force_masks(cfg, W, H):
+  out = {}
+  for bn, poly in (cfg.get('force') or {}).items():
+    mk = Image.new('L', (W, H), 0); _ID.Draw(mk).polygon([tuple(p) for p in poly], fill=255)
+    out[bn] = np.asarray(mk) > 0
+  return out
+
 im = np.asarray(Image.open(SRC).convert('RGB')).astype(np.float32)
 H, W, _ = im.shape
 r, g, b = im[..., 0], im[..., 1], im[..., 2]
@@ -44,6 +55,8 @@ def segd(px, py, a, c):
   return np.hypot(px - (ax + t * vx), py - (ay + t * vy))
 names = list(BONES)
 owner = np.argmin(np.stack([segd(xs, ys, J[BONES[n][0]], J[BONES[n][1]]) - TH[n] for n in names]), 0)
+FORCE = force_masks(cfg, W, H)
+for bn, fm in FORCE.items(): owner[fm] = names.index(bn)
 fig = alpha > 0
 os.makedirs(OUT, exist_ok=True)
 meta = {'groups': {}, 'order': ORDER, 'bones': names}
@@ -74,6 +87,8 @@ for gname, bones in GROUPS.items():
       d = np.array([float(segd(np.float32(vx), np.float32(vy), J[BONES[bn][0]], J[BONES[bn][1]])) for bn in bones])
       w = np.exp(-((d - d.min()) / SIGMA) ** 2)
       w[w < 0.02] = 0
+      for bn, fm in FORCE.items():   # вершина внутри принудительной области — целиком этой кости
+        if bn in bones and fm[min(H - 1, max(0, int(vy))), min(W - 1, max(0, int(vx)))]: w = np.array([1.0 if b_ == bn else 0.0 for b_ in bones])
       w /= w.sum()
       top = np.argsort(-w)[:3]
       weights.append([[names.index(bones[i]), round(float(w[i]), 3)] for i in top if w[i] > 0])
