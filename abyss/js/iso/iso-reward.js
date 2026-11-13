@@ -47,10 +47,11 @@ AB.IsoReward = (() => {
     box.style.setProperty('--rw', `rgb(${k.col})`);
     const stats = typeof rw.stats === 'function' ? rw.stats() : rw.stats;
     box.innerHTML = `<div class="rw-card"><div class="rw-kind">${k.title}</div><div class="rw-name">${rw.name || def.name || id}</div>
-      ${stats ? `<div class="rw-stats">${stats}</div>` : ''}${rw.hint ? `<div class="rw-hint">${rw.hint}</div>` : ''}</div>`;
+      ${stats ? `<div class="rw-stats">${stats}</div>` : ''}${rw.hint ? `<div class="rw-hint">${rw.hint}</div>` : ''}<button class="rw-ok" type="button">Окей</button></div>`;
     box.hidden = false;
     box.classList.remove('go'); void box.offsetWidth; box.classList.add('go');
-    clearTimeout(show.t); show.t = setTimeout(hide, 3600);
+    // №90: карточка не исчезает сама — закрыть кнопкой «Окей» (или Enter / Esc)
+    const ok = box.querySelector('.rw-ok'); if (ok) setTimeout(() => ok.focus({ preventScroll: true }), 300);
   }
   function hide() { const box = el(); if (box) { box.hidden = true; box.classList.remove('go'); } }
 
@@ -72,7 +73,8 @@ AB.IsoReward = (() => {
   });
   // новые награды других видов (броня, герой) вызывают это напрямую
   AB.Bus.on('iso:reward', ({ id, kind, stats, hint, by, name }) => show(id, { kind, stats, hint, name }, by));
-  document.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('#iso-reward')) hide(); });
+  document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#iso-reward .rw-ok')) { e.stopPropagation(); hide(); } }, true);
+  document.addEventListener('keydown', (e) => { const box = el(); if (box && !box.hidden && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.stopPropagation(); hide(); } }, true);
 
   // ---------- рисование: лучи над ещё не подобранной наградой, вспышка у героя ----------
   function drawGround(ctx, toScreen, time, items) {
@@ -121,7 +123,7 @@ AB.IsoReward = (() => {
     ctx.fillStyle = g; ctx.fillRect(-90, -90, 180, 180);
     ctx.restore();
   }
-  const api = { darkness, drawGround, drawFx, show, hide, has: (id) => got.has(id), reset: () => got.clear(), just: null };
+  const api = { darkness, drawGround, drawFx, show, hide, isOpen: () => { const b = el(); return !!b && !b.hidden; }, has: (id) => got.has(id), reset: () => got.clear(), just: null };
   return api;
 })();
 
