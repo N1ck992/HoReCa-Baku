@@ -312,6 +312,7 @@ AB.IsoRender = (() => {
     overlays(fx);
     for (const e of AB.IsoEnemies.all()) enemyBar(e);
     if (AB.BaseView) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.BaseView.drawTop(ctx, toScreen, time); }   // №71: станки, склады, груз
+    if (AB.IsoCompanion) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.IsoCompanion.draw(ctx, toScreen, time); }   // №85: дрон-спутник
   }
 
   // №57: турель / пушка — тумба со стволом; включена — светится и смотрит на ближайшего врага

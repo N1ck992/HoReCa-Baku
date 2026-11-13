@@ -68,11 +68,10 @@ AB.IsoActs = (() => {
   });
   const RUN = {
     // выживший в «Отсеке на склоне» — в экипаже базы (№69)
+    // №85: вместо Сайласа — дрон-спутник ЭХО (устройство отряда, не отдельный боец)
     recruit() {
-      if (!crew.includes('CHAR-004')) crew.push('CHAR-004');
       AB.Flags.add('recruit');
-      const m = AB.IsoParty.find('CHAR-004'); if (m) { m.hidden = true; m.sector = 'SECTOR-005'; }
-      toast('Сайлас идёт к капсуле — теперь он в экипаже базы', 'good');
+      AB.IsoCompanion.give();
       checkEnd();
     },
     // капсула отстыкована: экипаж на борту, дальше — карта дна в режиме базы
@@ -107,10 +106,8 @@ AB.IsoActs = (() => {
     AB.IsoGame.travel(sector, L.enter.x, L.enter.y);
   }
   AB.Bus.on('iso:travel', ({ sector }) => {
-    if (sector !== 'SECTOR-006' || AB.Flags.has('recruit')) return;
-    const p = AB.ISO_LAYOUTS['SECTOR-006'].survivor;
-    const m = AB.IsoParty.addNpc('CHAR-004', p.x, p.y); m.hidden = false; m.facing = -1;
-    if (!AB.Chars.get('CHAR-004') && AB.Chars.spawn) { const c = AB.Chars.spawn('CHAR-004', { room: 'ROOM-024', x: 0 }); if (c) c.controllable = false; }
+    // №85: в капсуле «Отсека на склоне» спит дрон — Сайласа больше нет
+    if (sector !== 'SECTOR-006') return;
   });
   function siteVisible(site) { const d = AB.ISO_SITES[site.key]; return !d || !d.act || site.key !== 'contact' || act >= 2; }
   function doSite(site) {
@@ -197,7 +194,7 @@ AB.IsoActs = (() => {
     devSet({ act: a, crew: list, built: mods } = {}) { if (a) act = a; if (list) { crew.length = 0; crew.push(...list); } for (const m of mods || []) built.add(m); },
     siteAction, siteVisible, doSite, build, canBuild: (id) => { const m = AB.ISO_MODULES.find((q) => q.id === id); return !!m && !built.has(id) && has(m.cost); },
     built: (id) => built.has(id), crew: () => crew.slice(), visited: (k) => visited.has(k),
-    view: () => (built.has('MOD-002') ? 4 : 2) + (AB.BaseSim && AB.BaseSim.on() ? AB.BaseSim.fx('view') : 0),   // №74: сонар дальнего обзора
+    view: () => (built.has('MOD-002') ? 4 : 2) + (AB.BaseSim && AB.BaseSim.on() ? AB.BaseSim.fx('view') : 0) + (AB.IsoCompanion ? AB.IsoCompanion.viewBonus() : 0),   // №74: сонар дальнего обзора
     onBase: () => { if (built.has('MOD-003')) healCrew(); },
   };
 })();

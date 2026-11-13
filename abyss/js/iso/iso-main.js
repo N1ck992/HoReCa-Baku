@@ -225,7 +225,7 @@
       const b = e.target.closest('[data-z]');
       if (b) AB.IsoRender.zoom(parseFloat(b.dataset.z));
     });
-    $('#iso-ids').addEventListener('click', () => { AB.isoShowIds = !AB.isoShowIds; });
+    // №85: кнопка ID убрана (подписи ID заглушек — для разработки, не нужны игроку)
     $('#iso-restart').addEventListener('click', () => AB.IsoGame.restart());
     $('#iso-cp').addEventListener('click', () => AB.IsoGame.fromCheckpoint());
     $('#iso-cp').addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -283,6 +283,7 @@
       AB.IsoNest.update(dt, input);
       AB.IsoBoss.update(dt);
       AB.IsoBase.update(dt);
+      AB.IsoCompanion.update(dt);   // №85: дрон-спутник
       if (!busy) AB.IsoCombat.update(dt, input);
       if (Math.random() < 0.1) AB.Quests.check();
       AB.Anim.update(dt);

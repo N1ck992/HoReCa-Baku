@@ -16,7 +16,8 @@ AB.OVERWORLD = {
   // №63: бродячие твари по случайным местам (черновик): сколько держать на карте и что с них падает
   wild: {
     hunters: { enemy: 'ENEMY-008', count: 9, minDist: 4, aggro: 3, leash: 6, loot: [['ITEM-007', 1]], respawn: 75 },
-    giants: { enemy: 'ENEMY-009', count: 2, minDist: 5, aggro: 1, leash: 3, loot: [['ITEM-015', 2], ['ITEM-007', 3]], respawn: 240 },
+    // №85: passive — исполин нападает, только если его ударили
+    giants: { enemy: 'ENEMY-009', count: 2, minDist: 5, aggro: 1, passive: true, leash: 3, loot: [['ITEM-015', 2], ['ITEM-007', 3]], respawn: 240 },
   },
   sites: [
     { key: 'abyss', q: 0, r: 0, kind: 'ship', name: '«Абисс»', pending: true,

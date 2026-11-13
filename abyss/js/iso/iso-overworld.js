@@ -494,7 +494,7 @@ AB.IsoOverworld = (() => {
       const foes = squads.filter((s) => s.state === 'out' && !(AB.Chars.get(s.id) || {}).dead);
       const tgt = foes.sort((a, b) => dist(at(a), m) - dist(at(b), m))[0];
       const d = tgt ? dist(at(tgt), m) : 99;
-      if (!m.hunt && tgt && d <= w.aggro) {
+      if (!m.hunt && tgt && d <= w.aggro && !w.passive) {
         m.hunt = true; m.anim = 'ALERT'; m.t = 0;
         if (m.kind === 'story') say('Мира: «Оно двинулось к тебе! Бей, как только подойдёт на две клетки»');
         else if (m.kind === 'giants') say('Исполин! Держитесь на расстоянии двух клеток');
