@@ -115,6 +115,26 @@
 // =====================================================================
 (async () => {
   // два варианта Марка для сравнения: A — реалистичный, B — рисованный
+  // ---------- №109: звук в тестовой комнате — те же файлы, что в игре (assets/audio) ----------
+  const SND = (() => {
+    let ctx = null, list = null, out = null, on = true; const buf = {}, last = {};
+    const VOL = { step_boot: 0.5, sword_swing: 0.6, sword_hit: 0.55, sword_clash: 0.5, cloth: 0.35 };
+    async function start() {
+      if (ctx || location.protocol === 'file:') return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      ctx = new AC(); out = ctx.createGain(); out.gain.value = 0.8; out.connect(ctx.destination);
+      try { list = await (await fetch('assets/audio/sounds.json')).json(); } catch (e) { list = {}; }
+      for (const g of Object.keys(VOL)) for (const n of list[g] || []) fetch('assets/audio/' + n + '.mp3').then((r) => r.arrayBuffer()).then((a) => ctx.decodeAudioData(a)).then((b) => { buf[n] = b; }).catch(() => {});
+    }
+    ['pointerdown', 'keydown'].forEach((ev) => addEventListener(ev, () => { start(); if (ctx && ctx.state === 'suspended') ctx.resume(); }, { capture: true }));
+    function play(g, vol = 1, rate = 1) {
+      if (window.__sndLog) window.__sndLog.push(g);
+      if (!ctx || !on || !list || !list[g]) return; const v = list[g]; let i = Math.floor(Math.random() * v.length); if (v.length > 1 && i === last[g]) i = (i + 1) % v.length; last[g] = i;
+      const b = buf[v[i]]; if (!b) return; const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = rate * (0.94 + Math.random() * 0.12);
+      const gn = ctx.createGain(); gn.gain.value = (VOL[g] || 0.5) * vol; s.connect(gn); gn.connect(out); s.start();
+    }
+    return { play, toggle() { on = !on; return on; } };
+  })();
+
   const KINDS = [{ id: 'A', name: 'Марк A', base: 'assets/char001/3q/front/' }, { id: 'B', name: 'Марк B', base: 'assets/char001/3q/front-b/', runBase: 'assets/char001/3q/run-b-1/' },
     { id: 'C', name: 'Марк B · сетка', base: 'assets/char001/3q/front-b/', mesh: true },
     // №96: преследователь ENEMY-002 — киборг-скелет (тело без плаща; плащ и клинок — следующим шагом)
@@ -577,7 +597,9 @@
       if (sp < vW) { wR = 0; wW = sp / vW; wI = 1 - wW; } else { wI = 0; wR = Math.min(1, (sp - vW) / (vR - vW)); wW = 1 - wR; }
       // фаза шага: длина цикла (в клетках) смешана между шагом и бегом — ступни не скользят
       const stride = vW * L.walk.dur * (1 - wR) + vR * L.run.dur * wR;
-      st.u += dt * sp / stride; st.it += dt;
+      const u0 = st.u; st.u += dt * sp / stride; st.it += dt;
+      if (sp > 0.3 && Math.floor(st.u * 2) !== Math.floor(u0 * 2)) SND.play('step_boot', h === me ? 1 : 0.5, sp > (vW + vR) / 2 ? 1.05 : 0.95);   // №109: шаг — на каждое касание стопы
+      if (h.kind.cloak && sp > vW * 1.2 && Math.random() < dt * 1.5) SND.play('cloth', 0.8);   // шелест накидки на бегу
       const Qs = {}, a = [0, 0, 0, 0], b = [0, 0, 0, 0], c = [0, 0, 0, 0];
       for (const bn of L.bones) {
         sample(L.idle, st.it / L.idle.dur, bn, a); sample(L.walk, st.u, bn, b); sample(L.run, st.u, bn, c);
@@ -590,7 +612,9 @@
       if (SL) {
         Qs.sword = CARRY;
         if (h.atk) {
-          const at = h.atk, cl = SL[at.clip]; at.t += dt;
+          const at = h.atk, cl = SL[at.clip]; const t0 = at.t; at.t += dt;
+          if (t0 === 0) SND.play('cloth', 1);                                                   // №109: накидка взлетает
+          const hs = cl.hit * cl.dur - 0.12; if (t0 < hs && at.t >= hs) { SND.play('sword_swing'); if (Math.random() < 0.5) SND.play('sword_hit', 0.5); }   // свист к моменту удара
           if (at.t >= cl.dur) { if (at.next) { h.atk = { clip: at.next, t: 0, next: null }; } else h.atk = null; }
           if (h.atk) {
             const cl2 = SL[h.atk.clip], u = h.atk.t / cl2.dur, w = Math.min(1, h.atk.t / 0.12, (cl2.dur - h.atk.t) / 0.18), q = [0, 0, 0, 0];
@@ -895,7 +919,8 @@
       // на картинке герой смотрит вправо: идёт вправо — как нарисован, влево — отражён
       if (Math.abs(sx) > 0.05) h.face = (sx > 0 ? 1 : -1) * (h.kind.rig.face || 1);
     }
-    h.phase += dt * h.speed * (h.run ? 2.3 : 3.3);
+    const ph0 = h.phase; h.phase += dt * h.speed * (h.run ? 2.3 : 3.3);
+    if (!h.kind.lib && h.speed > 0.3 && Math.floor(h.phase / Math.PI) !== Math.floor(ph0 / Math.PI)) SND.play('step_boot', h === me ? 1 : 0.5, h.run ? 1.05 : 0.95);   // №109
     h.wave = Math.max(0, h.wave - dt);
   }
 

@@ -27,6 +27,9 @@ AB.IsoAudio = (() => {
       step_metal: 0.5, pipe_hit: 0.75, flesh_hit: 0.6, plasma_shot: 0.55, plasma_hit: 0.5,
       mutant_alert: 0.7, mutant_attack: 0.65, mutant_hurt: 0.55, mutant_death: 0.75, mutant_idle: 0.45,
       brute_roar: 0.8, boss_roar: 0.9, door: 0.5, distant: 0.32,
+      // №109
+      step_boot: 0.55, heavy_step: 0.7, ui_click: 0.35, ui_open: 0.3, ui_close: 0.3, ui_denied: 0.4, quest_new: 0.5, quest_done: 0.55, reward: 0.6,
+      pickup: 0.45, spark: 0.45, alarm: 0.55, turret_shot: 0.45, grate_break: 0.7, grate_fix: 0.4, power_on: 0.6, sword_swing: 0.6, sword_hit: 0.6, sword_clash: 0.55, cloth: 0.3,
     },
   };
   let ctx = null, out = null, on = true, list = null, started = false;
@@ -140,7 +143,8 @@ AB.IsoAudio = (() => {
   let shotT = 0;
   B.on('iso:shot', ({ from, to, landed, energy, dart }) => {
     shotT = performance.now();
-    if (dart) synth('dart', from.x, from.y); else play('plasma_shot', { x: from.x, y: from.y });
+    const own = AB.IsoParty.members().some((m) => Math.hypot(m.x - from.x, m.y - from.y) < 0.4);   // №109: турели и пушки — свой звук
+    if (dart) synth('dart', from.x, from.y); else play(own ? 'plasma_shot' : 'turret_shot', { x: from.x, y: from.y });
     if (landed && energy) play('plasma_hit', { x: to.x, y: to.y, delay: 0.05 });
   });
   B.on('combat:swing', ({ charId, landed }) => {
@@ -162,19 +166,51 @@ AB.IsoAudio = (() => {
   B.on('enemy:dead', ({ id }) => { const e = AB.IsoEnemies && AB.IsoEnemies.get(id); const k = kindOf(id); if (e) play(k === 'boss' ? 'boss_roar' : 'mutant_death', { x: e.x, y: e.y, rate: k === 'brute' ? 0.8 : 1 }); });
   B.on('iso:door', ({ key }) => { const d = AB.IsoInteract && AB.IsoInteract.doors().find((q) => q.key === key); const t = d && d.tiles[0]; play('door', t ? { x: t[0] + 0.5, y: t[1] + 0.5 } : {}); });
   ['iso:world', 'iso:travel', 'equip:changed'].forEach((ev) => B.on(ev, () => setTimeout(ambience, 50)));
+  // ---------- №109: мир и интерфейс ----------
+  const ui = (g, opt) => play(g, opt);                  // без места — слышно одинаково везде
+  B.on('door:denied', () => ui('ui_denied'));
+  B.on('combat:noweapon', () => ui('ui_denied'));
+  B.on('item:pickup', ({ added }) => { if (added !== false) ui('pickup'); });
+  B.on('container:looted', () => ui('pickup'));
+  B.on('quest:start', () => ui('quest_new', { delay: 0.15 }));
+  B.on('quest:done', () => ui('quest_done'));
+  B.on('equip:changed', ({ id, state }) => {
+    if (state !== 'done') return;
+    const l = listener();
+    if (id === 'EQUIP-003') ui('power_on'); else play('spark', l ? { x: l.x, y: l.y } : {});   // генератор / починка, взлом
+  });
+  ['nest:start', 'guard:start', 'boss:start'].forEach((ev) => B.on(ev, () => ui('alarm')));
+  B.on('nest:turret', () => { const l = listener(); play('spark', l ? { x: l.x, y: l.y } : {}); });
+  B.on('nest:breach', ({ key }) => { const d = AB.IsoInteract && AB.IsoInteract.doors().find((q) => q.key === key); const t = d && d.tiles[0]; play('grate_break', t ? { x: t[0] + 0.5, y: t[1] + 0.5 } : {}); });
+  // кнопки — щелчок; окна — звук открытия/закрытия; карточка награды — нарастающий звук
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b && b.id !== 'iso-snd' && ctx) ui('ui_click'); }, true);
+  window.addEventListener('DOMContentLoaded', () => {
+    const watch = (id, onShow, onHide) => { const el = document.getElementById(id); if (!el) return; let was = el.hidden; new MutationObserver(() => { if (el.hidden === was) return; was = el.hidden; if (!was) onShow && onShow(); else onHide && onHide(); }).observe(el, { attributes: true, attributeFilter: ['hidden'] }); };
+    for (const id of ['iso-inv', 'iso-hero', 'iso-perks', 'iso-dev', 'bx-cat']) watch(id, () => ui('ui_open'), () => ui('ui_close'));
+    watch('iso-reward', () => ui('reward'));
+  });
 
   // ---------- каждый кадр: шаги, стоны, далёкие звуки ----------
-  let distantT = rnd(...RULES.distant), moanT = rnd(...RULES.idleMoan);
+  let distantT = rnd(...RULES.distant), moanT = rnd(...RULES.idleMoan), fixT = 1;
   function update(dt) {
     if (!ctx || !on) return;
     const l = listener();
     for (const m of [...AB.IsoParty.members(), ...AB.IsoParty.npcs()]) {
       if (m.hidden || m.ext) continue;
       const st = m.stride || 0, prev = m._sndStride == null ? st : m._sndStride, every = (m.run ? RULES.step.run : RULES.step.walk) * 50;
-      if (st - prev >= every) { m._sndStride = st; play('step_metal', { x: m.x, y: m.y, vol: m === l ? RULES.step.lead : RULES.step.other, rate: m.run ? 1.05 : 0.95 }); }
+      if (st - prev >= every) { m._sndStride = st; play('step_boot', { x: m.x, y: m.y, vol: m === l ? RULES.step.lead : RULES.step.other, rate: m.run ? 1.04 : 0.96 }); }   // №109: ботинки вместо металла
       else if (st < prev) m._sndStride = st;
       else if (m._sndStride == null) m._sndStride = st;
     }
+    // №109: тяжёлые шаги громилы и Колосса; стук починки решётки
+    if (AB.IsoEnemies) for (const e of AB.IsoEnemies.alive()) {
+      const k = kindOf(e.id); if (k !== 'brute' && k !== 'boss') continue;
+      if (e._sx == null) { e._sx = e.x; e._sy = e.y; e._sd = 0; }
+      e._sd += Math.hypot(e.x - e._sx, e.y - e._sy); e._sx = e.x; e._sy = e.y;
+      if (e._sd > (k === 'boss' ? 1.3 : 0.95)) { e._sd = 0; play('heavy_step', { x: e.x, y: e.y, rate: k === 'boss' ? 0.75 : 0.95, vol: k === 'boss' ? 1 : 0.8 }); }
+    }
+    fixT -= dt;
+    if (fixT <= 0) { fixT = rnd(0.9, 1.5); const r = AB.IsoParty.members().find((m) => m.repair && !m.path); if (r && AB.IsoNest && AB.IsoNest.active && AB.IsoNest.active()) play('grate_fix', { x: r.x, y: r.y }); }
     distantT -= dt; moanT -= dt;
     if (distantT <= 0 && l) { distantT = rnd(...RULES.distant); const a = Math.random() * 6.28; play('distant', { x: l.x + Math.cos(a) * 8, y: l.y + Math.sin(a) * 8, rate: rnd(0.7, 1.0) }); }
     if (moanT <= 0) {

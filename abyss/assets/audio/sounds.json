@@ -86,5 +86,85 @@
 ],
 "amb_machine": [
 "amb_machine"
+],
+"step_boot": [
+"step_boot_1",
+"step_boot_2",
+"step_boot_3",
+"step_boot_4",
+"step_boot_5",
+"step_boot_6",
+"step_boot_7",
+"step_boot_8"
+],
+"heavy_step": [
+"heavy_step_1"
+],
+"sword_swing": [
+"sword_swing_1",
+"sword_swing_2",
+"sword_swing_3",
+"sword_swing_4"
+],
+"sword_hit": [
+"sword_hit_1",
+"sword_hit_2",
+"sword_hit_3"
+],
+"sword_clash": [
+"sword_clash_1",
+"sword_clash_2"
+],
+"cloth": [
+"cloth_1",
+"cloth_2",
+"cloth_3",
+"cloth_4"
+],
+"ui_click": [
+"ui_click_1",
+"ui_click_2"
+],
+"ui_open": [
+"ui_open_1"
+],
+"ui_close": [
+"ui_close_1"
+],
+"ui_denied": [
+"ui_denied_1"
+],
+"quest_new": [
+"quest_new_1"
+],
+"quest_done": [
+"quest_done_1"
+],
+"reward": [
+"reward_1"
+],
+"pickup": [
+"pickup_1"
+],
+"spark": [
+"spark_1",
+"spark_2"
+],
+"alarm": [
+"alarm_1"
+],
+"turret_shot": [
+"turret_shot_1"
+],
+"grate_break": [
+"grate_break_1",
+"grate_break_2"
+],
+"grate_fix": [
+"grate_fix_1",
+"grate_fix_2"
+],
+"power_on": [
+"power_on_1"
 ]
 }

@@ -1,4 +1,4 @@
-# Использование: скачать наборы из assets/audio/CREDITS.txt в папку, распаковать в x/ (архивы) и dl/ (одиночные файлы),
+# Использование: скачать наборы из assets/audio/CREDITS.txt (одиночные файлы — в dl/ и dl2/, архивы распаковать в x/ и x2/),
 # затем из этой папки: python3 <путь>/tools/build_sounds.py <путь>/assets/audio
 # Сборка звуков игры (№108): обрезка тишины, нарезка длинных записей по паузам, выравнивание громкости, моно MP3.
 import subprocess, numpy as np, os, json, sys
@@ -66,5 +66,35 @@ loop('amb_hum', X + 'sci-fi-sfx/loop_ambient_01.ogg', rms=-22)
 loop('amb_dark', 'dl/dungeon_ambient_1_0.ogg', 22, 70, rms=-26)
 loop('amb_drips', 'dl/atmosbasement.mp3_.flac', 1.5, 20, rms=-30)
 loop('amb_machine', X + 'sci-fi-sfx/loop_machine_02.ogg', rms=-24)
+
+# ---- №109: новые шаги (ботинки + шорох одежды), мир, интерфейс, меч ----
+Y = 'x2/'
+L = [load(Y + f'footsteps/footsteps/step_lth{i}.ogg') for i in (1, 2, 4, 33)]
+CL = [load(Y + f'footsteps/footsteps/step_cloth{i}.ogg') for i in (1, 2, 3, 4)]
+mix = []
+for i in range(8):
+    a = trim(L[i % 4]).copy(); b = trim(CL[(i * 3 + 1) % 4]); n = max(len(a), len(b)); m = np.zeros(n, np.float32); m[:len(a)] += a; m[:len(b)] += b * 0.45; mix.append(m)
+one('step_boot', mix, rms=-21)
+one('heavy_step', ['dl2/stomp.flac'], rms=-17)
+one('sword_swing', [Y + f'swishes/swishes/swish-{i}.wav' for i in (10, 11, 12, 13)], rms=-17)
+one('sword_hit', [Y + f'sword_-_starninjas_1/sword - StarNinjas/sword.{i}.ogg' for i in (3, 4, 6)], rms=-17)
+one('sword_clash', [Y + f'sword_clash_-_starninjas_0/sword_clash.{i}.ogg' for i in (2, 4)], rms=-17)
+one('cloth', [Y + f'footsteps/footsteps/step_cloth{i}.ogg' for i in (1, 2, 3, 4)], rms=-24)
+K = Y + 'kenney_interfaceSounds/Audio/'
+one('ui_click', [K + 'click_003.ogg', K + 'click_002.ogg'], rms=-22)
+one('ui_open', [K + 'open_001.ogg'], rms=-24)
+one('ui_close', [K + 'close_001.ogg'], rms=-24)
+one('ui_denied', [K + 'error_002.ogg'], rms=-21)
+one('quest_new', [K + 'confirmation_004.ogg'], rms=-19)
+one('quest_done', ['dl2/completetask_0.mp3'], rms=-19)
+one('reward', [Y + 'SoundPack01/Rise03.aif'], rms=-19)
+one('pickup', ['dl2/key-176034.mp3'], rms=-21)
+one('spark', ['dl2/continuousspark.wav', 'dl2/spark.wav'], rms=-21)
+one('alarm', ['dl2/alarm_0.ogg'], rms=-18)
+one('turret_shot', ['dl/burst%20fire_1.mp3'], rms=-20)
+one('grate_break', [X + 'sfx_breaking_and_falling/bfh1_metal_falling_01.ogg', X + 'sfx_breaking_and_falling/bfh1_metal_falling_02.ogg'], rms=-17)
+one('grate_fix', [X + 'metal_interactions/metal_interactions/metal_interaction1.wav', X + 'metal_interactions/metal_interactions/metal_interaction2.wav'], rms=-19)
+g = load('dl2/loop_generator_1.mp3')[:int(3.0 * SR)]; n = int(1.2 * SR); g[:n] *= np.linspace(0, 1, n) ** 2; one('power_on', [g], rms=-17)
+
 json.dump(M, open(OUT + '/sounds.json', 'w'), ensure_ascii=False, indent=0)
 print('файлов', sum(len(v) for v in M.values()), 'всего', total // 1024, 'КБ'); print({k: len(v) for k, v in M.items()})
