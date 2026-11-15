@@ -16,6 +16,15 @@ AB.ITEMS.push({
   desc: 'Оптический прибор преследователя: латунь, круглое стекло, разъём как у наручного терминала Марка. Сквозь неё не действуют внушения — видно то, что есть на самом деле.',
 });
 AB.ID.register('ITEM-022', AB.ITEMS.find((i) => i.id === 'ITEM-022'));
+// №120: оружие доктора Хейл — «Биологическая уязвимость»: ампула с препаратом, после которого ткани цели
+// на время восприимчивее к любому урону (×1,5 на 6 с). Сам выстрел почти не ранит; рядом — слабое лечение.
+AB.ITEMS.push({
+  id: 'ITEM-023', name: 'Инжектор уязвимости', short: 'ИНЖ', category: 'weapon', stack: 1, icon: null, use: null, pending: true,
+  weapon: { damage: 3, range: 520, cooldown: 1.3, hitAt: 0.1, ranged: true, infinite: true, dart: true, bash: 3,
+    vuln: { mult: 1.5, time: 6 }, aura: { radius: 200, heal: 0.8 } },
+  desc: 'Медицинский инжектор доктора Хейл. Ампула с препаратом делает ткани цели восприимчивее к повреждениям: 6 секунд любой урон по ней ×1,5. Рядом с Хейл раненые понемногу затягиваются.',
+});
+AB.ID.register('ITEM-023', AB.ITEMS.find((i) => i.id === 'ITEM-023'));
 
 AB.EQUIPMENT.push({
   id: 'EQUIP-017', name: 'Кокон из паутины', room: 'ROOM-007', asset: null, x: 600, y: -100, w: 160, h: 200,
@@ -28,7 +37,8 @@ AB.ID.register('EQUIP-017', AB.EQUIPMENT.find((e) => e.id === 'EQUIP-017'));
 // Копии — ENEMY-011~c1… (та же запись; 1 удар — и лопаются облаком спор).
 AB.ENEMIES.push({
   id: 'ENEMY-011', name: 'Мира', type: 'mira', look: 'CHAR-002', pending: true,
-  hp: 240, dart: 7, stats: { maxHp: 240, speed: 110, runSpeed: 150 }, behavior: { retreatBelow: 0 },
+  // №120: фаза 1 — 40–60 с: плазма Марка по ней ×0,35, вплотную ×0,6; ампулы Хейл ускоряют (×1,5)
+  hp: 900, dart: 7, armor: { ranged: 0.35, melee: 0.6 }, stats: { maxHp: 900, speed: 110, runSpeed: 150 }, behavior: { retreatBelow: 0 },
   anims: {}, carry: null, spawn: null,
 });
 AB.ID.register('ENEMY-011', AB.ENEMIES.find((e) => e.id === 'ENEMY-011'));
@@ -130,7 +140,7 @@ AB.DIALOGS.push(
       { speaker: 'CHAR-003', text: 'Та, что ходит рядом с тобой. Она усыпила меня на мостике и замотала в эту массу. Не съела — просто убрала с дороги.' },
       { speaker: 'CHAR-003', text: 'Ты видишь девушку, Марк. Я видела, что стоит за ней. Многоногое. Рой.' },
       { speaker: 'CHAR-001', text: 'Я не знаю, кому верить.' },
-      { speaker: 'CHAR-003', text: 'Тогда держись рядом со мной. Мой пистолет со снотворным — его она боится.' },
+      { speaker: 'CHAR-003', text: 'Тогда держись рядом со мной. У меня инжектор: после моей ампулы ткани любой твари рвутся легче. Бей тех, кого я отмечу.' },
     ],
   },
   {

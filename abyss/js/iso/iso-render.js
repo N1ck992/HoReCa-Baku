@@ -749,6 +749,12 @@ AB.IsoRender = (() => {
       ctx.strokeStyle = `rgba(255,70,50,${0.55 + Math.sin(time * 6) * 0.2})`; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 24, 12, 0, 0, 7); ctx.stroke();
     }
+    if (e.vulnT > 0 && e.state !== 'DEAD') {   // №120: под препаратом Хейл — болезненно-зелёные пятна и кольцо
+      const k = Math.min(1, e.vulnT / 1.5);
+      ctx.strokeStyle = `rgba(170,255,90,${(0.45 + Math.sin(time * 9) * 0.2) * k})`; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 27, 13, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = '700 10px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(190,255,120,${k})`; ctx.fillText(`×${e.vulnMult}`, p.x + 26, p.y - 70);
+    }
     const dd = AB.ID.get(e.id);
     if (dd && dd.type === 'mira' && AB.IsoMira) { AB.IsoMira.draw(ctx, e, p, (f, q) => AB.Render.drawFigure(ctx, f, q.x, q.y, FIG_K)); return; }   // №118: облик Миры
     if (AB.Render && AB.Render.drawEnemyFigure) AB.Render.drawEnemyFigure(ctx, e, p.x, p.y, ENEMY_K);

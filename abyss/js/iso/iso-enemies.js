@@ -242,6 +242,7 @@ AB.IsoEnemies = (() => {
       return true;
     }
     if (e.state === 'DORMANT') return false;
+    if (e.vulnT > 0) amount *= e.vulnMult || 1;   // №120: «биологическая уязвимость» — препарат Хейл
     if (d.armor && d.armor[kind] != null) amount = Math.round(amount * d.armor[kind]);
     if (AB.IsoBoss) amount = Math.max(from ? 1 : 0, Math.round(amount * AB.IsoBoss.mod(e, from)));   // №57: Колосса берут только пушки
     e.hp = Math.max(0, e.hp - amount);
@@ -270,9 +271,12 @@ AB.IsoEnemies = (() => {
   }
 
   // №69: далёкие спокойные противники (больше 18 клеток от отряда) не думают — экономим на расчётах
+  // №120: препарат делает ткани цели восприимчивее к урону на время
+  function vulnerable(id, v) { const e = list.get(id); if (!e || e.state === 'DEAD') return; e.vulnT = v.time; e.vulnMult = v.mult; AB.Bus.emit('enemy:vuln', { id, x: e.x, y: e.y }); }
   function update(dt) {
     const l = AB.IsoParty.lead();
     for (const e of here()) {
+      if (e.vulnT > 0) e.vulnT = Math.max(0, e.vulnT - dt);
       if (l && !e.nest && ['PATROL', 'IDLE', 'DORMANT', 'DEAD'].includes(e.state) && Math.hypot(e.x - l.x, e.y - l.y) > 18) continue;
       tick(e, dt);
     }
@@ -290,6 +294,7 @@ AB.IsoEnemies = (() => {
   }
 
   return {
+    vulnerable,
     spawn, update, damage, alive, spawnSector, get: (id) => list.get(id), all: here,
     despawn: (id) => list.delete(id),
     // ушли из помещения преследователя — он исчезает (как в основной игре)

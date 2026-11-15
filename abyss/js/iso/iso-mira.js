@@ -14,7 +14,7 @@ AB.IsoMira = (() => {
   const RULES = {
     range: 4.5, decoyRange: 3, speed: 2.2,
     dart: { every: 1.7, decoyEvery: 2.4, reach: 8 },
-    heal: { every: 9, amount: 20, below: 0.85 },
+    heal: { every: 9, amount: 50, below: 0.85 },
     swap: 7, decoys: 3, decoyRespawn: 6,
     spores: { radius: 1.7, slow: 2.5 },
     flee: 0.2,
@@ -66,7 +66,7 @@ AB.IsoMira = (() => {
     haleJoin() {
       P().join('CHAR-003');
       const c = AB.Chars.get('CHAR-003'); if (c) { c.controllable = true; c.follow = 'CHAR-001'; }
-      if (!AB.Inventory.weapon('CHAR-003')) AB.Inventory.add('CHAR-003', 'ITEM-012', 1, { swap: false });
+      if (!AB.Inventory.weapon('CHAR-003')) AB.Inventory.add('CHAR-003', 'ITEM-023', 1, { swap: false });   // №120: инжектор уязвимости
       AB.IsoActs.setCrew(['CHAR-001', 'CHAR-002', 'CHAR-003']);
     },
     // Мира ждёт у капсулы в ангаре
