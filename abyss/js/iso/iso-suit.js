@@ -12,7 +12,11 @@ AB.IsoSuit = (() => {
   const R = () => AB.RIGS.EXOSUIT;
   // Марк снаружи — в костюме. Правило автора (№58): транспорт только вне зданий —
   // на корабле и в зданиях (секторы без outside) — только герои
-  const suited = (m) => !!m && m.id === 'CHAR-001' && !!(AB.IsoWorld.layout() || {}).outside;
+  // №121: у доктора Хейл свой костюм (медицинская переделка той же модели)
+  const ART_OF = { 'CHAR-003': 'EXOSUIT_HALE_ART' };
+  const SWING = { EXOSUIT_HALE_ART: 0.5 };
+  const artName = (id) => (ART_OF[id] && AB.RIGS[ART_OF[id]] ? ART_OF[id] : 'EXOSUIT_ART');
+  const suited = (m) => !!m && (m.id === 'CHAR-001' || m.id === 'CHAR-003') && !!(AB.IsoWorld.layout() || {}).outside;
   const weapon = () => ({ id: 'EQUIP-005', name: 'Манипуляторы экзокостюма', short: 'МНП', weapon: { ...R().weapon, range: R().weapon.reachCells * 50 } });
 
   // поза из состояния персонажа: шаг (по пройденному пути), удар, урон, гибель
@@ -20,6 +24,7 @@ AB.IsoSuit = (() => {
     const swing = AB.IsoCombat && AB.IsoCombat.swingOf ? AB.IsoCombat.swingOf(m.id) : null;
     const tr = AB.Anim.current(m.id), c = AB.Chars.get(m.id);
     return {
+      id: m.id,
       facing: m.facing || 1,
       phase: (m.stride || 0) / 78 * Math.PI * 2,
       moving: !!m.moving,
@@ -57,22 +62,22 @@ AB.IsoSuit = (() => {
   }
 
   // ---------- №62: костюм по картинке, нарезанной на части (js/data/rigs/EXOSUIT_ART.js) ----------
-  const imgs = {};
-  let artReady = false;
-  function loadArt() {
-    const A = AB.RIGS.EXOSUIT_ART;
-    if (!A || Object.keys(imgs).length) return;
+  const IMGS = {}, READY = {};
+  function loadArt(key) {
+    const A = AB.RIGS[key];
+    if (!A || IMGS[key]) return;
+    const set = IMGS[key] = {};
     let n = 0;
     for (const [name, part] of Object.entries(A.parts)) {
       const im = new Image();
-      im.onload = () => { if (++n === Object.keys(A.parts).length) artReady = true; };
+      im.onload = () => { if (++n === Object.keys(A.parts).length) READY[key] = true; };
       im.src = part.file;
-      imgs[name] = im;
+      set[name] = im;
     }
   }
-  loadArt();
+  loadArt('EXOSUIT_ART'); loadArt('EXOSUIT_HALE_ART');
   function drawArt(g, pose, x, y, k) {
-    const A = AB.RIGS.EXOSUIT_ART, J = A.joints, P = A.parts;
+    const key = artName(pose.id), A = AB.RIGS[key], J = A.joints, P = A.parts, imgs = IMGS[key];
     const s = k * (R().height / A.heightPx);                      // экранных px на px исходника
     const sw = Math.sin(pose.phase), amp = pose.moving ? 1 : 0;
     const bob = (amp * Math.abs(sw) * 2.5 + (pose.moving ? 0 : Math.sin(pose.t * 2) * 0.8)) * (A.heightPx / R().height);
@@ -96,10 +101,13 @@ AB.IsoSuit = (() => {
       g.save();
       g.translate(0, -bob * 0.3);
       const th = -sgn * sw * 0.32 * amp, kn = amp * Math.max(0, -sgn * Math.cos(pose.phase)) * 0.55;
-      piv(J[`hip_${side}`], th);
-      put(`thigh_${side}`, side === 'far');
-      piv(J[`knee_${side}`], kn);
-      put(`shin_${side}`, side === 'far');
+      // №121: дальняя нога почти не видна на картинке — рисуем копию ближней, сдвинутую к дальнему бедру
+      const src = A.farFromNear && side === 'far' ? 'near' : side;
+      if (src !== side) g.translate(J.hip_far[0] - J.hip_near[0], J.hip_far[1] - J.hip_near[1]);
+      piv(J[`hip_${src}`], th);
+      put(`thigh_${src}`, side === 'far');
+      piv(J[`knee_${src}`], kn);
+      put(`shin_${src}`, side === 'far');
       g.restore();
     };
     leg('far', -1);
@@ -113,7 +121,7 @@ AB.IsoSuit = (() => {
     g.save();
     g.translate(0, -bob);
     piv([J.hip[0], J.hip[1]], lean);
-    const fa = -atk * 1.0 + (amp ? sw * 0.12 : 0);
+    const fa = -atk * (SWING[key] || 1.0) + (amp ? sw * 0.12 : 0);   // №121: Хейл целится инжектором — рука поднимается меньше
     piv(J.elbow, fa);
     put('forearm_near');
     g.restore();
@@ -127,7 +135,7 @@ AB.IsoSuit = (() => {
 
   // нарисовать костюм: (x, y) — точка на полу под ним, k — масштаб единиц
   function draw(g, pose, x, y, k = 1) {
-    if (artReady) { drawArt(g, pose, x, y, k); return; }
+    if (READY[artName(pose.id)]) { drawArt(g, pose, x, y, k); return; }
     const r = R(), B = r.bones, C = r.colors;
     g.save(); g.translate(x, y); g.scale(k * pose.facing, k);
     if (pose.dead) { g.rotate(-1.35); g.translate(-20, -8); g.globalAlpha = 0.85; }

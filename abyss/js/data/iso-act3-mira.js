@@ -32,13 +32,17 @@ AB.EQUIPMENT.push({
   text: { ready: 'Разрезать кокон', done: 'Кокон вскрыт' },
 });
 AB.ID.register('EQUIP-017', AB.EQUIPMENT.find((e) => e.id === 'EQUIP-017'));
+// №121: экзокостюм доктора Хейл — та же тяжёлая модель, переделанная под врача (номер 07, ящик с препаратами,
+// инжектор на предплечье). Хейл берёт его со стойки в шлюзе «Абисса»; на дне — её транспорт.
+// Картинка — assets/source/EXOSUIT-HALE-01.png, части — assets/exosuit/hale (tools/rigs/EXOSUIT_HALE.json).
+AB.ID.register('EQUIP-018', { id: 'EQUIP-018', name: 'Экзокостюм доктора Хейл', desc: 'Тяжёлый глубоководный костюм, номер 07: ящик с препаратами на ранце, инжектор на предплечье.', pending: true });
 
 // Мира в бою. Облик — как у CHAR-002 (look); поведение — свой тип 'mira' (iso-mira.js).
 // Копии — ENEMY-011~c1… (та же запись; 1 удар — и лопаются облаком спор).
 AB.ENEMIES.push({
   id: 'ENEMY-011', name: 'Мира', type: 'mira', look: 'CHAR-002', pending: true,
   // №120: фаза 1 — 40–60 с: плазма Марка по ней ×0,35, вплотную ×0,6; ампулы Хейл ускоряют (×1,5)
-  hp: 900, dart: 7, armor: { ranged: 0.35, melee: 0.6 }, stats: { maxHp: 900, speed: 110, runSpeed: 150 }, behavior: { retreatBelow: 0 },
+  hp: 700, dart: 7, armor: { ranged: 0.35, melee: 0.6 }, stats: { maxHp: 700, speed: 110, runSpeed: 150 }, behavior: { retreatBelow: 0 },
   anims: {}, carry: null, spawn: null,
 });
 AB.ID.register('ENEMY-011', AB.ENEMIES.find((e) => e.id === 'ENEMY-011'));

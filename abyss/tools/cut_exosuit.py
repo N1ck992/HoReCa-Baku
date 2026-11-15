@@ -2,7 +2,8 @@
 """
 Нарезка экзокостюма (EQUIP-005) из одной картинки сбоку (дополнение №62).
 
-    python3 tools/cut_exosuit.py
+    python3 tools/cut_exosuit.py                       # костюм Марка (EXOSUIT-01)
+    python3 tools/cut_exosuit.py tools/rigs/EXOSUIT_HALE.json   # №121: другой костюм — свои суставы и файлы
 
 У этого дизайна корпус почти целиком закрыт наплечником и ближней рукой, поэтому режем не на 11
 частей, как человека, а на то, что действительно двигается:
@@ -38,6 +39,19 @@ CAPS = {
     'shin_far': ([('knee_far', 'ankle_far'), ('ankle_far', 'toe_far')], 115),
 }
 ORDER = ['forearm_near', 'shin_near', 'thigh_near', 'body', 'thigh_far', 'shin_far']   # ближнее — раньше
+BODY_Y, THIGH_Y = 930, 900          # корпус — выше BODY_Y; бедро — ниже THIGH_Y
+VAR, OUT_REL, JS_NAME = 'EXOSUIT_ART', 'assets/exosuit/v2', 'EXOSUIT_ART.js'
+HIDDEN_TONE, FAR_FROM_NEAR = 0.32, False   # яркость достроенного; дальняя нога — копия ближней (если её почти не видно)
+# №121: другой костюм того же типа — параметры из json (src, out, var, joints, sole, caps, bodyY, thighY)
+import sys
+if len(sys.argv) > 1:
+    _c = json.load(open(sys.argv[1], encoding='utf-8'))
+    SRC = os.path.join(ROOT, _c['src']); OUT_REL = _c['out']; OUT = os.path.join(ROOT, OUT_REL)
+    VAR = _c['var']; JS_NAME = VAR + '.js'
+    J = {k: tuple(v) for k, v in _c['joints'].items()}; SOLE = _c['sole']
+    if 'caps' in _c: CAPS = {k: ([tuple(x) for x in v[0]], v[1]) for k, v in _c['caps'].items()}
+    BODY_Y, THIGH_Y = _c.get('bodyY', BODY_Y), _c.get('thighY', THIGH_Y)
+    HIDDEN_TONE = _c.get('hiddenTone', 0.32); FAR_FROM_NEAR = _c.get('farFromNear', False)
 
 
 def seg_dist(xx, yy, a, b):
@@ -65,11 +79,11 @@ def main():
     for n in ORDER:
         if n == 'body':
             # корпус — всё выше линии таза, что не взяла рука
-            inside = fg & ~done & (yy < 930)
+            inside = fg & ~done & (yy < BODY_Y)
         else:
             inside = fg & ~done & (dist[n] <= 1.0)
             if n.startswith('thigh'):
-                inside &= yy > 900                       # бедро начинается ниже юбки корпуса
+                inside &= yy > THIGH_Y                   # бедро начинается ниже юбки корпуса
         owner[inside] = n; done |= inside
     # что осталось (края ног) — ближайшей ноге
     left = fg & ~done
@@ -84,9 +98,9 @@ def main():
         hidden = np.zeros_like(own)
         if n == 'body':
             # корпус за предплечьем: полоса под рукой внутри силуэта
-            hidden = (owner == 'forearm_near') & (yy < 900)
+            hidden = (owner == 'forearm_near') & (yy < THIGH_Y)
         elif n == 'thigh_far':
-            hidden = (dist['thigh_far'] <= 0.85) & ((owner == 'thigh_near') | (owner == 'shin_near')) & (yy > 930)
+            hidden = (dist['thigh_far'] <= 0.85) & ((owner == 'thigh_near') | (owner == 'shin_near')) & (yy > BODY_Y)
         elif n == 'shin_far':
             hidden = (dist['shin_far'] <= 0.8) & ((owner == 'shin_near') | (owner == 'thigh_near'))
         elif n == 'thigh_near':
@@ -100,7 +114,7 @@ def main():
             # а не размытое пятно: у робота там действительно тень и узлы
             rng = np.random.default_rng(7)
             noise = rng.integers(-6, 7, size=filled.shape[:2])[..., None]
-            dark = np.clip(filled.astype(int) * 0.32 + 18 + noise, 0, 255).astype(np.uint8)
+            dark = np.clip(filled.astype(int) * HIDDEN_TONE + 18 + noise, 0, 255).astype(np.uint8)
             px = np.where(hidden[..., None], dark, px)
         shape = own | hidden
         ys, xs = np.nonzero(shape)
@@ -110,19 +124,20 @@ def main():
         im = Image.fromarray(rgba, 'RGBA')
         im = im.resize((max(1, round(im.width * SCALE)), max(1, round(im.height * SCALE))), Image.LANCZOS)
         im.save(os.path.join(OUT, f'{n}.png'), optimize=True)
-        parts[n] = {'file': f'assets/exosuit/v2/{n}.png', 'x': int(x0), 'y': int(y0), 'w': int(x1 - x0), 'h': int(y1 - y0)}
+        parts[n] = {'file': f'{OUT_REL}/{n}.png', 'x': int(x0), 'y': int(y0), 'w': int(x1 - x0), 'h': int(y1 - y0)}
         print(f'  {n}: {x1 - x0}×{y1 - y0}' + (' (достроено)' if hidden.any() else ''))
 
     art = {
-        'source': 'assets/source/EXOSUIT-01.png', 'scale': SCALE,
+        'source': os.path.relpath(SRC, ROOT), 'scale': SCALE,
         'heightPx': SOLE - J['crown'][1], 'soleY': SOLE, 'joints': J, 'parts': parts,
         'order': ['thigh_far', 'shin_far', 'body', 'thigh_near', 'shin_near', 'forearm_near'],   # дальнее — раньше
+        'farFromNear': FAR_FROM_NEAR,
     }
-    js = os.path.join(ROOT, 'js/data/rigs/EXOSUIT_ART.js')
+    js = os.path.join(ROOT, 'js/data/rigs/' + JS_NAME)
     with open(js, 'w') as f:
         f.write('// Создано tools/cut_exosuit.py — не редактировать вручную (№62).\n')
         f.write('// Картинка экзокостюма, нарезанная на части: координаты — в пикселях исходника.\n')
-        f.write('AB.RIGS = AB.RIGS || {};\nAB.RIGS.EXOSUIT_ART = ' + json.dumps(art, ensure_ascii=False, indent=2) + ';\n')
+        f.write('AB.RIGS = AB.RIGS || {};\nAB.RIGS.' + VAR + ' = ' + json.dumps(art, ensure_ascii=False, indent=2) + ';\n')
     print('  →', os.path.relpath(js, ROOT))
 
 

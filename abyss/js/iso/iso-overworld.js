@@ -145,7 +145,7 @@ AB.IsoOverworld = (() => {
   function syncSquads() {
     const crew = AB.IsoActs ? AB.IsoActs.crew() : ['CHAR-001'];
     for (const id of crew) if (!squads.some((s) => s.id === id)) {
-      const vehicle = id === 'CHAR-001' ? 'EQUIP-005' : null;
+      const vehicle = id === 'CHAR-001' ? 'EQUIP-005' : id === 'CHAR-003' ? 'EQUIP-018' : null;   // №121: у Хейл — свой костюм
       squads.push({ id, kind: 'squad', vehicle, state: 'home', q: base.q, r: base.r, path: [], anim: null, target: null, atk: null, atkT: 0, flash: 0, stride: 0, face: 1 });
     }
   }
@@ -760,7 +760,7 @@ AB.IsoOverworld = (() => {
   }
   function drawSquad(s) {
     const c = slotPos(s), me = AB.Chars.get(s.id);
-    const pose = { facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
+    const pose = { id: s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
     if (s.state === 'retreat') g.globalAlpha = 0.75;
     AB.IsoSuit.draw(g, pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height);
     g.globalAlpha = 1;

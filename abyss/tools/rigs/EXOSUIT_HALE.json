@@ -1,0 +1,123 @@
+{
+  "src": "assets/source/EXOSUIT-HALE-01.png",
+  "out": "assets/exosuit/hale",
+  "var": "EXOSUIT_HALE_ART",
+  "sole": 1505,
+  "bodyY": 965,
+  "thighY": 940,
+  "joints": {
+    "crown": [
+      600,
+      20
+    ],
+    "hip": [
+      520,
+      960
+    ],
+    "elbow": [
+      470,
+      565
+    ],
+    "wrist": [
+      520,
+      790
+    ],
+    "hand": [
+      540,
+      870
+    ],
+    "hip_near": [
+      470,
+      1000
+    ],
+    "knee_near": [
+      420,
+      1315
+    ],
+    "ankle_near": [
+      450,
+      1440
+    ],
+    "toe_near": [
+      640,
+      1480
+    ],
+    "hip_far": [
+      580,
+      970
+    ],
+    "knee_far": [
+      585,
+      1190
+    ],
+    "ankle_far": [
+      630,
+      1420
+    ],
+    "toe_far": [
+      715,
+      1470
+    ]
+  },
+  "caps": {
+    "forearm_near": [
+      [
+        [
+          "elbow",
+          "wrist"
+        ],
+        [
+          "wrist",
+          "hand"
+        ]
+      ],
+      90
+    ],
+    "shin_near": [
+      [
+        [
+          "knee_near",
+          "ankle_near"
+        ],
+        [
+          "ankle_near",
+          "toe_near"
+        ]
+      ],
+      125
+    ],
+    "thigh_near": [
+      [
+        [
+          "hip_near",
+          "knee_near"
+        ]
+      ],
+      120
+    ],
+    "thigh_far": [
+      [
+        [
+          "hip_far",
+          "knee_far"
+        ]
+      ],
+      100
+    ],
+    "shin_far": [
+      [
+        [
+          "knee_far",
+          "ankle_far"
+        ],
+        [
+          "ankle_far",
+          "toe_far"
+        ]
+      ],
+      105
+    ]
+  },
+  "hiddenTone": 0.62,
+  "farFromNear": true
+}
