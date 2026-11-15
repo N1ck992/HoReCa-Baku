@@ -206,7 +206,8 @@ AB.IsoEnemies = (() => {
         }
         if (!e.hitDone && e.t >= d.attack.windup) {
           e.hitDone = true;
-          if (tg && Math.hypot(tg.x - e.x, tg.y - e.y) <= d.attack.range / T + 0.45) AB.IsoCombat.damageChar(tg.id, d.damage, e);
+          if (tg && Math.hypot(tg.x - e.x, tg.y - e.y) <= d.attack.range / T + 0.45 && !(AB.IsoFX && AB.IsoFX.invulnerable(tg))) AB.IsoCombat.damageChar(tg.id, d.damage, e);
+          else if (AB.IsoFX && d.type !== 'boss') { e.stagger = AB.IsoFX.RULES.whiff; e.knockX = 0; e.knockY = 0; e.flash = 0.6; AB.Bus.emit('enemy:whiff', { id: e.id, x: e.x, y: e.y }); }   // №111: промах — открыт
           AB.Bus.emit('iso:enemyStrike', { id: e.id });
         }
         if (e.t > 1.0) { e.cooldown = d.attack.cooldown; setState(e, 'CHASE'); }
@@ -224,7 +225,7 @@ AB.IsoEnemies = (() => {
   }
 
   // урон противнику (броня — по виду удара, как в основной игре)
-  function damage(id, amount, from, kind = 'melee') {
+  function damage(id, amount, from, kind = 'melee', opt = {}) {
     const e = list.get(id);
     if (!e || e.state === 'DEAD') return false;
     const d = def(e);
@@ -258,7 +259,7 @@ AB.IsoEnemies = (() => {
     }
     e.stagger = d.type === 'boss' ? 0.12 : 0.35;
     if (from) {
-      const dx = e.x - from.x, dy = e.y - from.y, n = Math.hypot(dx, dy) || 1, k = (d.type === 'boss' ? 30 : 180) / T;
+      const dx = e.x - from.x, dy = e.y - from.y, n = Math.hypot(dx, dy) || 1, k = (d.type === 'boss' ? 30 : 180) / T * (opt.knock || 1);   // №111: тяжёлый удар серии отбрасывает дальше
       e.knockX = (dx / n) * k; e.knockY = (dy / n) * k;
     }
     AB.Anim.play(id, 'hurt', { restart: true });

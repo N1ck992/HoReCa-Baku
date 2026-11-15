@@ -605,3 +605,11 @@ body.base-build #iso-hud { display: none; }
 #iso-patch-box p { margin: 0; } #iso-patch-box .pb-hint { color: var(--muted); font-size: 12px; } #iso-patch-box .pb-msg { color: #ffd27a; min-height: 1em; }
 #iso-patch-box .pb-row { display: flex; flex-wrap: wrap; gap: 8px; }
 #iso-patch-box .pb-reset, #iso-patch-box .pb-close { color: #d9f6ff; background: #1a2228; border: 1px solid rgba(255, 255, 255, .2); }
+
+/* №111: кнопки боя на телефоне — удар и рывок (на компьютере: F/J и пробел) */
+#iso-actbtns { display: none; position: fixed; z-index: 6; right: 14px; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); gap: 12px; align-items: flex-end; }
+@media (hover: none) and (pointer: coarse) { #iso-actbtns { display: flex; } }
+#iso-actbtns button { width: 64px; height: 64px; border-radius: 50%; font: 700 26px var(--display); color: #e8f8ff; background: rgba(10, 16, 20, .72); border: 2px solid rgba(94, 230, 255, .55); touch-action: manipulation; }
+#iso-actbtns #iso-btn-atk { width: 78px; height: 78px; font-size: 32px; border-color: rgba(255, 120, 90, .7); }
+#iso-actbtns button:active { transform: scale(.92); background: rgba(94, 230, 255, .25); }
+#iso-actbtns button.cd { opacity: .45; }

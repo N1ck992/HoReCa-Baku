@@ -299,20 +299,24 @@
       const raw = AB.IsoInput.update(dt), input = busy ? { x: 0, y: 0, walk: false } : raw;
       AB.IsoStory.update(dt);
       AB.IsoGame.update(dt);
-      AB.IsoParty.update(dt, input);
+      // №111: стоп-кадр — игра почти стоит (gd), кадр и сцены идут как обычно; рывок — до движения отряда
+      const gd = AB.IsoFX.step(dt);
+      const dashing = AB.IsoFX.dashUpdate(gd);
+      AB.IsoParty.update(gd, dashing ? { x: 0, y: 0, walk: false } : input);
       AB.IsoBridge.sync();
-      AB.IsoInteract.update(dt, input);
-      AB.IsoEnemies.update(dt);
-      AB.IsoNest.update(dt, input);
-      AB.IsoBoss.update(dt);
-      AB.IsoBase.update(dt);
-      AB.IsoCompanion.update(dt);   // №85: дрон-спутник
-      AB.IsoGuard.update(dt);       // №86: оборона ангара
-      AB.IsoCrowd.update(dt);       // №98: никто не стоит в одной точке
-      AB.IsoAudio.update(dt);       // №108: шаги, стоны, далёкие звуки
-      if (!busy) AB.IsoCombat.update(dt, input);
+      AB.IsoInteract.update(gd, input);
+      AB.IsoEnemies.update(gd);
+      AB.IsoNest.update(gd, input);
+      AB.IsoBoss.update(gd);
+      AB.IsoBase.update(gd);
+      AB.IsoCompanion.update(gd);   // №85: дрон-спутник
+      AB.IsoGuard.update(gd);       // №86: оборона ангара
+      AB.IsoCrowd.update(gd);       // №98: никто не стоит в одной точке
+      AB.IsoAudio.update(gd);       // №108: шаги, стоны, далёкие звуки
+      AB.IsoFX.update(gd);          // №111: брызги, пятна
+      if (!busy) AB.IsoCombat.update(gd, input);
       if (Math.random() < 0.1) AB.Quests.check();
-      AB.Anim.update(dt);
+      AB.Anim.update(gd);
       AB.IsoRender.frame(dt);
       AB.IsoMap.draw(dt);
       updateHud();

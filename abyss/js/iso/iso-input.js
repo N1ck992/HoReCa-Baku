@@ -26,7 +26,8 @@ AB.IsoInput = (() => {
       if (AB.IsoInventory && (AB.IsoInventory.isOpen() || AB.IsoInventory.heroOpen())) return;   // открыто окно — клавиши его
       if (e.code === 'KeyQ') { e.preventDefault(); if (!e.repeat) AB.IsoParty.cycle(); return; }
       if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat) { AB.IsoInteract.actNearest(); return; }
-      if ((e.code === 'KeyF' || e.code === 'Space') && !e.repeat) { e.preventDefault(); AB.IsoCombat.attackNearest(); return; }
+      if ((e.code === 'KeyF' || e.code === 'KeyJ') && !e.repeat) { e.preventDefault(); AB.IsoCombat.attackNearest(); return; }
+      if (e.code === 'Space' && !e.repeat) { e.preventDefault(); AB.IsoFX.dash(update(0)); return; }   // №111: пробел — рывок
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') AB.IsoRender.zoom(-0.1);
       if (e.code === 'Equal' || e.code === 'NumpadAdd') AB.IsoRender.zoom(0.1);
       if (Object.values(MAP).flat().includes(e.code)) e.preventDefault();

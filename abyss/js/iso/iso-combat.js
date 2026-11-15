@@ -45,7 +45,11 @@ AB.IsoCombat = (() => {
     if (e) { m.hx = e.x - m.x; m.hy = e.y - m.y; const sx = m.hx - m.hy; if (Math.abs(sx) > 0.05) m.facing = sx > 0 ? 1 : -1; }
     const shot = w.weapon.ranged && (w.weapon.infinite || (w.weapon.energy ? AB.Inventory.fire(m.id) : false));
     if (w.weapon.ranged && !shot) AB.Bus.emit(w.weapon.energy ? 'combat:overheated' : 'combat:noammo', { charId: m.id });
-    swings.set(m.id, { t: 0, w, hit: false, shot, target: e ? e.id : null });
+    // №111: серия ударов ближнего боя — нажал снова вскоре после удара → следующий; третий — тяжёлый
+    const now = performance.now() / 1000, C = AB.IsoFX ? AB.IsoFX.RULES.combo : null;
+    let combo = 0;
+    if (C && !shot && !w.weapon.ranged) { combo = (m.lastSwing != null && now - m.lastSwing < (w.weapon.cooldown || 0.6) + C.window) ? ((m.combo || 0) + 1) % 3 : 0; m.combo = combo; m.lastSwing = now; }
+    swings.set(m.id, { t: 0, w, hit: false, shot, target: e ? e.id : null, combo });
     AB.Anim.play(m.id, 'attack', { restart: true });
     m.action = 'attack';
     return true;
@@ -66,7 +70,7 @@ AB.IsoCombat = (() => {
         if (!W().see(m.x, m.y, e.x, e.y, 0.05)) continue;
         hit = e; best = along;
       }
-      if (hit) landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged');
+      if (hit) { landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged'); if (landed && AB.IsoFX) AB.IsoFX.impact(hit, { x: hit.x - (hit.x - m.x) * 0.01, y: hit.y - (hit.y - m.y) * 0.01 }, false, hit.state === 'DEAD'); }
       const end = hit ? { x: hit.x, y: hit.y } : { x: m.x + dx * Math.min(range, 6), y: m.y + dy * Math.min(range, 6) };
       AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart });
     } else {
@@ -75,7 +79,10 @@ AB.IsoCombat = (() => {
       for (const e of AB.IsoEnemies.alive()) {
         const rx = e.x - m.x, ry = e.y - m.y, d = Math.hypot(rx, ry);
         if (d > reach || (d > 0.4 && (rx * m.hx + ry * m.hy) / (d * n) < 0.35)) continue;   // перед собой, ~70°
-        landed = AB.IsoEnemies.damage(e.id, dmg, m, 'melee') || landed;
+        const C = AB.IsoFX && AB.IsoFX.RULES.combo, k = sw.combo || 0, heavy = k === 2;
+        const hit = AB.IsoEnemies.damage(e.id, dmg * (C ? C.dmg[k] : 1), m, 'melee', { knock: C ? C.knock[k] : 1 });
+        if (hit && AB.IsoFX) AB.IsoFX.impact(e, m, heavy, e.state === 'DEAD');
+        landed = hit || landed;
       }
     }
     AB.Bus.emit('combat:swing', { charId: m.id, landed, damage: sw.shot ? w.damage * mod('rangedDamage') : (w.ranged ? w.bash : w.damage) * mod('meleeDamage') });   // №88: урон удара — для дрона
@@ -85,6 +92,7 @@ AB.IsoCombat = (() => {
   function damageChar(id, amount, from) {
     const c = charOf(id), m = member(id);
     if (!c || c.dead) return;
+    if (AB.IsoFX && AB.IsoFX.invulnerable(m)) { AB.Bus.emit('iso:dodge', { id }); return; }   // №111: в рывке — удар мимо
     amount *= mod('damageTaken');
     if (AB.IsoSuit && AB.IsoSuit.suited(m)) amount *= AB.IsoSuit.rig().armor;   // корпус костюма держит удар
     if (AB.IsoArmor) amount *= 1 - AB.IsoArmor.of(id);                          // №82: надетая броня
@@ -144,7 +152,12 @@ AB.IsoCombat = (() => {
   }
   function attackNearest() {
     const l = AB.IsoParty.lead();
-    const e = foeInReach(l, 0.4) || AB.IsoEnemies.alive().filter((q) => Math.hypot(q.x - l.x, q.y - l.y) < 2).sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))[0];
+    if (swings.has(l.id)) { l.queued = performance.now(); return true; }   // №111: нажал во время удара — следующий удар серии сразу после
+    // №111: сначала — враг впереди (куда смотрит/идёт ведущий), потом ближайший
+    const n0 = Math.hypot(l.hx || 0, l.hy || 0) || 1;
+    const ahead = AB.IsoEnemies.alive().filter((q) => hostile(q) && Math.hypot(q.x - l.x, q.y - l.y) < 2.2 && ((q.x - l.x) * l.hx + (q.y - l.y) * l.hy) / (n0 * (Math.hypot(q.x - l.x, q.y - l.y) || 1)) > 0.5)
+      .sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))[0];
+    const e = ahead || foeInReach(l, 0.4) || AB.IsoEnemies.alive().filter((q) => Math.hypot(q.x - l.x, q.y - l.y) < 2).sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))[0];
     return attack(l, e || null);
   }
 
@@ -203,7 +216,11 @@ AB.IsoCombat = (() => {
       const m = member(id);
       if (!m) { swings.delete(id); continue; }
       if (!sw.hit && sw.t >= sw.w.weapon.hitAt) { sw.hit = true; resolve(m, sw); }
-      if (sw.t >= sw.w.weapon.cooldown) swings.delete(id);
+      if (sw.t >= sw.w.weapon.cooldown) {
+        swings.delete(id);
+        if (m.queued && performance.now() - m.queued < 700 && m === AB.IsoParty.lead()) { m.queued = null; attackNearest(); }   // №111: серия
+        else m.queued = null;
+      }
     }
     leaderTick(dt, input);
     followersTick();

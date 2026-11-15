@@ -335,6 +335,7 @@ AB.IsoRender = (() => {
     drawFloorMarks();
     if (AB.IsoReward) AB.IsoReward.drawGround(ctx, toScreen, time, AB.IsoInteract.targets().filter((t) => t.kind === 'item'));   // №81: лучи над наградой
     drawMarker();
+    if (AB.IsoFX) AB.IsoFX.drawGround(ctx, toScreen);   // №111: пятна и красные зоны замаха
 
     // видимая область в клетках (с запасом на высоту стен)
     const hw = cv.width / 2 / sc + TW * 2, hh = cv.height / 2 / sc + WALL_H + TH * 2;
@@ -383,6 +384,11 @@ AB.IsoRender = (() => {
         const a = alphaFor(`w${o.x},${o.y}`, hid, dt);
         block(o.x, o.y, hgt, WALL_LOOK, a, { l: W.cell(o.x, o.y + 1) !== W.WALL, r: W.cell(o.x + 1, o.y) !== W.WALL });
       } else if (o.k === 'p') {
+        // №111: криокапсула — картинка (закрытая/открытая) вместо брусков; рисуется один раз, на последней клетке
+        if (o.p.kind === 'cryopod' && podImg.closed && podImg.closed.complete && podImg.closed.naturalWidth) {
+          if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) drawPod(o.p, alphaFor(`p${o.x},${o.y}`, occludes(o.x, o.y, 40, party), dt));
+          continue;
+        }
         const look = o.p.bay && AB.IsoActs.built(o.p.bay) ? PROP_LOOK.baybuilt : PROP_LOOK[o.p.kind] || PROP_LOOK.crate;
         const hid = occludes(o.x, o.y, look.h, party);
         const a = alphaFor(`p${o.x},${o.y}`, hid, dt);
@@ -421,6 +427,7 @@ AB.IsoRender = (() => {
     updateFx(dt);
     drawFx();
     if (AB.IsoReward) AB.IsoReward.drawFx(ctx, toScreen, dt);   // №81: вспышка награды
+    if (AB.IsoFX) AB.IsoFX.draw(ctx, toScreen);                 // №111: брызги, искры, след рывка
     lighting(sc, party);
     for (const m of party) if (!m.hidden) nameTag(m, m === l);
     for (const m of AB.IsoParty.npcs()) if (!m.hidden) nameTag(m, false);
@@ -430,6 +437,7 @@ AB.IsoRender = (() => {
     for (const e of AB.IsoEnemies.all()) enemyBar(e);
     if (AB.BaseView) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.BaseView.drawTop(ctx, toScreen, time); }   // №71: станки, склады, груз
     if (AB.IsoCompanion) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.IsoCompanion.draw(ctx, toScreen, time); }   // №85: дрон-спутник
+    if (AB.IsoFX) { ctx.setTransform(1, 0, 0, 1, 0, 0); AB.IsoFX.draw2d(ctx, cv.width, cv.height); }   // №111: красная кромка при ранении
   }
 
   // №57: турель / пушка — тумба со стволом; включена — светится и смотрит на ближайшего врага
@@ -615,6 +623,27 @@ AB.IsoRender = (() => {
   }
 
   // крышка капсулы: светится, пока внутри спит Марк; открывается в сцене пробуждения
+  // №111: картинки капсулы (автор): закрытая — Марк спит (голубой свет под стеклом), открытая — после пробуждения
+  const podImg = {};
+  for (const n of ['closed', 'open']) { const im = new Image(); im.src = `assets/props/cryopod-${n}.webp`; podImg[n] = im; }
+  function drawPod(p, alpha) {
+    const st = p.prop && AB.IsoStory && AB.IsoStory.fx.props[p.prop];
+    const main = !!p.main, eq = p.equip && AB.Equip && AB.Equip.state ? AB.Equip.state(p.equip) : null;
+    const open = main ? !(st === 'closed' || st === 'opening') : eq === 'done';
+    const im = open && podImg.open.complete && podImg.open.naturalWidth ? podImg.open : podImg.closed;
+    const c = toScreen(p.x + p.w / 2, p.y + p.h / 2), Wd = (p.w + p.h) * TW / 2 * 1.2, Hd = Wd * im.naturalHeight / im.naturalWidth;
+    ctx.save(); ctx.globalAlpha = alpha;
+    if (!main && !p.equip) ctx.filter = 'brightness(0.55) saturate(0.6)';   // пустые капсулы — без питания, тёмные
+    ctx.drawImage(im, c.x - Wd / 2, c.y - Hd * 0.6, Wd, Hd);
+    ctx.filter = 'none';
+    if (main && !open) {                                                      // живой свет под инеем
+      const g = ctx.createRadialGradient(c.x, c.y - Hd * 0.32, 2, c.x, c.y - Hd * 0.32, Wd * 0.4);
+      const a = st === 'opening' ? 0.3 + Math.sin(time * 8) * 0.12 : 0.22;
+      g.addColorStop(0, `rgba(120,210,255,${a})`); g.addColorStop(1, 'rgba(120,210,255,0)');
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(c.x - Wd / 2, c.y - Hd, Wd, Hd); ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+  }
   function podGlass(x, y, hgt, p) {
     const st = p.prop && AB.IsoStory && AB.IsoStory.fx.props[p.prop];
     const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
