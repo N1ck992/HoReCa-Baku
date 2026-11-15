@@ -126,7 +126,7 @@ AB.ISO_LAYOUTS = {
     ],
     props: [
       { kind: 'cryopod', x: 3, y: 3, w: 2, h: 2, main: true, prop: 'cryopod-main', asset: 'ASSET-ROOM001-02' },
-      { kind: 'cryopod', x: 6, y: 3, w: 2, h: 2, asset: 'ASSET-ROOM001-02' },
+      { kind: 'cryopod', x: 6, y: 3, w: 2, h: 2, asset: 'ASSET-ROOM001-02', look: 'broken' },   // №111: разбитая (картинка автора)
       { kind: 'cryopod', x: 9, y: 3, w: 2, h: 2, asset: 'ASSET-ROOM001-02' },
       { kind: 'console', x: 12, y: 2, w: 1, h: 1, asset: 'ASSET-ROOM001-04' },
       { kind: 'medbed', x: 11, y: 7, w: 2, h: 1, asset: 'ASSET-ROOM001-03' },

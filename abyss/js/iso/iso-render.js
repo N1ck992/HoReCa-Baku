@@ -625,15 +625,16 @@ AB.IsoRender = (() => {
   // крышка капсулы: светится, пока внутри спит Марк; открывается в сцене пробуждения
   // №111: картинки капсулы (автор): закрытая — Марк спит (голубой свет под стеклом), открытая — после пробуждения
   const podImg = {};
-  for (const n of ['closed', 'open']) { const im = new Image(); im.src = `assets/props/cryopod-${n}.webp`; podImg[n] = im; }
+  for (const n of ['closed', 'open', 'broken']) { const im = new Image(); im.src = `assets/props/cryopod-${n}.webp`; podImg[n] = im; }
   function drawPod(p, alpha) {
     const st = p.prop && AB.IsoStory && AB.IsoStory.fx.props[p.prop];
     const main = !!p.main, eq = p.equip && AB.Equip && AB.Equip.state ? AB.Equip.state(p.equip) : null;
     const open = main ? !(st === 'closed' || st === 'opening') : eq === 'done';
-    const im = open && podImg.open.complete && podImg.open.naturalWidth ? podImg.open : podImg.closed;
+    const ok = (q) => q && q.complete && q.naturalWidth;
+    const im = p.look === 'broken' && ok(podImg.broken) ? podImg.broken : open && ok(podImg.open) ? podImg.open : podImg.closed;
     const c = toScreen(p.x + p.w / 2, p.y + p.h / 2), Wd = (p.w + p.h) * TW / 2 * 1.2, Hd = Wd * im.naturalHeight / im.naturalWidth;
     ctx.save(); ctx.globalAlpha = alpha;
-    if (!main && !p.equip) ctx.filter = 'brightness(0.55) saturate(0.6)';   // пустые капсулы — без питания, тёмные
+    if (!main && !p.equip) ctx.filter = p.look === 'broken' ? 'brightness(0.8)' : 'brightness(0.55) saturate(0.6)';   // пустые капсулы — без питания, тёмные
     ctx.drawImage(im, c.x - Wd / 2, c.y - Hd * 0.6, Wd, Hd);
     ctx.filter = 'none';
     if (main && !open) {                                                      // живой свет под инеем
