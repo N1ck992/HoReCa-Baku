@@ -180,6 +180,7 @@ AB.BaseBuild = (() => {
     const S = sim().state();
     if (sel && !ghost) { const o = sim().obj(sel); if (o) { poly(ctx, toScreen, rectPts(o)); ctx.fillStyle = 'rgba(255,226,168,.12)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,226,168,.9)'; ctx.lineWidth = 2; ctx.stroke(); } }
     if (!ghost) return;
+    if (floating()) placeFloat(ctx, toScreen);
     const c = check(), col = c && c.ok ? '120,255,170' : '255,110,90';
     if (ghost.uid) { const o = sim().obj(ghost.uid); if (o) { poly(ctx, toScreen, rectPts(o)); ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); } }
     for (const [x, y] of AB.BaseGrids.cellsOf(ghost)) {
@@ -201,11 +202,14 @@ AB.BaseBuild = (() => {
     return cost.map(([i, n]) => { const have = AB.BaseView.stock(i); return `<span class="${have < n ? 'bad' : ''}">${esc(nm(i))} ${n} <i>(есть ${have})</i></span>`; }).join(' · ');
   }
   function render() {
-    const cat = el('bx-cat'), bar = el('bx-ghost');
+    const cat = el('bx-cat'), bar = el('bx-ghost'), fl = el('bx-confirm');
     if (!cat || !bar) return;
     document.body.classList.toggle('base-build', on);
+    // №114: устройство подтверждается кнопками ✓ / ✕ прямо над призраком (панель — только для кабеля)
+    const floatOn = on && !!ghost && floating();
+    if (fl) { fl.hidden = !floatOn; if (floatOn) { const c = check(); fl.querySelector('.nm').textContent = sim().bp(ghost.bp).name + (c.ok ? '' : ` — ${c.why}`); fl.querySelector('.yes').disabled = !c.ok; fl.classList.toggle('bad', !c.ok); } }
     cat.hidden = !on || !!ghost || !!sel;
-    bar.hidden = !on || (!ghost && !sel);
+    bar.hidden = !on || (!ghost && !sel) || floatOn;
     if (!on) return;
     if (!ghost && !sel) {
       const S = sim().state();
@@ -246,6 +250,20 @@ AB.BaseBuild = (() => {
       </div>
       <div class="muted">${o.built ? `При сносе в приёмник вернётся половина материалов${b.kind === 'room' ? '; помещение должно быть пустым' : ''}.` : 'Каркас: при сносе всё принесённое вернётся в приёмник.'}</div>`;
   }
+  const floating = () => !!ghost && sim().bp(ghost.bp).kind === 'device';
+  // ставит ✓ / ✕ над призраком: верхний угол призрака на экране → координаты страницы
+  function placeFloat(ctx, toScreen) {
+    const fl = el('bx-confirm'); if (!fl || fl.hidden) return;
+    const pts = [[ghost.x, ghost.y], [ghost.x + ghost.w, ghost.y], [ghost.x + ghost.w, ghost.y + ghost.h], [ghost.x, ghost.y + ghost.h]].map(([x, y]) => toScreen(x, y));
+    const top = pts.reduce((a, b) => (b.y < a.y ? b : a)), cx = pts.reduce((s, p) => s + p.x, 0) / 4;
+    const m = ctx.getTransform(), cv = ctx.canvas, rc = cv.getBoundingClientRect(), k = rc.width / cv.width;
+    const x = rc.left + (m.a * cx + m.c * top.y + m.e) * k, y = rc.top + (m.b * cx + m.d * top.y + m.f) * k;
+    const lx = Math.max(70, Math.min(innerWidth - 70, x)), ly = Math.max(70, y - 40);
+    const v = `translate(${Math.round(lx)}px,${Math.round(ly)}px) translate(-50%,-100%)`;
+    if (fl.style.transform !== v) fl.style.transform = v;
+    const ok = check().ok, yes = fl.querySelector('.yes');
+    if (yes.disabled === ok) render();
+  }
   function onClick(e) {
     const btn = e.target.closest('[data-b]'); if (!btn || btn.disabled) return;
     const [a, v] = btn.dataset.b.split('|');
@@ -263,7 +281,8 @@ AB.BaseBuild = (() => {
     else if (a === 'info') { const u = sel; toggle(false); AB.BaseView.open(u); }
   }
   function init() {
-    for (const id of ['bx-cat', 'bx-ghost']) { const n = el(id); if (n) n.addEventListener('click', onClick); }
+    for (const id of ['bx-cat', 'bx-ghost', 'bx-confirm']) { const n = el(id); if (n) n.addEventListener('click', onClick); }
+    const fl = el('bx-confirm'); if (fl) fl.addEventListener('pointerdown', (e) => e.stopPropagation());
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   AB.Bus.on('base:view', ({ on: v }) => { if (!v && on) toggle(false); });

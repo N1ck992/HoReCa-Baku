@@ -613,3 +613,17 @@ body.base-build #iso-hud { display: none; }
 #iso-actbtns #iso-btn-atk { width: 78px; height: 78px; font-size: 32px; border-color: rgba(255, 120, 90, .7); }
 #iso-actbtns button:active { transform: scale(.92); background: rgba(94, 230, 255, .25); }
 #iso-actbtns button.cd { opacity: .45; }
+
+/* №114: стройка — ✓ / ✕ над самим зданием; на базе (мирная зона) нет кнопок удара и рывка */
+body.in-base #iso-actbtns { display: none !important; }
+#bx-confirm { position: fixed; left: 0; top: 0; z-index: 6; display: grid; justify-items: center; gap: 5px; pointer-events: auto; }
+#bx-confirm[hidden] { display: none; }
+#bx-confirm .nm { max-width: 240px; padding: 2px 8px; font: 600 11px var(--mono); color: #d8ffe6; background: rgba(6, 10, 12, .8); border-radius: 4px; text-align: center; }
+#bx-confirm.bad .nm { color: #ffc4b4; }
+#bx-confirm .bt { display: flex; gap: 10px; align-items: center; }
+#bx-confirm button { width: 50px; height: 50px; min-width: 0; padding: 0; border-radius: 50%; font: 700 24px var(--display); color: #fff; touch-action: manipulation; cursor: pointer; }
+#bx-confirm .yes { background: #1f9d55; border: 3px solid #8ff0b4; box-shadow: 0 0 12px rgba(80, 230, 140, .6); }
+#bx-confirm .yes:disabled { background: #2b3a33; border-color: #56685d; box-shadow: none; color: #8a9a90; cursor: not-allowed; }
+#bx-confirm .no { background: #b8322a; border: 3px solid #ff9c90; box-shadow: 0 0 12px rgba(255, 90, 70, .5); }
+#bx-confirm .rot { width: 36px; height: 36px; font-size: 17px; background: rgba(10, 16, 20, .85); border: 2px solid rgba(94, 230, 255, .55); }
+#bx-confirm button:active { transform: scale(.92); }
