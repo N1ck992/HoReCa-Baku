@@ -44,6 +44,7 @@ AB.IsoAudio = (() => {
   }
   async function start() {
     if (started) return; started = true;
+    if (location.protocol === 'file:') return;            // открыто как файл — браузер не даст загрузить звуки (в публикации — работают)
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     ctx = new AC(); out = ctx.createGain(); out.gain.value = on ? RULES.master : 0; out.connect(ctx.destination);
     try { list = await (await fetch(BASE + 'sounds.json')).json(); } catch (e) { list = {}; }
