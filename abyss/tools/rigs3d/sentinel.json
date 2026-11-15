@@ -1,0 +1,21 @@
+{
+ "height": 1.9, "sigma": 0.035,
+ "joints": {
+  "pelvis": [0, 0.27], "spine": [0, 0.30], "neck": [0, 0.70], "crown": [0, 0.95], "crotch": [0, 0.04],
+  "sh_l": [0.23, 0.62], "el_l": [0.36, 0.36], "wr_l": [0.46, 0.13], "fi_l": [0.49, -0.02],
+  "sh_r": [-0.23, 0.62], "el_r": [-0.36, 0.36], "wr_r": [-0.46, 0.13], "fi_r": [-0.49, -0.02],
+  "hip_l": [0.1, 0.06], "kn_l": [0.13, -0.42], "an_l": [0.15, -0.85], "to_l": [0.16, -0.93, 0.14],
+  "hip_r": [-0.1, 0.06], "kn_r": [-0.13, -0.42], "an_r": [-0.15, -0.85], "to_r": [-0.16, -0.93, 0.14]
+ },
+ "bones": {
+  "pelvis": ["pelvis", "crotch"], "spine": ["spine", "neck"], "neck": ["neck", "crown"],
+  "sh_l": ["sh_l", "el_l"], "el_l": ["el_l", "wr_l"], "wr_l": ["wr_l", "fi_l"],
+  "sh_r": ["sh_r", "el_r"], "el_r": ["el_r", "wr_r"], "wr_r": ["wr_r", "fi_r"],
+  "hip_l": ["hip_l", "kn_l"], "kn_l": ["kn_l", "an_l"], "an_l": ["an_l", "to_l"],
+  "hip_r": ["hip_r", "kn_r"], "kn_r": ["kn_r", "an_r"], "an_r": ["an_r", "to_r"]
+ },
+ "thick": { "pelvis": 0.13, "spine": 0.17, "neck": 0.07, "sh_l": 0.06, "el_l": 0.05, "wr_l": 0.04, "sh_r": 0.06, "el_r": 0.05, "wr_r": 0.04,
+            "hip_l": 0.08, "kn_l": 0.065, "an_l": 0.05, "hip_r": 0.08, "kn_r": 0.065, "an_r": 0.05 },
+ "parents": { "pelvis": null, "spine": "pelvis", "neck": "spine", "sh_l": "spine", "el_l": "sh_l", "wr_l": "el_l", "sh_r": "spine", "el_r": "sh_r", "wr_r": "el_r",
+              "hip_l": "pelvis", "kn_l": "hip_l", "an_l": "kn_l", "hip_r": "pelvis", "kn_r": "hip_r", "an_r": "kn_r" }
+}

@@ -122,7 +122,9 @@
     // №100: 3D-манекен без графики — объёмные детали на скелете, поворачивается в любую сторону
     { id: 'F', name: '3D-манекен', three: true },
     // №101: 3D-модель преследователя (GLB автора) — детали привязаны к скелету манекена по названиям
-    { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb.json', height: 2.0 }];
+    { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb.json', height: 2.0 },
+    // №102: «Хромированный страж» (Meshy, автор) — цельная модель, скелет и веса посчитаны по геометрии, рисуется видеокартой
+    { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json' }];
   // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
   // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
   // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
@@ -189,13 +191,14 @@
       return P;
     }
     function draw(ctx, h, t, dt) {
-      if (h.kind.glb && !h.kind.model) return;
+      if ((h.kind.glb && !h.kind.model) || (h.kind.skinned && !h.kind.skin)) return;
       if (h.yaw == null) h.yaw = h.yawT == null ? Math.PI / 4 : h.yawT;
       if (h.yawT != null) { let d = h.yawT - h.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; h.yaw += d * Math.min(1, dt * 12); }
       const P = pose(h, t);
       const root = mul(Tr(h.x, h.y, P.bob * PER_M), mul(Rz(h.yaw), [PER_M, 0, 0, 0, 0, PER_M, 0, 0, 0, 0, PER_M, 0]));
       const M = {};
-      const md = h.kind.model, sk = md ? md.SK : SK;
+      const md = h.kind.model, sd = h.kind.skin, sk = sd ? sd.SK : md ? md.SK : SK;
+      if (sd) { drawSkinned(ctx, h, P); return; }
       if (md) P.cloak = fwd(-((5 + 22 * (h.run ? 1 : 0)) * Math.min(1, h.speed / 1.6) + Math.sin(t * 3.1) * 2.5 + Math.sin(h.phase * 2) * 3 * Math.min(1, h.speed / 1.6)));   // плащ отлетает назад
       for (const [j, [par, off]] of Object.entries(sk)) M[j] = mul(mul(par ? M[par] : root, Tr(...off)), P[j] || I());
       if (md) { drawModel(ctx, md, M); return; }
@@ -317,11 +320,86 @@
         ctx.beginPath(); ctx.moveTo(X(f.a), Y(f.a)); ctx.lineTo(X(f.b), Y(f.b)); ctx.lineTo(X(f.c), Y(f.c)); ctx.closePath(); ctx.fill(); ctx.stroke();
       }
     }
-    return { draw, load };
+    // ---------- №102: цельная модель со скелетом (веса на вершинах) — WebGL ----------
+    async function loadSkinned(url) {
+      const j = await (await fetch(url)).json();
+      const bin = Uint8Array.from(atob(j.bin), (c) => c.charCodeAt(0)), n = j.verts;
+      const cut = (a, b) => bin.slice(a, b).buffer;
+      const pos = new Float32Array(cut(0, 12 * n)), nrm = new Int8Array(cut(12 * n, 15 * n)), bi = new Uint8Array(cut(15 * n, 17 * n)), bw = new Uint8Array(cut(17 * n, 19 * n));
+      const idx = j.idx16 ? new Uint16Array(cut(19 * n, 19 * n + 6 * j.tris)) : new Uint32Array(cut(19 * n, 19 * n + 12 * j.tris));
+      const SKs = {};
+      for (const [b, p] of Object.entries(j.parents)) SKs[b] = [p, p ? j.joints[b].map((v, c) => v - j.joints[p][c]) : j.joints[b]];
+      return { j, pos, nrm, bi, bw, idx, SK: SKs, bones: j.bones };
+    }
+    const G3 = (() => {
+      let gl = null, prog, buf = null, cv3 = null;
+      const VS = () => `attribute vec3 p; attribute vec3 n; attribute vec2 bi; attribute vec2 bw;
+        uniform mat4 B[16]; uniform vec2 sz; uniform float S; varying vec3 vn; varying float vd;
+        void main() {
+          mat4 m = B[int(bi.x)] * bw.x + B[int(bi.y)] * bw.y;
+          vec3 w = (m * vec4(p, 1.0)).xyz; vn = normalize(mat3(m) * n);
+          float sx = (w.x - w.y) * ${TW / 2}.0 * S, sy = ((w.x + w.y) * ${TH / 2}.0 - w.z * ${ZT}.0) * S;
+          vd = dot(w, vec3(${VIEW.join(',')}));
+          gl_Position = vec4(sx / (sz.x * 0.5), -(sy + sz.y * 0.35) / (sz.y * 0.5), -vd / 40.0, 1.0);
+        }`;
+      const FS = () => `precision mediump float; varying vec3 vn; varying float vd; uniform vec3 col;
+        void main() {
+          vec3 n = normalize(vn), L = vec3(${LIGHT.join(',')}), V = vec3(${VIEW.join(',')});
+          float d = max(dot(n, L), 0.0), sp = pow(max(dot(reflect(-L, n), V), 0.0), 22.0), rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+          float env = 0.5 + 0.5 * n.z;                                     // «хром»: сверху светлее, снизу — тёмный пол
+          vec3 c = col * (0.18 + 0.55 * d + 0.35 * env) + vec3(1.0) * sp * 0.9 + vec3(0.35, 0.8, 0.95) * rim * 0.35;
+          gl_FragColor = vec4(c, 1.0);
+        }`;
+      function init() {
+        cv3 = document.createElement('canvas'); gl = cv3.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: true });
+        if (!gl) return false;
+        const sh = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+        prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS())); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS())); gl.linkProgram(prog);
+        return true;
+      }
+      function upload(sd) {
+        const mk = (data, type) => { const b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; };
+        sd.gl = { p: mk(sd.pos), n: mk(sd.nrm), bi: mk(sd.bi), bw: mk(sd.bw), i: mk(sd.idx, gl.ELEMENT_ARRAY_BUFFER), ext: sd.idx instanceof Uint32Array ? gl.getExtension('OES_element_index_uint') : null };
+      }
+      function render(sd, mats, S, col) {
+        if (!gl && !init()) return null;
+        if (!sd.gl) upload(sd);
+        const W = Math.min(2048, Math.ceil(170 * S)), H = Math.min(2048, Math.ceil(250 * S));
+        if (cv3.width !== W || cv3.height !== H) { cv3.width = W; cv3.height = H; }
+        gl.viewport(0, 0, W, H); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.useProgram(prog);
+        const at = (name, b, size, type, norm) => { const l = gl.getAttribLocation(prog, name); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, type, norm, 0, 0); };
+        at('p', sd.gl.p, 3, gl.FLOAT, false); at('n', sd.gl.n, 3, gl.BYTE, true); at('bi', sd.gl.bi, 2, gl.UNSIGNED_BYTE, false); at('bw', sd.gl.bw, 2, gl.UNSIGNED_BYTE, true);
+        gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'B'), false, mats);
+        gl.uniform2f(gl.getUniformLocation(prog, 'sz'), W, H); gl.uniform1f(gl.getUniformLocation(prog, 'S'), S); gl.uniform3fv(gl.getUniformLocation(prog, 'col'), col);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sd.gl.i);
+        gl.drawElements(gl.TRIANGLES, sd.idx.length, sd.idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+        return cv3;
+      }
+      return { render };
+    })();
+    function drawSkinned(ctx, h, P) {
+      const sd = h.kind.skin;
+      const root = mul(Tr(0, 0, P.bob * PER_M), mul(Rz(h.yaw), [PER_M, 0, 0, 0, 0, PER_M, 0, 0, 0, 0, PER_M, 0]));
+      const M = {};
+      for (const [j, [par, off]] of Object.entries(sd.SK)) M[j] = mul(mul(par ? M[par] : root, Tr(...off)), P[j] || I());
+      const mats = new Float32Array(16 * 16);
+      sd.bones.forEach((b, i) => {
+        const r = sd.j.joints[b], m = mul(M[b], Tr(-r[0], -r[1], -r[2]));
+        // в столбцы (как ждёт WebGL)
+        mats.set([m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0, m[3], m[7], m[11], 1], i * 16);
+      });
+      const t = ctx.getTransform(), S = t.a, p = { x: (h.x - h.y) * TW / 2, y: (h.x + h.y) * TH / 2 };
+      const c3 = G3.render(sd, mats, S, h.kind.col || [0.78, 0.8, 0.84]);
+      if (!c3) return;
+      const ax = p.x * t.a + t.e, ay = p.y * t.d + t.f;
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c3, Math.round(ax - c3.width / 2), Math.round(ay - c3.height * 0.85)); ctx.restore();
+    }
+    return { draw, load, loadSkinned };
   })();
 
   for (const k of KINDS) {
-    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); continue; }
+    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); continue; }
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
     await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));
