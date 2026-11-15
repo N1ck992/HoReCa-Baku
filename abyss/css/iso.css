@@ -594,3 +594,14 @@ body.base-build #iso-hud { display: none; }
 .ow-slot span { font-size: 8px; bottom: 4px; }
 .ow-slot button { width: 22px; height: 18px; font-size: 11px; bottom: 4px; }
 .ow-slot.add { font-size: 28px; }
+
+/* №110: обновление патчем (только в приложении Android) */
+#iso-patch-bar { position: fixed; z-index: 30; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 8px 10px 8px 14px; font: 13px var(--mono); color: #d9f6ff; background: rgba(6, 12, 16, .95); border: 1px solid rgba(94, 230, 255, .5); border-radius: 8px; box-shadow: 0 0 20px rgba(94, 230, 255, .2); }
+#iso-patch-bar button, #iso-patch-box button { min-height: 34px; padding: 6px 12px; font: 600 13px var(--mono); color: #071014; background: #5ee6ff; border: 0; border-radius: 6px; cursor: pointer; }
+#iso-patch-box { position: fixed; z-index: 31; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .6); }
+#iso-patch-box[hidden] { display: none; }
+#iso-patch-box .pb-card { width: min(460px, calc(100vw - 32px)); display: grid; gap: 8px; padding: 16px; font: 13px var(--mono); color: #d9f6ff; background: #0a1014; border: 1px solid rgba(94, 230, 255, .45); border-radius: 10px; }
+#iso-patch-box b { font: 600 15px var(--display); letter-spacing: 2px; color: #5ee6ff; }
+#iso-patch-box p { margin: 0; } #iso-patch-box .pb-hint { color: var(--muted); font-size: 12px; } #iso-patch-box .pb-msg { color: #ffd27a; min-height: 1em; }
+#iso-patch-box .pb-row { display: flex; flex-wrap: wrap; gap: 8px; }
+#iso-patch-box .pb-reset, #iso-patch-box .pb-close { color: #d9f6ff; background: #1a2228; border: 1px solid rgba(255, 255, 255, .2); }
