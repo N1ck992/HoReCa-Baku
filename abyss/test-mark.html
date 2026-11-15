@@ -65,6 +65,7 @@
   <button id="wave">Помахать</button>
   <button id="who">Управляю: Марк A</button>
   <button id="castbtn">Персонажи</button>
+  <button id="atk" title="Клавиша J; повторно во время удара — следующий удар серии">Удар мечом</button>
   <button id="anim">Анимация</button>
   <button id="runart" class="on">Рисунок бега: вкл</button>
   <button id="meshbtn">Сетка</button>
@@ -126,7 +127,7 @@
     // №102: «Хромированный страж» (Meshy, автор) — цельная модель, скелет и веса посчитаны по геометрии, рисуется видеокартой
     { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json', mocap: 'assets/models/anims/cmu-basic.json', paint: 'pursuer' },
     // №105: киборг с текстурами (Meshy, автор) — облегчён 12,6 → 1,5 МБ, текстуры: цвет, металл/шероховатость, рельеф
-    { id: 'I', name: 'Киборг · 3D (текстуры)', three: true, skinned: 'assets/models/reaper/reaper.json', mocap: 'assets/models/anims/cmu-basic-reaper.json', tex: { base: 'assets/models/reaper/base.jpg', mr: 'assets/models/reaper/mr.jpg', nrm: 'assets/models/reaper/nrm.jpg' } }];
+    { id: 'I', name: 'Киборг · 3D (текстуры)', three: true, skinned: 'assets/models/reaper/reaper.json', mocap: 'assets/models/anims/cmu-basic-reaper.json', tex: { base: 'assets/models/reaper/base.jpg', mr: 'assets/models/reaper/mr.jpg', nrm: 'assets/models/reaper/nrm.jpg' }, sword: 'assets/models/anims/cmu-sword-reaper.json' }];
   // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
   // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
   // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
@@ -336,7 +337,7 @@
       return { j, pos, nrm, bi, bw, idx, paint, uv, SK: SKs, bones: j.bones };
     }
     const G3 = (() => {
-      let gl = null, prog, buf = null, cv3 = null, deriv = false;
+      let gl = null, prog, buf = null, cv3 = null, deriv = false, kat = null;
       const VS = () => `attribute vec3 p; attribute vec3 n; attribute vec2 bi; attribute vec2 bw; attribute vec2 pm; attribute vec2 uv;
         uniform mat4 B[16]; uniform vec2 sz; uniform float S; varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm; varying vec2 vuv; varying vec3 vw;
         void main() {
@@ -436,7 +437,7 @@
         const mk = (data, type) => { const b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; };
         sd.gl = { p: mk(sd.pos), n: mk(sd.nrm), bi: mk(sd.bi), bw: mk(sd.bw), pm: mk(sd.paint || new Uint8Array(sd.pos.length / 3 * 2)), uv: mk(sd.uv || new Uint16Array(sd.pos.length / 3 * 2)), i: mk(sd.idx, gl.ELEMENT_ARRAY_BUFFER), ext: sd.idx instanceof Uint32Array ? gl.getExtension('OES_element_index_uint') : null };
       }
-      function render(sd, mats, S, col) {
+      function render(sd, mats, S, col, extra) {
         if (!gl && !init()) return null;
         if (!sd.gl) upload(sd);
         const W = Math.min(2048, Math.ceil(170 * S)), H = Math.min(2048, Math.ceil(250 * S));
@@ -463,6 +464,16 @@
         if (fc) { U('eyeR', fc.eyeR); U('eyeL', fc.eyeL); U('mouth', fc.mouth); }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sd.gl.i);
         gl.drawElements(gl.TRIANGLES, sd.idx.length, sd.idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+        // №106: катана — тем же шейдером, в тот же кадр глубины; жёстко на кости «меч» (матрица B[0])
+        if (extra) {
+          if (!kat) { kat = {}; for (const [k, arr] of Object.entries(Mini3D.katanaMesh())) { const f = new Float32Array(arr), n = f.length / 6, P = new Float32Array(n * 3), Nn = new Int8Array(n * 3); for (let i = 0; i < n; i++) { P.set(f.subarray(i * 6, i * 6 + 3), i * 3); for (let c = 0; c < 3; c++) Nn[i * 3 + c] = Math.round(f[i * 6 + 3 + c] * 127); } const mk = (d) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW); return b; }; kat[k] = { p: mk(P), n: mk(Nn), bi: mk(new Uint8Array(n * 2)), bw: mk(new Uint8Array(n * 2).map((_, i) => (i % 2 ? 0 : 255))), pm: mk(new Uint8Array(n * 2)), uv: mk(new Uint16Array(n * 2)), count: n }; } }
+          gl.uniform1f(gl.getUniformLocation(prog, 'texOn'), 0); gl.uniform1f(gl.getUniformLocation(prog, 'paintOn'), 0);
+          const M16 = new Float32Array(16 * 16); M16.set(extra.mat, 0); gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'B'), false, M16);
+          for (const [k, c] of [['blade', [0.86, 0.88, 0.92]], ['guard', [0.62, 0.45, 0.22]], ['grip', [0.16, 0.06, 0.06]]]) {
+            const g = kat[k]; at('p', g.p, 3, gl.FLOAT, false); at('n', g.n, 3, gl.BYTE, true); at('bi', g.bi, 2, gl.UNSIGNED_BYTE, false); at('bw', g.bw, 2, gl.UNSIGNED_BYTE, true); at('pm', g.pm, 2, gl.UNSIGNED_BYTE, true); at('uv', g.uv, 2, gl.UNSIGNED_SHORT, true);
+            gl.uniform3fv(gl.getUniformLocation(prog, 'col'), c); gl.drawArrays(gl.TRIANGLES, 0, g.count);
+          }
+        }
         return cv3;
       }
       return { render };
@@ -480,10 +491,24 @@
       });
       const t = ctx.getTransform(), S = t.a, p = { x: (h.x - h.y) * TW / 2, y: (h.x + h.y) * TH / 2 };
       sd.style = h.kind.paint;
-      const c3 = G3.render(sd, mats, S, h.kind.col || [0.78, 0.8, 0.84]);
+      let extra = null;
+      if (M.sword) { const m = M.sword; extra = { mat: [m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0, m[3], m[7], m[11], 1] }; }
+      const c3 = G3.render(sd, mats, S, h.kind.col || [0.78, 0.8, 0.84], extra);
       if (!c3) return;
       const ax = p.x * t.a + t.e, ay = p.y * t.d + t.f;
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c3, Math.round(ax - c3.width / 2), Math.round(ay - c3.height * 0.85)); ctx.restore();
+      // №106: след клинка во время удара — светлая дуга от середины до острия, тает за 0,15 с
+      if (M.sword) {
+        const iso3 = (q) => ({ x: p.x + (q[0] - q[1]) * TW / 2, y: p.y + (q[0] + q[1]) * TH / 2 - q[2] * ZT });
+        const tr = h.trail || (h.trail = []), now = performance.now() / 1000;
+        if (h.atk) tr.push({ t: now, a: iso3(ap(M.sword, [0.3, 0, 0.01])), b: iso3(ap(M.sword, [0.79, 0, 0.03])) });
+        while (tr.length && now - tr[0].t > 0.15) tr.shift();
+        for (let i = 1; i < tr.length; i++) {
+          const A = tr[i - 1], Bq = tr[i], al = Math.max(0, 1 - (now - Bq.t) / 0.15) * 0.5;
+          ctx.fillStyle = `rgba(235,245,255,${al})`;
+          ctx.beginPath(); ctx.moveTo(A.a.x, A.a.y); ctx.lineTo(A.b.x, A.b.y); ctx.lineTo(Bq.b.x, Bq.b.y); ctx.lineTo(Bq.a.x, Bq.a.y); ctx.closePath(); ctx.fill();
+        }
+      }
     }
     // ---------- №103: записанные движения (CMU) — стойка, шаг, бег, смешиваются по скорости ----------
     async function loadMocap(url) {
@@ -509,21 +534,90 @@
       // фаза шага: длина цикла (в клетках) смешана между шагом и бегом — ступни не скользят
       const stride = vW * L.walk.dur * (1 - wR) + vR * L.run.dur * wR;
       st.u += dt * sp / stride; st.it += dt;
-      const P = {}, a = [0, 0, 0, 0], b = [0, 0, 0, 0], c = [0, 0, 0, 0];
+      const Qs = {}, a = [0, 0, 0, 0], b = [0, 0, 0, 0], c = [0, 0, 0, 0];
       for (const bn of L.bones) {
         sample(L.idle, st.it / L.idle.dur, bn, a); sample(L.walk, st.u, bn, b); sample(L.run, st.u, bn, c);
         const sb = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3] < 0 ? -1 : 1, sc = b[0] * c[0] + b[1] * c[1] + b[2] * c[2] + b[3] * c[3] < 0 ? -1 : 1;
-        const q = [0, 1, 2, 3].map((i) => a[i] * wI + b[i] * sb * wW + c[i] * sb * sc * wR);
-        P[bn] = qm(q);
+        Qs[bn] = [0, 1, 2, 3].map((i) => a[i] * wI + b[i] * sb * wW + c[i] * sb * sc * wR);
       }
-      P.bob = bobAt(L.idle, st.it / L.idle.dur) * wI + bobAt(L.walk, st.u) * wW + bobAt(L.run, st.u) * wR;
+      let bob = bobAt(L.idle, st.it / L.idle.dur) * wI + bobAt(L.walk, st.u) * wW + bobAt(L.run, st.u) * wR;
+      // №106: меч — на шаге и в стойке опущен вниз-вперёд; удар — записанное движение поверх
+      const SL = h.kind.swordLib;
+      if (SL) {
+        Qs.sword = CARRY;
+        if (h.atk) {
+          const at = h.atk, cl = SL[at.clip]; at.t += dt;
+          if (at.t >= cl.dur) { if (at.next) { h.atk = { clip: at.next, t: 0, next: null }; } else h.atk = null; }
+          if (h.atk) {
+            const cl2 = SL[h.atk.clip], u = h.atk.t / cl2.dur, w = Math.min(1, h.atk.t / 0.12, (cl2.dur - h.atk.t) / 0.18), q = [0, 0, 0, 0];
+            for (const bn of SL.bones) {
+              sampleClamp(cl2, u, bn, q); const o = Qs[bn] || [0, 0, 0, 1];
+              const sg = o[0] * q[0] + o[1] * q[1] + o[2] * q[2] + o[3] * q[3] < 0 ? -1 : 1;
+              Qs[bn] = [0, 1, 2, 3].map((i) => o[i] * (1 - w) + q[i] * sg * w);
+            }
+            bob = bob * (1 - w) + bobAtClamp(cl2, u) * w;
+          }
+        }
+      }
+      const P = {};
+      for (const bn in Qs) P[bn] = qm(Qs[bn]);
+      P.bob = bob;
       return P;
     }
-    return { draw, load, loadSkinned, loadMocap, PER_M };
+    // клипы ударов не зациклены — кадр берётся без перескока в начало
+    function sampleClamp(cl, u, b, out) {
+      const n = cl.frames, x = Math.max(0, Math.min(n - 1.001, u * (n - 1))), i = Math.floor(x), k = i + 1, f = x - i, Q = cl.Q[b];
+      let s = 1; if (Q[i * 4] * Q[k * 4] + Q[i * 4 + 1] * Q[k * 4 + 1] + Q[i * 4 + 2] * Q[k * 4 + 2] + Q[i * 4 + 3] * Q[k * 4 + 3] < 0) s = -1;
+      for (let c = 0; c < 4; c++) out[c] = Q[i * 4 + c] * (1 - f) + Q[k * 4 + c] * f * s;
+      return out;
+    }
+    const bobAtClamp = (cl, u) => { const n = cl.frames, x = Math.max(0, Math.min(n - 1.001, u * (n - 1))), i = Math.floor(x); return cl.bob[i] * (1 - (x - i)) + cl.bob[i + 1] * (x - i); };
+    // меч в покое: клинок вниз и чуть вперёд (поворот оси +X вокруг Y на 70°)
+    const CARRY = (() => { const a = 70 * Math.PI / 180 / 2; return [0, Math.sin(a), 0, Math.cos(a)]; })();
+    async function loadSword(url) {
+      const j = await (await fetch(url)).json();
+      for (const c of ['slash1', 'slash2', 'slash3']) { const cl = j[c]; cl.Q = {}; for (const b of j.bones) cl.Q[b] = new Float32Array(cl.q[b]); }
+      return j;
+    }
+    function addSwordBone(sd, grip) {
+      const J = sd.j.joints, w = J.wr_r, f = J.fi_r;
+      sd.SK.sword = ['wr_r', [0, 1, 2].map((i) => (f[i] - w[i]) * grip)];
+    }
+    // катана: изогнутый клинок, гарда, рукоять — в своей системе (начало — хват, +X — вдоль клинка), метры
+    function katanaMesh() {
+      const parts = { blade: [], guard: [], grip: [] };
+      const box = (arr, cx, cz, lx, ly, lz, ang) => {           // брусок с поворотом вокруг Y (изгиб клинка)
+        const c = Math.cos(ang), s = Math.sin(ang), V = [];
+        for (const dx of [-1, 1]) for (const dy of [-1, 1]) for (const dz of [-1, 1]) { const x = dx * lx / 2, z = dz * lz / 2; V.push([cx + x * c + z * s, dy * ly / 2, cz - x * s + z * c]); }
+        for (const q of [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]) {
+          const [A, B, C] = [V[q[0]], V[q[1]], V[q[2]]]; let n = [(B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]), (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]), (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])];
+          const ctr = q.reduce((o, i) => o.map((v, k) => v + V[i][k] / 4), [0, 0, 0]); if ((ctr[0] - cx) * n[0] + ctr[1] * n[1] + (ctr[2] - cz) * n[2] < 0) n = n.map((v) => -v);
+          const l = Math.hypot(...n) || 1; n = n.map((v) => v / l);
+          for (const i of [q[0], q[1], q[2], q[0], q[2], q[3]]) arr.push(...V[i], ...n);
+        }
+      };
+      // клинок — цельный: сечение-ромб (обух сверху, кромка снизу) вдоль плавной дуги «сори», к острию сужается
+      const N = 18, L = 0.74, ring = [];
+      for (let i = 0; i <= N; i++) {
+        const t = i / N, x = 0.05 + t * L, sori = 0.03 * Math.sin(t * Math.PI * 0.85), h = 0.032 * (1 - Math.pow(t, 3) * 0.75), th = 0.0045 * (1 - t * 0.5);
+        const tipCut = t === 1 ? 0.15 : 1;
+        ring.push([[x, th, sori + h * 0.45 * tipCut], [x, th * 1.25, sori], [x, 0, sori - h * 0.55 * tipCut], [x, -th * 1.25, sori], [x, -th, sori + h * 0.45 * tipCut]]);
+      }
+      const tri = (A, B, C) => { let n = [(B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]), (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]), (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])]; const l = Math.hypot(...n) || 1; n = n.map((v) => v / l); for (const P of [A, B, C]) parts.blade.push(...P, ...n); };
+      for (let i = 0; i < N; i++) for (let k = 0; k < 5; k++) {
+        const a = ring[i][k], b = ring[i][(k + 1) % 5], c = ring[i + 1][(k + 1) % 5], d = ring[i + 1][k];
+        tri(a, b, c); tri(a, c, d); tri(a, c, b); tri(a, d, c);           // обе стороны (клинок тонкий — так не пропадает на развороте)
+      }
+      box(parts.guard, 0.04, 0, 0.012, 0.075, 0.075, 0);
+      box(parts.grip, -0.08, 0, 0.25, 0.032, 0.036, 0);
+      return parts;
+    }
+    return { draw, load, loadSkinned, loadMocap, loadSword, addSwordBone, katanaMesh, PER_M };    return { draw, load, loadSkinned, loadMocap, PER_M };
   })();
 
   for (const k of KINDS) {
-    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); if (k.skin && k.tex) { k.skin.texImgs = {}; for (const [n, u] of Object.entries(k.tex)) { const im = new Image(); im.src = u; k.skin.texImgs[n] = im; } } if (k.mocap) { k.lib = await Mini3D.loadMocap(k.mocap).catch((e) => { console.warn(e); return null; }); if (k.lib) { k.walkV = k.lib.walk.speed * Mini3D.PER_M; k.runV = k.lib.run.speed * Mini3D.PER_M; } } continue; }
+    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); if (k.skin && k.tex) { k.skin.texImgs = {}; for (const [n, u] of Object.entries(k.tex)) { const im = new Image(); im.src = u; k.skin.texImgs[n] = im; } } if (k.mocap) { k.lib = await Mini3D.loadMocap(k.mocap).catch((e) => { console.warn(e); return null; }); if (k.lib) { k.walkV = k.lib.walk.speed * Mini3D.PER_M; k.runV = k.lib.run.speed * Mini3D.PER_M; } }
+    if (k.sword && k.skin) { k.swordLib = await Mini3D.loadSword(k.sword).catch((e) => { console.warn(e); return null; }); if (k.swordLib) Mini3D.addSwordBone(k.skin, k.swordLib.grip); } continue; }
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
     await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));
@@ -635,6 +729,15 @@
   }
   // панель — под строкой кнопок (на телефоне кнопки в несколько строк); закрыть: ✕, «Персонажи», Esc или нажатие мимо
   function closeCast() { B('cast').hidden = true; B('castbtn').classList.remove('on'); }
+  // №106: удар мечом — у персонажей с мечом; повторное нажатие во время удара — следующий удар серии
+  function swordAttack() {
+    const SL = me.kind.swordLib; if (!SL) { B('atk').textContent = 'Меч — у «Киборг · 3D»'; setTimeout(() => { B('atk').textContent = 'Удар мечом'; }, 1500); return; }
+    const order = ['slash1', 'slash2', 'slash3'];
+    if (!me.atk) me.atk = { clip: 'slash1', t: 0, next: null };
+    else if (me.atk.t > SL[me.atk.clip].dur * 0.4 && !me.atk.next) me.atk.next = order[(order.indexOf(me.atk.clip) + 1) % 3];
+  }
+  B('atk').onclick = (e) => { e.stopPropagation(); swordAttack(); };
+  addEventListener('keydown', (e) => { if (!ed.on && (e.code === 'KeyJ') && !e.repeat) swordAttack(); });
   B('castbtn').onclick = (e) => { e.stopPropagation(); if (!B('cast').hidden) { closeCast(); return; } B('cast').style.top = `${Math.round(B('ui').getBoundingClientRect().bottom + 6)}px`; B('cast').hidden = false; B('castbtn').classList.add('on'); castUi(); };
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !B('cast').hidden) closeCast(); });
   addEventListener('pointerdown', (e) => { if (!B('cast').hidden && !e.target.closest('#cast') && !e.target.closest('#castbtn')) closeCast(); }, true);
@@ -707,7 +810,7 @@
     }
   }
   function moveHero(h, wx, wy, running, dt) {
-    const sp = (running ? (h.kind.runV || 3.4) : (h.kind.walkV || 1.6)) * Math.hypot(wx, wy);   // №103: у записанных движений — своя скорость
+    const sp = (running ? (h.kind.runV || 3.4) : (h.kind.walkV || 1.6)) * Math.hypot(wx, wy) * (h.atk ? 0.2 : 1);   // №106: во время удара — почти на месте   // №103: у записанных движений — своя скорость
     h.speed += (sp - h.speed) * Math.min(1, dt * 10);
     h.run = running && sp > 0;
     if (sp > 0) {
