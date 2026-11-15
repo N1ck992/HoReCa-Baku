@@ -241,7 +241,8 @@ AB.IsoStory = (() => {
     trigger(`enter:${roomId}`);
   });
   AB.Bus.on('equip:changed', ({ id }) => trigger(`equip:${id}`));
-  AB.Bus.on('world:power', ({ on }) => { if (on) trigger('power_on'); });
+  // №119: тревога (красное мигание с пробуждения) гаснет, когда дали питание
+  AB.Bus.on('world:power', ({ on }) => { if (on) { fx.alarm = false; trigger('power_on'); } });
   AB.Bus.on('event:end', (id) => trigger(`after:${id}`));
 
   // тот же интерфейс, что у AB.Story основной игры (доступ к дверям, задания)

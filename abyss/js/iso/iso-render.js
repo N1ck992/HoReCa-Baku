@@ -215,7 +215,14 @@ AB.IsoRender = (() => {
       t.setTransform(new DOMMatrix([TW / 2 * kt, TH / 2 * kt, -TW / 2 * kt, TH / 2 * kt, 0, -hgt]));
       ctx.fillStyle = t; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.35)'; ctx.fill();
     } else { ctx.fillStyle = WALL_LOOK.top; ctx.fill(); }
-    ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.stroke();
+    // №119: стены не сливаются с полом — светлая кромка по верху; низкий передний бортик — заметнее
+    ctx.strokeStyle = hgt < 20 ? 'rgba(235,205,130,.75)' : 'rgba(200,215,225,.55)'; ctx.lineWidth = hgt < 20 ? 2 : 1.5; ctx.stroke();
+    if (faces.l || faces.r) {   // тёмная полоса у основания стены — граница с полом
+      ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2; ctx.beginPath();
+      if (faces.l) { ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); }
+      if (faces.r) { ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); }
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -654,6 +661,7 @@ AB.IsoRender = (() => {
     ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt - 1); ctx.lineTo(e.x, e.y - hgt - 1); ctx.lineTo(s.x, s.y - hgt - 1); ctx.lineTo(w.x, w.y - hgt - 1); ctx.closePath(); ctx.fill();
   }
   // истинный облик (ASSET-CHAR002-02): на миг в помещении, между ними, — непонятно, кто это
+  const miraTrue = new Image(); miraTrue.src = 'assets/char002/true/mira-true.webp';
   function drawTrueForm(fx) {
     const tf = fx.trueForm;
     if (!tf) return;
@@ -661,7 +669,9 @@ AB.IsoRender = (() => {
     const p = toScreen(tf.x, tf.y);
     ctx.save();
     ctx.globalAlpha = Math.min(1, k * 1.4) * (Math.sin(time * 40) > -0.6 ? 0.9 : 0.4);
-    if (a.status === 'ready') { const h = 150, w = a.img.width * (h / a.img.height); ctx.drawImage(a.img, p.x - w / 2, p.y - h, w, h); }
+    // №119: истинный облик Миры — картинка автора (худая паучиха из плоти)
+    if (miraTrue.complete && miraTrue.naturalWidth) { const h = 230, w = miraTrue.naturalWidth * (h / miraTrue.naturalHeight); ctx.drawImage(miraTrue, p.x - w / 2, p.y - h * 0.97, w, h); }
+    else if (a.status === 'ready') { const h = 150, w = a.img.width * (h / a.img.height); ctx.drawImage(a.img, p.x - w / 2, p.y - h, w, h); }
     else { ctx.fillStyle = '#0a1418'; ctx.beginPath(); ctx.ellipse(p.x, p.y - 40, 50, 30, 0, 0, 7); ctx.fill(); }
     ctx.restore();
   }
@@ -835,7 +845,7 @@ AB.IsoRender = (() => {
     const L = lctx, k = 0.5;
     L.setTransform(1, 0, 0, 1, 0, 0);
     L.globalCompositeOperation = 'source-over';
-    const dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.72, lit: 0.5 }, AB.World && AB.World.hasPower()) : (AB.World && AB.World.hasPower() ? 0.5 : 0.72);
+    const dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.72, lit: 0.3 }, AB.World && AB.World.hasPower()) : (AB.World && AB.World.hasPower() ? 0.3 : 0.72);
     L.fillStyle = `rgba(3,4,7,${Math.max(0, dk)})`;   // с питанием светлее (№82: плавно, со вспышкой)
     L.fillRect(0, 0, lightCv.width, lightCv.height);
     L.setTransform(sc * k, 0, 0, sc * k, (cv.width / 2 - cam.x * sc) * k, (cv.height / 2 - cam.y * sc) * k);
