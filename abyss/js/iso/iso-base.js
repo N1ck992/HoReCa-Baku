@@ -28,6 +28,7 @@ AB.IsoBase = (() => {
     AB.IsoParty.setScene(false);
     AB.IsoRender.focus(null);
     document.body.classList.remove('in-base');
+    { const bx = document.getElementById('bx'); if (bx) bx.hidden = true; }   // №118: панель базы — только в базе (стыковка к «Абиссу» прямо из базы)
     AB.Bus.emit('base:view', { on: false });
   }
   function update(dt) {

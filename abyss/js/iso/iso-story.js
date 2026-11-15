@@ -12,7 +12,8 @@ AB.IsoStory = (() => {
   // весь акт I (№49–50); порядок и шаги — из events.js
   // №55: акт I кончается на внешних камерах (EVENT-012); экзокостюм — акт II (EVENT-010 не используется)
   const SUPPORTED = ['EVENT-001', 'EVENT-014', 'EVENT-003', 'EVENT-004', 'EVENT-002', 'EVENT-005', 'EVENT-006', 'EVENT-007', 'EVENT-008', 'EVENT-009', 'EVENT-011', 'EVENT-012',
-    'EVENT-015', 'EVENT-016', 'EVENT-017', 'EVENT-018', 'EVENT-019', 'EVENT-020', 'EVENT-021', 'EVENT-022', 'EVENT-023'];
+    'EVENT-015', 'EVENT-016', 'EVENT-017', 'EVENT-018', 'EVENT-019', 'EVENT-020', 'EVENT-021', 'EVENT-022', 'EVENT-023',
+    'EVENT-024', 'EVENT-025', 'EVENT-026', 'EVENT-027', 'EVENT-028'];   // №118: разоблачение Миры
   // триггер события в изометрии (js/data/iso-acts.js может заменить триггер из events.js)
   const trig = (def) => (AB.ISO_TRIGGER && AB.ISO_TRIGGER[def.id]) || def.trigger;
   const done = new Set();
@@ -131,6 +132,7 @@ AB.IsoStory = (() => {
     // вспышка истинного облика: свет почти гаснет, существо — в помещении между ними
     true_form: (s) => {
       if (running.skip) return;
+      if (s.at_char) { const c = who(s.at_char); if (c) { fx.trueForm = { x: c.x, y: c.y + 0.3, t: s.duration, dur: s.duration }; fx.flicker = Math.max(fx.flicker, s.duration); } return; }   // №118: облик сквозь линзу
       const a = who(s.between[0]), b = who(s.between[1]);
       const x = a && b ? (a.x + b.x) / 2 : (a || b).x, y = a && b ? (a.y + b.y) / 2 + 1.2 : (a || b).y;
       fx.trueForm = { x, y, t: s.duration, dur: s.duration };
@@ -163,6 +165,7 @@ AB.IsoStory = (() => {
       if (trig(def) !== kind || (def.once && done.has(def.id))) continue;
       if (off || !SUPPORTED.includes(def.id)) continue;
       if (def.needs === 'power' && !AB.World.hasPower()) continue;
+      if (def.needsFlag && !(AB.Flags && AB.Flags.has(def.needsFlag))) continue;   // №118: сцена ждёт своей отметки
       if (running) { if (running.def.id !== def.id && !queue.includes(def.id)) queue.push(def.id); }
       else start(def.id);
       return;

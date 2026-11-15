@@ -49,6 +49,7 @@ AB.IsoRender = (() => {
     exorack: { h: 96, top: '#3a3f44', l: '#4a5058', r: '#383d44' },
     // №55: мастерская, ангар, дно
     bench: { h: 30, top: '#55504a', l: '#403b35', r: '#35312c' },
+    cocoon: { h: 46, top: '#8a7a98', l: '#5a4a66', r: '#463a52', glow: [190, 120, 255] },   // №118: кокон из органической массы
     capsule: { h: 70, top: '#c9a24a', l: '#8a6e30', r: '#6e5726', glow: [255, 210, 120] },
     rock: { h: 46, top: '#2a3438', l: '#1d2528', r: '#171e21' },
     crystal: { h: 34, top: '#9a6cff', l: '#6a44c0', r: '#55369c', glow: [170, 110, 255] },
@@ -738,6 +739,8 @@ AB.IsoRender = (() => {
       ctx.strokeStyle = `rgba(255,70,50,${0.55 + Math.sin(time * 6) * 0.2})`; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 24, 12, 0, 0, 7); ctx.stroke();
     }
+    const dd = AB.ID.get(e.id);
+    if (dd && dd.type === 'mira' && AB.IsoMira) { AB.IsoMira.draw(ctx, e, p, (f, q) => AB.Render.drawFigure(ctx, f, q.x, q.y, FIG_K)); return; }   // №118: облик Миры
     if (AB.Render && AB.Render.drawEnemyFigure) AB.Render.drawEnemyFigure(ctx, e, p.x, p.y, ENEMY_K);
   }
   // полоса здоровья: у раненых, у цели и под указателем

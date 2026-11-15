@@ -308,6 +308,7 @@
       AB.IsoEnemies.update(gd);
       AB.IsoNest.update(gd, input);
       AB.IsoBoss.update(gd);
+      if (AB.IsoMira) AB.IsoMira.update(gd);
       AB.IsoBase.update(gd);
       AB.IsoCompanion.update(gd);   // №85: дрон-спутник
       AB.IsoGuard.update(gd);       // №86: оборона ангара

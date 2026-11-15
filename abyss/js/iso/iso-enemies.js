@@ -134,6 +134,7 @@ AB.IsoEnemies = (() => {
     if (e.story) { e.t += dt; return; }   // сюжетное появление — без поведения
     const d = def(e);
     if (d.type === 'pursuer') { pursuerTick(e, d, dt); return; }
+    if (d.type === 'mira') { AB.IsoMira.tick(e, dt); return; }   // №118: Мира и её копии
     if (e.state === 'DORMANT') { e.t += dt; return; }   // спит до своей сцены (Колосс)
     e.t += dt; e.cooldown = Math.max(0, e.cooldown - dt); e.flash = Math.max(0, e.flash - dt * 4);
     if (e.state === 'DEAD') return;
