@@ -737,6 +737,9 @@ AB.IsoOverworld = (() => {
     }
   }
   const baseImg = new Image(); baseImg.src = 'assets/seabed/base-capsule.webp';
+  // в пути — второй рисунок автора (винты, пузыри, лучи прожекторов); исходник выровнен по корпусу стоящей базы:
+  // точка (50, 2) исходника «в пути» = левый верхний угол обрезки стоящей (90, 6), масштаб тот же
+  const moveImg = new Image(); moveImg.src = 'assets/seabed/base-capsule-move.webp';
   function drawBase() {
     const c = slotPos(base);
     if (ascend) c.y -= size * 6 * Math.min(1, ascend.t / 5);          // капсула поднимается
@@ -745,7 +748,9 @@ AB.IsoOverworld = (() => {
       const w = size * SQ3 * 1.55, h = baseImg.naturalHeight * w / baseImg.naturalWidth;
       const bob = base.anim ? Math.sin(time * 3) * size * 0.04 : 0;
       g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.ellipse(c.x, c.y + size * 0.1, w * 0.4, w * 0.4 * TILT * 0.45, 0, 0, 7); g.fill();
-      g.drawImage(baseImg, c.x - w / 2, c.y + size * 0.25 - h * 0.99 + bob, w, h);
+      const x0 = c.x - w / 2, y0 = c.y + size * 0.25 - h * 0.99 + bob, k = w / 1376;
+      if ((base.anim || base.path.length || ascend) && moveImg.complete && moveImg.naturalWidth) g.drawImage(moveImg, x0 - 50 * k, y0 - 2 * k, 1536 * k, 1024 * k);
+      else g.drawImage(baseImg, x0, y0, w, h);
       return;
     }
     g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.ellipse(c.x, c.y + 6, 20 * dpr, 5 * dpr, 0, 0, 7); g.fill();
