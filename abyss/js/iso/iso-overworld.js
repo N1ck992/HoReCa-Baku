@@ -29,7 +29,8 @@ AB.IsoOverworld = (() => {
   const inside = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) <= D().radius;
   const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
   // №64: капсула по дну идёт медленно — 5 с на клетку (решение автора); костюм — 0,75 с
-  const TILT = 0.6, STEP = 0.75, BASE_STEP = 5;
+  // №113: наклон карты — под картинки клеток дна автора (высота клетки ≈ 0,9 ширины)
+  const TILT = 0.776, STEP = 0.75, BASE_STEP = 5;
   const px = (q, r) => ({ x: size * SQ3 * (q + r / 2), y: size * 1.5 * r * TILT });
   const siteAt = (q, r) => D().sites.find((s) => s.q === q && s.r === r) || null;
   // №88: точки-объекты («Абисс», обломки, поселение…) занимают свою клетку — на неё не встать, к ним подходят вплотную.
@@ -612,21 +613,62 @@ AB.IsoOverworld = (() => {
     }
   }
   const LIFT = { rock: 0.42, crystal: 0.12, silt: 0.06, trench: -0.18 };
+  // №113: клетки дна — картинки автора (assets/seabed): ил трёх видов, ил с обломками (реже), скалы.
+  // Картинка — шестиугольник вершиной вверх, ширина = ширине клетки. Высокие скалы выходят вверх за клетку,
+  // поэтому картинка ставится по низу: FULL — последняя строка, где картинка во всю ширину
+  // (нижние боковые вершины + бортик); она встаёт на SEAT·ширины ниже центра клетки.
+  const SEABED = {
+    silt: ['silt-1', 'silt-2', 'silt-3'], rare: ['silt-wreck'], rareChance: 0.12,
+    rock: ['rock-1', 'rock-2', 'rock-3', 'rock-4'], trench: ['trench-1', 'trench-2'],
+    FULL: { 'silt-1': 186, 'silt-2': 186, 'silt-3': 186, 'silt-wreck': 185, 'rock-1': 198, 'rock-2': 178, 'rock-3': 180, 'rock-4': 174, 'trench-1': 180, 'trench-2': 180 },
+    SEAT: 0.2786, W: 256,
+  };
+  // тёмная копия (клетка вне обзора) готовится один раз при загрузке — фильтр на каждом кадре слишком медленный
+  const tileImg = {}, tileDark = {};
+  for (const n of Object.keys(SEABED.FULL)) {
+    const im = new Image();
+    im.onload = () => {
+      tileImg[n] = im;
+      const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+      const x = c.getContext('2d'); x.drawImage(im, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(0, 0, c.width, c.height);
+      tileDark[n] = c;
+    };
+    im.src = `assets/seabed/${n}.webp`;
+  }
+  const cellHash = (q, r) => { let h = (q * 374761393 + r * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  function tileOf(c) {
+    if (c.tile === undefined) {
+      const h = cellHash(c.q, c.r), pick = (list, x) => list[Math.min(list.length - 1, Math.floor(x * list.length))];
+      if (c.kind === 'rock' || c.kind === 'trench') c.tile = pick(SEABED[c.kind], h);
+      else c.tile = h < SEABED.rareChance ? pick(SEABED.rare, h / SEABED.rareChance) : pick(SEABED.silt, (h - SEABED.rareChance) / (1 - SEABED.rareChance));
+    }
+    return tileImg[c.tile] || null;
+  }
+  function drawTile(c, im, x, y, dark) {
+    const w = size * SQ3, k = w / im.width;
+    g.drawImage((dark && tileDark[c.tile]) || im, x - w / 2, y + SEABED.SEAT * w - SEABED.FULL[c.tile] * k, w, im.height * k);
+  }
   function draw() {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#010305'; g.fillRect(0, 0, cv.width, cv.height);
     g.setTransform(1, 0, 0, 1, cv.width / 2 - cam.x, cv.height / 2 - cam.y);
     const order = [...cells.values()].filter((c) => c.seen).sort((a, b) => a.r - b.r || a.q - b.q);
     for (const c of order) {
-      const p0 = px(c.q, c.r), lit = near(c), lift = LIFT[c.kind] * size;
+      const p0 = px(c.q, c.r), lit = near(c), im = tileOf(c);
+      const lift = im ? 0 : LIFT[c.kind] * size;
       const p = { x: p0.x, y: p0.y - Math.max(0, lift) };
-      if (lift > 0) sides(p.x, p.y, size * 0.97, lift + size * 0.06, c.kind === 'rock' ? '#1c2328' : '#1a2a30');
-      hex(p.x, p.y, size * 0.97);
-      g.fillStyle = COLOR[c.kind]; g.fill();
+      if (im) {
+        drawTile(c, im, p.x, p.y, !lit);
+        hex(p.x, p.y, size);
+      } else {
+        if (lift > 0) sides(p.x, p.y, size * 0.97, lift + size * 0.06, c.kind === 'rock' ? '#1c2328' : '#1a2a30');
+        hex(p.x, p.y, size * 0.97);
+        g.fillStyle = COLOR[c.kind]; g.fill();
+      }
       if (c.kind === 'crystal') { g.fillStyle = `rgba(170,110,255,${0.12 + Math.sin(time * 2 + c.q) * 0.06})`; g.fill(); }
-      if (c.kind === 'rock') { g.fillStyle = 'rgba(255,255,255,.04)'; g.fill(); }
-      if (!lit) { g.fillStyle = 'rgba(0,0,0,.5)'; g.fill(); }
-      g.strokeStyle = 'rgba(120,180,200,.08)'; g.lineWidth = 1; g.stroke();
+      if (c.kind === 'rock' && !im) { g.fillStyle = 'rgba(255,255,255,.04)'; g.fill(); }
+      if (!lit && !im) { g.fillStyle = 'rgba(0,0,0,.5)'; g.fill(); }
+      if (!(im && c.kind !== 'silt' && c.kind !== 'crystal')) { g.strokeStyle = 'rgba(120,180,200,.08)'; g.lineWidth = 1; g.stroke(); }
       if (c.kind === 'crystal') for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(190,140,255,.7)'; g.fillRect(p.x - size * 0.3 + i * size * 0.25, p.y - size * 0.15 - (i % 2) * 6, 3, 8); }
       if (c.dep) {          // №71: россыпь реголита
         const k = c.dep.left / c.dep.max;
