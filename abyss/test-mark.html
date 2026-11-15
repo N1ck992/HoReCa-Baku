@@ -124,7 +124,7 @@
     // №101: 3D-модель преследователя (GLB автора) — детали привязаны к скелету манекена по названиям
     { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb.json', height: 2.0 },
     // №102: «Хромированный страж» (Meshy, автор) — цельная модель, скелет и веса посчитаны по геометрии, рисуется видеокартой
-    { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json' }];
+    { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json', mocap: 'assets/models/anims/cmu-basic.json' }];
   // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
   // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
   // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
@@ -194,7 +194,7 @@
       if ((h.kind.glb && !h.kind.model) || (h.kind.skinned && !h.kind.skin)) return;
       if (h.yaw == null) h.yaw = h.yawT == null ? Math.PI / 4 : h.yawT;
       if (h.yawT != null) { let d = h.yawT - h.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; h.yaw += d * Math.min(1, dt * 12); }
-      const P = pose(h, t);
+      const P = h.kind.lib ? mocapPose(h, dt) : pose(h, t);   // №103: записанные движения, если есть
       const root = mul(Tr(h.x, h.y, P.bob * PER_M), mul(Rz(h.yaw), [PER_M, 0, 0, 0, 0, PER_M, 0, 0, 0, 0, PER_M, 0]));
       const M = {};
       const md = h.kind.model, sd = h.kind.skin, sk = sd ? sd.SK : md ? md.SK : SK;
@@ -395,11 +395,45 @@
       const ax = p.x * t.a + t.e, ay = p.y * t.d + t.f;
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c3, Math.round(ax - c3.width / 2), Math.round(ay - c3.height * 0.85)); ctx.restore();
     }
-    return { draw, load, loadSkinned };
+    // ---------- №103: записанные движения (CMU) — стойка, шаг, бег, смешиваются по скорости ----------
+    async function loadMocap(url) {
+      const j = await (await fetch(url)).json();
+      for (const c of ['idle', 'walk', 'run']) { const cl = j[c]; cl.Q = {}; for (const b of j.bones) cl.Q[b] = new Float32Array(cl.q[b]); }
+      return j;
+    }
+    // кадр клипа в момент u (0..1), между кадрами — плавно
+    function sample(cl, u, b, out) {
+      const n = cl.frames, x = ((u % 1) + 1) % 1 * n, i = Math.floor(x) % n, k = (i + 1) % n, f = x - Math.floor(x), Q = cl.Q[b];
+      let s = 1; if (Q[i * 4] * Q[k * 4] + Q[i * 4 + 1] * Q[k * 4 + 1] + Q[i * 4 + 2] * Q[k * 4 + 2] + Q[i * 4 + 3] * Q[k * 4 + 3] < 0) s = -1;
+      for (let c = 0; c < 4; c++) out[c] = Q[i * 4 + c] * (1 - f) + Q[k * 4 + c] * f * s;
+      return out;
+    }
+    const bobAt = (cl, u) => { const n = cl.frames, x = ((u % 1) + 1) % 1 * n, i = Math.floor(x) % n, k = (i + 1) % n, f = x - Math.floor(x); return cl.bob[i] * (1 - f) + cl.bob[k] * f; };
+    const qm = (q) => { const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1, x = q[0] / l, y = q[1] / l, z = q[2] / l, w = q[3] / l;
+      return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 0, 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 0, 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y), 0]; };
+    function mocapPose(h, dt) {
+      const L = h.kind.lib, st = h.mc || (h.mc = { u: 0, it: Math.random() * 5 });
+      const vW = h.kind.walkV, vR = h.kind.runV, sp = Math.max(0, h.speed);
+      let wI, wW, wR;
+      if (sp < vW) { wR = 0; wW = sp / vW; wI = 1 - wW; } else { wI = 0; wR = Math.min(1, (sp - vW) / (vR - vW)); wW = 1 - wR; }
+      // фаза шага: длина цикла (в клетках) смешана между шагом и бегом — ступни не скользят
+      const stride = vW * L.walk.dur * (1 - wR) + vR * L.run.dur * wR;
+      st.u += dt * sp / stride; st.it += dt;
+      const P = {}, a = [0, 0, 0, 0], b = [0, 0, 0, 0], c = [0, 0, 0, 0];
+      for (const bn of L.bones) {
+        sample(L.idle, st.it / L.idle.dur, bn, a); sample(L.walk, st.u, bn, b); sample(L.run, st.u, bn, c);
+        const sb = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3] < 0 ? -1 : 1, sc = b[0] * c[0] + b[1] * c[1] + b[2] * c[2] + b[3] * c[3] < 0 ? -1 : 1;
+        const q = [0, 1, 2, 3].map((i) => a[i] * wI + b[i] * sb * wW + c[i] * sb * sc * wR);
+        P[bn] = qm(q);
+      }
+      P.bob = bobAt(L.idle, st.it / L.idle.dur) * wI + bobAt(L.walk, st.u) * wW + bobAt(L.run, st.u) * wR;
+      return P;
+    }
+    return { draw, load, loadSkinned, loadMocap, PER_M };
   })();
 
   for (const k of KINDS) {
-    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); continue; }
+    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); if (k.mocap) { k.lib = await Mini3D.loadMocap(k.mocap).catch((e) => { console.warn(e); return null; }); if (k.lib) { k.walkV = k.lib.walk.speed * Mini3D.PER_M; k.runV = k.lib.run.speed * Mini3D.PER_M; } } continue; }
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
     await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));
@@ -583,7 +617,7 @@
     }
   }
   function moveHero(h, wx, wy, running, dt) {
-    const sp = (running ? 3.4 : 1.6) * Math.hypot(wx, wy);
+    const sp = (running ? (h.kind.runV || 3.4) : (h.kind.walkV || 1.6)) * Math.hypot(wx, wy);   // №103: у записанных движений — своя скорость
     h.speed += (sp - h.speed) * Math.min(1, dt * 10);
     h.run = running && sp > 0;
     if (sp > 0) {
