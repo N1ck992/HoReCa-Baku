@@ -56,6 +56,7 @@ AB.BaseBuild = (() => {
   }
   function check() {
     if (!ghost) return null;
+    if (ghost.auto) { const p = plan(); return { ok: !!(p && p.ok), why: p ? (p.miss ? 'Не хватает материалов (см. цену)' : p.why || '') : '', cost: (p && p.cost) || [] }; }
     const key = JSON.stringify(ghost) + sim().state().seq + sim().state().rooms.length + sim().state().devs.length;
     if (key === chkKey) return chk;
     chkKey = key;
@@ -66,6 +67,12 @@ AB.BaseBuild = (() => {
   }
   function confirm() {
     if (!ghost) return;
+    if (ghost.auto) {
+      const r = sim().autoPlace(ghost.bp, { at: { x: ghost.x, y: ghost.y, w: ghost.w, h: ghost.h } }), b = sim().bp(ghost.bp);
+      if (!r.ok) { say(r.miss ? missText(b, r.miss) : `${b.name}: ${r.why}`); return; }
+      AB.Bus.emit('iso:toast', { text: `${b.name}: каркас поставлен${r.cables ? `, проводка проложена (${r.cells} кл.)` : ''} — строители принесут материалы`, kind: 'good' });
+      ghost = null; sel = null; sim().save(); render(); return;
+    }
     const r = ghost.uid ? sim().modify(ghost.uid, { x: ghost.x, y: ghost.y, w: ghost.w, h: ghost.h }) : sim().place(ghost);
     if (!r.ok) { AB.Bus.emit('iso:toast', { text: r.why, kind: 'info' }); return; }
     AB.Bus.emit('iso:toast', { text: ghost.uid ? 'Перестройка: строители доделают каркас' : 'Каркас поставлен: строители принесут материалы', kind: 'good' });
@@ -95,16 +102,38 @@ AB.BaseBuild = (() => {
   function rotate() { if (!ghost) return; [ghost.w, ghost.h] = [ghost.h, ghost.w]; render(); }
 
   // №86: выбрал чертёж — игра сама ставит его и тянет проводку; не хватает материалов — говорит ЭХО
+  // №112: выбрал здание — игра показывает, где предлагает его поставить (призрак + будущая проводка);
+  // каталог закрывается, стройка — только после «Построить здесь». Призрак можно передвинуть — проводка пересчитается.
   function auto(bpId) {
-    const r = sim().autoPlace(bpId), b = sim().bp(bpId);
-    if (r.ok) {
-      AB.Bus.emit('iso:toast', { text: `${b.name}: каркас поставлен${r.cables ? `, проводка проложена (${r.cells} кл.)` : ''} — строители принесут материалы`, kind: 'good' });
-      const o = sim().obj(r.uid); if (o) AB.IsoRender.focus({ x: o.x + o.w / 2, y: o.y + o.h / 2 });
-      sel = null; sim().save(); render(); return;
+    const b = sim().bp(bpId);
+    if (b.kind === 'device') {
+      const r = sim().autoPlace(bpId, { dry: true });
+      if (r.plan) {
+        ghost = { bp: bpId, ...r.plan, auto: true }; sel = null; delAsk = false;
+        AB.IsoRender.focus({ x: r.plan.x + r.plan.w / 2, y: r.plan.y + r.plan.h / 2 });
+        render();
+        if (r.miss) say(missText(b, r.miss));
+        return;
+      }
+      say(`${b.name}: ${r.why}`); return;
     }
+    if (b.kind === 'cable') { startNew(bpId); return; }
+    const r = sim().autoPlace(bpId);
+    if (r.ok) { sim().save(); render(); return; }
+    say(r.miss ? missText(b, r.miss) : `${b.name}: ${r.why}`);
+  }
+  function missText(b, miss) {
     const nm2 = (i) => (AB.ID.get(i) || {}).name || i;
-    const text = r.miss ? `Для «${b.name}» не хватает: ${r.miss.map(([i, n, h]) => `${nm2(i).toLowerCase()} — нужно ${n}, есть ${h}`).join('; ')}.${r.miss.some(([i]) => i === 'ITEM-017') ? ' Стройматериал печатает 3D-принтер из реголита.' : ''}${r.miss.some(([i]) => i === 'ITEM-003' || i === 'ITEM-001' || i === 'ITEM-002') ? ' Металлолом, электронику и провода ищите на карте дна.' : ''}` : `${b.name}: ${r.why}`;
-    if (AB.IsoCompanion && AB.IsoCompanion.has()) AB.IsoCompanion.message(text); else AB.Bus.emit('iso:toast', { text, kind: 'info' });
+    return `Для «${b.name}» не хватает: ${miss.map(([i, n, h]) => `${nm2(i).toLowerCase()} — нужно ${n}, есть ${h}`).join('; ')}.${miss.some(([i]) => i === 'ITEM-017') ? ' Стройматериал печатает 3D-принтер из реголита.' : ''}${miss.some(([i]) => i === 'ITEM-003' || i === 'ITEM-001' || i === 'ITEM-002') ? ' Металлолом, электронику и провода ищите на карте дна.' : ''}`;
+  }
+  const say = (text) => { if (AB.IsoCompanion && AB.IsoCompanion.has()) AB.IsoCompanion.message(text); else AB.Bus.emit('iso:toast', { text, kind: 'info' }); };
+  // план для призрака «по предложению игры»: место + проводка + цена (пересчёт, если призрак сдвинули)
+  let planKey = '', planR = null;
+  function plan() {
+    if (!ghost || !ghost.auto) return null;
+    const key = `${ghost.bp}|${ghost.x}|${ghost.y}|${ghost.w}|${ghost.h}|${sim().state().seq}`;
+    if (key !== planKey) { planKey = key; planR = sim().autoPlace(ghost.bp, { dry: true, at: { x: ghost.x, y: ghost.y, w: ghost.w, h: ghost.h } }); }
+    return planR;
   }
 
   // ---------- касания ----------
@@ -158,6 +187,8 @@ AB.BaseBuild = (() => {
       ctx.fillStyle = `rgba(${col},${0.18 + Math.sin(time * 4) * 0.05})`; ctx.fill();
     }
     if (!ghost.grid || ghost.grid === 'GRID-001' || ghost.grid === 'GRID-003') { poly(ctx, toScreen, rectPts(ghost)); ctx.strokeStyle = `rgba(${col},.95)`; ctx.lineWidth = 2; ctx.stroke(); }
+    const pl = plan();   // №112: будущая проводка — жёлтым пунктиром
+    if (pl && pl.cab) for (const r of pl.cab) { poly(ctx, toScreen, rectPts(r)); ctx.fillStyle = `rgba(255,210,90,${0.22 + Math.sin(time * 4) * 0.06})`; ctx.fill(); ctx.setLineDash([4, 3]); ctx.strokeStyle = 'rgba(255,210,90,.8)'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
     // будущие проходы к соседним помещениям
     if (sim().bp(ghost.bp).kind === 'room' && c && c.ok) {
       const g = AB.BaseGrids;
@@ -178,13 +209,13 @@ AB.BaseBuild = (() => {
     if (!on) return;
     if (!ghost && !sel) {
       const S = sim().state();
-      cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Нажмите на чертёж — встанет сам, с проводкой · нажмите на постройку, чтобы передвинуть или снести</span><button class="bx-x" data-b="exit" aria-label="Выйти из стройки">✕</button></div>
-        <div class="bx-cat-list">${S.unlocked.map((id) => sim().bp(id)).filter((b) => b && !b.core).map((b) => {
+      cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Выберите здание — игра покажет, куда его поставить и где пройдёт проводка; подтвердите «Построить здесь» · нажмите на постройку, чтобы передвинуть или снести</span><button class="bx-x" data-b="exit" aria-label="Выйти из стройки">✕</button></div>
+        <div class="bx-cat-list">${S.unlocked.map((id) => sim().bp(id)).filter((b) => b && !b.core && b.kind !== 'room').map((b) => {   // №112: новых отсеков не строим
           const size = b.kind === 'cable' ? `линия до ${b.size.long[1]} клеток` : b.kind === 'room' ? `${b.size.short[0]}×${b.size.long[0]} … ${b.size.short[1]}×${b.size.long[1]}` : `${b.w}×${b.h}`;
           const cost = b.kind === 'cable' ? `${nm(b.costPer.item)} 1 на ${b.costPer.cells} клетки` : b.kind === 'room' ? b.costPerCell.map(([i, n]) => `${nm(i)} ${n} за клетку`).join(', ') : (b.cost || []).map(([i, n]) => `${nm(i)} ${n}`).join(', ');
           return `<button class="bx-bp" data-b="new|${b.id}"><b>${esc(b.name)}</b><span>${esc(b.kind === 'room' ? 'Помещение' : b.kind === 'cable' ? 'Электросеть' : 'Устройство')} · ${esc(size)}</span><span class="cost">${esc(cost)}</span><span class="muted">${esc(b.desc)}</span></button>`;
         }).join('')}</div>
-        <div class="muted">Новые чертежи, сетки и расширение корпуса — в «Науке».</div>`;
+        <div class="muted">Новые чертежи — в «Науке».</div>`;
       return;
     }
     if (ghost) {
@@ -197,10 +228,10 @@ AB.BaseBuild = (() => {
           ${b.kind === 'cable' ? '<button class="bx-chip" data-b="h|-1">− короче</button><button class="bx-chip" data-b="h|1">+ длиннее</button>' : ''}
           ${room ? `<button class="bx-chip" data-b="w|-1">− ширина</button><button class="bx-chip" data-b="w|1">+ ширина</button><button class="bx-chip" data-b="h|-1">− длина</button><button class="bx-chip" data-b="h|1">+ длина</button>` : ''}
           <button class="bx-chip" data-b="rot">⟳ Повернуть</button>
-          <button class="bx-chip go" data-b="ok" ${c.ok ? '' : 'disabled'}>✓ ${ghost.uid ? 'Перестроить' : 'Поставить'}</button>
+          <button class="bx-chip go" data-b="ok" ${c.ok ? '' : 'disabled'}>✓ ${ghost.uid ? 'Перестроить' : ghost.auto ? 'Построить здесь' : 'Поставить'}</button>
           <button class="bx-chip" data-b="cancel">✕ Отмена</button>
         </div>
-        <div class="muted">Нажмите на сетку — призрак переедет туда; можно тащить пальцем.</div>`;
+        <div class="muted">${ghost.auto ? 'Здесь его предлагает поставить игра; жёлтым — будущая проводка. Можно передвинуть (нажать на пол или тащить) — проводка пересчитается.' : 'Нажмите на сетку — призрак переедет туда; можно тащить пальцем.'}</div>`;
       return;
     }
     const o = sim().obj(sel);

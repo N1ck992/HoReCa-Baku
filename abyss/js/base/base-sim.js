@@ -697,7 +697,8 @@ AB.BaseSim = (() => {
     return out.map((c) => ({ x: c.x, y: c.y, w: c.dir === 'y' ? 1 : c.len, h: c.dir === 'y' ? c.len : 1 }));
   }
   function lack(cost) { return cost.filter(([i, n]) => stockOf(i) < n).map(([i, n]) => [i, n, stockOf(i)]); }
-  function autoPlace(bpId) {
+  // №112: opt.dry — только рассчитать место и проводку (ничего не строить); opt.at — поставить ровно сюда
+  function autoPlace(bpId, opt = {}) {
     const b = bp(bpId); if (!b) return { ok: false, why: 'Нет такого чертежа' };
     if (!S.unlocked.includes(bpId)) return { ok: false, why: 'Чертёж не изучен' };
     const g = geom(), core = D().core.rooms[0], cx = core.x + core.w / 2, cy = core.y + core.h / 2;
@@ -714,25 +715,33 @@ AB.BaseSim = (() => {
       const r = place({ bp: bpId, ...best }); return { ...r, cables: 0 };
     }
     // устройство: места в построенных помещениях, ближе к питанию; проводка — кратчайшая
+    let best = null;
+    if (opt.at) {
+      if (!check({ bp: bpId, ...opt.at, skipWire: true }).ok) return { ok: false, why: 'Сюда поставить нельзя — занято или вне помещения' };
+      const p = wirePath(opt.at); if (!p) return { ok: false, why: 'Отсюда нет пути для проводки к питанию' };
+      best = { ...opt.at, path: p };
+    }
     const cand = [];
     const dims = b.w === b.h ? [[b.w, b.h]] : [[b.w, b.h], [b.h, b.w]];
+    if (!best) {
     for (const r of S.rooms.filter((q) => q.built)) for (const [w, h] of dims) for (let y = r.y; y + h <= r.y + r.h; y++) for (let x = r.x; x + w <= r.x + r.w; x++) {
       if (check({ bp: bpId, x, y, w, h, skipWire: true }).ok) cand.push({ x, y, w, h, d: Math.hypot(x - cx, y - cy) });
       if (cand.length > 120) break;
     }
     if (!cand.length) return { ok: false, why: 'Нет свободного места в помещениях — постройте ещё отсек' };
     cand.sort((a, c) => a.d - c.d);
-    let best = null;
     for (const c of cand.slice(0, 40)) {
       const p = wirePath(c); if (!p) continue;
       if (!best || p.length < best.path.length) best = { ...c, path: p };
       if (best.path.length === 0) break;
     }
     if (!best) return { ok: false, why: 'Нет пути для проводки к источнику питания' };
+    }
     const cab = runs(best.path), wires = cab.reduce((a, r) => a + Math.ceil((r.w * r.h) / bp('BLD-110').costPer.cells), 0);
     const cost = costOf(b, best).map(([i, n]) => [i, n]);
     if (wires) { const w = cost.find(([i]) => i === 'ITEM-003'); if (w) w[1] += wires; else cost.push(['ITEM-003', wires]); }
     const miss = lack(cost);
+    if (opt.dry) return { ok: !miss.length, plan: { x: best.x, y: best.y, w: best.w, h: best.h }, cab, cells: best.path.length, cost, miss: miss.length ? miss : null };
     if (miss.length) return { ok: false, miss };
     for (const r of cab) place({ bp: 'BLD-110', ...r });
     const res = place({ bp: bpId, x: best.x, y: best.y, w: best.w, h: best.h });
