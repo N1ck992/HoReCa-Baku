@@ -127,7 +127,7 @@
     // №102: «Хромированный страж» (Meshy, автор) — цельная модель, скелет и веса посчитаны по геометрии, рисуется видеокартой
     { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json', mocap: 'assets/models/anims/cmu-basic.json', paint: 'pursuer' },
     // №105: киборг с текстурами (Meshy, автор) — облегчён 12,6 → 1,5 МБ, текстуры: цвет, металл/шероховатость, рельеф
-    { id: 'I', name: 'Киборг · 3D (текстуры)', three: true, skinned: 'assets/models/reaper/reaper.json', mocap: 'assets/models/anims/cmu-basic-reaper.json', tex: { base: 'assets/models/reaper/base.jpg', mr: 'assets/models/reaper/mr.jpg', nrm: 'assets/models/reaper/nrm.jpg' }, sword: 'assets/models/anims/cmu-sword-reaper.json' }];
+    { id: 'I', name: 'Киборг · 3D (текстуры)', three: true, skinned: 'assets/models/reaper/reaper.json', mocap: 'assets/models/anims/cmu-basic-reaper.json', tex: { base: 'assets/models/reaper/base.jpg', mr: 'assets/models/reaper/mr.jpg', nrm: 'assets/models/reaper/nrm.jpg' }, sword: 'assets/models/anims/cmu-sword-reaper.json', cloak: 'assets/models/reaper/cloak.webp' }];
   // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
   // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
   // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
@@ -194,6 +194,7 @@
       return P;
     }
     function draw(ctx, h, t, dt) {
+      h._dt = dt;
       if ((h.kind.glb && !h.kind.model) || (h.kind.skinned && !h.kind.skin)) return;
       if (h.yaw == null) h.yaw = h.yawT == null ? Math.PI / 4 : h.yawT;
       if (h.yawT != null) { let d = h.yawT - h.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; h.yaw += d * Math.min(1, dt * 12); }
@@ -340,9 +341,17 @@
       let gl = null, prog, buf = null, cv3 = null, deriv = false, kat = null;
       const VS = () => `attribute vec3 p; attribute vec3 n; attribute vec2 bi; attribute vec2 bw; attribute vec2 pm; attribute vec2 uv;
         uniform mat4 B[16]; uniform vec2 sz; uniform float S; varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm; varying vec2 vuv; varying vec3 vw;
+        uniform float clothOn; uniform vec4 cw; uniform float ct;
         void main() {
           mat4 m = B[int(bi.x)] * bw.x + B[int(bi.y)] * bw.y;
-          vec3 w = (m * vec4(p, 1.0)).xyz; vn = normalize(mat3(m) * n); vr = p; vm = pm; vuv = uv; vw = w;
+          vec3 pp = p;
+          if (clothOn > 0.5) {                     // №107: ткань — низ отстаёт (назад/вбок/вверх) и колышется; верх держится за плечи
+            float w0 = pow(pm.x, 1.35), th = pm.y * 6.2832 - 3.1416, backness = 0.45 + 0.55 * (1.0 - cos(th)) * 0.5;
+            vec3 radial = vec3(cos(th), sin(th), 0.0);
+            float fl = sin(ct * 4.6 + th * 4.0 + pm.x * 9.0) * 0.6 + sin(ct * 7.9 - th * 3.0 + pm.x * 13.0) * 0.4;
+            pp += w0 * vec3(-cw.x * backness, cw.y, cw.x * 0.5 * backness + cw.z) + radial * w0 * cw.w * fl * 0.6 + vec3(-0.5, 0.0, 0.25) * w0 * cw.w * fl;
+          }
+          vec3 w = (m * vec4(pp, 1.0)).xyz; vn = normalize(mat3(m) * n); vr = p; vm = pm; vuv = uv; vw = w;
           float sx = (w.x - w.y) * ${TW / 2}.0 * S, sy = ((w.x + w.y) * ${TH / 2}.0 - w.z * ${ZT}.0) * S;
           vd = dot(w, vec3(${VIEW.join(',')}));
           gl_Position = vec4(sx / (sz.x * 0.5), -(sy + sz.y * 0.35) / (sz.y * 0.5), -vd / 40.0, 1.0);
@@ -357,6 +366,7 @@
         #endif
         varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm; varying vec2 vuv; varying vec3 vw;
         uniform sampler2D tBase; uniform sampler2D tMR; uniform sampler2D tNrm; uniform float texOn;
+        uniform sampler2D tCloth; uniform float clothOn;
         uniform vec3 col; uniform float paintOn; uniform vec3 eyeR; uniform vec3 eyeL; uniform vec3 mouth;
         float h1(vec3 q) { return fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
         vec3 h3(vec3 q) { return fract(sin(vec3(dot(q, vec3(127.1, 311.7, 74.7)), dot(q, vec3(269.5, 183.3, 246.1)), dot(q, vec3(113.5, 271.9, 124.6)))) * 43758.5453); }
@@ -372,6 +382,8 @@
         void main() {
           vec3 nn = normalize(vn), L = vec3(${LIGHT.join(',')}), V = vec3(${VIEW.join(',')});
           float metal = 0.0, rough = 0.6;
+          vec4 cl = vec4(0.0);
+          if (clothOn > 0.5) { cl = texture2D(tCloth, vuv); if (cl.a < 0.45) discard; if (!gl_FrontFacing) nn = -nn; }
           #ifdef DERIV
           if (texOn > 0.5) {                         // рельеф из карты нормалей: касательные — по производным (без данных в модели)
             vec3 dp1 = dFdx(vw), dp2 = dFdy(vw); vec2 du1 = dFdx(vuv), du2 = dFdy(vuv);
@@ -384,7 +396,8 @@
           #endif
           float d = max(dot(nn, L), 0.0), env = 0.5 + 0.5 * nn.z, rim = pow(1.0 - max(dot(nn, V), 0.0), 3.0);
           vec3 base = col; float spk = 0.9, shin = 22.0; vec3 glow = vec3(0.0); vec3 rimc = vec3(0.35, 0.8, 0.95) * 0.35;
-          if (texOn > 0.5) {
+          if (clothOn > 0.5) { base = cl.rgb * 1.15; spk = 0.06; shin = 6.0; rimc = vec3(0.5, 0.45, 0.4) * 0.1; }
+          else if (texOn > 0.5) {
             base = pow(texture2D(tBase, vuv).rgb, vec3(1.15)); vec3 mr = texture2D(tMR, vuv).rgb; rough = mr.g; metal = mr.b;
             spk = mix(0.12, 0.9, metal) * (1.0 - rough * 0.7); shin = mix(48.0, 6.0, rough); rimc = vec3(0.6, 0.55, 0.5) * 0.12;
             vec3 tc = texture2D(tBase, vuv).rgb;   // светятся красные глаза и огни
@@ -437,7 +450,7 @@
         const mk = (data, type) => { const b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; };
         sd.gl = { p: mk(sd.pos), n: mk(sd.nrm), bi: mk(sd.bi), bw: mk(sd.bw), pm: mk(sd.paint || new Uint8Array(sd.pos.length / 3 * 2)), uv: mk(sd.uv || new Uint16Array(sd.pos.length / 3 * 2)), i: mk(sd.idx, gl.ELEMENT_ARRAY_BUFFER), ext: sd.idx instanceof Uint32Array ? gl.getExtension('OES_element_index_uint') : null };
       }
-      function render(sd, mats, S, col, extra) {
+      function render(sd, mats, S, col, extra, cloak) {
         if (!gl && !init()) return null;
         if (!sd.gl) upload(sd);
         const W = Math.min(2048, Math.ceil(170 * S)), H = Math.min(2048, Math.ceil(250 * S));
@@ -464,6 +477,23 @@
         if (fc) { U('eyeR', fc.eyeR); U('eyeL', fc.eyeL); U('mouth', fc.mouth); }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sd.gl.i);
         gl.drawElements(gl.TRIANGLES, sd.idx.length, sd.idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+        // №107: накидка — тем же шейдером, держится за торс (B[0]); ткань колышется в вершинном шейдере
+        gl.uniform1f(gl.getUniformLocation(prog, 'clothOn'), 0);
+        if (cloak && sd.cloakImg && sd.cloakImg.complete && sd.cloakImg.naturalWidth) {
+          if (!sd.cloakGL) {
+            const c = Mini3D.cloakMesh(sd), mk = (d) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW); return b; };
+            const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sd.cloakImg); gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            sd.cloakGL = { p: mk(c.p), n: mk(c.n), bi: mk(new Uint8Array(c.count * 2)), bw: mk(new Uint8Array(c.count * 2).map((_, i) => (i % 2 ? 0 : 255))), pm: mk(c.pm), uv: mk(c.uv), i: (() => { const b = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, c.idx, gl.STATIC_DRAW); return b; })(), n_: c.idx.length, tex: t };
+          }
+          const g = sd.cloakGL, M16 = new Float32Array(16 * 16); M16.set(cloak.mat, 0); gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'B'), false, M16);
+          at('p', g.p, 3, gl.FLOAT, false); at('n', g.n, 3, gl.BYTE, true); at('bi', g.bi, 2, gl.UNSIGNED_BYTE, false); at('bw', g.bw, 2, gl.UNSIGNED_BYTE, true); at('pm', g.pm, 2, gl.UNSIGNED_BYTE, true); at('uv', g.uv, 2, gl.UNSIGNED_SHORT, true);
+          gl.uniform1f(gl.getUniformLocation(prog, 'clothOn'), 1); gl.uniform1f(gl.getUniformLocation(prog, 'texOn'), 0); gl.uniform1f(gl.getUniformLocation(prog, 'paintOn'), 0);
+          gl.uniform4fv(gl.getUniformLocation(prog, 'cw'), cloak.w); gl.uniform1f(gl.getUniformLocation(prog, 'ct'), cloak.t);
+          gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, g.tex); gl.uniform1i(gl.getUniformLocation(prog, 'tCloth'), 3);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.i); gl.drawElements(gl.TRIANGLES, g.n_, gl.UNSIGNED_SHORT, 0);
+          gl.uniform1f(gl.getUniformLocation(prog, 'clothOn'), 0);
+        }
         // №106: катана — тем же шейдером, в тот же кадр глубины; жёстко на кости «меч» (матрица B[0])
         if (extra) {
           if (!kat) { kat = {}; for (const [k, arr] of Object.entries(Mini3D.katanaMesh())) { const f = new Float32Array(arr), n = f.length / 6, P = new Float32Array(n * 3), Nn = new Int8Array(n * 3); for (let i = 0; i < n; i++) { P.set(f.subarray(i * 6, i * 6 + 3), i * 3); for (let c = 0; c < 3; c++) Nn[i * 3 + c] = Math.round(f[i * 6 + 3 + c] * 127); } const mk = (d) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW); return b; }; kat[k] = { p: mk(P), n: mk(Nn), bi: mk(new Uint8Array(n * 2)), bw: mk(new Uint8Array(n * 2).map((_, i) => (i % 2 ? 0 : 255))), pm: mk(new Uint8Array(n * 2)), uv: mk(new Uint16Array(n * 2)), count: n }; } }
@@ -493,7 +523,21 @@
       sd.style = h.kind.paint;
       let extra = null;
       if (M.sword) { const m = M.sword; extra = { mat: [m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0, m[3], m[7], m[11], 1] }; }
-      const c3 = G3.render(sd, mats, S, h.kind.col || [0.78, 0.8, 0.84], extra);
+      let cloak = null;
+      if (sd.cloakImg) {
+        // пружина ткани: цель — от скорости, поворота и удара; ткань догоняет с запаздыванием и чуть качается
+        const cs = h.cloth || (h.cloth = { b: 0, s: 0, l: 0, vb: 0, vs: 0, vl: 0, a: 0.012, yaw: h.yaw, t: Math.random() * 10 });
+        const dtc = Math.min(0.05, h._dt || 1 / 60), run = Math.min(1, Math.max(0, h.speed) / (h.kind.runV || 3.4));
+        let turn = h.yaw - cs.yaw; while (turn > Math.PI) turn -= 2 * Math.PI; while (turn < -Math.PI) turn += 2 * Math.PI; cs.yaw = h.yaw;
+        const atk = h.atk ? 1 : 0;
+        const tb = 0.05 + run * 0.32 + atk * 0.14, ts = Math.max(-0.22, Math.min(0.22, -turn / Math.max(dtc, 1e-3) * 0.035)), tl = atk * 0.08 + run * 0.03;
+        for (const [k, v, tg, K, C] of [['b', 'vb', tb, 26, 5.5], ['s', 'vs', ts, 18, 4], ['l', 'vl', tl, 30, 6]]) { cs[v] += ((tg - cs[k]) * K - cs[v] * C) * dtc; cs[k] += cs[v] * dtc; }
+        cs.a += ((0.012 + run * 0.035 + atk * 0.05) - cs.a) * Math.min(1, dtc * 4);
+        cs.t += dtc * (1 + run * 1.6 + atk * 1.5);
+        const si = sd.bones.indexOf('spine');
+        cloak = { mat: mats.subarray(si * 16, si * 16 + 16), w: [cs.b, cs.s, cs.l, cs.a], t: cs.t };
+      }
+      const c3 = G3.render(sd, mats, S, h.kind.col || [0.78, 0.8, 0.84], extra, cloak);
       if (!c3) return;
       const ax = p.x * t.a + t.e, ay = p.y * t.d + t.f;
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c3, Math.round(ax - c3.width / 2), Math.round(ay - c3.height * 0.85)); ctx.restore();
@@ -612,11 +656,38 @@
       box(parts.grip, -0.08, 0, 0.25, 0.032, 0.036, 0);
       return parts;
     }
-    return { draw, load, loadSkinned, loadMocap, loadSword, addSwordBone, katanaMesh, PER_M };    return { draw, load, loadSkinned, loadMocap, PER_M };
+    // №107: накидка — открытая «труба» вокруг шеи, плеч и корпуса до колен; спереди — разрез (как на картинке),
+    // спереди картинка проецируется как есть, сзади — цельная ткань из боковых частей картинки
+    function cloakMesh(sd) {
+      const J = sd.j.joints, zTop = J.neck[2] + 0.07, zSh = J.sh_l[2] - 0.02, zBot = J.kn_l[2] - 0.06, cx = (J.spine[0] + J.neck[0]) / 2 - 0.01;
+      const NU = 56, NV = 28, P = [], Nn = [], UV = [], PM = [], idx = [];
+      const R = (v) => {                        // полуоси (вперёд, вбок) по высоте
+        const zz = zTop - v * (zTop - zBot);
+        if (zz > zSh + 0.07) { const k = (zTop - zz) / (zTop - zSh - 0.07); return [0.1 + 0.04 * k, 0.1 + 0.08 * k]; }
+        if (zz > zSh - 0.08) { const k = (zSh + 0.07 - zz) / 0.15; return [0.14 + 0.06 * k, 0.18 + 0.16 * Math.sqrt(k)]; }
+        return [0.2 + 0.03 * v, 0.34 + 0.03 * v];
+      };
+      for (let j = 0; j <= NV; j++) {
+        const v = j / NV, z = zTop - v * (zTop - zBot), [rx, ry] = R(v);
+        for (let i = 0; i <= NU; i++) {
+          const th = -Math.PI + (i / NU) * 2 * Math.PI, x = cx + Math.cos(th) * rx, y = Math.sin(th) * ry;
+          P.push(x, y, z);
+          const nx = Math.cos(th) / rx, ny = Math.sin(th) / ry, l = Math.hypot(nx, ny); Nn.push(Math.round(nx / l * 127), Math.round(ny / l * 127), 0);
+          const sN = y / 0.4;                                          // поперёк: −1 справа … +1 слева
+          let u = Math.abs(th) <= Math.PI / 2 ? 0.5 + 0.5 * sN : 0.5 + Math.sign(sN || 1) * (0.18 + 0.32 * Math.abs(sN));
+          UV.push(Math.round(Math.min(1, Math.max(0, u)) * 65535), Math.round(v * 65535));
+          PM.push(Math.round(v * 255), Math.round((th + Math.PI) / (2 * Math.PI) * 255));
+        }
+      }
+      for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+      return { p: new Float32Array(P), n: new Int8Array(Nn), uv: new Uint16Array(UV), pm: new Uint8Array(PM), idx: new Uint16Array(idx), count: P.length / 3 };
+    }
+    return { draw, load, loadSkinned, loadMocap, loadSword, addSwordBone, katanaMesh, cloakMesh, PER_M };    return { draw, load, loadSkinned, loadMocap, PER_M };
   })();
 
   for (const k of KINDS) {
     if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); if (k.skin && k.tex) { k.skin.texImgs = {}; for (const [n, u] of Object.entries(k.tex)) { const im = new Image(); im.src = u; k.skin.texImgs[n] = im; } } if (k.mocap) { k.lib = await Mini3D.loadMocap(k.mocap).catch((e) => { console.warn(e); return null; }); if (k.lib) { k.walkV = k.lib.walk.speed * Mini3D.PER_M; k.runV = k.lib.run.speed * Mini3D.PER_M; } }
+    if (k.cloak && k.skin) { const im = new Image(); im.src = k.cloak; k.skin.cloakImg = im; }   // №107: накидка
     if (k.sword && k.skin) { k.swordLib = await Mini3D.loadSword(k.sword).catch((e) => { console.warn(e); return null; }); if (k.swordLib) Mini3D.addSwordBone(k.skin, k.swordLib.grip); } continue; }
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
