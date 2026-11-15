@@ -1,16 +1,24 @@
 import json, struct, sys, numpy as np
+import json, struct, sys, numpy as np
 from PIL import Image, ImageDraw
 d=open(sys.argv[1],'rb').read()
 cl,ct=struct.unpack('<I4s',d[12:20]); j=json.loads(d[20:20+cl]); off=20+cl+8
 def acc(i):
     a=j['accessors'][i]; bv=j['bufferViews'][a['bufferView']]; o=off+bv.get('byteOffset',0)+a.get('byteOffset',0)
-    n={'SCALAR':1,'VEC3':3,'VEC4':4,'VEC2':2}[a['type']]; dt={5126:np.float32,5125:np.uint32,5123:np.uint16}[a['componentType']]
+    n={'SCALAR':1,'VEC3':3,'VEC4':4,'VEC2':2}[a['type']]; dt={5126:np.float32,5125:np.uint32,5123:np.uint16,5121:np.uint8}[a['componentType']]
+    st=bv.get('byteStride'); es=np.dtype(dt).itemsize*n
+    if st and st!=es:
+        raw=np.frombuffer(d,np.uint8,st*(a['count']-1)+es,o)
+        out=np.lib.stride_tricks.as_strided(raw,(a['count'],es),(st,1)).copy().view(dt).reshape(a['count'],n)
+        return out if n>1 else out[:,0]
     return np.frombuffer(d,dt,a['count']*n,o).reshape(-1,n) if n>1 else np.frombuffer(d,dt,a['count'],o)
 p=j['meshes'][0]['primitives'][0]; P=acc(p['attributes']['POSITION']).astype(np.float64); I=acc(p['indices']).reshape(-1,3)
-M=np.array(j['nodes'][0]['matrix']).reshape(4,4).T; print('matrix\n',M.round(3))
+M=np.array(j['nodes'][0].get('matrix',[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])).reshape(4,4).T
 P=(np.c_[P,np.ones(len(P))]@M.T)[:,:3]
 print('bounds',P.min(0).round(3),P.max(0).round(3))
 np.save(sys.argv[2]+'/P.npy',P); np.save(sys.argv[2]+'/I.npy',I)
+if 'TEXCOORD_0' in p['attributes']: np.save(sys.argv[2]+'/UV.npy',acc(p['attributes']['TEXCOORD_0']).astype(np.float32))
+if 'NORMAL' in p['attributes']: np.save(sys.argv[2]+'/N.npy',acc(p['attributes']['NORMAL']).astype(np.float64))
 S=400
 def view(ax_h, ax_v, flip_h, name):
     h=P[:,ax_h]*(-1 if flip_h else 1); v=P[:,ax_v]

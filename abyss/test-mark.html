@@ -124,7 +124,9 @@
     // №101: 3D-модель преследователя (GLB автора) — детали привязаны к скелету манекена по названиям
     { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb.json', height: 2.0 },
     // №102: «Хромированный страж» (Meshy, автор) — цельная модель, скелет и веса посчитаны по геометрии, рисуется видеокартой
-    { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json', mocap: 'assets/models/anims/cmu-basic.json', paint: 'pursuer' }];
+    { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json', mocap: 'assets/models/anims/cmu-basic.json', paint: 'pursuer' },
+    // №105: киборг с текстурами (Meshy, автор) — облегчён 12,6 → 1,5 МБ, текстуры: цвет, металл/шероховатость, рельеф
+    { id: 'I', name: 'Киборг · 3D (текстуры)', three: true, skinned: 'assets/models/reaper/reaper.json', mocap: 'assets/models/anims/cmu-basic-reaper.json', tex: { base: 'assets/models/reaper/base.jpg', mr: 'assets/models/reaper/mr.jpg', nrm: 'assets/models/reaper/nrm.jpg' } }];
   // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
   // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
   // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
@@ -330,27 +332,30 @@
       const SKs = {};
       for (const [b, p] of Object.entries(j.parents)) SKs[b] = [p, p ? j.joints[b].map((v, c) => v - j.joints[p][c]) : j.joints[b]];
       const paint = j.paint ? Uint8Array.from(atob(j.paint), (c) => c.charCodeAt(0)) : null;
-      return { j, pos, nrm, bi, bw, idx, paint, SK: SKs, bones: j.bones };
+      const uv = j.uv ? new Uint16Array(Uint8Array.from(atob(j.uv), (c) => c.charCodeAt(0)).buffer) : null;
+      return { j, pos, nrm, bi, bw, idx, paint, uv, SK: SKs, bones: j.bones };
     }
     const G3 = (() => {
-      let gl = null, prog, buf = null, cv3 = null;
-      const VS = () => `attribute vec3 p; attribute vec3 n; attribute vec2 bi; attribute vec2 bw; attribute vec2 pm;
-        uniform mat4 B[16]; uniform vec2 sz; uniform float S; varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm;
+      let gl = null, prog, buf = null, cv3 = null, deriv = false;
+      const VS = () => `attribute vec3 p; attribute vec3 n; attribute vec2 bi; attribute vec2 bw; attribute vec2 pm; attribute vec2 uv;
+        uniform mat4 B[16]; uniform vec2 sz; uniform float S; varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm; varying vec2 vuv; varying vec3 vw;
         void main() {
           mat4 m = B[int(bi.x)] * bw.x + B[int(bi.y)] * bw.y;
-          vec3 w = (m * vec4(p, 1.0)).xyz; vn = normalize(mat3(m) * n); vr = p; vm = pm;
+          vec3 w = (m * vec4(p, 1.0)).xyz; vn = normalize(mat3(m) * n); vr = p; vm = pm; vuv = uv; vw = w;
           float sx = (w.x - w.y) * ${TW / 2}.0 * S, sy = ((w.x + w.y) * ${TH / 2}.0 - w.z * ${ZT}.0) * S;
           vd = dot(w, vec3(${VIEW.join(',')}));
           gl_Position = vec4(sx / (sz.x * 0.5), -(sy + sz.y * 0.35) / (sz.y * 0.5), -vd / 40.0, 1.0);
         }`;
       // №104: материал «как преследователь» — рисуется по точкам модели (без текстуры): керамические пластины,
       // механика с бронзой на суставах, ремень, лицо-череп с красным глазом и латунным прибором
-      const FS = () => `#ifdef GL_FRAGMENT_PRECISION_HIGH
+      const FS = () => `${deriv ? '#extension GL_OES_standard_derivatives : enable\n#define DERIV 1' : ''}
+        #ifdef GL_FRAGMENT_PRECISION_HIGH
         precision highp float;
         #else
         precision mediump float;
         #endif
-        varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm;
+        varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm; varying vec2 vuv; varying vec3 vw;
+        uniform sampler2D tBase; uniform sampler2D tMR; uniform sampler2D tNrm; uniform float texOn;
         uniform vec3 col; uniform float paintOn; uniform vec3 eyeR; uniform vec3 eyeL; uniform vec3 mouth;
         float h1(vec3 q) { return fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
         vec3 h3(vec3 q) { return fract(sin(vec3(dot(q, vec3(127.1, 311.7, 74.7)), dot(q, vec3(269.5, 183.3, 246.1)), dot(q, vec3(113.5, 271.9, 124.6)))) * 43758.5453); }
@@ -365,8 +370,25 @@
           return vec2(sqrt(d2) - sqrt(d1), id); }
         void main() {
           vec3 nn = normalize(vn), L = vec3(${LIGHT.join(',')}), V = vec3(${VIEW.join(',')});
+          float metal = 0.0, rough = 0.6;
+          #ifdef DERIV
+          if (texOn > 0.5) {                         // рельеф из карты нормалей: касательные — по производным (без данных в модели)
+            vec3 dp1 = dFdx(vw), dp2 = dFdy(vw); vec2 du1 = dFdx(vuv), du2 = dFdy(vuv);
+            vec3 t = dp1 * du2.y - dp2 * du1.y, b = dp2 * du1.x - dp1 * du2.x;
+            float inv = inversesqrt(max(dot(t, t), dot(b, b)) + 1e-12);
+            vec3 tn = texture2D(tNrm, vuv).xyz * 2.0 - 1.0;
+            vec3 pn = normalize(t * inv * tn.x + b * inv * tn.y + nn * tn.z);
+            if (dot(pn, pn) > 0.5) nn = pn;
+          }
+          #endif
           float d = max(dot(nn, L), 0.0), env = 0.5 + 0.5 * nn.z, rim = pow(1.0 - max(dot(nn, V), 0.0), 3.0);
           vec3 base = col; float spk = 0.9, shin = 22.0; vec3 glow = vec3(0.0); vec3 rimc = vec3(0.35, 0.8, 0.95) * 0.35;
+          if (texOn > 0.5) {
+            base = pow(texture2D(tBase, vuv).rgb, vec3(1.15)); vec3 mr = texture2D(tMR, vuv).rgb; rough = mr.g; metal = mr.b;
+            spk = mix(0.12, 0.9, metal) * (1.0 - rough * 0.7); shin = mix(48.0, 6.0, rough); rimc = vec3(0.6, 0.55, 0.5) * 0.12;
+            vec3 tc = texture2D(tBase, vuv).rgb;   // светятся красные глаза и огни
+            glow = vec3(1.0, 0.15, 0.08) * smoothstep(0.25, 0.45, tc.r - max(tc.g, tc.b)) * 1.4;
+          }
           if (paintOn > 0.5) {
             vec2 v = vor(vr * vec3(6.5, 6.5, 4.5));                  // пластины ~15 см, вытянуты вдоль тела
             float seam = 1.0 - smoothstep(0.008, 0.028, v.x);
@@ -405,13 +427,14 @@
       function init() {
         cv3 = document.createElement('canvas'); gl = cv3.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: true });
         if (!gl) return false;
+        deriv = !!gl.getExtension('OES_standard_derivatives');
         const sh = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
         prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS())); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS())); gl.linkProgram(prog);
         return true;
       }
       function upload(sd) {
         const mk = (data, type) => { const b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; };
-        sd.gl = { p: mk(sd.pos), n: mk(sd.nrm), bi: mk(sd.bi), bw: mk(sd.bw), pm: mk(sd.paint || new Uint8Array(sd.pos.length / 3 * 2)), i: mk(sd.idx, gl.ELEMENT_ARRAY_BUFFER), ext: sd.idx instanceof Uint32Array ? gl.getExtension('OES_element_index_uint') : null };
+        sd.gl = { p: mk(sd.pos), n: mk(sd.nrm), bi: mk(sd.bi), bw: mk(sd.bw), pm: mk(sd.paint || new Uint8Array(sd.pos.length / 3 * 2)), uv: mk(sd.uv || new Uint16Array(sd.pos.length / 3 * 2)), i: mk(sd.idx, gl.ELEMENT_ARRAY_BUFFER), ext: sd.idx instanceof Uint32Array ? gl.getExtension('OES_element_index_uint') : null };
       }
       function render(sd, mats, S, col) {
         if (!gl && !init()) return null;
@@ -421,11 +444,22 @@
         gl.viewport(0, 0, W, H); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.useProgram(prog);
         const at = (name, b, size, type, norm) => { const l = gl.getAttribLocation(prog, name); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, type, norm, 0, 0); };
-        at('p', sd.gl.p, 3, gl.FLOAT, false); at('n', sd.gl.n, 3, gl.BYTE, true); at('bi', sd.gl.bi, 2, gl.UNSIGNED_BYTE, false); at('bw', sd.gl.bw, 2, gl.UNSIGNED_BYTE, true); at('pm', sd.gl.pm, 2, gl.UNSIGNED_BYTE, true);
+        at('p', sd.gl.p, 3, gl.FLOAT, false); at('n', sd.gl.n, 3, gl.BYTE, true); at('bi', sd.gl.bi, 2, gl.UNSIGNED_BYTE, false); at('bw', sd.gl.bw, 2, gl.UNSIGNED_BYTE, true); at('pm', sd.gl.pm, 2, gl.UNSIGNED_BYTE, true); at('uv', sd.gl.uv, 2, gl.UNSIGNED_SHORT, true);
         gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'B'), false, mats);
         gl.uniform2f(gl.getUniformLocation(prog, 'sz'), W, H); gl.uniform1f(gl.getUniformLocation(prog, 'S'), S); gl.uniform3fv(gl.getUniformLocation(prog, 'col'), col);
         const fc = sd.j.face, U = (k, v) => gl.uniform3fv(gl.getUniformLocation(prog, k), v);
         gl.uniform1f(gl.getUniformLocation(prog, 'paintOn'), sd.paint && sd.style === 'pursuer' ? 1 : 0);
+        const tx = sd.texImgs, ready = tx && tx.base && tx.base.complete && tx.base.naturalWidth;
+        gl.uniform1f(gl.getUniformLocation(prog, 'texOn'), ready ? 1 : 0);
+        if (ready) {
+          if (!sd.glTex) sd.glTex = {};
+          ['base', 'mr', 'nrm'].forEach((k, i) => {
+            const im = tx[k]; if (!im || !im.complete || !im.naturalWidth) return;
+            if (!sd.glTex[k]) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im); gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); sd.glTex[k] = t; }
+            gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, sd.glTex[k]);
+          });
+          gl.uniform1i(gl.getUniformLocation(prog, 'tBase'), 0); gl.uniform1i(gl.getUniformLocation(prog, 'tMR'), 1); gl.uniform1i(gl.getUniformLocation(prog, 'tNrm'), 2);
+        }
         if (fc) { U('eyeR', fc.eyeR); U('eyeL', fc.eyeL); U('mouth', fc.mouth); }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sd.gl.i);
         gl.drawElements(gl.TRIANGLES, sd.idx.length, sd.idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
@@ -489,7 +523,7 @@
   })();
 
   for (const k of KINDS) {
-    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); if (k.mocap) { k.lib = await Mini3D.loadMocap(k.mocap).catch((e) => { console.warn(e); return null; }); if (k.lib) { k.walkV = k.lib.walk.speed * Mini3D.PER_M; k.runV = k.lib.run.speed * Mini3D.PER_M; } } continue; }
+    if (k.three) { k.rig = { height: 1, face: 1, parts: {}, ground: [0, 0] }; if (k.glb) k.model = await Mini3D.load(k.glb, k.height).catch((e) => { console.warn(e); return null; }); if (k.skinned) k.skin = await Mini3D.loadSkinned(k.skinned).catch((e) => { console.warn(e); return null; }); if (k.skin && k.tex) { k.skin.texImgs = {}; for (const [n, u] of Object.entries(k.tex)) { const im = new Image(); im.src = u; k.skin.texImgs[n] = im; } } if (k.mocap) { k.lib = await Mini3D.loadMocap(k.mocap).catch((e) => { console.warn(e); return null; }); if (k.lib) { k.walkV = k.lib.walk.speed * Mini3D.PER_M; k.runV = k.lib.run.speed * Mini3D.PER_M; } } continue; }
     k.rig = await (await fetch(k.base + 'rig.json')).json();
     k.imgs = {};
     await Promise.all(Object.keys(k.rig.parts).map((n) => new Promise((ok) => { const im = new Image(); im.onload = ok; im.onerror = ok; im.src = k.base + n + '.png'; k.imgs[n] = im; })));

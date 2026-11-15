@@ -30,6 +30,8 @@ A,Bv,C=P[I[:,0]],P[I[:,1]],P[I[:,2]]; fn=np.cross(Bv-A,C-A)
 N=np.zeros_like(P); 
 for k in range(3): np.add.at(N,I[:,k],fn)
 N/=np.linalg.norm(N,axis=1,keepdims=True)+1e-9
+import os
+if os.path.exists(sys.argv[1]+'/N.npy'): N=np.load(sys.argv[1]+'/N.npy'); N/=np.linalg.norm(N,axis=1,keepdims=True)+1e-9   # нормали из файла (как у художника)
 # в наши оси: вперёд = +z файла, влево = +x, вверх = +y; низ — на полу; рост — cfg['height']
 bot=P[:,1].min(); k=cfg['height']/(P[:,1].max()-bot)
 conv=lambda Q,isn=False: np.stack([Q[:,2],Q[:,0],(Q[:,1]-(0 if isn else bot))],1)*(1 if isn else k)
@@ -39,6 +41,7 @@ bi=np.array([[names.index(n) for n in names]])  # не нужно
 blob=Pm.tobytes()+(Nm*127).round().astype(np.int8).tobytes()+order.astype(np.uint8).tobytes()+(w*255).round().astype(np.uint8).tobytes()+I.astype(np.uint16 if P.shape[0]<65536 else np.uint32).tobytes()
 out={'note':'3D-модель со скелетом для тестовой комнаты (№102): суставы и веса — tools/rig3d (scratchpad rig3d.py)','verts':int(len(P)),'tris':int(len(I)),'idx16':bool(P.shape[0]<65536),
      'bones':names,'boneJoint':{n:B[n][0] for n in names},'joints':Jm,'parents':cfg['parents'],'bin':base64.b64encode(blob).decode()}
+if os.path.exists(sys.argv[1]+'/UV.npy'): out['uv']=base64.b64encode((np.clip(np.load(sys.argv[1]+'/UV.npy'),0,1)*65535).round().astype(np.uint16).tobytes()).decode()   # развёртка текстуры
 json.dump(out,open(sys.argv[3],'w'))
 print('ok verts',len(P),'tris',len(I),'size',len(blob)//1024,'KB'); print({kk:[round(c,3) for c in v] for kk,v in Jm.items()})
 # проверка раскраски по костям
