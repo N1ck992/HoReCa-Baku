@@ -133,8 +133,37 @@ AB.IsoSuit = (() => {
     g.restore();
   }
 
+  // ---------- №122: костюм по готовым кадрам ходьбы (лист автора) — у доктора Хейл ----------
+  const FRAMES_OF = { 'CHAR-003': 'EXOSUIT_HALE_WALK' };
+  const FIMG = {};
+  function loadFrames(key) {
+    const A = AB.RIGS[key]; if (!A || FIMG[key]) return;
+    FIMG[key] = {};
+    for (const [side, list] of Object.entries(A.frames)) FIMG[key][side] = list.map((f) => { const im = new Image(); im.src = f.file; return im; });
+  }
+  Object.values(FRAMES_OF).forEach(loadFrames);
+  function drawFrames(g, pose, x, y, k, key) {
+    const A = AB.RIGS[key], side = pose.facing >= 0 ? 'right' : 'left';
+    const n = pose.moving ? A.walk[Math.floor((((pose.phase / (Math.PI * 2)) % 1) + 1) % 1 * A.walk.length)] : A.idle;
+    const f = A.frames[side][n], im = FIMG[key][side][n];
+    if (!im || !im.complete || !im.naturalWidth) return false;
+    const s = k * (R().height / A.heightPx), dir = pose.facing >= 0 ? 1 : -1;
+    const atk = pose.attack >= 0 ? Math.sin(pose.attack * Math.PI) : 0;
+    const bob = pose.moving ? 0 : Math.sin(pose.t * 2) * 0.8 * k;
+    g.save();
+    g.translate(x, y);
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 0, f.w * s * 0.42, f.w * s * 0.1, 0, 0, 7); g.fill();
+    if (pose.dead) { g.rotate(-1.35 * dir); g.globalAlpha = 0.85; }
+    else g.rotate((0.04 + atk * 0.1 - pose.hurt * 0.08) * dir);   // наклон: удар — вперёд, урон — назад
+    g.drawImage(im, -f.ax * s + atk * 6 * k * dir, -f.ay * s - bob, f.w * s, f.h * s);
+    if (pose.hurt) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(255,80,60,.25)'; g.fillRect(-f.ax * s, -f.ay * s, f.w * s, f.h * s); }
+    g.restore();
+    return true;
+  }
+
   // нарисовать костюм: (x, y) — точка на полу под ним, k — масштаб единиц
   function draw(g, pose, x, y, k = 1) {
+    { const fk = FRAMES_OF[pose.id]; if (fk && AB.RIGS[fk] && drawFrames(g, pose, x, y, k, fk)) return; }
     if (READY[artName(pose.id)]) { drawArt(g, pose, x, y, k); return; }
     const r = R(), B = r.bones, C = r.colors;
     g.save(); g.translate(x, y); g.scale(k * pose.facing, k);
