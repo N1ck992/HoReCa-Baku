@@ -1,0 +1,18 @@
+Звуки PROJECT ABYSS (дополнение №108). Все — лицензия CC0 (общественное достояние), OpenGameArt.org.
+Указывать авторов не обязательно, но благодарим:
+
+шаги по металлу (step_metal)         — Thimras, «Metal footsteps on concrete»            https://opengameart.org/content/metal-footsteps-on-concrete
+удар трубой (pipe_hit)                — rubberduck, «75 CC0 breaking/falling/hit sfx»     https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx
+удар по телу (flesh_hit)              — qubodup, «37 hits/punches»                         https://opengameart.org/content/37-hitspunches
+выстрел/попадание плазмы              — rubberduck, «60 CC0 Sci-Fi SFX»                    https://opengameart.org/content/60-cc0-sci-fi-sfx
+голоса мутантов, Колосса              — rubberduck, «80 CC0 creature SFX»                  https://opengameart.org/content/80-cc0-creature-sfx
+стоны бродячих мутантов (mutant_idle) — Darsycho, «Zombie moans»                           https://opengameart.org/content/zombie-moans
+рёв громилы (brute_roar)              — Darsycho, «Big scary troll sounds»                 https://opengameart.org/content/big-scary-troll-sounds
+гермодверь (door)                     — yd, «Platformer sounds (terminal, door, …)»        https://opengameart.org/content/platformer-sounds-terminal-interaction-door-shots-bang-and-footsteps
+далёкие удары металла (distant)       — Ogrebane, «Dark ambiences»                         https://opengameart.org/content/dark-ambiences
+гул корабля, машины (amb_hum, amb_machine) — rubberduck, «50 CC0 Sci-Fi SFX»               https://opengameart.org/content/50-cc0-sci-fi-sfx
+тёмный фон (amb_dark)                 — JaggedStone, «Loopable dungeon ambience»           https://opengameart.org/content/loopable-dungeon-ambience
+капли (amb_drips)                     — qubodup, «Dripping water loop»                     https://opengameart.org/content/dripping-water-loop
+
+Свист удара, перегрев плазмы и треск молнии ЭХО — собираются кодом (js/iso/iso-audio.js).
+Обработка (обрезка тишины, нарезка, громкость, моно MP3) — tools/build_sounds.py.

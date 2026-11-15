@@ -1,0 +1,90 @@
+{
+"step_metal": [
+"step_metal_1",
+"step_metal_2",
+"step_metal_3",
+"step_metal_4",
+"step_metal_5",
+"step_metal_6",
+"step_metal_7",
+"step_metal_8"
+],
+"pipe_hit": [
+"pipe_hit_1",
+"pipe_hit_2",
+"pipe_hit_3"
+],
+"flesh_hit": [
+"flesh_hit_1",
+"flesh_hit_2",
+"flesh_hit_3"
+],
+"plasma_shot": [
+"plasma_shot_1",
+"plasma_shot_2",
+"plasma_shot_3",
+"plasma_shot_4"
+],
+"plasma_hit": [
+"plasma_hit_1",
+"plasma_hit_2",
+"plasma_hit_3"
+],
+"mutant_alert": [
+"mutant_alert_1",
+"mutant_alert_2",
+"mutant_alert_3"
+],
+"mutant_attack": [
+"mutant_attack_1",
+"mutant_attack_2",
+"mutant_attack_3"
+],
+"mutant_hurt": [
+"mutant_hurt_1",
+"mutant_hurt_2",
+"mutant_hurt_3"
+],
+"mutant_death": [
+"mutant_death_1",
+"mutant_death_2"
+],
+"mutant_idle": [
+"mutant_idle_1",
+"mutant_idle_2",
+"mutant_idle_3",
+"mutant_idle_4",
+"mutant_idle_5",
+"mutant_idle_6"
+],
+"brute_roar": [
+"brute_roar_1",
+"brute_roar_2",
+"brute_roar_3",
+"brute_roar_4"
+],
+"boss_roar": [
+"boss_roar_1",
+"boss_roar_2"
+],
+"door": [
+"door_1"
+],
+"distant": [
+"distant_1",
+"distant_2",
+"distant_3"
+],
+"amb_hum": [
+"amb_hum"
+],
+"amb_dark": [
+"amb_dark"
+],
+"amb_drips": [
+"amb_drips"
+],
+"amb_machine": [
+"amb_machine"
+]
+}

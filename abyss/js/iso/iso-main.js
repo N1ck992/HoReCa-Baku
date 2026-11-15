@@ -309,6 +309,7 @@
       AB.IsoCompanion.update(dt);   // №85: дрон-спутник
       AB.IsoGuard.update(dt);       // №86: оборона ангара
       AB.IsoCrowd.update(dt);       // №98: никто не стоит в одной точке
+      AB.IsoAudio.update(dt);       // №108: шаги, стоны, далёкие звуки
       if (!busy) AB.IsoCombat.update(dt, input);
       if (Math.random() < 0.1) AB.Quests.check();
       AB.Anim.update(dt);

@@ -44,6 +44,7 @@ AB.IsoEnemies = (() => {
     e.state = s; e.t = 0; e.hitDone = false; e.path = null;
     const a = { ALERT: 'alert', ATTACK: 'attack', DEAD: 'death' }[s];
     if (a) AB.Anim.play(e.id, a, { restart: true });
+    AB.Bus.emit('enemy:state', { id: e.id, state: s, x: e.x, y: e.y });   // №108: для звука (рык, атака)
   }
 
   // кого замечает: ближе всех из отряда — по зрению (впереди дальше, сзади — доля) или по шуму
