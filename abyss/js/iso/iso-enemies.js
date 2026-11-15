@@ -242,7 +242,9 @@ AB.IsoEnemies = (() => {
       return true;
     }
     if (e.state === 'DORMANT') return false;
-    if (e.vulnT > 0) amount *= e.vulnMult || 1;   // №120: «биологическая уязвимость» — препарат Хейл
+    if (e.vulnT > 0) amount *= e.vulnMult || 1;
+    if (e.armorMul != null) amount *= e.armorMul;                          // №123: броня меняется в бою (гигант оглушён — открыт)
+    if (e.minHp != null) amount = Math.min(amount, Math.max(0, e.hp - e.minHp));   // №123: не умирает раньше сцены   // №120: «биологическая уязвимость» — препарат Хейл
     if (d.armor && d.armor[kind] != null) amount = Math.round(amount * d.armor[kind]);
     if (AB.IsoBoss) amount = Math.max(from ? 1 : 0, Math.round(amount * AB.IsoBoss.mod(e, from)));   // №57: Колосса берут только пушки
     e.hp = Math.max(0, e.hp - amount);

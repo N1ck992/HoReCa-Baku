@@ -17,7 +17,7 @@ AB.IsoMira = (() => {
     heal: { every: 9, amount: 50, below: 0.85 },
     swap: 7, decoys: 3, decoyRespawn: 6,
     spores: { radius: 1.7, slow: 2.5 },
-    flee: 0.2,
+    p1End: 0.7,   // №123: при 70 % здоровья иллюзия рвётся — погоня (фазы 2–3 — iso-mira-phases.js)
   };
   const REAL = 'ENEMY-011';
   const HANGAR = { mira: { x: 73.5, y: 47.5 } };   // где Мира ждёт у капсулы
@@ -78,6 +78,13 @@ AB.IsoMira = (() => {
     miraFight: () => start(),
     miraGone: () => gone(),
     escape: () => escape(),
+    // №123: фазы 2–3
+    chaseStart: () => AB.IsoMiraP.chaseStart((F && F.at) || HANGAR.mira),
+    nestStart: () => AB.IsoMiraP.nestStart(),
+    mindStart: () => AB.IsoMiraP.mindStart(),
+    killMira: () => AB.IsoMiraP.kill(),
+    riftOpen: () => AB.IsoMiraP.riftOpen(),
+    riftClose: () => AB.IsoMiraP.riftClose(),
   };
 
   // ---------- этап 3: бой ----------
@@ -112,6 +119,7 @@ AB.IsoMira = (() => {
 
   // поведение (вызывается из iso-enemies.js для type 'mira')
   function tick(e, dt) {
+    { const form = AB.ID.get(e.id).form; if (form && form !== 'girl') return AB.IsoMiraP.tick(e, dt); }
     e.t += dt; e.flash = Math.max(0, e.flash - dt * 4); e.cooldown = Math.max(0, e.cooldown - dt);
     e.heal = Math.max(0, (e.heal || 0) - dt);
     if (e.state === 'DEAD' || !F || F.fled) { e.moving = false; return; }
@@ -159,12 +167,12 @@ AB.IsoMira = (() => {
     // новые копии
     if (alive.length < RULES.decoys) { F.respawnT += dt; if (F.respawnT >= RULES.decoyRespawn) { F.respawnT = 0; decoy(e.x, e.y); } } else F.respawnT = 0;
     // хватит — уходит
-    if (e.hp <= AB.ID.get(REAL).hp * RULES.flee && !F.fled) { F.fled = true; AB.Flags.add('mira-fled'); AB.IsoStory.trigger('mira:fled'); }
+    if (e.hp <= AB.ID.get(REAL).hp * RULES.p1End && !F.fled) { F.fled = true; F.at = { x: e.x, y: e.y }; AB.IsoStory.trigger('mira:p1'); }
   }
 
   // копия лопнула — облако спор
   AB.Bus.on('enemy:dead', ({ id }) => {
-    if (id === REAL && F && !F.fled) { F.fled = true; AB.Flags.add('mira-fled'); AB.IsoStory.trigger('mira:fled'); return; }
+    if (id === REAL && F && !F.fled) { const e = AB.IsoEnemies.get(id); F.fled = true; F.at = e ? { x: e.x, y: e.y } : HANGAR.mira; AB.IsoStory.trigger('mira:p1'); return; }
     if (!F || !F.decoys.has(id)) return;
     const e = AB.IsoEnemies.get(id); F.decoys.delete(id);
     if (!e) return;
@@ -185,6 +193,7 @@ AB.IsoMira = (() => {
   // Марк и Хейл уходят на капсуле: Миры в экипаже больше нет
   function escape() {
     F = null;
+    AB.Flags.add('mira-fled'); if (AB.IsoMiraP) AB.IsoMiraP.end();
     const m = P().find('CHAR-002'); if (m) { m.hidden = true; m.sector = 'SECTOR-000'; }
     AB.IsoActs.setCrew(['CHAR-001', 'CHAR-003']);
     AB.IsoActs.enterBase();
@@ -199,6 +208,7 @@ AB.IsoMira = (() => {
     return f;
   }
   function draw(ctx, e, p, drawFig) {
+    { const form = AB.ID.get(e.id).form; if (form && form !== 'girl') return AB.IsoMiraP.draw(ctx, e, p, drawFig); }
     if (e.state === 'DEAD') return;
     const seen = lens();
     ctx.save();
@@ -214,5 +224,5 @@ AB.IsoMira = (() => {
     if (e.heal > 0) { ctx.strokeStyle = `rgba(110,255,170,${e.heal})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 26, 13, 0, 0, 7); ctx.stroke(); }
   }
 
-  return { RULES, tick, update, draw, run: (fn) => RUN[fn] && RUN[fn](), state: () => F, active: () => !!F && !F.fled, checkEcho };
+  return { RULES, tick, update, draw, figureOf: figure, run: (fn) => RUN[fn] && RUN[fn](), state: () => F, active: () => !!F && !F.fled, checkEcho };
 })();

@@ -344,6 +344,7 @@ AB.IsoRender = (() => {
     if (AB.IsoReward) AB.IsoReward.drawGround(ctx, toScreen, time, AB.IsoInteract.targets().filter((t) => t.kind === 'item'));   // №81: лучи над наградой
     drawMarker();
     if (AB.IsoFX) AB.IsoFX.drawGround(ctx, toScreen);   // №111: пятна и красные зоны замаха
+    if (AB.IsoMiraP) AB.IsoMiraP.drawGround(ctx, toScreen);   // №123: бой с Мирой — зоны, разрядники, разлом
 
     // видимая область в клетках (с запасом на высоту стен)
     const hw = cv.width / 2 / sc + TW * 2, hh = cv.height / 2 / sc + WALL_H + TH * 2;
@@ -756,6 +757,7 @@ AB.IsoRender = (() => {
       ctx.font = '700 10px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(190,255,120,${k})`; ctx.fillText(`×${e.vulnMult}`, p.x + 26, p.y - 70);
     }
     const dd = AB.ID.get(e.id);
+    if (AB.IsoMiraP && AB.IsoMiraP.drawLarva(ctx, e, p, (f, q) => AB.Render.drawFigure(ctx, f, q.x, q.y, FIG_K))) return;   // №123: «Разум» — личинки как люди
     if (dd && dd.type === 'mira' && AB.IsoMira) { AB.IsoMira.draw(ctx, e, p, (f, q) => AB.Render.drawFigure(ctx, f, q.x, q.y, FIG_K)); return; }   // №118: облик Миры
     if (AB.Render && AB.Render.drawEnemyFigure) AB.Render.drawEnemyFigure(ctx, e, p.x, p.y, ENEMY_K);
   }
@@ -811,6 +813,7 @@ AB.IsoRender = (() => {
 
   function drawMember(m, isLead) {
     const p = toScreen(m.x, m.y);
+    if (AB.IsoMiraP && AB.IsoMiraP.drawMember(ctx, m, p)) return;   // №123: «Разум» — Хейл видится чудовищем
     // аура лечения дротикового пистолета: мягкое зелёное кольцо
     if (AB.IsoCombat.hasAura(m.id) && !(AB.Chars.get(m.id) || {}).dead) {
       const on = AB.IsoCombat.auraActive(m.id), r = AB.IsoCombat.weaponOf(m.id).weapon.aura.radius / 50;
