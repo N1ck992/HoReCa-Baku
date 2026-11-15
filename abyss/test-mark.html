@@ -124,7 +124,7 @@
     // №101: 3D-модель преследователя (GLB автора) — детали привязаны к скелету манекена по названиям
     { id: 'G', name: 'Преследователь · 3D', three: true, glb: 'assets/enemy002/3d/mechanical_raider.glb.json', height: 2.0 },
     // №102: «Хромированный страж» (Meshy, автор) — цельная модель, скелет и веса посчитаны по геометрии, рисуется видеокартой
-    { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json', mocap: 'assets/models/anims/cmu-basic.json' }];
+    { id: 'H', name: 'Страж · 3D (Meshy)', three: true, skinned: 'assets/models/sentinel/sentinel.json', mocap: 'assets/models/anims/cmu-basic.json', paint: 'pursuer' }];
   // ---------- №100: 3D-манекен — маленький 3D без библиотек ----------
   // Скелет из суставов (оси модели: X — вперёд, Y — влево, Z — вверх, метры), на костях — коробки.
   // Проекция — та же изометрия, что у комнаты: экран x = (X−Y)·TW/2, y = (X+Y)·TH/2 − Z·ZT.
@@ -329,25 +329,77 @@
       const idx = j.idx16 ? new Uint16Array(cut(19 * n, 19 * n + 6 * j.tris)) : new Uint32Array(cut(19 * n, 19 * n + 12 * j.tris));
       const SKs = {};
       for (const [b, p] of Object.entries(j.parents)) SKs[b] = [p, p ? j.joints[b].map((v, c) => v - j.joints[p][c]) : j.joints[b]];
-      return { j, pos, nrm, bi, bw, idx, SK: SKs, bones: j.bones };
+      const paint = j.paint ? Uint8Array.from(atob(j.paint), (c) => c.charCodeAt(0)) : null;
+      return { j, pos, nrm, bi, bw, idx, paint, SK: SKs, bones: j.bones };
     }
     const G3 = (() => {
       let gl = null, prog, buf = null, cv3 = null;
-      const VS = () => `attribute vec3 p; attribute vec3 n; attribute vec2 bi; attribute vec2 bw;
-        uniform mat4 B[16]; uniform vec2 sz; uniform float S; varying vec3 vn; varying float vd;
+      const VS = () => `attribute vec3 p; attribute vec3 n; attribute vec2 bi; attribute vec2 bw; attribute vec2 pm;
+        uniform mat4 B[16]; uniform vec2 sz; uniform float S; varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm;
         void main() {
           mat4 m = B[int(bi.x)] * bw.x + B[int(bi.y)] * bw.y;
-          vec3 w = (m * vec4(p, 1.0)).xyz; vn = normalize(mat3(m) * n);
+          vec3 w = (m * vec4(p, 1.0)).xyz; vn = normalize(mat3(m) * n); vr = p; vm = pm;
           float sx = (w.x - w.y) * ${TW / 2}.0 * S, sy = ((w.x + w.y) * ${TH / 2}.0 - w.z * ${ZT}.0) * S;
           vd = dot(w, vec3(${VIEW.join(',')}));
           gl_Position = vec4(sx / (sz.x * 0.5), -(sy + sz.y * 0.35) / (sz.y * 0.5), -vd / 40.0, 1.0);
         }`;
-      const FS = () => `precision mediump float; varying vec3 vn; varying float vd; uniform vec3 col;
+      // №104: материал «как преследователь» — рисуется по точкам модели (без текстуры): керамические пластины,
+      // механика с бронзой на суставах, ремень, лицо-череп с красным глазом и латунным прибором
+      const FS = () => `#ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+        #else
+        precision mediump float;
+        #endif
+        varying vec3 vn; varying float vd; varying vec3 vr; varying vec2 vm;
+        uniform vec3 col; uniform float paintOn; uniform vec3 eyeR; uniform vec3 eyeL; uniform vec3 mouth;
+        float h1(vec3 q) { return fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+        vec3 h3(vec3 q) { return fract(sin(vec3(dot(q, vec3(127.1, 311.7, 74.7)), dot(q, vec3(269.5, 183.3, 246.1)), dot(q, vec3(113.5, 271.9, 124.6)))) * 43758.5453); }
+        float noise(vec3 q) { vec3 i = floor(q), f = fract(q); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(h1(i), h1(i + vec3(1, 0, 0)), f.x), mix(h1(i + vec3(0, 1, 0)), h1(i + vec3(1, 1, 0)), f.x), f.y),
+                     mix(mix(h1(i + vec3(0, 0, 1)), h1(i + vec3(1, 0, 1)), f.x), mix(h1(i + vec3(0, 1, 1)), h1(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+        float fbm(vec3 q) { return noise(q) * 0.5 + noise(q * 2.03) * 0.25 + noise(q * 4.1) * 0.125; }
+        vec2 vor(vec3 q) { vec3 i = floor(q), f = fract(q); float d1 = 8.0, d2 = 8.0, id = 0.0;
+          for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) {
+            vec3 g = vec3(float(x), float(y), float(z)), r = g + h3(i + g) - f; float d = dot(r, r);
+            if (d < d1) { d2 = d1; d1 = d; id = h1(i + g); } else if (d < d2) d2 = d; }
+          return vec2(sqrt(d2) - sqrt(d1), id); }
         void main() {
-          vec3 n = normalize(vn), L = vec3(${LIGHT.join(',')}), V = vec3(${VIEW.join(',')});
-          float d = max(dot(n, L), 0.0), sp = pow(max(dot(reflect(-L, n), V), 0.0), 22.0), rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-          float env = 0.5 + 0.5 * n.z;                                     // «хром»: сверху светлее, снизу — тёмный пол
-          vec3 c = col * (0.18 + 0.55 * d + 0.35 * env) + vec3(1.0) * sp * 0.9 + vec3(0.35, 0.8, 0.95) * rim * 0.35;
+          vec3 nn = normalize(vn), L = vec3(${LIGHT.join(',')}), V = vec3(${VIEW.join(',')});
+          float d = max(dot(nn, L), 0.0), env = 0.5 + 0.5 * nn.z, rim = pow(1.0 - max(dot(nn, V), 0.0), 3.0);
+          vec3 base = col; float spk = 0.9, shin = 22.0; vec3 glow = vec3(0.0); vec3 rimc = vec3(0.35, 0.8, 0.95) * 0.35;
+          if (paintOn > 0.5) {
+            vec2 v = vor(vr * vec3(6.5, 6.5, 4.5));                  // пластины ~15 см, вытянуты вдоль тела
+            float seam = 1.0 - smoothstep(0.008, 0.028, v.x);
+            vec3 ivory = vec3(0.86, 0.82, 0.74) * (0.88 + 0.16 * v.y);
+            float stain = smoothstep(0.55, 0.8, fbm(vr * vec3(7.0, 7.0, 2.2)));             // ржавые потёки — вытянуты вниз
+            ivory = mix(ivory, vec3(0.45, 0.28, 0.14), stain * 0.6);
+            float crack = smoothstep(0.035, 0.0, abs(fbm(vr * 26.0) - 0.5)) * step(0.55, h1(floor(vr * vec3(6.5, 6.5, 4.5)) + 0.37));
+            ivory *= 1.0 - crack * 0.65;
+            ivory *= mix(0.62, 1.0, smoothstep(0.15, 1.1, vr.z));      // снизу грязнее
+            vec3 plate = mix(ivory, vec3(0.07, 0.06, 0.05), seam * 0.9);
+            plate = mix(plate, vec3(0.55, 0.38, 0.18), (1.0 - smoothstep(0.028, 0.05, v.x)) * (1.0 - seam) * 0.35);
+            float cable = 0.5 + 0.5 * sin(vr.z * 210.0 + noise(vr * 22.0) * 7.0 + vr.y * 60.0);   // пучки кабелей — неровно
+            vec3 mech = mix(vec3(0.07, 0.065, 0.06), vec3(0.14, 0.125, 0.11), cable * cable * (0.6 + 0.4 * noise(vr * 15.0)));
+            mech = mix(mech, vec3(0.62, 0.43, 0.2), smoothstep(0.68, 0.92, noise(vr * 32.0)) * 0.85);
+            float m = smoothstep(0.35, 0.65, vm.x), ring = clamp(1.0 - abs(vm.x - 0.5) * 5.0, 0.0, 1.0);
+            base = mix(plate, mech, m);
+            base = mix(base, vec3(0.64, 0.45, 0.21), ring * 0.85);
+            float bl = smoothstep(0.4, 0.7, vm.y);
+            vec3 leather = vec3(0.25, 0.15, 0.08) * (0.75 + 0.35 * noise(vr * 55.0));
+            if (abs(vr.y) < 0.035 && vr.x > 0.04) leather = vec3(0.72, 0.52, 0.22);       // пряжка
+            base = mix(base, leather, bl);
+            // лицо-череп: глазницы, латунный прибор на левом глазу, красный правый, оскал
+            float dR = distance(vr, eyeR), dL = distance(vr, eyeL);
+            base = mix(base, vec3(0.025), smoothstep(0.034, 0.025, min(dR, dL)));
+            base = mix(base, vec3(0.68, 0.49, 0.21), smoothstep(0.047, 0.041, dL) * smoothstep(0.025, 0.031, dL));
+            base = mix(base, vec3(0.35, 0.25, 0.1), smoothstep(0.016, 0.01, dL));
+            vec3 mq = vr - mouth;
+            if (abs(mq.z) < 0.012 && abs(mq.y) < 0.042 && mq.x > -0.03) base = mix(vec3(0.04), vec3(0.82, 0.78, 0.68), step(0.45, fract(mq.y * 95.0)) * step(abs(mq.z), 0.008));
+            glow = vec3(1.0, 0.12, 0.07) * (smoothstep(0.016, 0.009, dR) * 1.6 + smoothstep(0.05, 0.0, dR) * 0.35);
+            spk = mix(0.32, 0.85, m); shin = mix(14.0, 30.0, m); rimc = vec3(0.6, 0.5, 0.4) * 0.15;
+          }
+          float sp = pow(max(dot(reflect(-L, nn), V), 0.0), shin);
+          vec3 c = base * (0.2 + 0.62 * d + 0.3 * env) + vec3(1.0) * sp * spk + rimc * rim + glow;
           gl_FragColor = vec4(c, 1.0);
         }`;
       function init() {
@@ -359,7 +411,7 @@
       }
       function upload(sd) {
         const mk = (data, type) => { const b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; };
-        sd.gl = { p: mk(sd.pos), n: mk(sd.nrm), bi: mk(sd.bi), bw: mk(sd.bw), i: mk(sd.idx, gl.ELEMENT_ARRAY_BUFFER), ext: sd.idx instanceof Uint32Array ? gl.getExtension('OES_element_index_uint') : null };
+        sd.gl = { p: mk(sd.pos), n: mk(sd.nrm), bi: mk(sd.bi), bw: mk(sd.bw), pm: mk(sd.paint || new Uint8Array(sd.pos.length / 3 * 2)), i: mk(sd.idx, gl.ELEMENT_ARRAY_BUFFER), ext: sd.idx instanceof Uint32Array ? gl.getExtension('OES_element_index_uint') : null };
       }
       function render(sd, mats, S, col) {
         if (!gl && !init()) return null;
@@ -369,9 +421,12 @@
         gl.viewport(0, 0, W, H); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.useProgram(prog);
         const at = (name, b, size, type, norm) => { const l = gl.getAttribLocation(prog, name); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, type, norm, 0, 0); };
-        at('p', sd.gl.p, 3, gl.FLOAT, false); at('n', sd.gl.n, 3, gl.BYTE, true); at('bi', sd.gl.bi, 2, gl.UNSIGNED_BYTE, false); at('bw', sd.gl.bw, 2, gl.UNSIGNED_BYTE, true);
+        at('p', sd.gl.p, 3, gl.FLOAT, false); at('n', sd.gl.n, 3, gl.BYTE, true); at('bi', sd.gl.bi, 2, gl.UNSIGNED_BYTE, false); at('bw', sd.gl.bw, 2, gl.UNSIGNED_BYTE, true); at('pm', sd.gl.pm, 2, gl.UNSIGNED_BYTE, true);
         gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'B'), false, mats);
         gl.uniform2f(gl.getUniformLocation(prog, 'sz'), W, H); gl.uniform1f(gl.getUniformLocation(prog, 'S'), S); gl.uniform3fv(gl.getUniformLocation(prog, 'col'), col);
+        const fc = sd.j.face, U = (k, v) => gl.uniform3fv(gl.getUniformLocation(prog, k), v);
+        gl.uniform1f(gl.getUniformLocation(prog, 'paintOn'), sd.paint && sd.style === 'pursuer' ? 1 : 0);
+        if (fc) { U('eyeR', fc.eyeR); U('eyeL', fc.eyeL); U('mouth', fc.mouth); }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sd.gl.i);
         gl.drawElements(gl.TRIANGLES, sd.idx.length, sd.idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
         return cv3;
@@ -390,6 +445,7 @@
         mats.set([m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0, m[3], m[7], m[11], 1], i * 16);
       });
       const t = ctx.getTransform(), S = t.a, p = { x: (h.x - h.y) * TW / 2, y: (h.x + h.y) * TH / 2 };
+      sd.style = h.kind.paint;
       const c3 = G3.render(sd, mats, S, h.kind.col || [0.78, 0.8, 0.84]);
       if (!c3) return;
       const ax = p.x * t.a + t.e, ay = p.y * t.d + t.f;
