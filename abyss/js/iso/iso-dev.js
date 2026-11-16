@@ -97,6 +97,7 @@ AB.IsoDev = (() => {
   // ---------- инструменты ----------
   const TOOLS = {
     god() { god = !god; return god ? 'Бессмертие: ВКЛ' : 'Бессмертие: выкл'; },
+    autofight() { AB.IsoCombat.setAutoFight(!AB.IsoCombat.autoFight()); return AB.IsoCombat.autoFight() ? 'Автобой: ВКЛ (ведущий сам бьёт врагов рядом)' : 'Автобой: выкл'; },
     res() { for (const [i, n] of [['ITEM-001', 10], ['ITEM-002', 5], ['ITEM-003', 5], ['ITEM-015', 3], ['ITEM-007', 6], ['ITEM-005', 3]]) AB.IsoStash.add(i, n); return 'Ресурсы добавлены'; },
     heal() { for (const id of ['CHAR-001', 'CHAR-002', 'CHAR-003', 'CHAR-004']) { const c = AB.Chars.get(id); if (c && !c.dead) c.hp = AB.ID.get(id).stats.maxHp; } return 'Отряд вылечен'; },
     kill() {
@@ -120,7 +121,7 @@ AB.IsoDev = (() => {
       <label class="dev-sw"><input type="checkbox" data-dev-on ${on() ? 'checked' : ''}> Режим разработчика</label>
       ${on() ? `${groups.map((g) => `<h3>${g}</h3><div class="dev-row">${JUMPS.filter((j) => j.group === g).map((j) => `<button data-jump="${j.id}">${j.name}</button>`).join('')}</div>`).join('')}
       <h3>Инструменты</h3><div class="dev-row">
-        <button data-tool="god">${god ? 'Бессмертие: ВКЛ' : 'Бессмертие: выкл'}</button><button data-tool="heal">Вылечить отряд</button>
+        <button data-tool="god">${god ? 'Бессмертие: ВКЛ' : 'Бессмертие: выкл'}</button><button data-tool="autofight">${AB.IsoCombat.autoFight() ? 'Автобой: ВКЛ' : 'Автобой: выкл'}</button><button data-tool="heal">Вылечить отряд</button>
         <button data-tool="res">+ Ресурсы</button><button data-tool="terminal">+ Наручный терминал</button>
         <button data-tool="kill">Убить врагов рядом</button><button data-tool="map">Открыть карту дна</button>
         <button data-tool="regolith">База: + реголит ×30</button><button data-tool="hour">База: прожить час</button><button data-tool="baseReset">База: сбросить</button></div>

@@ -343,6 +343,10 @@ AB.IsoRender = (() => {
     drawFloorMarks();
     if (AB.IsoReward) AB.IsoReward.drawGround(ctx, toScreen, time, AB.IsoInteract.targets().filter((t) => t.kind === 'item'));   // №81: лучи над наградой
     drawMarker();
+    { const aim = AB.IsoInput.aim && AB.IsoInput.aim(), l = AB.IsoParty.lead();   // №124: линия прицела правого стика
+      if (aim && l) { const a0 = toScreen(l.x, l.y), b0 = toScreen(l.x + aim.x * 6, l.y + aim.y * 6);
+        ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,110,80,.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a0.x, a0.y - 34); ctx.lineTo(b0.x, b0.y - 34); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,110,80,.9)'; ctx.beginPath(); ctx.arc(b0.x, b0.y - 34, 4, 0, 7); ctx.fill(); ctx.restore(); } }
     if (AB.IsoFX) AB.IsoFX.drawGround(ctx, toScreen);   // №111: пятна и красные зоны замаха
     if (AB.IsoMiraP) AB.IsoMiraP.drawGround(ctx, toScreen);   // №123: бой с Мирой — зоны, разрядники, разлом
 

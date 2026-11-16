@@ -42,6 +42,7 @@ AB.IsoInput = (() => {
       if (AB.Dialog.isOpen()) { AB.Dialog.next(); return; }
       if (AB.IsoStory.locked() || AB.IsoGame.busy()) return;
       canvas.setPointerCapture(e.pointerId);
+      if (twinStart(e)) return;   // №124: телефон — левая половина джойстик, правая прицел
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 2) {
         // два пальца — масштаб, движение не задаём
@@ -61,6 +62,7 @@ AB.IsoInput = (() => {
       holdT = 0.15;
     });
     canvas.addEventListener('pointermove', (e) => {
+      if (twinMove(e)) return;
       if (e.pointerType === 'mouse') { hoverFoe = enemyAt(e.clientX, e.clientY); canvas.style.cursor = hoverFoe ? 'pointer' : AB.IsoInteract.hoverAt(e.clientX, e.clientY) ? 'pointer' : 'crosshair'; }
       if (!pointers.has(e.pointerId)) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -75,6 +77,7 @@ AB.IsoInput = (() => {
       }
     });
     const up = (e) => {
+      if (twinEnd(e)) return;
       if (baseDrag && baseDrag.id === e.pointerId) { const d = baseDrag; baseDrag = null; if (d.ghost) AB.BaseBuild.drop(); if (!d.moved && e.type === 'pointerup') AB.IsoInteract.click(e.clientX, e.clientY); }
       pointers.delete(e.pointerId);
       if (hold === e.pointerId) hold = null;
@@ -86,6 +89,77 @@ AB.IsoInput = (() => {
   }
 
   let hoverFoe = null, baseDrag = null;
+
+  // ---------- №124: телефон — «два стика» ----------
+  // Левая половина экрана: джойстик движения появляется под пальцем. Правая — прицел: тянете палец — герой
+  // целится в ту сторону и стреляет, пока палец прижат. Короткое касание без сдвига — как раньше (идти, дверь, предмет).
+  const twin = { aim: null, tap: null };
+  const isTouch = (e) => e.pointerType === 'touch' || (e.pointerType === 'pen' && matchMedia('(pointer: coarse)').matches);
+  function twinStart(e) {
+    if (!isTouch(e) || (AB.IsoBase && AB.IsoBase.active())) return false;
+    const left = e.clientX < innerWidth / 2;
+    if (left && stk.el && stk.id == null) {
+      const r = stk.el.getBoundingClientRect();
+      stk.el.classList.add('float', 'on'); stk.el.hidden = false;
+      stk.el.style.left = `${e.clientX - r.width / 2}px`; stk.el.style.top = `${e.clientY - r.height / 2}px`; stk.el.style.bottom = 'auto';
+      stk.cx = e.clientX; stk.cy = e.clientY; stk.R = r.width * 0.36; stk.id = e.pointerId; stk.x = stk.y = 0;
+      twin.tap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, side: 'l' };
+      return true;
+    }
+    if (!left && !twin.aim) {
+      twin.aim = { id: e.pointerId, cx: e.clientX, cy: e.clientY, dir: null };
+      twin.tap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, side: 'r' };
+      aimEl(true, e.clientX, e.clientY, 0, 0);
+      return true;
+    }
+    return false;
+  }
+  function twinMove(e) {
+    if (twin.tap && twin.tap.id === e.pointerId && Math.hypot(e.clientX - twin.tap.x, e.clientY - twin.tap.y) > 12) twin.tap.moved = true;
+    if (stk.id === e.pointerId && stk.el.classList.contains('float')) {
+      const dx = e.clientX - stk.cx, dy = e.clientY - stk.cy, n = Math.hypot(dx, dy), k = n > stk.R ? stk.R / n : 1;
+      stk.x = (dx * k) / stk.R; stk.y = (dy * k) / stk.R; stk.knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+      return true;
+    }
+    if (twin.aim && twin.aim.id === e.pointerId) {
+      const dx = e.clientX - twin.aim.cx, dy = e.clientY - twin.aim.cy, n = Math.hypot(dx, dy);
+      if (n > 12) {
+        const TW = AB.IsoRender.TW, TH = AB.IsoRender.TH, wx = dy / TH + dx / TW, wy = dy / TH - dx / TW, m = Math.hypot(wx, wy);
+        twin.aim.dir = { x: wx / m, y: wy / m };
+      }
+      const k = n > 44 ? 44 / n : 1; aimEl(true, twin.aim.cx, twin.aim.cy, dx * k, dy * k);
+      return true;
+    }
+    return false;
+  }
+  function twinEnd(e) {
+    const tap = twin.tap && twin.tap.id === e.pointerId ? twin.tap : null;
+    let mine = false;
+    if (stk.id === e.pointerId && stk.el.classList.contains('float')) {
+      stk.id = null; stk.x = stk.y = 0; stk.knob.style.transform = '';
+      stk.el.classList.remove('float', 'on'); stk.el.style.left = stk.el.style.top = stk.el.style.bottom = '';
+      mine = true;
+    }
+    if (twin.aim && twin.aim.id === e.pointerId) { twin.aim = null; aimEl(false); mine = true; }
+    if (tap) {
+      twin.tap = null;
+      if (!tap.moved && performance.now() - tap.t < 350 && e.type === 'pointerup') {   // короткое касание — как раньше
+        const foe = enemyAt(e.clientX, e.clientY);
+        if (foe) AB.IsoCombat.setTarget(foe);
+        else if (!AB.IsoInteract.click(e.clientX, e.clientY)) moveTo(e.clientX, e.clientY);
+      }
+    }
+    return mine;
+  }
+  let aimNode = null;
+  function aimEl(on, x, y, dx, dy) {
+    if (!aimNode) { aimNode = document.createElement('div'); aimNode.id = 'iso-aim'; aimNode.innerHTML = '<i></i>'; document.body.appendChild(aimNode); }
+    aimNode.hidden = !on;
+    if (!on) return;
+    aimNode.style.left = `${x - 56}px`; aimNode.style.top = `${y - 56}px`;
+    aimNode.firstChild.style.transform = `translate(${dx}px, ${dy}px)`;
+  }
+  const aimDir = () => (twin.aim && twin.aim.dir) || null;
   // противник под указателем (по фигуре, не только по ногам)
   function enemyAt(cx, cy) {
     let best = null, bd = 34;
@@ -155,11 +229,13 @@ AB.IsoInput = (() => {
       if (holdT <= 0) { const p = pointers.get(hold); moveTo(p.x, p.y); holdT = 0.2; }
     }
     if (AB.IsoInventory && (AB.IsoInventory.isOpen() || AB.IsoInventory.heroOpen())) return { x: 0, y: 0, walk: false };   // открыт инвентарь — стоит
+    const aim = aimDir();
+    if (aim && dt > 0 && !(AB.IsoStory.locked() || AB.IsoGame.busy())) AB.IsoCombat.fireAt(aim);   // прицел прижат — стреляет
     const st = stickAxis();
-    if (st && !(AB.IsoBase && AB.IsoBase.active())) return st;
+    if (st && !(AB.IsoBase && AB.IsoBase.active())) return { ...st, aim };
     const a = axis();
-    return { x: a.x, y: a.y, walk: keys.has('ShiftLeft') || keys.has('ShiftRight') };
+    return { x: a.x, y: a.y, walk: keys.has('ShiftLeft') || keys.has('ShiftRight'), aim };
   }
 
-  return { init, update, stick, hoverFoe: () => hoverFoe, stickActive: () => stk.id != null };
+  return { init, update, stick, hoverFoe: () => hoverFoe, stickActive: () => stk.id != null, aim: aimDir };
 })();

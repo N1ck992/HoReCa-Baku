@@ -114,12 +114,14 @@ AB.IsoParty = (() => {
       W().move(l, input.x * sp * dt, input.y * sp * dt);
       went = Math.hypot(l.x - ox, l.y - oy);
       l.hx = input.x; l.hy = input.y;
+      if (input.aim) { l.hx = input.aim.x; l.hy = input.aim.y; }   // №124: правый стик — прицел важнее направления шага
       l.run = !input.walk;
     } else if (l.path) {
       l.run = l.scripted ? false : !(input && input.walk);
       went = walkPath(l, dt, l.scripted || speedOf(l, l.run));
       if (!l.path) l.scripted = null;
     }
+    if (input && input.aim && !(input.x || input.y)) { l.hx = input.aim.x; l.hy = input.aim.y; }   // стоит и целится
     animate(l, went, dt);
 
     // остальные: каждый к своему месту строя

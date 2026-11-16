@@ -17,8 +17,9 @@ AB.IsoCombat = (() => {
   const swings = new Map();            // ID персонажа → { t, w, hit, shot, target }
   const healing = new Map();
   let target = null;                   // противник, которого атакует ведущий по нажатию
-  let autoFight = true;
-  try { autoFight = localStorage.getItem('abyss_autofight') !== 'off'; } catch (e) { /* хранилище недоступно */ }
+  // №124: автобой ведущего — только в режиме разработчика (DEV → «Автобой»); по умолчанию выключен
+  let autoFight = false;
+  try { autoFight = localStorage.getItem('abyss_autofight') === 'on'; } catch (e) { /* хранилище недоступно */ }
 
   const mod = (k) => (AB.Perks ? AB.Perks.mod(k) : 1);   // улучшения (перки) — множители
   // №56: снаружи Марк в экзокостюме — бьёт манипуляторами костюма, а не оружием в руках
@@ -151,6 +152,13 @@ AB.IsoCombat = (() => {
     target = e ? e.id : null;
     if (e) AB.IsoParty.goTo(e.x, e.y);
   }
+  // №124: правый стик — выстрел/удар в направлении прицела (без поиска цели)
+  function fireAt(dir) {
+    const l = AB.IsoParty.lead();
+    if (!l || swings.has(l.id)) return false;
+    l.hx = dir.x; l.hy = dir.y; const sx = dir.x - dir.y; if (Math.abs(sx) > 0.05) l.facing = sx > 0 ? 1 : -1;
+    return attack(l, null);
+  }
   function attackNearest() {
     const l = AB.IsoParty.lead();
     if (swings.has(l.id)) { l.queued = performance.now(); return true; }   // №111: нажал во время удара — следующий удар серии сразу после
@@ -177,7 +185,7 @@ AB.IsoCombat = (() => {
       return;
     }
     // автобой: враг в досягаемости — бьёт сам; уходит от врага — не мешаем
-    if (!autoFight) return;
+    if (!autoFight || !(AB.IsoDev && AB.IsoDev.on())) return;
     const f = foeInReach(l);
     if (!f) return;
     if (input && (input.x || input.y) && (input.x * (f.x - l.x) + input.y * (f.y - l.y)) < 0) return;
@@ -228,7 +236,7 @@ AB.IsoCombat = (() => {
   }
 
   return {
-    update, attack, attackNearest, damageChar, setTarget, weaponOf, reachOf,
+    update, attack, attackNearest, fireAt, damageChar, setTarget, weaponOf, reachOf,
     swingOf: (id) => swings.get(id) || null,
     target: () => target, isSwinging: (id) => swings.has(id),
     auraActive: (id) => (healing.get(id) || 0) > 0, hasAura: (id) => { const w = weaponOf(id); return !!(w && w.weapon.aura); },

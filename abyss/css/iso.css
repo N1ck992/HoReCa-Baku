@@ -632,3 +632,9 @@ body.in-base #iso-actbtns { display: none !important; }
 #iso-finish { position: fixed; z-index: 7; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); min-width: 220px; height: 54px; padding: 0 18px; font: 700 15px var(--display); letter-spacing: 1px; text-transform: uppercase; color: #ffe8e0; border: 2px solid rgba(255, 90, 70, .85); border-radius: 8px; touch-action: none; user-select: none;
   background: linear-gradient(90deg, rgba(170, 30, 20, .92) calc(var(--k, 0) * 100%), rgba(20, 10, 12, .88) calc(var(--k, 0) * 100%)); }
 #iso-finish[hidden] { display: none; }
+
+/* №124: телефон — джойстик под пальцем (левая половина) и прицел (правая) */
+#iso-stick.float { left: 0; top: 0; bottom: auto; opacity: .9; }
+#iso-aim { position: fixed; z-index: 4; width: 112px; height: 112px; border-radius: 50%; border: 2px solid rgba(255, 110, 80, .55); background: rgba(40, 10, 8, .25); pointer-events: none; display: grid; place-items: center; }
+#iso-aim[hidden] { display: none; }
+#iso-aim i { width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 110, 80, .3); border: 1px solid rgba(255, 130, 100, .8); }

@@ -92,7 +92,8 @@ AB.IsoStory = (() => {
       if (running.skip) { m.x = tx; m.y = ty; return; }
       P().walkTo(s.char, tx, ty, (s.speed || 100) / T);
     },
-    wait_arrive: (s) => { running.wait = () => { const m = P().find(s.char); return !m || !m.path; }; },
+    // №124: персонаж может застрять (путь перекрыт отрядом или ящиками) — через 4 с встаёт на место сам, сцена не зависает
+    wait_arrive: (s) => { const t0 = performance.now(); running.wait = () => { const m = P().find(s.char); if (!m || !m.path) return true; if (performance.now() - t0 > 4000) { const g = m.path[m.path.length - 1]; if (g) { m.x = g.x; m.y = g.y; } m.path = null; m.goal = null; return true; } return false; }; },
     face: (s) => faceTo(who(s.char), who(s.target)),
     follow: (s) => { P().join(s.char); const c = AB.Chars.get(s.char); if (c) { c.follow = s.leader; } },
     flicker: (s) => { fx.flicker = s.duration; },
