@@ -1445,6 +1445,7 @@ AB.Render = (() => {
   // ---------- Оружие в руке: труба (ASSET-ITEM009-01) или гарпунное ружьё (ASSET-ITEM011-01) ----------
   function drawWeapon(hand, ang, itemId, foreAng, owner) {
     const wdef = itemId && AB.ID.get(itemId);
+    if (wdef && wdef.weapon && wdef.weapon.inArt) return;   // №125: оружие уже нарисовано на картинке персонажа (инжектор Хейл)
     if (wdef && wdef.weapon && wdef.weapon.dart) {
       // дротиковый пистолет: компактный корпус, зелёная капсула с препаратом
       ctx.save();
