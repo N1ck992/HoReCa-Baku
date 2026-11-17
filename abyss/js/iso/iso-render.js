@@ -717,14 +717,22 @@ AB.IsoRender = (() => {
   // foot — где по высоте картинки нижний угол основания; scale — какую часть клеток предмета займёт основание
   const PROP_IMG = {
     algaetank: { src: 'assets/props/algaetank.webp', base: 0.72, foot: 0.973, scale: 0.68, h: 100 },
-    // №137: ферма водорослей (EQUIP-009); запасной вид — assets/props/algaefarm-alt.webp
-    algaefarm: { src: 'assets/props/algaefarm.webp', base: 0.78, foot: 0.98, scale: 0.9, h: 100,
-      on: { src: 'assets/props/algaefarm-on.webp', base: 0.8, foot: 0.985 } },   // №138: после запуска питания — яркая, работает
+    // №139 (автор): на корабле ферма (EQUIP-009) выглядит как остальные баки — бак тот же, с ним просто можно работать
+    algaefarm: { src: 'assets/props/algaetank.webp', base: 0.72, foot: 0.973, scale: 0.68, h: 100 },
+    // №139: своя, миниатюрная ферма — в батискафе (здание конструктора BLD-107, prop 'algae').
+    // До постройки сети питания — приглушённый вид, при питании — яркий «рабочий» (№137–138)
+    algae: { src: 'assets/props/algaefarm.webp', base: 0.78, foot: 0.98, scale: 0.62, h: 70,
+      on: { src: 'assets/props/algaefarm-on.webp', base: 0.8, foot: 0.985 } },
   };
   for (const v of Object.values(PROP_IMG)) for (const o of [v, v.on].filter(Boolean)) { o.im = new Image(); o.im.src = o.src; }
+  // питание предмета: устройство базы — своя сеть (BaseSim), остальное — главное питание корабля
+  function propPowered(p) {
+    if (p.dev && AB.BaseSim && AB.BaseSim.on()) { const d = AB.BaseSim.dev(p.dev); return !!d && AB.BaseSim.canPower(d); }
+    return !!(AB.World && AB.World.hasPower());
+  }
   function drawPropImg(p, spec, alpha, lit) {
     // есть питание и у предмета есть «рабочая» картинка — показываем её (пропорции свои)
-    if (spec.on && spec.on.im.complete && spec.on.im.naturalWidth && AB.World && AB.World.hasPower()) spec = { ...spec, ...spec.on };
+    if (spec.on && spec.on.im.complete && spec.on.im.naturalWidth && propPowered(p)) spec = { ...spec, ...spec.on };
     const im = spec.im, Wd = (p.w + p.h) * TW / 2 * spec.scale / spec.base, Hd = Wd * im.naturalHeight / im.naturalWidth;
     const c = toScreen(p.x + p.w / 2, p.y + p.h / 2), bottom = c.y + (p.w + p.h) * TH / 4 * spec.scale;
     ctx.save(); ctx.globalAlpha = alpha;
