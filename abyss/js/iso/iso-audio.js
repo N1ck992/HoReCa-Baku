@@ -55,7 +55,8 @@ AB.IsoAudio = (() => {
     ambience();
     for (const g of Object.keys(list)) for (const n of list[g]) load(n);    // остальное — в фоне
   }
-  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => { start(); if (ctx && ctx.state === 'suspended') ctx.resume(); }, { capture: true }));
+  // №132: звук выключен — касания не будят звуковой движок
+  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => { start(); if (on && ctx && ctx.state === 'suspended') ctx.resume(); }, { capture: true }));
 
   // громкость и панорама по месту источника; за стеной — глуше
   function place(x, y) {
@@ -227,13 +228,25 @@ AB.IsoAudio = (() => {
   }
 
   // кнопка «звук»
-  function toggle() {
-    on = !on; try { localStorage.setItem('abyss_sound', on ? '1' : '0'); } catch (e) { /* без хранилища */ }
-    if (out) out.gain.setTargetAtTime(on ? RULES.master : 0, ctx.currentTime, 0.1);
-    const b = document.getElementById('iso-snd'); if (b) { b.textContent = on ? '🔊' : '🔇'; b.title = on ? 'Звук: вкл' : 'Звук: выкл'; }
-    ambience();
+  // №132: выключение звука — всё и сразу: общая громкость в ноль, фоновые петли остановлены и удалены,
+  // звуковой движок усыплён (раньше фон мог продолжать звучать); включение — движок просыпается, фон заново
+  function setOn(v) {
+    on = !!v; try { localStorage.setItem('abyss_sound', on ? '1' : '0'); } catch (e) { /* без хранилища */ }
+    if (!ctx) { if (on) start(); return; }
+    const t = ctx.currentTime;
+    out.gain.cancelScheduledValues(t);
+    if (!on) {
+      out.gain.setValueAtTime(0, t);
+      for (const [k, L] of Object.entries(loops)) { try { L.s.stop(); } catch (e) { /* уже остановлен */ } try { L.s.disconnect(); L.g.disconnect(); } catch (e) { /* уже отключён */ } delete loops[k]; }
+      ctx.suspend().catch(() => {});
+    } else {
+      ctx.resume().catch(() => {});
+      out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(RULES.master, t + 0.15);
+      ambience();
+    }
   }
-  window.addEventListener('DOMContentLoaded', () => { const b = document.getElementById('iso-snd'); if (b) { b.textContent = on ? '🔊' : '🔇'; b.addEventListener('click', (e) => { e.stopPropagation(); start(); toggle(); }); } });
+  function toggle() { setOn(!on); }
+  // №132: кнопка звука — в настройках (⚙); старая кнопка сверху скрыта
 
-  return { play, synth, update, toggle, start, RULES, on: () => on, ready: () => !!ctx };
+  return { play, synth, update, toggle, setOn, start, RULES, on: () => on, ready: () => !!ctx, state: () => (ctx ? ctx.state : 'none'), loops: () => Object.keys(loops).length };
 })();

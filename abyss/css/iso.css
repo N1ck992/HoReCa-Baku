@@ -686,3 +686,6 @@ body.base-build #iso-ab { display: none; }
 #iso-ab .ab-label { position: absolute; transform: translate(-50%, -100%); padding: 4px 9px; white-space: nowrap; font: 600 12px var(--display); color: #fff; background: rgba(6, 10, 12, .92); border: 1px solid rgba(94, 230, 255, .5); border-radius: 5px; pointer-events: none; display: grid; justify-items: center; }
 #iso-ab .ab-label[hidden] { display: none; }
 #iso-ab .ab-label i { font: 10px var(--mono); font-style: normal; color: #8fb6c2; }
+
+/* №132: звук — в настройках (⚙); старая кнопка сверху не показывается */
+#iso-snd { display: none !important; }

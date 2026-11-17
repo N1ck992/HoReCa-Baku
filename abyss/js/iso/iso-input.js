@@ -166,15 +166,14 @@ AB.IsoInput = (() => {
   // №128: правила прицела: мёртвая зона, радиус стика, отметка выстрела (режим «pull»), скорость следования по чувствительности
   function aimRules() {
     const s = AB.IsoSettings ? AB.IsoSettings.get('sens') : 3;
-    return { dead: 24 - s * 2, R: 56, fire: 0.78, follow: [1.2, 2.2, 3.5, 6, 11][Math.max(0, Math.min(4, s - 1))] };
+    return { dead: 24 - s * 2, R: 56, fire: 0.78, jitter: [6, 4, 2.5, 1.2, 0][Math.max(0, Math.min(4, s - 1))] };   // jitter — градусы
   }
-  function aimStep(dt) {   // направление плавно догоняет палец
+  // №132: прицел без задержки — сразу туда, куда палец; мелкое дрожание (меньше порога чувствительности) не учитывается
+  function aimStep() {
     const a = twin.aim; if (!a || !a.raw) return;
     if (!a.dir) { a.dir = { ...a.raw }; return; }
-    // у центра стика палец дрожит сильнее всего — там прицел ещё спокойнее; у края — откликается полностью
-    const k = 1 - Math.exp(-aimRules().follow * Math.max(0.25, Math.min(1, a.pull * 1.3)) * dt);
-    let x = a.dir.x + (a.raw.x - a.dir.x) * k, y = a.dir.y + (a.raw.y - a.dir.y) * k; const n = Math.hypot(x, y) || 1;
-    a.dir = { x: x / n, y: y / n };
+    const d = Math.abs(Math.atan2(a.dir.x * a.raw.y - a.dir.y * a.raw.x, a.dir.x * a.raw.x + a.dir.y * a.raw.y)) * 180 / Math.PI;
+    if (d >= aimRules().jitter) a.dir = { ...a.raw };
   }
   const aimDir = () => (twin.aim && twin.aim.dir) || null;
   // противник под указателем (по фигуре, не только по ногам)
