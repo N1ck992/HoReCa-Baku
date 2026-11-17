@@ -467,6 +467,12 @@ AB.IsoRender = (() => {
         const a = alphaFor(`w${o.x},${o.y}`, hid, dt);
         block(o.x, o.y, hgt, WALL_LOOK, a, { l: W.cell(o.x, o.y + 1) !== W.WALL, r: W.cell(o.x + 1, o.y) !== W.WALL });
       } else if (o.k === 'p') {
+        // №136: предметы-картинки (бак с водорослями) — один раз, на последней клетке предмета
+        const pim = PROP_IMG[o.p.kind];
+        if (pim && pim.im.complete && pim.im.naturalWidth) {
+          if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) drawPropImg(o.p, pim, alphaFor(`p${o.x},${o.y}`, occludes(o.x, o.y, pim.h, party), dt));
+          continue;
+        }
         // №111: криокапсула — картинка (закрытая/открытая) вместо брусков; рисуется один раз, на последней клетке
         if (o.p.kind === 'cryopod' && podImg.closed && podImg.closed.complete && podImg.closed.naturalWidth) {
           if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) drawPod(o.p, alphaFor(`p${o.x},${o.y}`, occludes(o.x, o.y, 40, party), dt));
@@ -707,6 +713,15 @@ AB.IsoRender = (() => {
 
   // крышка капсулы: светится, пока внутри спит Марк; открывается в сцене пробуждения
   // №111: картинки капсулы (автор): закрытая — Марк спит (голубой свет под стеклом), открытая — после пробуждения
+  // №136: картинки предметов от автора. base — доля ширины картинки, которую занимает основание;
+  // foot — где по высоте картинки нижний угол основания; scale — какую часть клеток предмета займёт основание
+  const PROP_IMG = { algaetank: { src: 'assets/props/algaetank.webp', base: 0.72, foot: 0.973, scale: 0.68, h: 100 } };
+  for (const v of Object.values(PROP_IMG)) { v.im = new Image(); v.im.src = v.src; }
+  function drawPropImg(p, spec, alpha) {
+    const im = spec.im, Wd = (p.w + p.h) * TW / 2 * spec.scale / spec.base, Hd = Wd * im.naturalHeight / im.naturalWidth;
+    const c = toScreen(p.x + p.w / 2, p.y + p.h / 2), bottom = c.y + (p.w + p.h) * TH / 4 * spec.scale;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.drawImage(im, c.x - Wd / 2, bottom - Hd * spec.foot, Wd, Hd); ctx.restore();
+  }
   const podImg = {};
   for (const n of ['closed', 'open', 'broken']) { const im = new Image(); im.src = `assets/props/cryopod-${n}.webp`; podImg[n] = im; }
   function drawPod(p, alpha) {
