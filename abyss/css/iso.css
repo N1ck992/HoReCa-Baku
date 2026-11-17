@@ -654,3 +654,35 @@ body.in-base #iso-actbtns { display: none !important; }
 #iso-aim.pull s { border-color: rgba(255, 160, 120, .55); }
 #iso-aim.fire { border-color: rgba(255, 70, 40, .95); }
 #iso-aim.fire i { background: rgba(255, 80, 50, .6); }
+
+/* №131: выдвижное меню способностей (нажать, удерживать, отвести) — вместо карточек отряда и кнопок ⚔ » */
+body.ab-menu #iso-party, body.ab-menu #iso-actbtns { display: none !important; }
+#iso-ab { position: fixed; z-index: 6; right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 76px; touch-action: none; user-select: none; -webkit-user-select: none; }
+body.base-build #iso-ab { display: none; }
+#iso-ab .ab-main { position: absolute; inset: 0; padding: 0; border: 0; border-radius: 50%; cursor: pointer; touch-action: none;
+  background: conic-gradient(#e0533f calc(var(--hp, 100) * 1%), rgba(255, 255, 255, .12) 0); box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 4px 14px rgba(0, 0, 0, .5); transition: transform .12s ease; }
+#iso-ab .ab-main::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: conic-gradient(#8a7cff calc(var(--heat, 0) * 1%), transparent 0); opacity: .9; }
+#iso-ab .ab-main.over::before { background: conic-gradient(#ff6a3a calc(var(--heat, 0) * 1%), transparent 0); }
+#iso-ab .ab-main canvas { position: absolute; inset: 7px; width: calc(100% - 14px); height: calc(100% - 14px); border-radius: 50%; background: radial-gradient(circle at 50% 35%, #2a3a44, #0c1216 75%); }
+#iso-ab .ab-main b { position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%); font: 600 10px var(--display); letter-spacing: .5px; color: #bfefff; white-space: nowrap; text-shadow: 0 1px 2px #000; pointer-events: none; }
+#iso-ab .ab-main.low { animation: ab-low 1s ease-in-out infinite; }
+@keyframes ab-low { 50% { box-shadow: 0 0 0 2px rgba(255, 70, 50, .8), 0 4px 14px rgba(0, 0, 0, .5); } }
+#iso-ab .ab-main.held { transform: scale(.92); }
+#iso-ab::before, #iso-ab::after { content: ''; position: absolute; left: -8px; width: 5px; border-radius: 3px; background: linear-gradient(to top, #e0533f calc(var(--o1, 0) * 1%), rgba(255, 255, 255, .15) 0); }
+#iso-ab::before { bottom: 8px; height: 28px; display: none; }
+#iso-ab::after { bottom: 40px; height: 28px; display: none; background: linear-gradient(to top, #e0533f calc(var(--o2, 0) * 1%), rgba(255, 255, 255, .15) 0); }
+#iso-ab[data-others="1"]::before, #iso-ab[data-others="2"]::before, #iso-ab[data-others="2"]::after { display: block; }
+#iso-ab .ab-fan { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+#iso-ab .ab-it { position: absolute; left: -29px; top: -29px; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: #e8f8ff;
+  background: rgba(10, 16, 20, .9); border: 2px solid rgba(94, 230, 255, .55); box-shadow: 0 4px 12px rgba(0, 0, 0, .5);
+  transform: translate(0, 0) scale(.3); opacity: 0; transition: transform .14s cubic-bezier(.2, .9, .3, 1.2) var(--d), opacity .1s ease var(--d), background .08s, border-color .08s; }
+#iso-ab.shown .ab-it { transform: translate(var(--x), var(--y)) scale(1); opacity: 1; }
+#iso-ab .ab-it svg { width: 28px; height: 28px; position: relative; }
+#iso-ab .ab-it canvas { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); border-radius: 50%; opacity: .55; }
+#iso-ab .ab-it.atk { border-color: rgba(255, 120, 90, .75); }
+#iso-ab .ab-it.off { opacity: .4 !important; }
+#iso-ab .ab-it.sel { background: rgba(94, 230, 255, .35); border-color: #bff6ff; transform: translate(var(--x), var(--y)) scale(1.18); }
+#iso-ab .ab-it.atk.sel { background: rgba(255, 110, 80, .45); border-color: #ffd0c4; }
+#iso-ab .ab-label { position: absolute; transform: translate(-50%, -100%); padding: 4px 9px; white-space: nowrap; font: 600 12px var(--display); color: #fff; background: rgba(6, 10, 12, .92); border: 1px solid rgba(94, 230, 255, .5); border-radius: 5px; pointer-events: none; display: grid; justify-items: center; }
+#iso-ab .ab-label[hidden] { display: none; }
+#iso-ab .ab-label i { font: 10px var(--mono); font-style: normal; color: #8fb6c2; }

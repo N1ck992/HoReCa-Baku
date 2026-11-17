@@ -82,6 +82,7 @@
         + `<i class="hp" style="width:${Math.round(hp * 100)}%"></i>${ht ? `<i class="heat ${ht.over ? 'over' : ''}" style="width:${Math.round(ht.heat * 100)}%"></i>` : ''}</button>`;
     }).join('');
     if (html !== lastParty) { ui.party.innerHTML = html; lastParty = html; }
+    if (AB.IsoAbilities) AB.IsoAbilities.update();   // №131: иконка героя с меню способностей
     // задание: текущие цели из системы заданий основной игры
     const qh = AB.Quests.active().map((q) => `<b>${q.name}</b>${q.objectives.map((o) => `<div class="${o.ok ? 'ok' : ''}">${o.text}</div>`).join('')}`).join('');
     if (qh !== lastQuest) { ui.quest.innerHTML = qh; lastQuest = qh; }
