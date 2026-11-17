@@ -107,7 +107,7 @@ AB.IsoInput = (() => {
       return true;
     }
     if (!left && !twin.aim) {
-      twin.aim = { id: e.pointerId, cx: e.clientX, cy: e.clientY, dir: null };
+      twin.aim = { id: e.pointerId, cx: e.clientX, cy: e.clientY, dir: null, raw: null, pull: 0 };
       twin.tap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, side: 'r' };
       aimEl(true, e.clientX, e.clientY, 0, 0);
       return true;
@@ -122,12 +122,14 @@ AB.IsoInput = (() => {
       return true;
     }
     if (twin.aim && twin.aim.id === e.pointerId) {
-      const dx = e.clientX - twin.aim.cx, dy = e.clientY - twin.aim.cy, n = Math.hypot(dx, dy);
-      if (n > 12) {
+      // №128: мёртвая зона (дрожание пальца у центра не крутит прицел); направление — «сырое», сглаживается в update
+      const A = aimRules(), dx = e.clientX - twin.aim.cx, dy = e.clientY - twin.aim.cy, n = Math.hypot(dx, dy);
+      if (n > A.dead) {
         const TW = AB.IsoRender.TW, TH = AB.IsoRender.TH, wx = dy / TH + dx / TW, wy = dy / TH - dx / TW, m = Math.hypot(wx, wy);
-        twin.aim.dir = { x: wx / m, y: wy / m };
+        twin.aim.raw = { x: wx / m, y: wy / m };
       }
-      const k = n > 44 ? 44 / n : 1; aimEl(true, twin.aim.cx, twin.aim.cy, dx * k, dy * k);
+      twin.aim.pull = Math.min(1, n / A.R);
+      const k = n > A.R ? A.R / n : 1; aimEl(true, twin.aim.cx, twin.aim.cy, dx * k, dy * k, twin.aim.pull >= A.fire);
       return true;
     }
     return false;
@@ -152,12 +154,27 @@ AB.IsoInput = (() => {
     return mine;
   }
   let aimNode = null;
-  function aimEl(on, x, y, dx, dy) {
-    if (!aimNode) { aimNode = document.createElement('div'); aimNode.id = 'iso-aim'; aimNode.innerHTML = '<i></i>'; document.body.appendChild(aimNode); }
+  function aimEl(on, x, y, dx, dy, firing) {
+    if (!aimNode) { aimNode = document.createElement('div'); aimNode.id = 'iso-aim'; aimNode.innerHTML = '<s></s><i></i>'; document.body.appendChild(aimNode); }
     aimNode.hidden = !on;
     if (!on) return;
-    aimNode.style.left = `${x - 56}px`; aimNode.style.top = `${y - 56}px`;
-    aimNode.firstChild.style.transform = `translate(${dx}px, ${dy}px)`;
+    aimNode.style.left = `${x - 64}px`; aimNode.style.top = `${y - 64}px`;
+    aimNode.lastChild.style.transform = `translate(${dx}px, ${dy}px)`;
+    aimNode.classList.toggle('pull', AB.IsoSettings && AB.IsoSettings.get('fireMode') === 'pull');   // отметка «выстрел» — внешнее кольцо
+    aimNode.classList.toggle('fire', !!firing);
+  }
+  // №128: правила прицела: мёртвая зона, радиус стика, отметка выстрела (режим «pull»), скорость следования по чувствительности
+  function aimRules() {
+    const s = AB.IsoSettings ? AB.IsoSettings.get('sens') : 3;
+    return { dead: 24 - s * 2, R: 56, fire: 0.78, follow: [1.2, 2.2, 3.5, 6, 11][Math.max(0, Math.min(4, s - 1))] };
+  }
+  function aimStep(dt) {   // направление плавно догоняет палец
+    const a = twin.aim; if (!a || !a.raw) return;
+    if (!a.dir) { a.dir = { ...a.raw }; return; }
+    // у центра стика палец дрожит сильнее всего — там прицел ещё спокойнее; у края — откликается полностью
+    const k = 1 - Math.exp(-aimRules().follow * Math.max(0.25, Math.min(1, a.pull * 1.3)) * dt);
+    let x = a.dir.x + (a.raw.x - a.dir.x) * k, y = a.dir.y + (a.raw.y - a.dir.y) * k; const n = Math.hypot(x, y) || 1;
+    a.dir = { x: x / n, y: y / n };
   }
   const aimDir = () => (twin.aim && twin.aim.dir) || null;
   // противник под указателем (по фигуре, не только по ногам)
@@ -229,8 +246,13 @@ AB.IsoInput = (() => {
       if (holdT <= 0) { const p = pointers.get(hold); moveTo(p.x, p.y); holdT = 0.2; }
     }
     if (AB.IsoInventory && (AB.IsoInventory.isOpen() || AB.IsoInventory.heroOpen())) return { x: 0, y: 0, walk: false };   // открыт инвентарь — стоит
+    aimStep(dt);
     const aim = aimDir();
-    if (aim && dt > 0 && !(AB.IsoStory.locked() || AB.IsoGame.busy())) AB.IsoCombat.fireAt(aim);   // прицел прижат — стреляет
+    if (aim && dt > 0 && !(AB.IsoStory.locked() || AB.IsoGame.busy())) {
+      // №128: режим стрельбы из настроек: «auto» — по врагу в секторе прицела; «pull» — когда стик отведён до отметки
+      if (AB.IsoSettings && AB.IsoSettings.get('fireMode') === 'pull') { if (twin.aim.pull >= aimRules().fire) AB.IsoCombat.fireAt(aim, true); }
+      else AB.IsoCombat.fireAt(aim);
+    }
     const st = stickAxis();
     if (st && !(AB.IsoBase && AB.IsoBase.active())) return { ...st, aim };
     const a = axis();

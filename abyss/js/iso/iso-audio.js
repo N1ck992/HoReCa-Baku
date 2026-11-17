@@ -24,7 +24,7 @@ AB.IsoAudio = (() => {
     distant: [12, 30],                  // далёкие удары металла — раз в N…M секунд
     idleMoan: [6, 14],                  // стоны бродячих мутантов
     vol: {                              // громкость групп
-      step_metal: 0.5, pipe_hit: 0.75, flesh_hit: 0.6, plasma_shot: 0.55, plasma_hit: 0.5,
+      step_metal: 0.5, nailgun: 0.6, pipe_hit: 0.75, flesh_hit: 0.6, plasma_shot: 0.55, plasma_hit: 0.5,
       mutant_alert: 0.7, mutant_attack: 0.65, mutant_hurt: 0.55, mutant_death: 0.75, mutant_idle: 0.45,
       brute_roar: 0.8, boss_roar: 0.9, door: 0.5, distant: 0.32,
       // №109
@@ -141,10 +141,10 @@ AB.IsoAudio = (() => {
   // ---------- события игры ----------
   const B = AB.Bus;
   let shotT = 0;
-  B.on('iso:shot', ({ from, to, landed, energy, dart }) => {
+  B.on('iso:shot', ({ from, to, landed, energy, dart, cut }) => {
     shotT = performance.now();
     const own = AB.IsoParty.members().some((m) => Math.hypot(m.x - from.x, m.y - from.y) < 0.4);   // №109: турели и пушки — свой звук
-    if (dart) synth('dart', from.x, from.y); else play(own ? 'plasma_shot' : 'turret_shot', { x: from.x, y: from.y });
+    if (dart) synth('dart', from.x, from.y); else if (cut) play('nailgun', { x: from.x, y: from.y }); else play(own ? 'plasma_shot' : 'turret_shot', { x: from.x, y: from.y });   // №128: резак — гвоздомёт
     if (landed && energy) play('plasma_hit', { x: to.x, y: to.y, delay: 0.05 });
   });
   B.on('combat:swing', ({ charId, landed }) => {

@@ -638,3 +638,17 @@ body.in-base #iso-actbtns { display: none !important; }
 #iso-aim { position: fixed; z-index: 4; width: 112px; height: 112px; border-radius: 50%; border: 2px solid rgba(255, 110, 80, .55); background: rgba(40, 10, 8, .25); pointer-events: none; display: grid; place-items: center; }
 #iso-aim[hidden] { display: none; }
 #iso-aim i { width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 110, 80, .3); border: 1px solid rgba(255, 130, 100, .8); }
+
+/* №128: настройки и прицел с отметкой выстрела */
+#iso-set { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .6); }
+#iso-set[hidden] { display: none; }
+.set-card { max-width: 460px; }
+.set-card h3 { margin: 4px 0 0; font: 600 13px var(--display); letter-spacing: 1px; text-transform: uppercase; color: #9fdcec; }
+.set-opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.set-opt span { display: grid; gap: 3px; } .set-opt i { font: 12px var(--mono); font-style: normal; color: var(--muted, #8a9aa2); }
+.set-row { display: flex; gap: 12px; align-items: center; } .set-row input { flex: 1; }
+#iso-aim { width: 128px; height: 128px; }
+#iso-aim s { position: absolute; inset: 14px; border-radius: 50%; border: 1px dashed rgba(255, 110, 80, .0); }
+#iso-aim.pull s { border-color: rgba(255, 160, 120, .55); }
+#iso-aim.fire { border-color: rgba(255, 70, 40, .95); }
+#iso-aim.fire i { background: rgba(255, 80, 50, .6); }

@@ -31,3 +31,5 @@
 тревога (alarm)                       — yd, «Short alarm»                                  https://opengameart.org/content/short-alarm
 очередь турели (turret_shot)          — celestialghost8, «Laser weapon burst fire»         https://opengameart.org/content/laser-weapon-burst-fire
 падение и починка решётки (grate_break, grate_fix) — rubberduck «75 CC0 breaking/falling/hit», qubodup «Metal interactions»
+
+nailgun_1..3 — звук ручного резака-гвоздомёта (№128): синтезирован для игры, tools/make_nailgun.py (без внешних записей; свободно используется в проекте).

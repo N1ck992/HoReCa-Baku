@@ -153,7 +153,7 @@ AB.IsoCombat = (() => {
     if (e) AB.IsoParty.goTo(e.x, e.y);
   }
   // №124: правый стик — выстрел/удар в направлении прицела (без поиска цели)
-  function fireAt(dir) {
+  function fireAt(dir, force = false) {   // force — режим «отвести до отметки»: выстрел и без цели
     const l = AB.IsoParty.lead();
     if (!l) return false;
     l.hx = dir.x; l.hy = dir.y; const sx = dir.x - dir.y; if (Math.abs(sx) > 0.05) l.facing = sx > 0 ? 1 : -1;
@@ -168,7 +168,7 @@ AB.IsoCombat = (() => {
       const dx = q.x - l.x, dy = q.y - l.y, d = Math.hypot(dx, dy);
       return d <= range && (dx * dir.x + dy * dir.y) / (d || 1) > 0.9 && W().see(l.x, l.y, q.x, q.y, 0.05);
     }).sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))[0];
-    if (!e) return false;
+    if (!e) return force ? attack(l, null) : false;
     return attack(l, e);
   }
   function attackNearest() {

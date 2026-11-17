@@ -166,5 +166,10 @@
 ],
 "power_on": [
 "power_on_1"
+],
+"nailgun": [
+"nailgun_1",
+"nailgun_2",
+"nailgun_3"
 ]
 }
