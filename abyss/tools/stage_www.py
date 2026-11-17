@@ -17,5 +17,6 @@ subprocess.run([sys.executable, os.path.join(ROOT, 'tools/bundle_iso.py'), os.pa
 for name in os.listdir(os.path.join(ROOT, 'assets')):
     if name in SKIP: continue
     src = os.path.join(ROOT, 'assets', name)
-    if os.path.isdir(src): shutil.copytree(src, os.path.join(d, 'assets', name), dirs_exist_ok=True)
+    # №137: исходники пропускаем на любой глубине (assets/props/source и т. п.)
+    if os.path.isdir(src): shutil.copytree(src, os.path.join(d, 'assets', name), dirs_exist_ok=True, ignore=shutil.ignore_patterns(*SKIP))
 json.dump({'version': n, 'name': f'v{n}', 'patch': patch, 'built': datetime.date.today().isoformat()}, open(os.path.join(d, 'version.json'), 'w'), ensure_ascii=False)
