@@ -20,8 +20,8 @@ AB.ID.register('ITEM-022', AB.ITEMS.find((i) => i.id === 'ITEM-022'));
 // на время восприимчивее к любому урону (×1,5 на 6 с). Сам выстрел почти не ранит; рядом — слабое лечение.
 AB.ITEMS.push({
   id: 'ITEM-023', name: 'Инжектор уязвимости', short: 'ИНЖ', category: 'weapon', stack: 1, icon: null, use: null, pending: true,
-  weapon: { damage: 3, range: 520, cooldown: 1.3, hitAt: 0.1, ranged: true, infinite: true, dart: true, bash: 3,
-    vuln: { mult: 1.5, time: 6 }, aura: { radius: 200, heal: 0.8 }, inArt: true },   // inArt — инжектор есть на картинке Хейл, поверх руки не рисуем
+  weapon: {},   // параметры — в js/data/weapons.js (наполняется при загрузке)
+  //   // inArt — инжектор есть на картинке Хейл, поверх руки не рисуем
   desc: 'Медицинский инжектор доктора Хейл. Ампула с препаратом делает ткани цели восприимчивее к повреждениям: 6 секунд любой урон по ней ×1,5. Рядом с Хейл раненые понемногу затягиваются.',
 });
 AB.ID.register('ITEM-023', AB.ITEMS.find((i) => i.id === 'ITEM-023'));

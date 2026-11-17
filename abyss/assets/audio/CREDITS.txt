@@ -33,3 +33,5 @@
 падение и починка решётки (grate_break, grate_fix) — rubberduck «75 CC0 breaking/falling/hit», qubodup «Metal interactions»
 
 nailgun_1..3 — звук ручного резака-гвоздомёта (№128): синтезирован для игры, tools/make_nailgun.py (без внешних записей; свободно используется в проекте).
+
+cutter_shot — ручной резак (№130): assets/weapons/cutter/source/laser-shot-92247.mp3 («freesound_community-laser-shot-92247», файл предоставлен автором проекта). Лицензию проверить по странице файла в источнике перед публикацией игры.

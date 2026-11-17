@@ -74,7 +74,7 @@ AB.IsoCombat = (() => {
       if (hit && w.vuln) AB.IsoEnemies.vulnerable(hit.id, w.vuln);   // №120: инжектор Хейл — ткани цели уязвимее
       if (hit) { landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged'); if (landed && AB.IsoFX) AB.IsoFX.impact(hit, { x: hit.x - (hit.x - m.x) * 0.01, y: hit.y - (hit.y - m.y) * 0.01 }, false, hit.state === 'DEAD'); }
       const end = hit ? { x: hit.x, y: hit.y } : { x: m.x + dx * Math.min(range, 6), y: m.y + dy * Math.min(range, 6) };
-      AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart, cut: !!w.cutter });
+      AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart, cut: !!w.cutter, weapon: sw.w.id });   // №130: weapon — для звука по реестру оружия
     } else {
       const dmg = (w.ranged ? w.bash : w.damage) * mod('meleeDamage'), reach = w.reachCells ? w.reachCells + 0.15 : (w.ranged ? 60 : w.range) / T + 0.45;
       const n = Math.hypot(m.hx, m.hy) || 1;
