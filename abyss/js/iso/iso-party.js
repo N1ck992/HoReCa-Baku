@@ -159,11 +159,22 @@ AB.IsoParty = (() => {
       let mw = m.path ? walkPath(m, dt, speedOf(m, m.run) * (far ? 1.1 : 1)) : 0;
       if (!m.path && dist <= 0.4) { m.hx = l.hx; m.hy = l.hy; }   // встал на место — смотрит туда же, что ведущий
       mw += separate(m, dt);
+      // №127: в помещениях отряд держится вместе: застрял (не продвигается к месту в строю) или отстал
+      // дальше COHESION.far клеток — сразу встаёт на своё место за ведущим
+      if (!m.engage && !(W().layout() || {}).outside) {
+        const lag = Math.hypot(l.x - m.x, l.y - m.y);
+        m.stuckT = dist > 0.8 && mw < COHESION.minMove * dt ? (m.stuckT || 0) + dt : 0;
+        if (m.stuckT > COHESION.stuck || lag > COHESION.far) {
+          const f = W().free(slot.x, slot.y) ? { x: Math.floor(slot.x), y: Math.floor(slot.y) } : W().nearestFree(slot.x, slot.y, 3);
+          if (f) { m.x = f.x + 0.5; m.y = f.y + 0.5; m.path = null; m.stuckT = 0; m.hx = l.hx; m.hy = l.hy; }
+        }
+      }
       animate(m, mw, dt);
     }
   }
 
   // не стоять друг в друге: лёгкое расталкивание
+  const COHESION = { stuck: 0.7, far: 4.5, minMove: 0.25 };   // №127: застрял дольше 0,7 с или отстал на 4,5 клетки — к ведущему
   function separate(m, dt) {
     let px = 0, py = 0;
     for (const o of members) {

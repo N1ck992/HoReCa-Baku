@@ -16,7 +16,10 @@ AB.IsoEnemies = (() => {
   const sectorNow = () => (AB.IsoGame ? AB.IsoGame.sector() : null);
   // story — появление в сюжетной сцене (преследователь): стоит и смотрит, в бою не участвует
   // scripted — появился по сюжетной сцене (преследователь бессмертен и иначе на карту не ставится)
-  function spawn(id, x, y, { story = false, scripted = false, state = null, facing = 1 } = {}) {
+  // №127: монстр, появившийся по ходу игры (волны, выводок, личинки), выползает из шахты: у стены — из решётки
+  // в стене, на открытом месте — из люка в полу (EMERGE с). Стоящие в помещении с начала — без этого (emerge: false).
+  const EMERGE = 1.1;
+  function spawn(id, x, y, { story = false, scripted = false, state = null, facing = 1, emerge = true } = {}) {
     const def = AB.ID.get(id);
     if (!def || (def.immortal && !story && !scripted) || dead.has(id)) return null;
     if (!AB.IsoWorld.free(x, y)) { const n = AB.IsoWorld.nearestFree(x, y, 4); if (n) { x = n.x + 0.5; y = n.y + 0.5; } }
@@ -30,6 +33,12 @@ AB.IsoEnemies = (() => {
     };
     if (story) { e.state = state || 'WATCH'; e.facing = facing; }
     else if (state) { e.state = state; e.facing = facing; e.alpha = state === 'APPEAR' ? 0 : 1; }
+    if (emerge && !story && !scripted) {
+      const cx = Math.floor(e.x), cy = Math.floor(e.y), WALL = W().WALL;
+      const wall = [[-1, 0], [0, -1], [1, 0], [0, 1]].find(([dx, dy]) => W().cell(cx + dx, cy + dy) === WALL);
+      e.emerge = EMERGE; e.shaft = wall ? { kind: 'wall', x: cx + 0.5 + wall[0] * 0.55, y: cy + 0.5 + wall[1] * 0.55 } : { kind: 'floor', x: e.x, y: e.y };
+      AB.Bus.emit('enemy:emerge', { id, ...e.shaft });
+    }
     list.set(id, e);
     AB.Anim.play(id, 'idle');
     return e;
@@ -132,6 +141,7 @@ AB.IsoEnemies = (() => {
 
   function tick(e, dt) {
     if (e.story) { e.t += dt; return; }   // сюжетное появление — без поведения
+    if (e.emerge > 0) { e.emerge -= dt; return; }   // №127: ещё вылезает из шахты
     const d = def(e);
     if (d.type === 'pursuer') { pursuerTick(e, d, dt); return; }
     if (d.type === 'mira') { AB.IsoMira.tick(e, dt); return; }   // №118: Мира и её копии
@@ -290,9 +300,9 @@ AB.IsoEnemies = (() => {
     spawned.add(sectorId);
     for (const a of layout.areas) for (const id of AB.ID.get(a.room).enemies || []) {
       const p = layout.enemyPos && layout.enemyPos[id];
-      if (p && !list.has(id)) spawn(id, p.x, p.y);
+      if (p && !list.has(id)) spawn(id, p.x, p.y, { emerge: false });
     }
-    for (const t of extra) spawn(t.id, t.x, t.y);
+    for (const t of extra) spawn(t.id, t.x, t.y, { emerge: false });
   }
 
   return {

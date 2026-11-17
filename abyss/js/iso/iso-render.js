@@ -352,6 +352,7 @@ AB.IsoRender = (() => {
         ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,110,80,.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a0.x, a0.y - 34); ctx.lineTo(b0.x, b0.y - 34); ctx.stroke(); ctx.setLineDash([]);
         ctx.fillStyle = 'rgba(255,110,80,.9)'; ctx.beginPath(); ctx.arc(b0.x, b0.y - 34, 4, 0, 7); ctx.fill(); ctx.restore(); } }
     if (AB.IsoFX) AB.IsoFX.drawGround(ctx, toScreen);   // №111: пятна и красные зоны замаха
+    drawShafts(dt);                                     // №127: люки и решётки, из которых вылезли монстры
     if (AB.IsoMiraP) AB.IsoMiraP.drawGround(ctx, toScreen);   // №123: бой с Мирой — зоны, разрядники, разлом
 
     // видимая область в клетках (с запасом на высоту стен)
@@ -679,7 +680,7 @@ AB.IsoRender = (() => {
     ctx.save();
     ctx.globalAlpha = Math.min(1, k * 1.4) * (Math.sin(time * 40) > -0.6 ? 0.9 : 0.4);
     // №119: истинный облик Миры — картинка автора (худая паучиха из плоти)
-    if (miraTrue.complete && miraTrue.naturalWidth) { const h = 230, w = miraTrue.naturalWidth * (h / miraTrue.naturalHeight); ctx.drawImage(miraTrue, p.x - w / 2, p.y - h * 0.97, w, h); }
+    if (miraTrue.complete && miraTrue.naturalWidth) { const h = 230, w = miraTrue.naturalWidth * (h / miraTrue.naturalHeight); if (AB.IsoMiraP) AB.IsoMiraP.drawMesh(ctx, miraTrue, p.x - w / 2, p.y - h * 0.97, w, h, time, 0.22, false); else ctx.drawImage(miraTrue, p.x - w / 2, p.y - h * 0.97, w, h); }
     else if (a.status === 'ready') { const h = 150, w = a.img.width * (h / a.img.height); ctx.drawImage(a.img, p.x - w / 2, p.y - h, w, h); }
     else { ctx.fillStyle = '#0a1418'; ctx.beginPath(); ctx.ellipse(p.x, p.y - 40, 50, 30, 0, 0, 7); ctx.fill(); }
     ctx.restore();
@@ -751,8 +752,49 @@ AB.IsoRender = (() => {
 
   // противник: составная фигура мутанта тем же кодом, что вид сбоку; цель — красное кольцо
   const ENEMY_K = 0.62;
+  // №127: шахты, из которых вылезают монстры: люк в полу или решётка в стене; остаются открытыми и гаснут
+  const shafts = [];
+  AB.Bus.on('enemy:emerge', (s) => { shafts.push({ ...s, t: 0 }); if (shafts.length > 12) shafts.shift(); });
+  function drawShafts(dt) {
+    for (let i = shafts.length - 1; i >= 0; i--) { shafts[i].t += dt; if (shafts[i].t > 9) shafts.splice(i, 1); }
+    for (const s of shafts) {
+      const a = Math.min(1, s.t * 4) * Math.min(1, (9 - s.t) / 2), open = Math.min(1, s.t / 0.35);
+      const c = toScreen(s.x, s.y);
+      ctx.save(); ctx.globalAlpha = a;
+      if (s.kind === 'floor') {
+        const q = (dx, dy) => toScreen(s.x + dx, s.y + dy);
+        const pts = [q(-0.38, -0.38), q(0.38, -0.38), q(0.38, 0.38), q(-0.38, 0.38)];
+        ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath();
+        ctx.fillStyle = '#050607'; ctx.fill(); ctx.strokeStyle = 'rgba(150,140,120,.8)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.strokeStyle = 'rgba(80,75,65,.7)'; ctx.lineWidth = 1;
+        for (let k = 1; k < 4; k++) { const u = -0.38 + k * 0.19, p1 = q(u, -0.38), p2 = q(u, 0.38); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+        // откинутая крышка
+        const h0 = pts[0], h1 = pts[1], lift = 26 * open;
+        ctx.beginPath(); ctx.moveTo(h0.x, h0.y); ctx.lineTo(h1.x, h1.y); ctx.lineTo(h1.x, h1.y - lift); ctx.lineTo(h0.x, h0.y - lift); ctx.closePath();
+        ctx.fillStyle = '#3a3c3f'; ctx.fill(); ctx.strokeStyle = 'rgba(190,180,150,.6)'; ctx.stroke();
+      } else {
+        const w = 26, h = 22, y0 = c.y - 30;
+        ctx.fillStyle = '#050607'; ctx.fillRect(c.x - w / 2, y0 - h, w, h);
+        ctx.strokeStyle = 'rgba(150,140,120,.85)'; ctx.lineWidth = 2; ctx.strokeRect(c.x - w / 2, y0 - h, w, h);
+        // сорванная решётка висит
+        ctx.save(); ctx.translate(c.x - w / 2, y0 - h); ctx.rotate(0.9 * open);
+        ctx.strokeStyle = 'rgba(120,115,100,.9)'; ctx.lineWidth = 1.5; for (let k = 0; k <= 4; k++) { ctx.beginPath(); ctx.moveTo(0, (k / 4) * h); ctx.lineTo(w, (k / 4) * h); ctx.stroke(); }
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  }
   function drawEnemy(e) {
     const p = toScreen(e.x, e.y);
+    if (e.emerge > 0 && e.shaft) {   // №127: вылезает: из пола — поднимается из люка; из стены — выползает из решётки
+      const k = 1 - e.emerge / 1.1;
+      ctx.save();
+      if (e.shaft.kind === 'floor') { ctx.beginPath(); ctx.rect(p.x - 120, p.y - 400, 240, 402); ctx.clip(); ctx.translate(0, (1 - k) * 90); }
+      else { const w0 = toScreen(e.shaft.x, e.shaft.y); ctx.translate((w0.x - p.x) * (1 - k), (w0.y - 30 - p.y) * (1 - k)); ctx.globalAlpha = 0.3 + 0.7 * k; }
+      if (AB.Render && AB.Render.drawEnemyFigure) AB.Render.drawEnemyFigure(ctx, e, p.x, p.y, ENEMY_K);
+      ctx.restore();
+      return;
+    }
     const tgt = AB.IsoCombat.target() === e.id, hov = AB.IsoInput.hoverFoe() === e;
     if ((tgt || hov) && e.state !== 'DEAD') {
       ctx.strokeStyle = `rgba(255,70,50,${0.55 + Math.sin(time * 6) * 0.2})`; ctx.lineWidth = 1.5;

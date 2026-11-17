@@ -325,6 +325,45 @@ AB.IsoMiraP = (() => {
       ctx.fillStyle = `rgba(200,210,150,${1 - t * 0.6})`; ctx.beginPath(); ctx.arc(a.x, a.y - 60 - Math.sin(t * Math.PI) * 30, 3, 0, 7); ctx.fill();
     }
   }
+  // ---------- №127: «скелет» истинного облика — картинка на сетке, лапы гнутся ----------
+  // Лап десять и они переплетаются, поэтому картинка не режется на части (были бы разрывы), а натянута на
+  // сетку 12×12: тело в центре неподвижно, лапы двигаются тем сильнее, чем дальше от тела; соседние —
+  // вразнобой (паучий шаг); передние лапы-руки поднимаются и сжимаются отдельно. Без разрывов на стыках.
+  const RIG = { cx: 0.52, cy: 0.47, inner: 0.13, outer: 0.42, grid: 12 };
+  function bend(u, v, t, amp) {   // u, v — доли картинки → смещённые доли
+    const dx = u - RIG.cx, dy = v - RIG.cy, r = Math.hypot(dx, dy);
+    const w0 = Math.min(1, Math.max(0, (r - RIG.inner) / (RIG.outer - RIG.inner))), w = w0 * w0 * (3 - 2 * w0);
+    if (w <= 0) return [u, v];
+    const ang = Math.atan2(dy, dx);
+    let th, lift = 0;
+    if (dy < -0.22) th = amp * 0.9 * Math.sin(t * 3.1 + (dx < 0 ? 0 : Math.PI)) * w;            // руки-лапы над головой
+    else { const ph = t * 6.2 + ang * 4; th = amp * 0.55 * Math.sin(ph) * w; if (dy > 0) lift = -amp * 0.05 * Math.max(0, Math.cos(ph)) * w; }
+    const c = Math.cos(th), s = Math.sin(th);
+    return [RIG.cx + dx * c - dy * s, RIG.cy + dx * s + dy * c + lift];
+  }
+  function drawMesh(ctx, im, x, y, w, h, t, amp, flip) {
+    const N = RIG.grid, W = im.naturalWidth, H = im.naturalHeight, P = [];
+    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+      const u = i / N, v = j / N, [bu, bv] = bend(u, v, t, amp);
+      P.push({ su: u * W, sv: v * H, x: x + (flip ? 1 - bu : bu) * w, y: y + bv * h });
+    }
+    const tri = (a, b, c) => {
+      const [x0, y0, x1, y1, x2, y2] = [a.x, a.y, b.x, b.y, c.x, c.y], [u0, v0, u1, v1, u2, v2] = [a.su, a.sv, b.su, b.sv, c.su, c.sv];
+      const den = u0 * (v2 - v1) - u1 * v2 + u2 * v1 + (u1 - u2) * v0; if (!den) return;
+      const m11 = -(v0 * (x2 - x1) - v1 * x2 + v2 * x1 + (v1 - v2) * x0) / den, m12 = (v1 * y2 + v0 * (y1 - y2) - v2 * y1 + (v2 - v1) * y0) / den;
+      const m21 = (u0 * (x2 - x1) - u1 * x2 + u2 * x1 + (u1 - u2) * x0) / den, m22 = -(u1 * y2 + u0 * (y1 - y2) - u2 * y1 + (u2 - u1) * y0) / den;
+      const dx = (u0 * (v2 * x1 - v1 * x2) + v0 * (u1 * x2 - u2 * x1) + (u2 * v1 - u1 * v2) * x0) / den, dy = (u0 * (v2 * y1 - v1 * y2) + v0 * (u1 * y2 - u2 * y1) + (u2 * v1 - u1 * v2) * y0) / den;
+      const cx = (x0 + x1 + x2) / 3, cy = (y0 + y1 + y2) / 3, gr = (px, py) => [px + (px - cx) * 0.04, py + (py - cy) * 0.04];   // чуть шире — без щелей
+      ctx.save(); ctx.beginPath(); const p0 = gr(x0, y0), p1 = gr(x1, y1), p2 = gr(x2, y2);
+      ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.closePath(); ctx.clip();
+      ctx.transform(m11, m12, m21, m22, dx, dy); ctx.drawImage(im, 0, 0); ctx.restore();
+    };
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const a = P[j * (N + 1) + i], b = P[j * (N + 1) + i + 1], c = P[(j + 1) * (N + 1) + i], d = P[(j + 1) * (N + 1) + i + 1];
+      tri(a, b, d); tri(a, d, c);
+    }
+  }
+
   // фигуры: зверь, гигант, худая Мира (картинка автора; масштаб — по форме)
   const H = { beast: 250, giant: 560, thin: 200 };
   function draw(ctx, e, p, drawFig) {
@@ -341,7 +380,9 @@ AB.IsoMiraP = (() => {
     if (e.down || e.dead) { ctx.rotate(0.5); ctx.globalAlpha = e.dead ? 0.7 : 0.9; }
     if (e.stun > 0) ctx.filter = 'brightness(1.4) saturate(0.4)';
     else if (e.flash > 0) ctx.filter = 'brightness(1.6)';
-    ctx.drawImage(img, -w / 2, -h * 0.97, w, h);
+    // лапы: идёт — шагает, стоит — подрагивает; оглушена/упала — почти неподвижна; гигант — медленнее
+    const amp = e.dead || e.down || e.stun > 0 ? 0.04 : e.moving || e.leap ? 0.32 : form === 'giant' ? 0.16 : 0.1;
+    drawMesh(ctx, img, -w / 2, -h * 0.97, w, h, now() * (form === 'giant' ? 0.45 : 1) + (e.stride || 0) * 0.01, amp, false);
     ctx.filter = 'none';
     ctx.restore();
     if (form === 'thin' && !e.dead && drawFig && S && S.phase === 'mind') {   // сквозь линзу проступает девушка — иллюзия, которую она держит
@@ -373,5 +414,5 @@ AB.IsoMiraP = (() => {
     return true;
   }
 
-  return { RULES, tick, update, draw, drawGround, drawLarva, drawMember, chaseStart, nestStart, mindStart, kill, riftOpen, riftClose, state: () => S, end() { setMind(false); hideFinish(); S = null; } };
+  return { RULES, drawMesh, tick, update, draw, drawGround, drawLarva, drawMember, chaseStart, nestStart, mindStart, kill, riftOpen, riftClose, state: () => S, end() { setMind(false); hideFinish(); S = null; } };
 })();

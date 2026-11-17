@@ -180,6 +180,7 @@ AB.IsoAudio = (() => {
     if (id === 'EQUIP-003') ui('power_on'); else play('spark', l ? { x: l.x, y: l.y } : {});   // генератор / починка, взлом
   });
   ['nest:start', 'guard:start', 'boss:start'].forEach((ev) => B.on(ev, () => ui('alarm')));
+  B.on('enemy:emerge', ({ x, y }) => play('grate_break', { x, y, vol: 0.55, rate: 1.15 }));   // №127: монстр вылезает из шахты
   B.on('nest:turret', () => { const l = listener(); play('spark', l ? { x: l.x, y: l.y } : {}); });
   B.on('nest:breach', ({ key }) => { const d = AB.IsoInteract && AB.IsoInteract.doors().find((q) => q.key === key); const t = d && d.tiles[0]; play('grate_break', t ? { x: t[0] + 0.5, y: t[1] + 0.5 } : {}); });
   // кнопки — щелчок; окна — звук открытия/закрытия; карточка награды — нарастающий звук
