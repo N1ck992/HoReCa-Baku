@@ -470,7 +470,7 @@ AB.IsoRender = (() => {
         // №136: предметы-картинки (бак с водорослями) — один раз, на последней клетке предмета
         const pim = PROP_IMG[o.p.kind];
         if (pim && pim.im.complete && pim.im.naturalWidth) {
-          if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) drawPropImg(o.p, pim, alphaFor(`p${o.x},${o.y}`, occludes(o.x, o.y, pim.h, party), dt));
+          if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) drawPropImg(o.p, pim, alphaFor(`p${o.x},${o.y}`, occludes(o.x, o.y, pim.h, party), dt), !!(o.p.equip && hl.has(`equip:${o.p.equip}`)));
           continue;
         }
         // №111: криокапсула — картинка (закрытая/открытая) вместо брусков; рисуется один раз, на последней клетке
@@ -715,12 +715,18 @@ AB.IsoRender = (() => {
   // №111: картинки капсулы (автор): закрытая — Марк спит (голубой свет под стеклом), открытая — после пробуждения
   // №136: картинки предметов от автора. base — доля ширины картинки, которую занимает основание;
   // foot — где по высоте картинки нижний угол основания; scale — какую часть клеток предмета займёт основание
-  const PROP_IMG = { algaetank: { src: 'assets/props/algaetank.webp', base: 0.72, foot: 0.973, scale: 0.68, h: 100 } };
+  const PROP_IMG = {
+    algaetank: { src: 'assets/props/algaetank.webp', base: 0.72, foot: 0.973, scale: 0.68, h: 100 },
+    // №137: ферма водорослей (EQUIP-009); запасной вид — assets/props/algaefarm-alt.webp
+    algaefarm: { src: 'assets/props/algaefarm.webp', base: 0.78, foot: 0.98, scale: 0.9, h: 100 },
+  };
   for (const v of Object.values(PROP_IMG)) { v.im = new Image(); v.im.src = v.src; }
-  function drawPropImg(p, spec, alpha) {
+  function drawPropImg(p, spec, alpha, lit) {
     const im = spec.im, Wd = (p.w + p.h) * TW / 2 * spec.scale / spec.base, Hd = Wd * im.naturalHeight / im.naturalWidth;
     const c = toScreen(p.x + p.w / 2, p.y + p.h / 2), bottom = c.y + (p.w + p.h) * TH / 4 * spec.scale;
-    ctx.save(); ctx.globalAlpha = alpha; ctx.drawImage(im, c.x - Wd / 2, bottom - Hd * spec.foot, Wd, Hd); ctx.restore();
+    ctx.save(); ctx.globalAlpha = alpha;
+    if (lit) { ctx.shadowColor = 'rgba(255,226,140,.95)'; ctx.shadowBlur = 14; }   // подсветка: с этим можно что-то сделать
+    ctx.drawImage(im, c.x - Wd / 2, bottom - Hd * spec.foot, Wd, Hd); ctx.restore();
   }
   const podImg = {};
   for (const n of ['closed', 'open', 'broken']) { const im = new Image(); im.src = `assets/props/cryopod-${n}.webp`; podImg[n] = im; }
