@@ -81,6 +81,17 @@ AB.IsoInteract = (() => {
     return Math.max(0, Math.min(1, t)) * (AB.ID.get(room).width || 1000);
   }
 
+  // №133: поднять павшего: 2 с рядом — встаёт с 40 % здоровья
+  const REVIVE = { time: 2, hp: 0.4 };
+  function revive(m) {
+    const c = AB.Chars.get(m.id); if (!c || !c.dead) return;
+    c.dead = false; c.down = false; c.hp = Math.round(AB.ID.get(m.id).stats.maxHp * REVIVE.hp);
+    if (AB.IsoParty.members().includes(m)) c.controllable = true;
+    m.dead = false; m.path = null; m.goal = null;
+    AB.Anim.play(m.id, 'idle', { restart: true });
+    AB.Bus.emit('char:hp', { charId: m.id, hp: c.hp, delta: c.hp });
+    AB.Bus.emit('char:revived', { charId: m.id });
+  }
   function targets() {
     const out = [];
     for (const room of rooms()) for (const it of AB.Rooms.worldItems(room)) {
@@ -109,6 +120,11 @@ AB.IsoInteract = (() => {
     for (const e of layout.exits || []) {
       const rd = roomDoor(e.room, e.door), to = rd && AB.ID.get(rd.to);
       out.push({ kind: 'exit', id: `exit:${e.room}:${e.door}`, x: e.x + 0.5, y: e.y + 0.5, ref: e, rd, name: `${rd && rd.kind === 'hatch' ? 'Люк' : rd && rd.kind === 'ladder' ? 'Лестница' : 'Дверь'}: ${e.toName || (to ? to.name : rd.to)}` });
+    }
+    // №133: павший из отряда лежит на месте — подойти и поднять
+    for (const m of [...AB.IsoParty.members(), ...AB.IsoParty.npcs()]) {
+      const c = AB.Chars.get(m.id); if (!c || !c.dead || m.hidden) continue;
+      out.push({ kind: 'revive', id: `revive:${m.id}`, x: m.x, y: m.y, ref: m, name: AB.ID.get(m.id).name });
     }
     return out;
   }
@@ -163,6 +179,7 @@ AB.IsoInteract = (() => {
       if (d.hp < d.max && armorySide(d)) return { label: `Чинить решётку (${pct}%)`, ok: true };
       return { label: `${d.def.name} заколочена (${pct}%) — выход через служебную дверь`, ok: false };
     }
+    if (t.kind === 'revive') return { label: `Поднять: ${t.name}`, ok: true };
     if (t.kind === 'door') {
       const d = t.ref;
       if (locked(d)) return { label: `${d.def.name}: ${doorAccess(d).reason.toLowerCase()}`, ok: false };
@@ -191,6 +208,7 @@ AB.IsoInteract = (() => {
     const ns = AB.IsoNest && AB.IsoNest.state(), ld = AB.IsoParty.lead();
     if (ns && ld.repair) return { label: `${AB.IsoNest.config().stageWord || 'Починка'} — этап ${ns.stage + 1}…`, ok: true, progress: ns.prog };
     if (work && work.t.kind === 'container') return { label: `Обыск: ${work.t.name}…`, ok: true, progress: work.p / work.time };
+    if (work && work.t.kind === 'revive') return { label: `Поднимаю: ${work.t.name}…`, ok: true, progress: work.p / work.time };
     if (work && work.t.kind === 'doorfix') return { label: `Чинить дверь… ${Math.round((work.t.ref.hp / work.t.ref.max) * 100)}%`, ok: true, progress: work.p / work.time };
     if (work) { return { label: `${AB.Equip.action(work.t.ref.id, actor(work.t.ref.id)).label}…`, ok: true, progress: work.p / work.time }; }
     const t = nearest();
@@ -204,6 +222,7 @@ AB.IsoInteract = (() => {
     l.hx = t.x - l.x; l.hy = t.y - l.y;
     if (Math.abs(l.hx - l.hy) > 0.05) l.facing = l.hx - l.hy > 0 ? 1 : -1;
     AB.Anim.play(l.id, 'interact', { restart: true });
+    if (t.kind === 'revive') { work = { t, p: 0, time: REVIVE.time, x: l.x, y: l.y }; return true; }
     if (t.kind === 'item') {
       const { taken, who } = AB.Inventory.addShared(l.id, t.ref.item, t.ref.qty);
       if (taken) AB.Rooms.takeItem(t.room, t.ref.key, taken);
@@ -383,6 +402,7 @@ AB.IsoInteract = (() => {
         if (work.p >= work.time) {
           const t = work.t; work = null;
           if (t.kind === 'container') loot(t);
+          else if (t.kind === 'revive') revive(t.ref);
           else if (t.kind === 'doorfix') { AB.IsoNest.repairDoor(t.ref.key); if (t.ref.state === 'closed' && t.ref.hp < t.ref.max && !AB.IsoNest.underAttack(t.ref)) work = { t, p: 0, time: work0time(), x: l.x, y: l.y }; }
           else AB.Equip.apply(t.ref.id, actor(t.ref.id));
         }

@@ -8,7 +8,7 @@
 //   • Палец над кнопкой — она подсвечивается и подписывается; отпустили над ней — способность
 //     срабатывает; отпустили мимо — меню закрывается без действия.
 //   • Короткое нажатие без сдвига — окно снаряжения героя (как раньше нажатие на карточку).
-// Способности те же, что были: удар (F/J), рывок (пробел), снаряжение героя, передать управление
+// Способности те же, что были: удар (F/J), рывок (пробел), ячейка быстрого доступа (№134), передать управление
 // другому герою отряда (Q). Клавиатура работает как раньше. В базе-капсуле (мирная зона) — без удара и рывка.
 // Заменяет карточки отряда (#iso-party) и кнопки ⚔ » (#iso-actbtns) — они скрыты, код их не удалён.
 // =====================================================================
@@ -36,7 +36,11 @@ AB.IsoAbilities = (() => {
       const ready = !AB.IsoFX.dashReady || AB.IsoFX.dashReady();
       list.push({ key: 'dash', name: ready ? 'Рывок' : 'Рывок — перезарядка', hint: 'пробел', icon: ICON.dash, off: !ready, run: () => AB.IsoFX.dash(AB.IsoInput.update(0)) });
     }
-    list.push({ key: 'gear', name: 'Снаряжение', hint: 'I', icon: ICON.gear, run: () => AB.IsoInventory.openHero(l.id) });
+    // №134: ячейка быстрого доступа — назначенная вещь (например, медикаменты); пусто — «назначить»
+    const q = QS.get(), qd = q && AB.ID.has(q) ? AB.ID.get(q) : null, qn = qd ? QS.count(q) : 0;
+    list.push(qd
+      ? { key: 'quick', name: `${qd.name} ×${qn}`, hint: qn ? 'использовать · держать — сменить' : 'закончились · держать — сменить', icon: `<em>${qd.short}</em><sub>${qn}</sub>`, cls: 'qs', off: !qn, dwell: true, run: () => QS.use() }
+      : { key: 'quick', name: 'Быстрый доступ — пусто', hint: 'назначить вещь', icon: '<em class="plus">+</em>', cls: 'qs empty', run: () => QS.pick() });
     AB.IsoParty.members().forEach((m, i) => {
       if (m === l) return;
       const c = AB.Chars.get(m.id), dead = c && c.dead;
@@ -100,12 +104,20 @@ AB.IsoAbilities = (() => {
       const x = Math.cos(ang(i)) * rad, y = Math.sin(ang(i)) * rad;
       return `<div class="ab-it ${it.cls || ''} ${it.off ? 'off' : ''}" data-i="${i}" style="--x:${x.toFixed(1)}px;--y:${y.toFixed(1)}px;--d:${i * 18}ms">${it.who ? `<canvas data-who="${it.who}"></canvas>` : ''}${it.icon}</div>`;
     }).join('');
+    requestAnimationFrame(dwellTick);
     st.pos = st.list.map((_, i) => ({ x: st.cx + Math.cos(ang(i)) * rad, y: st.cy + Math.sin(ang(i)) * rad }));
     root.classList.add('open');
     requestAnimationFrame(() => {
       fan.querySelectorAll('canvas[data-who]').forEach((cv) => AB.IsoRender.portrait(cv, cv.dataset.who, 1));
       root.classList.add('shown');
     });
+  }
+  // удержание пальца на ячейке быстрого доступа — сменить вещь
+  function dwellTick() {
+    if (!st || !st.open) return;
+    const it = st.sel >= 0 ? st.list[st.sel] : null;
+    if (it && it.dwell) { st.dwellT = (st.dwellT || 0) + 1 / 60; if (st.dwellT > 0.8) { close(); QS.pick(); return; } } else st.dwellT = 0;
+    requestAnimationFrame(dwellTick);
   }
   function pick(x, y) {
     let best = -1, bd = R.pick;
@@ -163,5 +175,42 @@ AB.IsoAbilities = (() => {
     AB.Bus.on('iso:party', () => { lastSig = ''; });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
-  return { update, isOpen: () => !!(st && st.open), RULES: R };
+  // ---------- №134: быстрый доступ ----------
+  const QS = (() => {
+    const KEY = 'abyss_quickslot';
+    let item = null; try { item = localStorage.getItem(KEY) || null; } catch (e) { /* без хранилища */ }
+    const save = () => { try { if (item) localStorage.setItem(KEY, item); else localStorage.removeItem(KEY); } catch (e) { /* без хранилища */ } };
+    // вещи отряда — общие (AB.IsoStash): оттуда берём и применяем к тому, кто ведёт отряд
+    const cells = () => (AB.IsoStash ? AB.IsoStash.cells() : []);
+    const count = (id) => (AB.IsoStash ? AB.IsoStash.count(id) : 0);
+    function use() {
+      const l = AB.IsoParty.lead(), i = cells().findIndex((c) => c && c.item === item);
+      if (!item || i < 0) { say(`Нет: ${item ? AB.ID.get(item).name : 'вещи'}`); return; }
+      const why = AB.IsoStash.useBlock(i, l.id); if (why) { say(why); return; }
+      AB.IsoStash.use(i, l.id); lastSig = '';
+    }
+    // выбор вещи: всё, что есть в сумках отряда и можно применить
+    function pick() {
+      let box = document.getElementById('iso-qs');
+      if (!box) { box = document.createElement('div'); box.id = 'iso-qs'; document.body.appendChild(box); box.addEventListener('pointerdown', (e) => e.stopPropagation()); box.addEventListener('click', onPick); }
+      const ids = new Set(cells().filter(Boolean).map((c) => c.item));
+      const usable = [...ids].filter((id) => { const d = AB.ID.get(id); return d && d.use; });
+      box.innerHTML = `<div class="inv-card qs-card" role="dialog" aria-label="Быстрый доступ"><div class="inv-head"><div><h2>Быстрый доступ</h2><div class="muted">Вещь в ячейке — в веере способностей: отпустите палец на ней, и она применится</div></div><button class="inv-x" data-q="x" aria-label="Закрыть">✕</button></div>
+        <div class="qs-list">${usable.length ? usable.map((id) => { const d = AB.ID.get(id); return `<button data-q="${id}" class="${id === item ? 'on' : ''}"><b>${d.short}</b><span>${d.name}</span><i>×${count(id)}</i></button>`; }).join('') : '<p class="muted">В сумках нет вещей, которые можно применить (медикаменты, паста…). Подберите — и назначьте.</p>'}</div>
+        ${item ? '<button class="qs-clear" data-q="clear">Очистить ячейку</button>' : ''}</div>`;
+      box.hidden = false;
+    }
+    function onPick(e) {
+      const box = document.getElementById('iso-qs'), b = e.target.closest('[data-q]');
+      if (e.target === box || (b && b.dataset.q === 'x')) { box.hidden = true; return; }
+      if (!b) return;
+      if (b.dataset.q === 'clear') item = null; else item = b.dataset.q;
+      save(); box.hidden = true; lastSig = '';
+      say(item ? `Быстрый доступ: ${AB.ID.get(item).name}` : 'Ячейка быстрого доступа пуста');
+    }
+    return { get: () => item, set(v) { item = v; save(); }, count, use, pick };
+  })();
+  const say = (text) => AB.Bus.emit('iso:toast', { text, kind: 'info' });
+
+  return { update, isOpen: () => !!(st && st.open), RULES: R, quick: QS };
 })();

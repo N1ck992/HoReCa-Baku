@@ -102,8 +102,21 @@ AB.IsoRender = (() => {
     window.addEventListener('resize', resize);
     AB.Bus.on('iso:world', () => { floorCv = null; snap = true; });
   }
+  // №133: качество графики — разрешение холста (главная нагрузка на телефоне — число пикселей) и мелкие детали
+  const Q = { res: 2, rims: true, auto: false };
+  // №133: «Авто» — начинаем с 1,5 и подстраиваемся: кадр дольше 30 мс в среднем за 2 с — ниже (до 1), быстрее 15 мс 6 с — выше
+  const QA = { t: 0, n: 0, sum: 0, last: 0, steps: [1, 1.25, 1.5, 2] };
+  function autoQuality(now) {
+    if (!Q.auto) return;
+    const ms = QA.last ? now - QA.last : 16; QA.last = now;
+    if (ms > 200) return;                                // вкладка была в фоне
+    QA.sum += ms; QA.n++; QA.t += ms;
+    const avg = QA.sum / QA.n, i = QA.steps.indexOf(Q.res);
+    if (QA.t > 2000 && avg > 30 && i > 0) { Q.res = QA.steps[i - 1]; resize(); QA.t = QA.sum = QA.n = 0; }
+    else if (QA.t > 6000) { if (avg < 15 && i >= 0 && i < QA.steps.length - 1 && Q.res < Math.min(2, window.devicePixelRatio || 1)) { Q.res = QA.steps[i + 1]; resize(); } QA.t = QA.sum = QA.n = 0; }
+  }
   function resize() {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = Math.max(1, Math.min(Q.res, window.devicePixelRatio || 1));
     vw = cv.clientWidth; vh = cv.clientHeight;
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
     lightCv.width = Math.ceil(cv.width / 2); lightCv.height = Math.ceil(cv.height / 2);
@@ -216,8 +229,8 @@ AB.IsoRender = (() => {
       ctx.fillStyle = t; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.35)'; ctx.fill();
     } else { ctx.fillStyle = WALL_LOOK.top; ctx.fill(); }
     // №119: стены не сливаются с полом — светлая кромка по верху; низкий передний бортик — заметнее
-    ctx.strokeStyle = hgt < 20 ? 'rgba(235,205,130,.75)' : 'rgba(200,215,225,.55)'; ctx.lineWidth = hgt < 20 ? 2 : 1.5; ctx.stroke();
-    if (faces.l || faces.r) {   // тёмная полоса у основания стены — граница с полом
+    if (Q.rims) { ctx.strokeStyle = hgt < 20 ? 'rgba(235,205,130,.75)' : 'rgba(200,215,225,.55)'; ctx.lineWidth = hgt < 20 ? 2 : 1.5; ctx.stroke(); }
+    if (Q.rims && (faces.l || faces.r)) {   // тёмная полоса у основания стены — граница с полом
       ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2; ctx.beginPath();
       if (faces.l) { ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); }
       if (faces.r) { ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); }
@@ -317,7 +330,57 @@ AB.IsoRender = (() => {
 
   // ---------- Кадр ----------
   const look = { x: 0, y: 0 }, LOOK = 3.2;   // №126: смещение камеры к прицелу, клеток
+
+  // ---------- №133: туман помещений — видно только то помещение, где отряд ----------
+  // Помещения без отряда тёмные: их стены, предметы, враги, свет и вспышки не рисуются (и кадр легче).
+  // Открытые (где отряд уже был) помнятся — по ним можно вести отряд с большой карты. Плавный переход.
+  // Нет тумана: в базе-капсуле, снаружи (на дне) и в секторах из одного помещения.
+  const fog = { a: new Map(), vis: new Set(), seen: new Set(), on: false, near: null, nearKey: '' };
+  function fogUpdate(dt, party) {
+    const W = AB.IsoWorld, lay = W.layout() || {};
+    const rooms = new Set((lay.areas || []).map((a) => a.room));
+    fog.on = !lay.outside && !document.body.classList.contains('in-base') && rooms.size > 1;
+    fog.vis.clear();
+    for (const m of party) { if (m.hidden) continue; const r = W.room(m.x, m.y); if (r) fog.vis.add(r); }
+    if (!fog.vis.size) { const l = AB.IsoParty.lead(), r = l && W.room(l.x, l.y); if (r) fog.vis.add(r); }
+    for (const r of fog.vis) fog.seen.add(r);
+    const k = Math.min(1, dt * 5);
+    for (const r of rooms) { const want = !fog.on || fog.vis.has(r) ? 0 : 1, cur = fog.a.has(r) ? fog.a.get(r) : want; fog.a.set(r, cur + (want - cur) * k); }
+    // клетки стен/дверей → помещения вокруг (кэш на сектор)
+    const key = `${lay.name}|${W.size().w}x${W.size().h}`;
+    if (fog.nearKey !== key) {
+      fog.nearKey = key; fog.near = new Map();
+      const { w, h } = W.size();
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const own = W.room(x + 0.5, y + 0.5); if (own) continue;
+        const set = new Set();
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const r = W.room(x + dx + 0.5, y + dy + 0.5); if (r) set.add(r); }
+        if (set.size) fog.near.set(y * w + x, [...set]);
+      }
+    }
+  }
+  const roomFog = (r) => (fog.on && r && fog.a.has(r) ? fog.a.get(r) : 0);
+  const roomShown = (r) => roomFog(r) < 0.95;
+  // клетка видна: её помещение видно; для стен и дверей — видно хоть одно соседнее помещение
+  function tileShown(x, y) {
+    if (!fog.on) return true;
+    const r = AB.IsoWorld.room(x + 0.5, y + 0.5);
+    if (r) return roomShown(r);
+    const near = fog.near && fog.near.get(y * AB.IsoWorld.size().w + x);
+    return !near || near.some(roomShown);
+  }
+  const pointShown = (x, y) => !fog.on || roomShown(AB.IsoWorld.room(x, y)) || tileShown(Math.floor(x), Math.floor(y));
+  function drawFog() {
+    if (!fog.on) return;
+    for (const a of AB.IsoWorld.layout().areas) {
+      const f = roomFog(a.room); if (f < 0.01) continue;
+      const p = [toScreen(a.x, a.y), toScreen(a.x + a.w, a.y), toScreen(a.x + a.w, a.y + a.h), toScreen(a.x, a.y + a.h)];
+      ctx.beginPath(); p.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath();
+      ctx.fillStyle = `rgba(3,3,5,${Math.min(1, f * 1.02)})`; ctx.fill();
+    }
+  }
   function frame(dt) {
+    autoQuality(performance.now());
     WALL_H = WALL_FULL;               // №80: передние стены теперь — бортик везде, задние снова в полный рост и в базе
     time += dt;
     if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
@@ -344,6 +407,7 @@ AB.IsoRender = (() => {
 
     // пол
     ctx.drawImage(floorCv, -floorOX, -TH / 2);
+    fogUpdate(dt, party);
     drawFloorMarks();
     if (AB.IsoReward) AB.IsoReward.drawGround(ctx, toScreen, time, AB.IsoInteract.targets().filter((t) => t.kind === 'item'));   // №81: лучи над наградой
     drawMarker();
@@ -355,6 +419,7 @@ AB.IsoRender = (() => {
     drawShafts(dt);                                     // №127: люки и решётки, из которых вылезли монстры
     if (AB.IsoMiraP) AB.IsoMiraP.drawGround(ctx, toScreen);   // №123: бой с Мирой — зоны, разрядники, разлом
 
+    drawFog();                                          // №133: помещения без отряда — в темноте (поверх следов на полу)
     // видимая область в клетках (с запасом на высоту стен)
     const hw = cv.width / 2 / sc + TW * 2, hh = cv.height / 2 / sc + WALL_H + TH * 2;
     const visible = (sx, sy) => Math.abs(sx - cam.x) < hw && sy - cam.y < hh && cam.y - sy < hh + WALL_H;
@@ -366,29 +431,29 @@ AB.IsoRender = (() => {
       const k = AB.IsoWorld.cell(x, y);
       if (k !== AB.IsoWorld.WALL || exitWall(x, y)) continue;
       const c = toScreen(x + 0.5, y + 0.5);
-      if (!visible(c.x, c.y)) continue;
+      if (!visible(c.x, c.y) || !tileShown(x, y)) continue;
       list.push({ d: x + y + 1, k: 'w', x, y });
     }
     for (const p of AB.IsoWorld.props()) for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) {
       const c = toScreen(x + 0.5, y + 0.5);
-      if (visible(c.x, c.y)) list.push({ d: x + y + 1, k: 'p', x, y, p });
+      if (visible(c.x, c.y) && tileShown(x, y)) list.push({ d: x + y + 1, k: 'p', x, y, p });
     }
     for (const m of party) list.push({ d: m.x + m.y + 0.01, k: 'c', m });
-    for (const m of AB.IsoParty.npcs()) list.push({ d: m.x + m.y + 0.01, k: 'c', m, npc: true });
-    for (const e of AB.IsoEnemies.all()) { const c = toScreen(e.x, e.y); if (visible(c.x, c.y)) list.push({ d: e.x + e.y + 0.005, k: 'e', e }); }
+    for (const m of AB.IsoParty.npcs()) if (pointShown(m.x, m.y)) list.push({ d: m.x + m.y + 0.01, k: 'c', m, npc: true });
+    for (const e of AB.IsoEnemies.all()) { const c = toScreen(e.x, e.y); if (visible(c.x, c.y) && (e.story || pointShown(e.x, e.y))) list.push({ d: e.x + e.y + 0.005, k: 'e', e }); }
     // двери сектора (створки), выходы в стене, предметы на полу
-    for (const dr of AB.IsoInteract.doors()) if (dr.anim > 0.03) for (const [x, y] of dr.tiles) list.push({ d: x + y + 1, k: 'd', x, y, dr });
+    for (const dr of AB.IsoInteract.doors()) if (dr.anim > 0.03) for (const [x, y] of dr.tiles) if (tileShown(x, y)) list.push({ d: x + y + 1, k: 'd', x, y, dr });
     for (const e of AB.IsoWorld.layout().exits || []) if (!e.floor) {
       const wx = e.x + (e.wall === 'w' ? -1 : e.wall === 'e' ? 1 : 0), wy = e.y + (e.wall === 'n' ? -1 : e.wall === 's' ? 1 : 0);
-      list.push({ d: wx + wy + 1.001, k: 'x', x: wx, y: wy, e });
+      if (!fog.on || roomShown(e.room)) list.push({ d: wx + wy + 1.001, k: 'x', x: wx, y: wy, e });
     }
     const near = AB.IsoInteract.nearest(), hov = AB.IsoInteract.hovered();
     hl = new Set([near && near.id, hov && hov.id]);
-    for (const t of AB.IsoInteract.targets()) if (t.kind === 'item') list.push({ d: t.x + t.y, k: 'i', t });
+    for (const t of AB.IsoInteract.targets()) if (t.kind === 'item' && pointShown(t.x, t.y)) list.push({ d: t.x + t.y, k: 'i', t });
     // №57: турели оружейной и пушки в зале Колосса
     const lay0 = AB.IsoWorld.layout(), ns0 = AB.IsoNest.state(), bs0 = AB.IsoBoss.state();
-    if (lay0.nest && lay0.nest.turrets) lay0.nest.turrets.forEach((g, i) => list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!ns0 && !!ns0.tur && ns0.tur[i].on, big: g.type === 'heavy' }));
-    if (lay0.boss) lay0.boss.cannons.forEach((g, i) => list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!bs0 && bs0.on[i], big: true }));
+    if (lay0.nest && lay0.nest.turrets) lay0.nest.turrets.forEach((g, i) => tileShown(g.x, g.y) && list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!ns0 && !!ns0.tur && ns0.tur[i].on, big: g.type === 'heavy' }));
+    if (lay0.boss) lay0.boss.cannons.forEach((g, i) => tileShown(g.x, g.y) && list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!bs0 && bs0.on[i], big: true }));
     list.sort((a, b) => a.d - b.d);
 
     for (const o of list) {
@@ -448,11 +513,11 @@ AB.IsoRender = (() => {
     if (AB.IsoFX) AB.IsoFX.draw(ctx, toScreen);                 // №111: брызги, искры, след рывка
     lighting(sc, party);
     for (const m of party) if (!m.hidden) nameTag(m, m === l);
-    for (const m of AB.IsoParty.npcs()) if (!m.hidden) nameTag(m, false);
+    for (const m of AB.IsoParty.npcs()) if (!m.hidden && pointShown(m.x, m.y)) nameTag(m, false);
     beacons();
     defenseMarks();
     overlays(fx);
-    for (const e of AB.IsoEnemies.all()) enemyBar(e);
+    for (const e of AB.IsoEnemies.all()) if (e.story || pointShown(e.x, e.y)) enemyBar(e);
     if (AB.BaseView) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.BaseView.drawTop(ctx, toScreen, time); }   // №71: станки, склады, груз
     if (AB.IsoCompanion) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.IsoCompanion.draw(ctx, toScreen, time); }   // №85: дрон-спутник
     if (AB.IsoFX) { ctx.setTransform(1, 0, 0, 1, 0, 0); AB.IsoFX.draw2d(ctx, cv.width, cv.height); }   // №111: красная кромка при ранении
@@ -531,7 +596,7 @@ AB.IsoRender = (() => {
       else if (t.kind === 'door' && t.ref.def.hack && t.ref.state !== 'open' && !t.ref.hacked && !AB.IsoNest.state()) { col = '94,230,255'; big = true; text = t.ref.def.name; }
       else continue;
       const p = toScreen(t.x, t.y), far = Math.hypot(t.x - l.x, t.y - l.y);
-      if (far > 22) continue;
+      if (far > 22 || !pointShown(t.x, t.y)) continue;   // №133: в тёмных помещениях маячков не видно
       const lift = t.kind === 'item' ? 26 : 62, bob = Math.sin(time * 3 + t.x) * 3, a = 0.55 + Math.sin(time * 4 + t.y) * 0.25;
       // луч
       const g = ctx.createLinearGradient(0, p.y - lift - 30, 0, p.y);
@@ -904,7 +969,9 @@ AB.IsoRender = (() => {
     const L = lctx, k = 0.5;
     L.setTransform(1, 0, 0, 1, 0, 0);
     L.globalCompositeOperation = 'source-over';
-    const dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.72, lit: 0.3 }, AB.World && AB.World.hasPower()) : (AB.World && AB.World.hasPower() ? 0.3 : 0.72);
+    // №133: до питания — гуще темнота (атмосфера), вокруг отряда — небольшое пятно; с питанием — как было
+    const powered = AB.World && AB.World.hasPower();
+    const dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.9, lit: 0.3 }, powered) : (powered ? 0.3 : 0.9);
     L.fillStyle = `rgba(3,4,7,${Math.max(0, dk)})`;   // с питанием светлее (№82: плавно, со вспышкой)
     L.fillRect(0, 0, lightCv.width, lightCv.height);
     L.setTransform(sc * k, 0, 0, sc * k, (cv.width / 2 - cam.x * sc) * k, (cv.height / 2 - cam.y * sc) * k);
@@ -917,25 +984,51 @@ AB.IsoRender = (() => {
       L.fillStyle = g; L.fillRect(-r, -r, r * 2, r * 2); L.restore();
     };
     const lights = AB.IsoWorld.layout().lights;
-    for (const li of lights) hole(li.x, li.y, li.radius * TW * 0.6, 0.9);
-    for (const m of party) hole(m.x, m.y - 0.6, 6 * TW * 0.6, 0.85);
+    // до питания лампы — аварийные, тусклые и короче; с питанием — в полную силу
+    for (const li of lights) if (pointShown(li.x, li.y)) hole(li.x, li.y, li.radius * TW * (powered ? 0.6 : 0.45), powered ? 0.9 : 0.5);
+    for (const m of party) hole(m.x, m.y - 0.6, (powered ? 6 : 3.4) * TW * 0.6, powered ? 0.85 : 0.75);
+    // №133: фонарь на оружии — когда герой целится, луч света в сторону прицела
+    const aimL = AB.IsoInput.aim && AB.IsoInput.aim(), ld = AB.IsoParty.lead();
+    const beam = aimL && ld ? coneOf(ld, aimL) : null;
+    if (beam) {
+      const g = L.createLinearGradient(beam.o.x, beam.o.y, beam.f.x, beam.f.y);
+      g.addColorStop(0, 'rgba(0,0,0,.95)'); g.addColorStop(0.7, 'rgba(0,0,0,.7)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      L.fillStyle = g; L.beginPath(); beam.pts.forEach((q, i) => (i ? L.lineTo(q.x, q.y) : L.moveTo(q.x, q.y))); L.closePath(); L.fill();
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(lightCv, 0, 0, cv.width, cv.height);
     // цветное свечение ламп
     ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc);
     ctx.globalCompositeOperation = 'lighter';
     for (const li of lights) {
+      if (!pointShown(li.x, li.y)) continue;
       const p = toScreen(li.x, li.y), r = li.radius * TW * 0.5, [cr, cg, cb] = li.color;
       ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, 0.6);
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
       g.addColorStop(0, `rgba(${cr},${cg},${cb},.16)`); g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
       ctx.fillStyle = g; ctx.fillRect(-r, -r, r * 2, r * 2); ctx.restore();
     }
+    if (beam) {   // тёплое свечение луча
+      const g = ctx.createLinearGradient(beam.o.x, beam.o.y, beam.f.x, beam.f.y);
+      g.addColorStop(0, 'rgba(255,236,200,.13)'); g.addColorStop(0.6, 'rgba(255,236,200,.05)'); g.addColorStop(1, 'rgba(255,236,200,0)');
+      ctx.fillStyle = g; ctx.beginPath(); beam.pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill();
+    }
     ctx.globalCompositeOperation = 'source-over';
+  }
+  // луч фонаря: от оружия (у пояса героя) конусом ±20° на 7 клеток, в экранных координатах сцены
+  function coneOf(m, dir) {
+    const LEN = 7, HALF = 0.35, a0 = Math.atan2(dir.y, dir.x), lift = 34;
+    const up = (p) => ({ x: p.x, y: p.y - lift });
+    const o = up(toScreen(m.x + dir.x * 0.3, m.y + dir.y * 0.3)), f = up(toScreen(m.x + dir.x * LEN, m.y + dir.y * LEN));
+    const pts = [o];
+    for (let i = 0; i <= 8; i++) { const a = a0 - HALF + (2 * HALF * i) / 8; pts.push(up(toScreen(m.x + Math.cos(a) * LEN, m.y + Math.sin(a) * LEN))); }
+    return { o, f, pts };
   }
 
   return {
     TW, TH, init, frame, pick, screenOf, toScreen, toWorld, portrait,
+    fog: () => ({ on: fog.on, vis: [...fog.vis], seen: [...fog.seen] }), roomSeen: (r) => !fog.on || fog.seen.has(r), roomVisible: (r) => !fog.on || fog.vis.has(r),
+    quality: () => ({ ...Q, dpr }), setQuality(q) { Object.assign(Q, q); QA.t = QA.sum = QA.n = 0; resize(); floorCv = null; },
     focus(p) { focusPt = p ? { ...p } : null; },
     // №69: свободная камера в базе — сдвиг обзора на (dx, dy) CSS-пикселей
     panBy(dx, dy) {

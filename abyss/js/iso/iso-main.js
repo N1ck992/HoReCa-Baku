@@ -41,8 +41,16 @@
   AB.Bus.on('weapon:overheat', () => toast('Терминал перегрет — пара секунд на остывание', 'info'));
   AB.Bus.on('enemy:dead', ({ name }) => toast(`${name} убит`, 'good'));
   // гибель Марка или Миры — конец, как в основной игре; остальные — отряд идёт дальше
+  // №133: павший из отряда — лежит на месте, его можно поднять (подойти, «Поднять»); пал ведущий — ведёт другой;
+  // конец — только если пал весь отряд
+  AB.Bus.on('char:revived', ({ charId }) => toast(`${AB.ID.get(charId).name} снова на ногах`, 'good'));
   AB.Bus.on('char:dead', ({ charId }) => {
-    if (charId !== 'CHAR-001' && charId !== 'CHAR-002') { toast(`${AB.ID.get(charId).name} погибла`); return; }
+    const alive = AB.IsoParty.members().filter((m) => { const c = AB.Chars.get(m.id); return c && !c.dead; });
+    if (alive.length) {
+      if (AB.IsoParty.lead().id === charId) AB.IsoParty.cycle();
+      toast(`${AB.ID.get(charId).name} пал${charId === 'CHAR-001' ? '' : 'а'} — подойдите и поднимите (E)`, 'info');
+      return;
+    }
     $('#iso-death h2').textContent = charId === 'CHAR-001' ? 'Вы погибли' : 'Её больше нет';
     // №59: есть контрольная точка (оборона оружейной, Колосс) — можно повторить с неё
     const cp = AB.IsoGame.checkpoint();
@@ -216,6 +224,7 @@
   function boot() {
     AB.Assets.load();
     AB.IsoRender.init($('#iso'));
+    if (AB.IsoSettings) AB.IsoSettings.applyGfx();   // №133: качество графики из настроек (по умолчанию «Авто»)
     AB.Quests.init();
     AB.IsoGame.start();                                   // пробуждение в криоотсеке (или тестовая сцена)
     AB.IsoInventory.init();

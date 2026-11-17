@@ -194,6 +194,14 @@ AB.IsoOverworld = (() => {
     if (sel === s.id && mode === 'capsule') sel = 'base';
   }
   // разбитый костюм: отступает на базу (не гибнет, как раненые в Warpath)
+  // №133: пал на дне (акт III) — очнулся в батискафе: сразу на базе, здоровье восстановлено
+  function respawn(s) {
+    const c = AB.Chars.get(s.id), max = (AB.ID.get(s.id).stats || {}).maxHp || 100;
+    if (c) { c.hp = max; c.dead = false; }
+    s.target = null; s.atk = null; s.path = []; s.anim = null; s.state = 'home'; s.q = base.q; s.r = base.r;
+    if (sel === s.id) sel = 'base';
+    say(`${AB.ID.get(s.id).name} пал${s.id === 'CHAR-001' ? '' : 'а'} на дне — очнул${s.id === 'CHAR-001' ? 'ся' : 'ась'} в батискафе`);
+  }
   function retreat(s) {
     const c = AB.Chars.get(s.id); if (c) c.hp = Math.max(1, c.hp);
     s.target = null; s.atk = null; s.state = 'retreat';
@@ -561,7 +569,7 @@ AB.IsoOverworld = (() => {
               v.flash = 0.3;
               c.hp -= def.damage * SUIT().armor;
               AB.Bus.emit('char:hit', { charId: v.id, amount: def.damage * SUIT().armor });
-              if (c.hp <= 1) retreat(v);
+              if (c.hp <= 1) (mode === 'capsule' ? respawn(v) : retreat(v));   // №133: на дне в акте III — очнётся в батискафе
             }
           }
         }
