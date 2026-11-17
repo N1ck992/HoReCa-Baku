@@ -45,7 +45,9 @@ body { font: 13px/1.4 var(--mono); user-select: none; -webkit-user-select: none;
 #iso-toast.info { border-color: rgba(94, 230, 255, .4); color: #cfeef6; }
 
 #iso-tools { position: fixed; z-index: 2; right: calc(12px + env(safe-area-inset-right, 0px)); top: calc(10px + env(safe-area-inset-top, 0px)); display: flex; gap: 6px; align-items: center; }
-#iso-zoom { display: flex; gap: 4px; }
+/* №129: кнопки − / + — только в базе-капсуле (там камера свободна); в локациях с героями их нет (щипок и колесо остались) */
+#iso-zoom { display: none; gap: 4px; }
+body.in-base #iso-zoom { display: flex; }
 #iso-tools button, #iso-tools a { min-width: 34px; height: 30px; padding: 0 8px; display: inline-grid; place-items: center; font: 14px var(--mono); color: var(--fg); text-decoration: none; background: rgba(10, 12, 14, .65); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
 #iso-tools a { font-size: 11px; }
 #iso-help { position: fixed; z-index: 2; left: 50%; transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 24px); font-size: 11px; color: var(--muted); text-align: center; text-shadow: 0 0 4px #000; pointer-events: none; }
