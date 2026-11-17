@@ -21,6 +21,7 @@ AB.IsoActs = (() => {
   function next(a) {
     if (a === 1) { act = 2; AB.IsoStory.trigger('act:2'); }
     else if (a === 2) { act = 3; AB.IsoStory.trigger('act:3'); }
+    else if (a === 3 && AB.IsoSurface) AB.IsoSurface.enter(true);   // №135: после всплытия — поверхность, зона A1
   }
 
   // ---------- Акт II: архив, жетон, выход за борт ----------

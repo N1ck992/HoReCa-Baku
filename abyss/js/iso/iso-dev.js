@@ -77,6 +77,14 @@ AB.IsoDev = (() => {
       quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), ['QUEST-009', { stage: 1, status: 'active' }]],
       after: () => { AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-002'], built: ['MOD-003'] }); AB.IsoCompanion.give(true); AB.Flags.add('surface-ready'); AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); },
     }) },
+    // №135: поверхность — сразу в зону A1 (случайная точка)
+    { id: 'sf-a1', group: 'Поверхность', name: 'Зона A1 (после всплытия, случайная точка)', st: () => ({
+      sector: 'SECTOR-003', at: { x: 72.5, y: 28.5 }, party: ['CHAR-001', 'CHAR-002'], story: A3, equipment: EQ3, power: true,
+      weapons: ARMS, stash: [['ITEM-005', 2], ['ITEM-009', 1], ...RES],
+      dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked', 'recruit', 'module', 'surface-ready', 'mira-fled', 'surfaced'],
+      quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), ['QUEST-009', { stage: 1, status: 'active' }]],
+      after: () => { AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-002'], built: ['MOD-003'] }); AB.IsoSurface.enter(true); },
+    }) },
   ];
 
   function jump(id) {
@@ -104,7 +112,7 @@ AB.IsoDev = (() => {
       if (AB.IsoOverworld.isOpen()) return `Тварей на карте убрано: ${AB.IsoOverworld.clearWild()}`;
       let n = 0; for (const e of AB.IsoEnemies.alive()) if (!e.story && AB.ID.get(e.id).type !== 'pursuer') { AB.IsoEnemies.damage(e.id, 99999, null); n++; } return `Убито рядом: ${n}`;
     },
-    map() { if (AB.IsoOverworld.revealAll) AB.IsoOverworld.revealAll(); return 'Карта дна открыта'; },
+    map() { if (AB.IsoSurface && AB.IsoSurface.isOpen()) { AB.IsoSurface.revealAll(); return 'Зона A1 открыта'; } if (AB.IsoOverworld.revealAll) AB.IsoOverworld.revealAll(); return 'Карта дна открыта'; },
     // №71: конструктор базы
     regolith() { if (!AB.BaseSim.on()) return 'База ещё не отстыкована'; AB.BaseSim.receive('ITEM-016', 30); return 'Реголит ×30 — в приёмник шлюза'; },
     hour() { if (!AB.BaseSim.on()) return 'База ещё не отстыкована'; AB.BaseSim.catchUp(3600); AB.BaseSim.save(); return 'База прожила час (как будто вас не было)'; },

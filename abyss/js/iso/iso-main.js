@@ -303,7 +303,7 @@
     function loop(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (paused || AB.IsoOverworld.isOpen()) { requestAnimationFrame(loop); return; }   // выбор улучшения или дно — бункер стоит
+      if (paused || AB.IsoOverworld.isOpen() || (AB.IsoSurface && AB.IsoSurface.isOpen())) { requestAnimationFrame(loop); return; }   // выбор улучшения или дно — бункер стоит
       // сцена, диалог или переход — управление у сцены
       const busy = AB.IsoStory.locked() || AB.IsoGame.busy();
       const raw = AB.IsoInput.update(dt), input = busy ? { x: 0, y: 0, walk: false } : raw;

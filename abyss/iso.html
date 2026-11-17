@@ -85,6 +85,16 @@
     </div>
   </div>
   <!-- Выход за борт (№54, прототип): дно океана, карта из шестиугольников -->
+  <!-- №135: поверхность, зона A1 -->
+  <div id="sf" hidden>
+    <canvas id="sf-map" aria-label="Поверхность: зона A1, карта из шестиугольников"></canvas>
+    <div id="sf-top"><b>Зона A1 · Поверхность</b><span>Пустошь Домов Песка ↔ Топи Детей Хора</span></div>
+    <div id="sf-legend"><span class="desert">◀ A4 · Пустыня — Дома Песка</span><span class="swamp">Болота — Дети Хора · A2 ▶</span></div>
+    <div id="sf-btns"><button data-sf-all title="Вся зона / обратно">◱</button><button data-sf-me title="К отряду">⌖</button><button data-sf-items title="Инвентарь отряда">▤</button><button id="sf-dev" data-dev-open title="Админ-панель">DEV</button></div>
+    <div id="sf-pop" hidden><i class="sf-side"></i><b></b><p></p><small></small><div class="sf-row"><button data-sf-act disabled></button><button data-sf-x aria-label="Закрыть">✕</button></div></div>
+    <div id="sf-hint">Нажмите на клетку — отряд пойдёт туда. По трактам быстрее. Нажмите на деревню, чтобы подойти.</div>
+    <div id="sf-say"></div>
+  </div>
   <div id="ow" hidden>
     <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
     <div id="ow-top"><b>Дно океана</b><span>рядом с «Абиссом» · прототип</span></div>
@@ -187,6 +197,8 @@
   <script src="js/iso/iso-nest.js"></script>
   <script src="js/iso/iso-boss.js"></script>
   <script src="js/iso/iso-overworld.js"></script>
+  <script src="js/data/surface-a1.js"></script>
+  <script src="js/iso/iso-surface.js"></script>
   <script src="js/iso/iso-acts.js"></script>
   <script src="js/iso/iso-mira.js"></script>
   <script src="js/iso/iso-mira-phases.js"></script>
