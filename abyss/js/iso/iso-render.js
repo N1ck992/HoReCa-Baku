@@ -316,6 +316,7 @@ AB.IsoRender = (() => {
   }
 
   // ---------- Кадр ----------
+  const look = { x: 0, y: 0 }, LOOK = 3.2;   // №126: смещение камеры к прицелу, клеток
   function frame(dt) {
     WALL_H = WALL_FULL;               // №80: передние стены теперь — бортик везде, задние снова в полный рост и в базе
     time += dt;
@@ -324,7 +325,10 @@ AB.IsoRender = (() => {
     const party = AB.IsoParty.members(), l = AB.IsoParty.lead();
     if (!l) return;
     const fp = focusPt || l;                          // №68: в базе камера держит всю капсулу
-    const t = toScreen(fp.x, fp.y - 0.4);
+    // №126: целится — камера показывает больше пространства в сторону прицела (плавно)
+    const aimV = !focusPt && AB.IsoInput.aim ? AB.IsoInput.aim() : null, lk = U.clamp(dt * 3, 0, 1);
+    look.x += ((aimV ? aimV.x * LOOK : 0) - look.x) * lk; look.y += ((aimV ? aimV.y * LOOK : 0) - look.y) * lk;
+    const t = toScreen(fp.x + look.x, fp.y - 0.4 + look.y);
     if (snap) { cam.x = t.x; cam.y = t.y; snap = false; }
     cam.x = U.lerp(cam.x, t.x, 1 - Math.pow(0.002, dt));
     cam.y = U.lerp(cam.y, t.y, 1 - Math.pow(0.002, dt));
@@ -780,8 +784,8 @@ AB.IsoRender = (() => {
   const fx = [];
   AB.Bus.on('iso:enemyHit', ({ x, y }) => { for (let i = 0; i < 14; i++) fx.push({ k: 'blood', x, y, z: 0.9, vx: (Math.random() - 0.5) * 2.4, vy: (Math.random() - 0.5) * 2.4, vz: 1 + Math.random() * 2, life: 0.9, age: 0 }); });
   AB.Bus.on('iso:charHit', ({ x, y }) => { for (let i = 0; i < 8; i++) fx.push({ k: 'blood', x, y, z: 1.1, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, vz: 1 + Math.random() * 1.5, life: 0.8, age: 0 }); });
-  AB.Bus.on('iso:shot', ({ from, to, landed, energy, dart }) => {
-    fx.push({ k: energy ? 'bolt' : 'tracer', x: from.x, y: from.y, x2: to.x, y2: to.y, life: energy ? Math.max(0.1, Math.hypot(to.x - from.x, to.y - from.y) / 40) : 0.14, age: 0, dart, landed });
+  AB.Bus.on('iso:shot', ({ from, to, landed, energy, dart, cut }) => {
+    fx.push({ k: energy ? 'bolt' : 'tracer', x: from.x, y: from.y, x2: to.x, y2: to.y, life: energy ? Math.max(0.1, Math.hypot(to.x - from.x, to.y - from.y) / 40) : cut ? 0.2 : 0.14, age: 0, dart, landed, cut });
   });
   const decals = [];
   function updateFx(dt) {
@@ -802,7 +806,7 @@ AB.IsoRender = (() => {
       if (f.k === 'blood') { const p = toScreen(f.x, f.y); ctx.fillStyle = `rgba(120,12,12,${a})`; ctx.fillRect(p.x - 1.5, p.y - f.z * 40 - 1.5, 3, 3); continue; }
       const a0 = toScreen(f.x, f.y), b0 = toScreen(f.x2, f.y2), h = 48;
       if (f.k === 'tracer') {
-        ctx.strokeStyle = f.dart ? `rgba(150,255,190,${0.9 * a})` : `rgba(220,250,255,${0.9 * a})`; ctx.lineWidth = 1.5;
+        ctx.strokeStyle = f.cut ? `rgba(255,170,70,${0.95 * a})` : f.dart ? `rgba(150,255,190,${0.9 * a})` : `rgba(220,250,255,${0.9 * a})`; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(a0.x, a0.y - h); ctx.lineTo(b0.x, b0.y - h); ctx.stroke();
       } else {
         const t = Math.min(1, f.age / f.life), x = a0.x + (b0.x - a0.x) * t, y = a0.y - h + (b0.y - a0.y) * t;

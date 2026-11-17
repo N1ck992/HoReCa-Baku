@@ -20,9 +20,10 @@ AB.ITEMS = [
     desc: 'Тяжёлая канистра с топливом. Без неё главный генератор не запустить. Занимает весь рюкзак.' },
   { id: 'ITEM-007', name: 'Биоматериалы', short: 'БИО', category: 'resource', stack: 10, icon: 'ASSET-ITEM007-01', use: null,
     desc: 'Образцы органики. Нужны для исследований.' },
-  { id: 'ITEM-009', name: 'Металлическая труба', short: 'ТРБ', category: 'weapon', stack: 1, icon: 'ASSET-ITEM009-01', use: null,
-    weapon: { damage: 26, range: 64, cooldown: 0.65, hitAt: 0.21 },
-    desc: 'Обрезок трубы. Тяжёлый и надёжный. Можно взять в руки как оружие.' },
+  // №126: вместо трубы — ручной резак (ID тот же): бьёт дугой на расстоянии, по одной цели; мутанту хватает двух попаданий
+  { id: 'ITEM-009', name: 'Ручной резак', short: 'РЗК', category: 'weapon', stack: 1, icon: 'ASSET-ITEM009-01', use: null,
+    weapon: { damage: 40, range: 480, cooldown: 0.75, hitAt: 0.08, ranged: true, infinite: true, cutter: true, bash: 12 },
+    desc: 'Аварийный резак ремонтной бригады: короткая раскалённая дуга режет металл — и то, что раньше было людьми. Бьёт на расстоянии, по одной цели. Обычному мутанту хватает двух попаданий.' },
   { id: 'ITEM-010', name: 'Ключ-карта', short: 'КЛЮЧ', category: 'key', stack: 1, icon: 'ASSET-ITEM010-01', use: null,
     desc: 'Магнитная карта доступа. Открывает дверь в конце коридора.' },
   { id: 'ITEM-008', name: 'Боеприпасы', short: 'БП', category: 'ammo', stack: 60, icon: 'ASSET-ITEM008-01', use: null,

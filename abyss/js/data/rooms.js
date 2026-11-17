@@ -82,7 +82,7 @@ AB.ROOMS = [
       // Дверь в генераторную — кодовый замок; код знает Мира (дополнение №37)
       { key: 'east', x: 2530, to: 'ROOM-003', access: { type: 'event', event: 'EVENT-003', reason: 'Кодовый замок: нужен код доступа' } },
       // люк в полу: технический тоннель под палубой (дополнение №35)
-      { key: 'hatch', kind: 'hatch', x: 1150, to: 'ROOM-012', access: { type: 'key', item: 'ITEM-009', reason: 'Люк заклинило: нужен рычаг — что-нибудь тяжёлое', lever: true } },
+      { key: 'hatch', kind: 'hatch', x: 1150, to: 'ROOM-012', access: { type: 'key', item: 'ITEM-009', reason: 'Люк заклинило: петли приварены — нужен резак', lever: true } },
     ],
     props: [],
     lights: [

@@ -48,7 +48,7 @@ AB.BARKS['CHAR-001'] = {
     { text: 'Ещё пара таких — и всё.', think: true },
   ],
   lead: [{ text: 'Я впереди. Держись за мной.' }],
-  'pickup:ITEM-009': [{ text: 'Труба. Лучше, чем ничего.', think: true, once: true }],
+  'pickup:ITEM-009': [{ text: 'Аварийный резак. Режет металл — и не только.', think: true, once: true }],
   'pickup:ITEM-011': [{ text: 'Плазменный резак. Не оружие — но сойдёт.', think: true, once: true }],
   'log:LOG-001': [{ text: 'Пробуждение через тридцать суток… А счётчик переполнен?', think: true }],
   'log:LOG-008': [{ text: '«Каждый видит его по-своему»… Бред какой-то.', think: true, reply: { by: 'CHAR-002', text: 'Учёные здесь быстро сходили с ума.' } }],

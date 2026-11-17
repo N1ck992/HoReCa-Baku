@@ -92,7 +92,7 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ITEM006-01', owner: 'ITEM-006', type: 'icon', src: null, desc: 'Топливо' },
   { id: 'ASSET-ITEM007-01', owner: 'ITEM-007', type: 'icon', src: null, desc: 'Биоматериалы' },
   { id: 'ASSET-ITEM008-01', owner: 'ITEM-008', type: 'icon', src: null, desc: 'Боеприпасы' },
-  { id: 'ASSET-ITEM009-01', owner: 'ITEM-009', type: 'icon', src: null, desc: 'Металлическая труба' },
+  { id: 'ASSET-ITEM009-01', owner: 'ITEM-009', type: 'icon', src: null, desc: 'Ручной резак (№126; раньше — металлическая труба)' },
   { id: 'ASSET-ITEM010-01', owner: 'ITEM-010', type: 'icon', src: null, desc: 'Ключ-карта' },
 
   // ---- ENEMY-001: первый мутант ----

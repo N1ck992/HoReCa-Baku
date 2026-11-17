@@ -74,7 +74,7 @@ AB.IsoCombat = (() => {
       if (hit && w.vuln) AB.IsoEnemies.vulnerable(hit.id, w.vuln);   // №120: инжектор Хейл — ткани цели уязвимее
       if (hit) { landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged'); if (landed && AB.IsoFX) AB.IsoFX.impact(hit, { x: hit.x - (hit.x - m.x) * 0.01, y: hit.y - (hit.y - m.y) * 0.01 }, false, hit.state === 'DEAD'); }
       const end = hit ? { x: hit.x, y: hit.y } : { x: m.x + dx * Math.min(range, 6), y: m.y + dy * Math.min(range, 6) };
-      AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart });
+      AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart, cut: !!w.cutter });
     } else {
       const dmg = (w.ranged ? w.bash : w.damage) * mod('meleeDamage'), reach = w.reachCells ? w.reachCells + 0.15 : (w.ranged ? 60 : w.range) / T + 0.45;
       const n = Math.hypot(m.hx, m.hy) || 1;
@@ -155,9 +155,21 @@ AB.IsoCombat = (() => {
   // №124: правый стик — выстрел/удар в направлении прицела (без поиска цели)
   function fireAt(dir) {
     const l = AB.IsoParty.lead();
-    if (!l || swings.has(l.id)) return false;
+    if (!l) return false;
     l.hx = dir.x; l.hy = dir.y; const sx = dir.x - dir.y; if (Math.abs(sx) > 0.05) l.facing = sx > 0 ? 1 : -1;
-    return attack(l, null);
+    // №126: прицел сам по себе беззвучен — выстрел только по врагу в секторе прицела, в досягаемости и на виду;
+    // без оружия и при перегреве — тишина (раньше сыпались «нет оружия» и «перегрев» каждый кадр)
+    const w = weaponOf(l.id);
+    if (!w || swings.has(l.id) || !canAttack(l)) return false;
+    const h = AB.Inventory.heat(l.id); if (h && h.over) return false;
+    const range = (w.weapon.ranged ? w.weapon.range : Math.max(w.weapon.range || 60, 90)) / T;
+    const e = AB.IsoEnemies.alive().filter((q) => {
+      if (!hostile(q)) return false;
+      const dx = q.x - l.x, dy = q.y - l.y, d = Math.hypot(dx, dy);
+      return d <= range && (dx * dir.x + dy * dir.y) / (d || 1) > 0.9 && W().see(l.x, l.y, q.x, q.y, 0.05);
+    }).sort((a, b) => Math.hypot(a.x - l.x, a.y - l.y) - Math.hypot(b.x - l.x, b.y - l.y))[0];
+    if (!e) return false;
+    return attack(l, e);
   }
   function attackNearest() {
     const l = AB.IsoParty.lead();

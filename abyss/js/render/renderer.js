@@ -1446,6 +1446,17 @@ AB.Render = (() => {
   function drawWeapon(hand, ang, itemId, foreAng, owner) {
     const wdef = itemId && AB.ID.get(itemId);
     if (wdef && wdef.weapon && wdef.weapon.inArt) return;   // №125: оружие уже нарисовано на картинке персонажа (инжектор Хейл)
+    if (wdef && wdef.weapon && wdef.weapon.cutter) {
+      // №126: ручной резак — короткий корпус с баллоном и раскалённым соплом
+      ctx.save(); ctx.translate(hand.fx, hand.fy); ctx.rotate(-ang + Math.PI / 2);
+      ctx.fillStyle = '#2b2f33'; ctx.fillRect(-3, -4, 18, 8);                 // корпус
+      ctx.fillStyle = '#7a5a2a'; ctx.fillRect(-1, -7.5, 9, 3.5);              // баллон
+      ctx.fillStyle = '#1c1f22'; ctx.fillRect(1, 4, 5, 7);                    // рукоять
+      ctx.fillStyle = '#4a5056'; ctx.fillRect(15, -2, 8, 4);                  // сопло
+      ctx.fillStyle = `rgba(255,${150 + Math.sin(time * 20) * 40},60,.9)`; ctx.beginPath(); ctx.arc(24, 0, 2.2, 0, 7); ctx.fill();
+      ctx.restore();
+      return;
+    }
     if (wdef && wdef.weapon && wdef.weapon.dart) {
       // дротиковый пистолет: компактный корпус, зелёная капсула с препаратом
       ctx.save();
@@ -1587,7 +1598,7 @@ AB.Render = (() => {
 
   // преследователь: человеческий силуэт (заглушка ASSET-ENEMY002-01), появляется и растворяется
   function drawPursuer(e, def, pass) {
-    const fake = { id: e.id, x: e.x, facing: e.facing, stride: e.stride, appearance: def.appearance, equipped: 'ITEM-009', hidden: false, room: e.room };
+    const fake = { id: e.id, x: e.x, facing: e.facing, stride: e.stride, appearance: def.appearance, equipped: 'PIPE', hidden: false, room: e.room };   // №126: ITEM-009 теперь резак — у преследователя по-прежнему обрезок трубы
     ctx.save();
     ctx.globalAlpha = U.clamp(e.alpha == null ? 1 : e.alpha, 0, 1) * ctx.globalAlpha;
     drawHero(fake, pass);
