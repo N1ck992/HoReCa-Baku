@@ -194,7 +194,8 @@ AB.IsoActs = (() => {
     toast('База-капсула. «Стройка» — проектировать отсеки и ставить устройства; «Экипаж» — кто чем занят; пульт — вести капсулу', 'info');
   }
   AB.Bus.on('iso:travel', ({ sector }) => { if (sector === 'SECTOR-005') placeCrew(); });
-  function leaveBase() { AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); }
+  // №140: на поверхности из капсулы выходим обратно на поверхность, а не на дно
+  function leaveBase() { if (AB.IsoSurface && AB.IsoSurface.active()) { AB.IsoSurface.enter(false); return; } AB.IsoOverworld.setMode('capsule'); AB.IsoOverworld.enter(); }
 
   return {
     enterBase, leaveBase, surface, canSurface,

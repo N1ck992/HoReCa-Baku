@@ -88,11 +88,21 @@
   <!-- №135: поверхность, зона A1 -->
   <div id="sf" hidden>
     <canvas id="sf-map" aria-label="Поверхность: зона A1, карта из шестиугольников"></canvas>
-    <div id="sf-top"><b>Зона A1 · Поверхность</b><span>Пустошь Домов Песка ↔ Топи Детей Хора</span></div>
-    <div id="sf-legend"><span class="desert">◀ A4 · Пустыня — Дома Песка</span><span class="swamp">Болота — Дети Хора · A2 ▶</span></div>
-    <div id="sf-btns"><button data-sf-all title="Вся зона / обратно">◱</button><button data-sf-me title="К отряду">⌖</button><button data-sf-items title="Инвентарь отряда">▤</button><button id="sf-dev" data-dev-open title="Админ-панель">DEV</button></div>
+    <div id="sf-top"><b>Зона A1 · Поверхность</b><span>Пустошь Домов Песка ↔ Топи Детей Хора</span>
+      <div id="sf-legend"><span class="desert">◀ A4 · Пустыня — Дома Песка</span><span class="swamp">Болота — Дети Хора · A2 ▶</span></div></div>
+    <div id="sf-btns"><button data-sf-items title="Инвентарь отряда">▤</button><button id="sf-dev" data-dev-open title="Админ-панель">DEV</button></div>
+    <!-- №140: нижняя панель как на дне: «Моя база» (нажать — к капсуле, ещё раз — войти; держать и потянуть — веер масштаба), «Вести базу», ячейки отрядов -->
+    <div id="sf-bar">
+      <div id="sf-left">
+        <button data-sf-drive class="ow-mini" title="Вести капсулу по карте: вкл/выкл">⇄ Вести базу: <b>выкл</b></button>
+        <div id="sf-mbwrap">
+          <div id="sf-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div>
+          <button id="sf-mybase" title="Моя база: нажатие — к капсуле, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button>
+        </div>
+      </div>
+      <div id="sf-slots" aria-label="Отряды"></div>
+    </div>
     <div id="sf-pop" hidden><i class="sf-side"></i><b></b><p></p><small></small><div class="sf-row"><button data-sf-act disabled></button><button data-sf-x aria-label="Закрыть">✕</button></div></div>
-    <div id="sf-hint">Нажмите на клетку — отряд пойдёт туда. По трактам быстрее. Нажмите на деревню, чтобы подойти.</div>
     <div id="sf-say"></div>
   </div>
   <div id="ow" hidden>

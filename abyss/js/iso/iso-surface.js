@@ -247,61 +247,107 @@ AB.IsoSurface = (() => {
     fg.restore();
   }
 
-  // ---------- отряд ----------
-  const party = { c: 0, r: 0, path: [], anim: null, face: 1 };
-  const cap = { c: 0, r: 0 };
-  let pendSite = null, follow = true;
+  // ---------- отряды и база (№140: как на дне) ----------
+  // капсула-батискаф — база: ездит по карте («Вести базу»), внутрь можно войти («Моя база»);
+  // герои выходят из неё в своих экзокостюмах, ходят, возвращаются и стыкуются рядом
+  const BASE_STEP = 0.9, SUIT_STEP = 0.3;            // секунд на клетку дороги (бездорожье — дольше, по цене клетки)
+  const base = { id: 'base', kind: 'base', c: 0, r: 0, path: [], anim: null, face: 1, stride: 0 };
+  const squads = [];                                 // { id, kind: 'squad', vehicle, state: 'home'|'out'|'retreat', c, r, path, anim, face, stride }
+  let sel = 'base', drive = false, pendSite = null, follow = true, flyU = null;
+  const unit = (id) => (id === 'base' ? base : squads.find((s) => s.id === id)) || null;
+  const outSquads = () => squads.filter((s) => s.state !== 'home');
+  const selU = () => { const u = unit(sel); return u && (u === base || u.state !== 'home') ? u : base; };
+  const curCell = (u) => (u.anim ? cell(u.anim.to.c, u.anim.to.r) : cell(u.c, u.r));
+  const VEHICLE = { 'CHAR-001': 'EQUIP-005', 'CHAR-003': 'EQUIP-018' };
+  function syncSquads() {
+    const crew = AB.IsoActs ? AB.IsoActs.crew() : ['CHAR-001'];
+    for (const id of crew) if (VEHICLE[id] && !squads.some((s) => s.id === id)) squads.push({ id, kind: 'squad', vehicle: VEHICLE[id], state: 'home', c: base.c, r: base.r, path: [], anim: null, face: 1, stride: 0 });
+    for (const s of squads) if (s.state === 'home') { s.c = base.c; s.r = base.r; }
+  }
+  const taken = (k, self) => (k.c === base.c && k.r === base.r) || outSquads().some((s) => s !== self && curCell(s) === k);
+  const besideBase = (self) => nbrs(curCell(base)).find((k) => passable(k) && !taken(k, self)) || null;
+  function deploy(id) {
+    const s = unit(id); if (!s || s.state !== 'home') return false;
+    if (base.anim) { say('Капсула в пути — выйти можно, когда остановится'); return false; }
+    const k = besideBase(s); if (!k) { say('Вокруг капсулы нет свободной клетки'); return false; }
+    Object.assign(s, { state: 'out', c: k.c, r: k.r, path: [], anim: null });
+    sel = id; drive = false; flyU = s; follow = true; barSig = '';
+    say(`${AB.ID.get(id).name}: экзокостюм вышел из капсулы`);
+    reveal(); return true;
+  }
+  function dock(s) { Object.assign(s, { state: 'home', path: [], anim: null, c: base.c, r: base.r }); if (sel === s.id) sel = 'base'; barSig = ''; }
+  function recall(id) {
+    const s = unit(id); if (!s || s.state === 'home') return;
+    if (dist(curCell(s), curCell(base)) <= 1 && !s.anim) { dock(s); say(`${AB.ID.get(id).name} — в капсуле`); return; }
+    const p = search(curCell(s), (m) => dist(m, curCell(base)) === 1 && passable(m), (m) => (passable(m) ? cost(m) : Infinity));
+    if (!p) { say('Путь к капсуле перекрыт'); return; }
+    s.path = p; s.state = 'retreat'; barSig = '';
+  }
   function spawn() {
     const home = sites.find((s) => s.kind === 'capital');
     const reach = new Set(); const q = [cell(home.c, home.r)]; reach.add(q[0]);
     while (q.length) { const k = q.pop(); for (const nb of nbrs(k)) if (passable(nb) && !reach.has(nb)) { reach.add(nb); q.push(nb); } }
     const ok = [...reach].filter((k) => !k.site && k.kind !== 'ford' && k.kind !== 'bridge' && k.r >= 4 && k.r <= H - 4 && k.c >= 3 && k.c <= W - 4 && sites.every((s) => dist(s, k) >= 2));
     const k = ok[Math.floor(Math.random() * ok.length)];
-    cap.c = k.c; cap.r = k.r;
-    const nb = nbrs(k).find((m) => passable(m) && !m.site) || k;
-    party.c = nb.c; party.r = nb.r; party.path = []; party.anim = null;
+    Object.assign(base, { c: k.c, r: k.r, path: [], anim: null });
+    squads.length = 0; syncSquads(); sel = 'base'; drive = false;
     reveal();
     return k;
   }
   function reveal() {
     const found = [];
-    for (let r = Math.max(0, party.r - VIEW - 1); r <= Math.min(H - 1, party.r + VIEW + 1); r++) {
-      for (let c = Math.max(0, party.c - VIEW - 1); c <= Math.min(W - 1, party.c + VIEW + 1); c++) {
-        const k = cell(c, r);
-        if (!k.seen && dist(k, party) <= VIEW) { k.seen = true; clearFog(k); if (k.site) found.push(k.site); }
+    for (const u of [base, ...outSquads()]) {
+      for (let r = Math.max(0, u.r - VIEW - 1); r <= Math.min(H - 1, u.r + VIEW + 1); r++) {
+        for (let c = Math.max(0, u.c - VIEW - 1); c <= Math.min(W - 1, u.c + VIEW + 1); c++) {
+          const k = cell(c, r);
+          if (!k.seen && dist(k, u) <= VIEW) { k.seen = true; clearFog(k); if (k.site) found.push(k.site); }
+        }
       }
     }
     if (found.length) say(`Найдено: ${found.map((s) => s.name).join(', ')}`);
   }
-  function goTo(k) {
+  function goTo(u, k) {
     if (!passable(k)) { say(K[k.kind].block); return false; }
-    const from = party.anim ? cell(party.anim.to.c, party.anim.to.r) : cell(party.c, party.r);
-    if (from === k) { party.path = []; if (k.site) showSite(k.site); return true; }
+    const from = curCell(u);
+    if (from === k) { u.path = []; if (k.site) showSite(k.site); return true; }
     const p = search(from, (m) => m === k, (m) => (passable(m) ? cost(m) : Infinity));
     if (!p) { say('Туда не дойти'); return false; }
-    party.path = p; follow = true;
+    if (u.state === 'retreat') u.state = 'out';
+    u.path = p; flyU = u; follow = true; barSig = '';
     return true;
   }
-  function step(dt) {
-    if (!party.anim && party.path.length) {
-      const nx = party.path.shift();
-      party.face = upx(nx.c, nx.r).x >= upx(party.c, party.r).x ? 1 : -1;
-      party.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: 0.24 * cost(nx) };
+  function stepUnit(u, dt) {
+    if (!u.anim && u.path.length) {
+      const nx = u.path.shift();
+      u.face = upx(nx.c, nx.r).x >= upx(u.c, u.r).x ? 1 : -1;
+      u.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: (u === base ? BASE_STEP : SUIT_STEP) * cost(nx) };
     }
-    if (!party.anim) return;
-    party.anim.t += dt / party.anim.dur;
-    if (party.anim.t >= 1) {
-      party.c = party.anim.to.c; party.r = party.anim.to.r; party.anim = null;
-      reveal();
-      if (!party.path.length) { save(); if (pendSite && pendSite.c === party.c && pendSite.r === party.r) { showSite(pendSite); pendSite = null; } }
-    }
+    if (!u.anim) return;
+    u.anim.t += dt / u.anim.dur; u.stride += dt * 90;
+    if (u.anim.t < 1) return;
+    u.c = u.anim.to.c; u.r = u.anim.to.r; u.anim = null;
+    if (u === base) for (const s of squads) if (s.state === 'home') { s.c = base.c; s.r = base.r; }
+    reveal();
+    if (u.path.length) return;
+    barSig = ''; save();
+    if (u.state === 'retreat' && dist(curCell(u), curCell(base)) <= 1) { dock(u); say(`${AB.ID.get(u.id).name} — в капсуле`); return; }
+    if (pendSite && pendSite.u === u && pendSite.s.c === u.c && pendSite.s.r === u.r) { showSite(pendSite.s); pendSite = null; }
   }
-  const partyPos = () => {
-    const a = bpx(party.c, party.r);
-    if (!party.anim) return a;
-    const b = bpx(party.anim.to.c, party.anim.to.r), t = party.anim.t;
+  const posOf = (u) => {
+    const a = bpx(u.c, u.r);
+    if (!u.anim) return a;
+    const b = bpx(u.anim.to.c, u.anim.to.r), t = u.anim.t;
     return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
   };
+  // кто идёт по нажатию: «Вести базу» — капсула; иначе выбранный отряд; нет никого снаружи — выходит первый
+  function mover() {
+    if (drive) return base;
+    const u = selU(); if (u.kind === 'squad') return u;
+    const out = outSquads()[0]; if (out) { sel = out.id; return out; }
+    const s = squads.find((q) => q.state === 'home');
+    if (s && deploy(s.id)) return s;
+    return base;
+  }
 
   // ---------- карточка точки ----------
   const ACT = { capital: 'Предстать перед Хранителем — скоро', village: 'Войти в деревню — скоро', ford: 'Зайти на брод — скоро', shrine: 'Подойти к купели — скоро' };
@@ -345,24 +391,27 @@ AB.IsoSurface = (() => {
     g.imageSmoothingEnabled = true;
     g.setTransform(k, 0, 0, k, cv.width / 2 - cam.x * k, cv.height / 2 - cam.y * k);
     g.drawImage(bake, 0, 0);
-    // капсула
-    { const p = bpx(cap.c, cap.r); drawCapsule(p.x, p.y); }
     g.drawImage(fogCv, 0, 0);
-    // память: всё, что дальше обзора, — приглушено
-    const pp = partyPos();
+    // память: всё, что дальше обзора, — приглушено (вокруг выбранного)
+    const pp = posOf(selU());
     const gr = g.createRadialGradient(pp.x, pp.y, S0 * VIEW * 1.2, pp.x, pp.y, S0 * VIEW * 2.1);
     gr.addColorStop(0, 'rgba(4,6,10,0)'); gr.addColorStop(1, 'rgba(4,6,10,.42)');
     g.fillStyle = gr; g.fillRect(cam.x - cv.width / k, cam.y - cv.height / k, cv.width * 2 / k, cv.height * 2 / k);
     // точки (только открытые)
     for (const s of sites) if (cell(s.c, s.r).seen) drawSite(s);
-    // путь
-    if (party.path.length) {
-      g.strokeStyle = 'rgba(255,226,140,.6)'; g.setLineDash([5, 6]); g.lineWidth = 2.5;
-      g.beginPath(); g.moveTo(pp.x, pp.y); for (const m of party.path) { const p = bpx(m.c, m.r); g.lineTo(p.x, p.y); } g.stroke(); g.setLineDash([]);
-      const e = party.path[party.path.length - 1], p = bpx(e.c, e.r);
-      g.strokeStyle = 'rgba(255,226,140,.9)'; hexPath(p.x, p.y, S0 * 0.7, g); g.stroke();
+    // пути: у выбранного — ярче
+    for (const u of [base, ...outSquads()]) {
+      if (!u.path.length) continue;
+      const me = u === selU(), from = posOf(u);
+      g.strokeStyle = me ? 'rgba(255,226,140,.65)' : 'rgba(255,226,140,.25)'; g.setLineDash([5, 6]); g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(from.x, from.y); for (const m of u.path) { const p = bpx(m.c, m.r); g.lineTo(p.x, p.y); } g.stroke(); g.setLineDash([]);
+      const e = u.path[u.path.length - 1], p = bpx(e.c, e.r);
+      g.strokeStyle = me ? 'rgba(255,226,140,.9)' : 'rgba(255,226,140,.35)'; hexPath(p.x, p.y, S0 * 0.7, g); g.stroke();
     }
-    drawParty(pp.x, pp.y);
+    // кольцо под выбранным
+    { const u = selU(), p = posOf(u); g.strokeStyle = drive ? 'rgba(255,210,120,.95)' : 'rgba(94,230,255,.9)'; g.lineWidth = 2; g.beginPath(); g.ellipse(p.x, p.y + 4, S0 * (u === base ? 0.85 : 0.5), S0 * (u === base ? 0.36 : 0.22), 0, 0, 7); g.stroke(); }
+    // база и отряды — сверху вниз, чтобы ближние перекрывали дальних
+    [base, ...outSquads()].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : drawSquad(u, p.x, p.y)));
     // подписи — постоянного размера на экране
     const fs = 11 * dpr / k;
     g.textAlign = 'center'; g.font = `600 ${fs}px "Share Tech Mono", monospace`;
@@ -374,25 +423,30 @@ AB.IsoSurface = (() => {
       g.fillStyle = s.side === 'desert' ? '#ffe2a8' : s.side === 'swamp' ? '#c6f0a8' : s.side === 'exit' ? '#9fe7ff' : '#e6e0d6'; g.fillText(t, p.x, y);
     }
   }
-  function drawCapsule(x, y) {
+  // №140: батискаф-база — та же картинка, что на дне (assets/seabed/base-capsule*.webp)
+  const baseImg = new Image(); baseImg.src = 'assets/seabed/base-capsule.webp';
+  const moveImg = new Image(); moveImg.src = 'assets/seabed/base-capsule-move.webp';
+  function drawBase(x, y) {
+    if (baseImg.complete && baseImg.naturalWidth) {
+      const w = S0 * SQ3 * 1.55, h = baseImg.naturalHeight * w / baseImg.naturalWidth;
+      const bob = base.anim ? Math.sin(time * 3) * S0 * 0.04 : 0;
+      g.fillStyle = 'rgba(0,0,0,.4)'; g.beginPath(); g.ellipse(x, y + S0 * 0.1, w * 0.4, w * 0.4 * TILT * 0.45, 0, 0, 7); g.fill();
+      const x0 = x - w / 2, y0 = y + S0 * 0.25 - h * 0.99 + bob, k = w / 1376;
+      if ((base.anim || base.path.length) && moveImg.complete && moveImg.naturalWidth) g.drawImage(moveImg, x0 - 50 * k, y0 - 2 * k, 1536 * k, 1024 * k);
+      else g.drawImage(baseImg, x0, y0, w, h);
+      return;
+    }
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x, y + 6, S0 * 0.7, S0 * 0.22, 0, 0, 7); g.fill();
     g.fillStyle = '#c9a24a'; g.beginPath(); g.ellipse(x, y, S0 * 0.62, S0 * 0.32, -0.25, 0, 7); g.fill();
-    g.fillStyle = '#8a6e30'; g.beginPath(); g.ellipse(x, y + 4, S0 * 0.62, S0 * 0.16, -0.25, 0, Math.PI); g.fill();
-    for (let i = -1; i <= 1; i++) { g.fillStyle = `rgba(94,230,255,${0.5 + 0.4 * Math.sin(time * 3 + i)})`; g.beginPath(); g.arc(x + i * S0 * 0.22, y - 2 - i * 3, 2.4, 0, 7); g.fill(); }
+    for (let i = -1; i <= 1; i++) { g.fillStyle = '#5ee6ff'; g.beginPath(); g.arc(x + i * S0 * 0.22, y - 2 - i * 3, 2.4, 0, 7); g.fill(); }
   }
-  function drawParty(x, y) {
-    const moving = !!party.anim, bob = moving ? Math.abs(Math.sin(time * 10)) * 2.5 : 0;
-    g.strokeStyle = 'rgba(255,226,140,.8)'; g.lineWidth = 2; g.beginPath(); g.ellipse(x, y + 4, S0 * 0.62, S0 * 0.26, 0, 0, 7); g.stroke();
-    const fig = (dx, body, visor, h, ph) => {
-      const b = moving ? Math.abs(Math.sin(time * 10 + ph)) * 2.5 : bob;
-      g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + dx, y + 4, 7, 3, 0, 0, 7); g.fill();
-      g.fillStyle = body; g.beginPath(); g.roundRect(x + dx - 6, y - h - b, 12, h, 4); g.fill();
-      g.fillStyle = '#20262a'; g.fillRect(x + dx - 5, y - 4 - b, 4, 6); g.fillRect(x + dx + 1, y - 4 - b, 4, 6);
-      g.fillStyle = body; g.beginPath(); g.arc(x + dx, y - h - 4 - b, 6.5, 0, 7); g.fill();
-      g.fillStyle = visor; g.beginPath(); g.ellipse(x + dx + 2 * party.face, y - h - 4 - b, 3.6, 2.6, 0, 0, 7); g.fill();
-    };
-    fig(-7 * party.face, '#d8dde0', '#9fe7ff', 16, 1.3);      // доктор Хейл
-    fig(6 * party.face, '#c9853a', '#5ee6ff', 20, 0);         // Марк
+  // герой в экзокостюме — той же фигурой, что на дне (AB.IsoSuit)
+  function drawSquad(s, x, y) {
+    if (s.state === 'retreat') g.globalAlpha = 0.8;
+    const pose = { id: s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: -1, hurt: 0, dead: false, t: time };
+    if (AB.IsoSuit && AB.RIGS && AB.RIGS.EXOSUIT) AB.IsoSuit.draw(g, pose, x, y + S0 * 0.2, (S0 * 1.3) / AB.RIGS.EXOSUIT.height);
+    else { g.fillStyle = '#c9853a'; g.beginPath(); g.arc(x, y - 10, 8, 0, 7); g.fill(); }
+    g.globalAlpha = 1;
   }
   function drawSite(s) {
     const p = bpx(s.c, s.r), x = p.x, y = p.y, u = S0;
@@ -444,8 +498,9 @@ AB.IsoSurface = (() => {
   function loop(now) {
     if (!open_) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
-    step(dt);
-    if (follow) { const p = partyPos(); cam.x += (p.x - cam.x) * Math.min(1, dt * 5); cam.y += (p.y - cam.y) * Math.min(1, dt * 5); clampCam(); }
+    stepUnit(base, dt); for (const s of outSquads()) stepUnit(s, dt);
+    barUi();
+    if (follow) { const p = posOf(flyU || selU()); cam.x += (p.x - cam.x) * Math.min(1, dt * 5); cam.y += (p.y - cam.y) * Math.min(1, dt * 5); clampCam(); }
     draw();
     requestAnimationFrame(loop);
   }
@@ -459,15 +514,93 @@ AB.IsoSurface = (() => {
   function tap(k) {
     hidePop();
     if (!k) return;
-    if (k.c === cap.c && k.r === cap.r && dist(k, party) <= 1 && !party.path.length) { say('Капсула — спасательный модуль. Уйти обратно под воду пока нельзя'); return; }
-    if (k.site) {                 // точка (даже ещё не открытая) — подойти и показать карточку
-      pendSite = k.site;
-      if (!party.anim && party.c === k.c && party.r === k.r) { showSite(k.site); pendSite = null; return; }
-      goTo(k); return;
+    // нажали на капсулу: выбран отряд снаружи — вернуть его; иначе — выбрать капсулу
+    if (k === curCell(base)) {
+      const u = selU();
+      if (u.kind === 'squad') { recall(u.id); return; }
+      sel = 'base'; flyU = base; follow = true; barSig = ''; say('Капсула. «Вести базу» — ехать на ней; удерживайте «Моя база» — масштаб карты'); return;
     }
-    pendSite = null;
-    if (!k.seen && !passable(k)) { say('Там ещё никто не был'); return; }
-    goTo(k);
+    // нажали на своего героя — выбрать его
+    const s = outSquads().find((q) => curCell(q) === k);
+    if (s) { sel = s.id; drive = false; flyU = s; follow = true; barSig = ''; return; }
+    if (!k.site && !k.seen && !passable(k)) { say('Там ещё никто не был'); return; }
+    const u = mover();
+    pendSite = k.site ? { s: k.site, u } : null;
+    if (k.site && !u.anim && u.c === k.c && u.r === k.r) { showSite(k.site); pendSite = null; return; }
+    goTo(u, k);
+  }
+  // ---------- нижняя панель: «Моя база» (с веером масштаба), «Вести базу», ячейки отрядов ----------
+  const STATE = { home: 'в капсуле', out: 'снаружи', retreat: 'возвращается' };
+  let barSig = '';
+  function barUi() {
+    const mb = document.getElementById('sf-mybase'); if (!mb) return;
+    mb.classList.toggle('on', drive);
+    mb.querySelector('span').textContent = base.anim || base.path.length ? 'База в пути' : 'Моя база';
+    const dr = document.querySelector('[data-sf-drive]'); dr.classList.toggle('on', drive); dr.querySelector('b').textContent = drive ? 'вкл' : 'выкл';
+    const slots = [];
+    for (const q of squads) {
+      const c = AB.Chars.get(q.id), d = AB.ID.get(q.id), hp = c && d.stats ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
+      const st = q.state === 'out' && (q.anim || q.path.length) ? 'в пути' : STATE[q.state];
+      const on = sel === q.id && q.state !== 'home';
+      const back = on && q.state === 'out' ? '<button data-do="back" title="Вернуть в капсулу">↩</button>' : '';
+      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${q.id}"></canvas><img src="assets/exosuit/v2/body.png" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}</div>`);
+    }
+    if (!squads.length) slots.push('<div class="ow-slot lock"><span>Нет экзокостюмов</span></div>');
+    const sig = slots.join('') + sel + drive;
+    if (sig === barSig) return;
+    barSig = sig;
+    const el = document.getElementById('sf-slots'); el.innerHTML = slots.join('');
+    if (AB.IsoRender && AB.IsoRender.portrait) for (const c2 of el.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(c2, c2.dataset.pt, 1);
+  }
+  // войти в капсулу: отряды стыкуются, карта закрывается; выйдя из капсулы — снова здесь (iso-acts: leaveBase)
+  function enterBase() {
+    for (const q of squads) if (q.state !== 'home') dock(q);
+    save(); close();
+    AB.IsoActs.enterBase();
+  }
+  function myBaseTap() {
+    const c = posOf(base), centred = Math.hypot(c.x - cam.x, c.y - cam.y) < S0 * 0.8 && follow && flyU === base;
+    if (!centred) { sel = drive ? 'base' : sel; flyU = base; follow = true; barSig = ''; return; }
+    enterBase();
+  }
+  // №140: веер на «Моя база» (нажать, держать, потянуть — как у способностей героя): масштаб карты
+  const FAN = [
+    { key: 'troops', label: 'Войска', z: 1.7 },
+    { key: 'village', label: 'Деревня', z: 1.05 },
+    { key: 'city', label: 'Город', z: 0.62 },
+    { key: 'world', label: 'Мир', z: 0 },
+  ];
+  function scaleTo(f) {
+    if (f.key === 'world') { follow = false; setZoom(0); }
+    else { setZoom(f.z); follow = true; flyU = f.key === 'troops' ? selU() : flyU; }
+    say(`Масштаб: ${f.label}`);
+  }
+  function fanInit() {
+    const mb = document.getElementById('sf-mybase'), fan = document.getElementById('sf-fan');
+    let st = null;
+    const items = () => [...fan.querySelectorAll('[data-fan]')];
+    const hit = (x, y) => items().find((el) => { const r = el.getBoundingClientRect(); return x >= r.left - 8 && x <= r.right + 8 && y >= r.top - 8 && y <= r.bottom + 8; });
+    mb.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); mb.setPointerCapture(e.pointerId);
+      st = { x: e.clientX, y: e.clientY, open: false, t: setTimeout(() => { if (st) { st.open = true; fan.hidden = false; document.body.classList.add('sf-fan'); } }, 280) };
+    });
+    mb.addEventListener('pointermove', (e) => {
+      if (!st) return;
+      if (!st.open && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 10) { st.open = true; fan.hidden = false; document.body.classList.add('sf-fan'); }
+      if (st.open) { const h = hit(e.clientX, e.clientY); for (const el of items()) el.classList.toggle('hot', el === h); }
+    });
+    const end = (e) => {
+      if (!st) return;
+      clearTimeout(st.t);
+      const wasOpen = st.open, h = wasOpen && e.type === 'pointerup' ? hit(e.clientX, e.clientY) : null;
+      st = null; fan.hidden = true; document.body.classList.remove('sf-fan'); for (const el of items()) el.classList.remove('hot');
+      if (h) scaleTo(FAN.find((f) => f.key === h.dataset.fan));
+      else if (!wasOpen && e.type === 'pointerup') myBaseTap();
+    };
+    mb.addEventListener('pointerup', end); mb.addEventListener('pointercancel', end);
+    mb.addEventListener('click', (e) => e.preventDefault());
+    // и простым нажатием по пункту, если веер открыт
+    fan.addEventListener('click', (e) => { const b = e.target.closest('[data-fan]'); if (b) { fan.hidden = true; scaleTo(FAN.find((f) => f.key === b.dataset.fan)); } });
   }
   let inited = false;
   function init() {
@@ -503,21 +636,28 @@ AB.IsoSurface = (() => {
       if (e.target.closest('[data-sf-me]')) { follow = true; if (zoomK < 0.9) setZoom(1); }
       if (e.target.closest('[data-sf-all]')) { if (zoomK > minZoom() + 0.01) { follow = false; setZoom(0); } else { setZoom(1); follow = true; } }
       if (e.target.closest('[data-sf-items]')) AB.IsoInventory.open();
+      if (e.target.closest('[data-sf-drive]')) { drive = !drive; if (drive) { sel = 'base'; flyU = base; say('Вести базу: вкл — нажмите на клетку, капсула поедет туда'); } else say('Вести базу: выкл'); barSig = ''; }
+      const bk = e.target.closest('[data-do="back"]'), sl = e.target.closest('[data-u]');
+      if (bk && sl) { recall(sl.dataset.u); return; }
+      if (sl) { const q = unit(sl.dataset.u); if (!q) return; drive = false; if (q.state === 'home') deploy(q.id); else { sel = q.id; flyU = q; follow = true; barSig = ''; } }
     });
     window.addEventListener('resize', () => { if (open_) fit(); });
+    fanInit();
   }
   function say(t) { const el = document.getElementById('sf-say'); if (!el) return; el.textContent = t; el.classList.add('show'); clearTimeout(say.t); say.t = setTimeout(() => el.classList.remove('show'), 2200 + t.length * 40); }
 
   // ---------- сохранение (только эта зона) ----------
   function save() {
-    try { localStorage.setItem(SAVE, JSON.stringify({ p: [party.c, party.r], cap: [cap.c, cap.r], seen: cells.filter((k) => k.seen).map((k) => idx(k.c, k.r)) })); } catch (e) { /* нет хранилища — не беда */ }
+    try { localStorage.setItem(SAVE, JSON.stringify({ base: [base.c, base.r], sq: squads.map((q) => [q.id, q.state === 'home' ? 'home' : 'out', curCell(q).c, curCell(q).r]), seen: cells.filter((k) => k.seen).map((k) => idx(k.c, k.r)) })); } catch (e) { /* нет хранилища — не беда */ }
   }
   function load() {
     try {
-      const s = JSON.parse(localStorage.getItem(SAVE) || 'null'); if (!s) return false;
-      party.c = s.p[0]; party.r = s.p[1]; cap.c = s.cap[0]; cap.r = s.cap[1];
+      const s = JSON.parse(localStorage.getItem(SAVE) || 'null'); if (!s || !s.base) return false;
+      Object.assign(base, { c: s.base[0], r: s.base[1], path: [], anim: null });
+      squads.length = 0; syncSquads();
+      for (const [id, state, c, r] of s.sq || []) { const q = unit(id); if (q && state === 'out' && passable(cell(c, r))) Object.assign(q, { state: 'out', c, r }); }
       for (const i of s.seen) if (cells[i] && !cells[i].seen) { cells[i].seen = true; clearFog(cells[i]); }
-      return passable(cell(party.c, party.r));
+      return passable(cell(base.c, base.r));
     } catch (e) { return false; }
   }
 
@@ -529,26 +669,28 @@ AB.IsoSurface = (() => {
     if (AB.IsoOverworld && AB.IsoOverworld.isOpen()) AB.IsoOverworld.close();
     for (const id of ['iso-act', 'iso-inv']) { const el = document.getElementById(id); if (el) el.hidden = true; }
     if (fresh || !load()) spawn();
+    syncSquads(); barSig = '';
     save();
     hidePop();
     open_ = true; document.getElementById('sf').hidden = false;
     document.body.classList.add('sf-on');
-    fit(); const p = partyPos(); cam.x = p.x; cam.y = p.y; follow = true;
+    fit(); flyU = selU(); const p = posOf(flyU); cam.x = p.x; cam.y = p.y; follow = true; inZone = true;
     last = performance.now(); requestAnimationFrame(loop);
     if (AB.Flags) AB.Flags.add('zone-a1');
     AB.Bus.emit('surface:enter', { zone: D().id });
-    const hereSide = cell(party.c, party.r).side === 'desert' ? 'пустыня Домов Песка' : 'болота Детей Хора';
-    if (fresh) say(`Капсулу вынесло на сушу — зона A1. Вокруг ${hereSide}. На западе — Цитадель Кадзэ, на востоке — Купель Хора`);
+    const hereSide = cell(base.c, base.r).side === 'desert' ? 'пустыня Домов Песка' : 'болота Детей Хора';
+    if (fresh) say(`Капсулу вынесло на сушу — зона A1, вокруг ${hereSide}. Нажмите на клетку — герой выйдет в экзокостюме; «Вести базу» — ехать капсулой`);
   }
+  let inZone = false;           // отряд уже на поверхности: из капсулы выходим сюда, а не на дно
   function close() { open_ = false; const el = document.getElementById('sf'); if (el) el.hidden = true; document.body.classList.remove('sf-on'); }
 
   return {
-    enter, close, isOpen: () => open_, say,
+    enter, close, isOpen: () => open_, say, active: () => inZone, enterBase, deploy, recall,
     revealAll() { for (const k of cells) if (!k.seen) { k.seen = true; clearFog(k); } save(); },
     zoom: (z) => setZoom(z),
     // для проверок
-    _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => party, _cap: () => cap,
-    _goTo: (c, r) => goTo(cell(c, r)), _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _passable: (c, r) => passable(cell(c, r)),
+    _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
+    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(FAN.find((f) => f.key === key)), _passable: (c, r) => passable(cell(c, r)),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
   };
 })();

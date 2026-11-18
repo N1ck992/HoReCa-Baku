@@ -83,7 +83,7 @@ AB.IsoDev = (() => {
       weapons: ARMS, stash: [['ITEM-005', 2], ['ITEM-009', 1], ...RES],
       dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked', 'recruit', 'module', 'surface-ready', 'mira-fled', 'surfaced'],
       quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), ['QUEST-009', { stage: 1, status: 'active' }]],
-      after: () => { AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-002'], built: ['MOD-003'] }); AB.IsoSurface.enter(true); },
+      after: () => { AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-003'], built: ['MOD-003'] }); AB.IsoSurface.enter(true); },
     }) },
   ];
 
