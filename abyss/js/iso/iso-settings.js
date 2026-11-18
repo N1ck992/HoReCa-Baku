@@ -43,7 +43,8 @@ AB.IsoSettings = (() => {
   function init() {
     const el = document.getElementById('iso-set'), btn = document.getElementById('iso-set-btn');
     if (!el || !btn) return;
-    btn.addEventListener('pointerdown', (e) => e.stopPropagation()); btn.addEventListener('click', open);
+    // №141: ⚙ есть и на картах (дно, поверхность) — [data-set-open]
+    for (const b of [btn, ...document.querySelectorAll('[data-set-open]')]) { b.addEventListener('pointerdown', (e) => e.stopPropagation()); b.addEventListener('click', open); }
     el.addEventListener('pointerdown', (e) => e.stopPropagation());
     el.addEventListener('click', (e) => { if (e.target.closest('[data-set-close]') || e.target === el) el.hidden = true; });
     el.addEventListener('input', (e) => {

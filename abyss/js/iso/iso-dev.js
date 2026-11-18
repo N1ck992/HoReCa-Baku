@@ -79,11 +79,18 @@ AB.IsoDev = (() => {
     }) },
     // №135: поверхность — сразу в зону A1 (случайная точка)
     { id: 'sf-a1', group: 'Поверхность', name: 'Зона A1 (после всплытия, случайная точка)', st: () => ({
-      sector: 'SECTOR-003', at: { x: 72.5, y: 28.5 }, party: ['CHAR-001', 'CHAR-002'], story: A3, equipment: EQ3, power: true,
+      sector: 'SECTOR-003', at: { x: 72.5, y: 28.5 }, party: ['CHAR-001', 'CHAR-003'], story: A3, equipment: EQ3, power: true,
       weapons: ARMS, stash: [['ITEM-005', 2], ['ITEM-009', 1], ...RES],
-      dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked', 'recruit', 'module', 'surface-ready', 'mira-fled', 'surfaced'],
-      quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), ['QUEST-009', { stage: 1, status: 'active' }]],
-      after: () => { AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-003'], built: ['MOD-003'] }); AB.IsoSurface.enter(true); },
+      dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked', 'recruit', 'module', 'surface-ready', 'mira-fled', 'surfaced', 'lens'],
+      quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), done('QUEST-009'), done('QUEST-010')],   // акт III пройден целиком
+      after: () => {
+        AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-003'], built: ['MOD-003'] });
+        // как после бегства Миры (iso-mira.js: escape): Миры в экипаже нет, Хейл — в отряде со своим инжектором
+        const m = AB.IsoParty.find('CHAR-002'); if (m) { m.hidden = true; m.sector = 'SECTOR-000'; }
+        const h = AB.Chars.get('CHAR-003'); if (h) { h.controllable = true; h.follow = 'CHAR-001'; }
+        if (AB.Inventory.weapon && !AB.Inventory.weapon('CHAR-003')) AB.Inventory.add('CHAR-003', 'ITEM-023', 1, { swap: false });
+        AB.IsoSurface.enter(true);
+      },
     }) },
   ];
 

@@ -90,17 +90,20 @@
     <canvas id="sf-map" aria-label="Поверхность: зона A1, карта из шестиугольников"></canvas>
     <div id="sf-top"><b>Зона A1 · Поверхность</b><span>Пустошь Домов Песка ↔ Топи Детей Хора</span>
       <div id="sf-legend"><span class="desert">◀ A4 · Пустыня — Дома Песка</span><span class="swamp">Болота — Дети Хора · A2 ▶</span></div></div>
-    <div id="sf-btns"><button data-sf-items title="Инвентарь отряда">▤</button><button id="sf-dev" data-dev-open title="Админ-панель">DEV</button></div>
+    <div id="sf-btns" class="map-btns"><button data-set-open title="Настройки">⚙</button><button class="map-dev" data-dev-open title="Админ-панель">DEV</button></div>
     <!-- №140: нижняя панель как на дне: «Моя база» (нажать — к капсуле, ещё раз — войти; держать и потянуть — веер масштаба), «Вести базу», ячейки отрядов -->
     <div id="sf-bar">
       <div id="sf-left">
-        <button data-sf-drive class="ow-mini" title="Вести капсулу по карте: вкл/выкл">⇄ Вести базу: <b>выкл</b></button>
-        <div id="sf-mbwrap">
-          <div id="sf-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div>
-          <button id="sf-mybase" title="Моя база: нажатие — к капсуле, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button>
+        <div id="sf-above"><button data-sf-drive class="ow-mini" title="Вести капсулу по карте: вкл/выкл">⇄ Вести базу: <b>выкл</b></button></div>
+        <div id="sf-row">
+          <div class="mb-wrap"><div class="map-fan" id="sf-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div><button id="sf-mybase" title="Моя база: нажатие — к капсуле, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button></div>
+          <button data-sf-items class="map-inv" title="Инвентарь отряда">▤</button>
         </div>
       </div>
-      <div id="sf-slots" aria-label="Отряды"></div>
+      <div id="sf-right">
+        <button data-sf-all class="ow-mini" title="Выбрать весь отряд снаружи: нажатие на клетку ведёт всех">◎ Отряд</button>
+        <div id="sf-slots" aria-label="Отряды"></div>
+      </div>
     </div>
     <div id="sf-pop" hidden><i class="sf-side"></i><b></b><p></p><small></small><div class="sf-row"><button data-sf-act disabled></button><button data-sf-x aria-label="Закрыть">✕</button></div></div>
     <div id="sf-say"></div>
@@ -119,8 +122,9 @@
           <button data-ow="surface" class="ow-mini up" hidden title="Всплыть на поверхность">⇧ Всплыть</button>
         </div>
         <div id="ow-row">
-          <button id="ow-mybase" title="Моя база: первое нажатие — к базе, повторное — войти"><i class="cap"></i><span>Моя база</span></button>
-          <div id="ow-menu"><button data-ow="items" title="Инвентарь отряда"><i>▤</i><span>Инвентарь</span></button></div>
+          <!-- №141: «Моя база» с веером масштаба и маленький значок инвентаря — как на поверхности -->
+          <div class="mb-wrap"><div class="map-fan" id="ow-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div><button id="ow-mybase" title="Моя база: нажатие — к базе, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button></div>
+          <button data-ow="items" class="map-inv" title="Инвентарь отряда">▤</button>
         </div>
       </div>
       <div id="ow-right">
@@ -128,7 +132,7 @@
         <div id="ow-slots" aria-label="Отряды"></div>
       </div>
     </div>
-    <button id="ow-dev" data-dev-open title="Админ-панель">DEV</button>
+    <div id="ow-btns" class="map-btns"><button data-set-open title="Настройки">⚙</button><button class="map-dev" data-dev-open title="Админ-панель">DEV</button></div>
     <!-- №88: маленькое окошко у точки (вместо большой карточки) -->
     <div id="ow-pop" hidden><b></b><button id="ow-act"></button><button id="ow-pop-x" aria-label="Закрыть">✕</button></div>
     <div id="ow-hint">Выберите карточку справа внизу и нажмите на клетку — туда пойдёт отряд или капсула. Нажмите на тварь — отряд подойдёт и ударит.</div>
@@ -206,6 +210,7 @@
   <script src="js/iso/iso-map.js"></script>
   <script src="js/iso/iso-nest.js"></script>
   <script src="js/iso/iso-boss.js"></script>
+  <script src="js/iso/iso-mapui.js"></script>
   <script src="js/iso/iso-overworld.js"></script>
   <script src="js/data/surface-a1.js"></script>
   <script src="js/iso/iso-surface.js"></script>

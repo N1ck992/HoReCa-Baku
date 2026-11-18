@@ -259,13 +259,6 @@ AB.IsoOverworld = (() => {
     bar.addEventListener('click', (e) => {
       const m = e.target.closest('[data-ow]'), b = e.target.closest('[data-do]'), c = e.target.closest('[data-u]');
       // №70: «Моя база» — первое нажатие подлетает к базе; если она уже в центре (или нажали повторно) — войти внутрь
-      if (e.target.closest('#ow-mybase')) {
-        if (mode !== 'capsule') { say('База появится вместе с капсулой'); return; }
-        const c = curPos(base), centred = Math.hypot(c.x - cam.x, c.y - cam.y) < size * 0.6;
-        if (!centred && fly !== base) { flyTo(base); squadsSig = ''; return; }
-        for (const s of squads) if (s.state !== 'home') dock(s);
-        AB.IsoActs.enterBase(); return;
-      }
       if (m) {
         const k = m.dataset.ow;
         // «Вести базу» — переключатель: включён — нажатие на клетку ведёт капсулу; камеру не двигает
@@ -287,8 +280,23 @@ AB.IsoOverworld = (() => {
         squadsSig = ''; flyTo(selU());
       }
     });
+    // №141: «Моя база» — короткое нажатие как раньше; удерживать и потянуть — веер масштаба (как на поверхности)
+    AB.IsoMapUI.fan(document.getElementById('ow-mybase'), document.getElementById('ow-fan'), { tap: myBaseTap, pick: scaleTo });
     window.addEventListener('keydown', (e) => { if (open_ && e.code === 'Escape') { pend = null; onSite = undefined; } });
     window.addEventListener('resize', () => { if (open_) fit(); });
+  }
+  function myBaseTap() {
+    if (mode !== 'capsule') { say('База появится вместе с капсулой'); return; }
+    const c = curPos(base), centred = Math.hypot(c.x - cam.x, c.y - cam.y) < size * 0.6;
+    if (!centred && fly !== base) { flyTo(base); squadsSig = ''; return; }
+    for (const s of squads) if (s.state !== 'home') dock(s);
+    AB.IsoActs.enterBase();
+  }
+  const SCALE = { troops: 1.6, village: 1, city: 0.7, world: 0 };
+  function scaleTo(key) {
+    setZoom(SCALE[key]);
+    if (key === 'world') { fly = null; cam.x = 0; cam.y = 0; clampCam(); } else flyTo(key === 'troops' ? selU() : fly || selU());
+    say(`Масштаб: ${AB.IsoMapUI.label(key)}`);
   }
   // нажали на клетку: выбранный отряд идёт туда (на тварь — подходит и бьёт); выбрана база — ведём капсулу
   let selAll = false, drive = false;
