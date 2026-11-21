@@ -1,0 +1,20 @@
+{
+  "rig": "CHAR001",
+  "height_units": 120,
+  "out_dir": "assets/char001/v2",
+  "js_out": "js/data/rigs/CHAR001.js",
+  "background": "green",
+  "variants": {
+    "01": { "image": "assets/source/CHAR001-01.png" },
+    "02": { "image": "assets/source/CHAR001-02.png" }
+  },
+  "points": {
+    "crown": [0, 0], "neck": [0, 0], "hip": [0, 0],
+    "shoulder_near": [0, 0], "elbow_near": [0, 0], "wrist_near": [0, 0], "hand_near": [0, 0],
+    "shoulder_far": [0, 0], "elbow_far": [0, 0], "wrist_far": [0, 0], "hand_far": [0, 0],
+    "knee_near": [0, 0], "ankle_near": [0, 0], "toe_near": [0, 0],
+    "knee_far": [0, 0], "ankle_far": [0, 0], "toe_far": [0, 0],
+    "sole_y": 0
+  },
+  "radius": { "head": 110, "torso": 100, "arm": 58, "leg": 82 }
+}

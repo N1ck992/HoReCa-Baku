@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ABYSS Изометрия</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oswald:wght@500;700&display=swap">
+  <link rel="stylesheet" href="css/iso.css">
+</head>
+<body>
+  <!-- Этап 1 перехода на изометрию (дополнение №45): тестовая сцена.
+       Старая игра (вид сбоку) — index.html, не меняется. -->
+  <canvas id="iso" aria-label="Изометрическая игровая сцена"></canvas>
+
+  <div id="iso-hud">
+    <div id="iso-room" aria-live="polite"></div>
+    <div id="iso-quest" aria-live="polite"></div>
+  </div>
+  <!-- герои — справа внизу; нажатие — окно героя (снаряжение, здоровье) -->
+  <div id="iso-party" aria-label="Отряд"></div>
+  <div id="iso-tools">
+    <button id="iso-fs" title="На весь экран (временно, пока игра не стала приложением)">⛶</button>
+    <div id="iso-zoom" aria-label="Камера"><button data-z="-0.15" title="Отдалить (−, колесо, щипок)">−</button><button data-z="0.15" title="Приблизить (+, колесо, щипок)">+</button></div>
+    <button id="iso-inv-btn" title="Инвентарь (I, Tab)">Инвентарь</button>
+    <button id="iso-dev-btn" data-dev-open title="Админ-панель: режим разработчика, переходы по актам">DEV</button>
+    <button id="iso-snd" hidden title="Звук — в настройках (⚙)">🔊</button>
+    <button id="iso-set-btn" title="Настройки: стрельба и чувствительность прицела">⚙</button>
+    <button id="iso-patch" hidden title="Обновить игру файлом патча">Патч</button>
+    <button id="iso-restart-top" title="Начать прохождение бункера сначала">Заново</button>
+    <a id="iso-back" href="index.html" title="Вернуться к игре (вид сбоку)">Вид сбоку</a>
+  </div>
+  <canvas id="iso-map" aria-label="Карта сектора (нажмите — крупнее)"></canvas>
+  <div id="iso-prompt" role="button" aria-live="polite"></div>
+  <div id="iso-toast" aria-live="polite"></div>
+  <div id="iso-reward" hidden aria-live="polite"></div>
+  <div id="iso-actbtns"><button id="iso-btn-dash" aria-label="Рывок">»</button><button id="iso-btn-atk" aria-label="Удар">⚔</button></div>
+  <div id="echo-msg" hidden role="status" aria-live="polite"></div>
+  <!-- №87: на телефоне игра — горизонтально -->
+  <div id="iso-rotate" hidden role="dialog" aria-label="Поверните телефон">
+    <div class="rt-card"><i class="rt-phone"></i><b>Поверните телефон горизонтально</b><span>Игра рассчитана на широкий экран: так помещаются все кнопки и удобнее управлять</span>
+      <button id="rt-go">На весь экран и повернуть</button><button id="rt-skip" class="rt-skip">Играть вертикально</button></div>
+  </div>
+  <div id="iso-inv" hidden>
+    <div class="inv-card" role="dialog" aria-label="Инвентарь">
+      <div class="inv-head">
+        <div><h2>Инвентарь</h2><div class="muted" id="iso-inv-owner"></div></div>
+        <button class="inv-x" data-inv-close aria-label="Закрыть">✕</button>
+      </div>
+      <div class="inv-body"><div id="iso-inv-grid"></div><div id="iso-inv-detail"></div></div>
+    </div>
+  </div>
+  <!-- №71: база-капсула — ресурсы, стройка, экипаж, карточки устройств -->
+  <div id="bx" hidden>
+    <div id="bx-res" aria-label="Материалы базы"></div>
+    <div id="bx-bar"><div id="bx-home"><button id="bx-mybase" title="Выйти из базы на карту дна"><i class="cap"></i><span>Выйти</span></button></div><button id="bx-build" title="Режим стройки">Стройка</button><button id="bx-crew" title="Экипаж и списки работ">Экипаж</button><button id="bx-sci" title="Исследования">Наука</button></div>
+    <div id="bx-cat" hidden></div>
+    <div id="bx-ghost" hidden></div>
+    <div id="bx-confirm" hidden><b class="nm"></b><div class="bt"><button class="no" data-b="cancel" aria-label="Отмена">✕</button><button class="rot" data-b="rot" aria-label="Повернуть">⟳</button><button class="yes" data-b="ok" aria-label="Построить">✓</button></div></div>
+    <div id="bx-card" hidden></div>
+  </div>
+  <div id="iso-dialog" hidden role="dialog" aria-live="polite">
+    <canvas class="pt l" aria-hidden="true"></canvas><canvas class="pt r" aria-hidden="true"></canvas>
+    <div class="tx"></div>
+  </div>
+  <!-- телефон: джойстик слева снизу (№55) -->
+  <div id="iso-stick" hidden aria-label="Джойстик"><i></i></div>
+  <button id="iso-skip" hidden>Пропустить сцену ▸▸</button>
+  <div id="iso-hero" hidden><div class="inv-card" id="iso-hero-body" role="dialog" aria-label="Герой"></div></div>
+  <div id="iso-nest" hidden aria-live="polite"></div>
+  <div id="iso-perks" hidden role="dialog" aria-label="Выбор улучшения">
+    <div class="perk-card"><div class="act-no">Новый уровень</div><h2>Выберите улучшение</h2><div class="perk-list"></div></div>
+  </div>
+  <div id="iso-act" hidden>
+    <div class="act-card">
+      <div class="act-no">Конец первого акта</div>
+      <h2>Тишина на дне</h2>
+      <p>Марк закрывает забрало. Впереди — три тысячи метров чёрной воды и ответ на вопрос, кто отправил сигнал.</p>
+      <p class="act-next">Акт II · «Петля» — выход за борт в экзокостюме</p>
+      <button id="iso-act-out">Продолжить</button>
+      <button id="iso-act-new" class="danger">Начать заново</button>
+    </div>
+  </div>
+  <!-- Выход за борт (№54, прототип): дно океана, карта из шестиугольников -->
+  <!-- №135: поверхность, зона A1 -->
+  <div id="sf" hidden>
+    <canvas id="sf-map" aria-label="Поверхность: зона A1, карта из шестиугольников"></canvas>
+    <div id="sf-top"><b>Зона A1 · Поверхность</b><span>Пустошь Домов Песка ↔ Топи Детей Хора</span>
+      <div id="sf-legend"><span class="desert">◀ A4 · Пустыня — Дома Песка</span><span class="swamp">Болота — Дети Хора · A2 ▶</span></div><em id="sf-goal"></em></div>
+    <div id="sf-btns" class="map-btns"><button data-fs title="На весь экран">⛶</button><button data-set-open title="Настройки">⚙</button><button class="map-dev" data-dev-open title="Админ-панель">DEV</button></div>
+    <!-- №140: нижняя панель как на дне: «Моя база» (нажать — к капсуле, ещё раз — войти; держать и потянуть — веер масштаба), «Вести базу», ячейки отрядов -->
+    <div id="sf-bar">
+      <div id="sf-left">
+        <div id="sf-above"><button data-sf-drive class="ow-mini" title="Вести капсулу по карте: вкл/выкл">⇄ Вести базу</button></div>
+        <div id="sf-row">
+          <div class="mb-wrap"><div class="map-fan" id="sf-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div><button id="sf-mybase" title="Моя база: нажатие — к капсуле, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button></div>
+          <button data-sf-items class="map-inv" title="Инвентарь отряда">▤</button>
+          <button data-sf-units class="map-units" title="Юниты: герои и транспорт">Юниты</button>
+        </div>
+      </div>
+      <div id="sf-right">
+        <div class="map-sqbtns"><button data-sf-allsel class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-sf-squad class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
+        <div id="sf-slots" aria-label="Отряды"></div>
+      </div>
+    </div>
+    <div id="sf-pop" hidden><i class="sf-side"></i><b></b><p></p><small></small><div class="sf-row"><button data-sf-act disabled></button><button data-sf-x aria-label="Закрыть">✕</button></div></div>
+    <div id="sf-say"></div>
+    <!-- №142–143: приказ по нажатию на клетку — две маленькие кнопки веером вокруг точки: «Автобой» / «Следовать»; на NPC — «Атаковать» -->
+    <div id="sf-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button></div>
+  </div>
+  <div id="ow" hidden>
+    <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
+    <div id="ow-top"><b>Дно океана</b><span>рядом с «Абиссом» · прототип</span></div>
+    <div id="ow-base" hidden></div>
+    <!-- №63: отряд — база и герои с транспортом (как в Warpath) -->
+    <!-- №68: нижняя панель как в Warpath — слева «Моя база» и меню, справа ячейки отрядов -->
+    <div id="ow-bar">
+      <!-- №70: слева — над «Моя база» маленькие «Вести базу» (вкл/выкл) и «Всплыть»; справа — «Отряд» над ячейками героев -->
+      <div id="ow-left">
+        <div id="ow-above">
+          <button data-ow="drive" class="ow-mini" title="Вести капсулу по дну (5 с на клетку): вкл/выкл">⇄ Вести базу</button>
+          <button data-ow="surface" class="ow-mini up" hidden title="Всплыть на поверхность">⇧ Всплыть</button>
+        </div>
+        <div id="ow-row">
+          <!-- №141: «Моя база» с веером масштаба и маленький значок инвентаря — как на поверхности -->
+          <div class="mb-wrap"><div class="map-fan" id="ow-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div><button id="ow-mybase" title="Моя база: нажатие — к базе, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button></div>
+          <button data-ow="items" class="map-inv" title="Инвентарь отряда">▤</button>
+          <button data-ow="units" class="map-units" title="Юниты: герои и транспорт">Юниты</button>
+        </div>
+      </div>
+      <div id="ow-right">
+        <div class="map-sqbtns" id="ow-sqbtns"><button data-ow="allsel" class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-ow="all" class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
+        <div id="ow-slots" aria-label="Отряды"></div>
+      </div>
+    </div>
+    <div id="ow-btns" class="map-btns"><button data-fs title="На весь экран">⛶</button><button data-set-open title="Настройки">⚙</button><button class="map-dev" data-dev-open title="Админ-панель">DEV</button></div>
+    <!-- №88: маленькое окошко у точки (вместо большой карточки) -->
+    <div id="ow-pop" hidden><b></b><button id="ow-act"></button><button id="ow-pop-x" aria-label="Закрыть">✕</button></div>
+    <div id="ow-hint">Выберите карточку справа внизу и нажмите на клетку — туда пойдёт отряд или капсула. Нажмите на тварь — отряд подойдёт и ударит.</div>
+    <div id="ow-say"></div>
+    <!-- №144: приказ по нажатию — тот же веер, что на поверхности -->
+    <div id="ow-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button></div>
+  </div>
+  <div id="iso-dev" hidden></div>
+  <div id="iso-set" hidden></div>
+  <!-- №142: окно «Отряд» — кто в какой технике (iso-roster.js) -->
+  <!-- №144: окно «Юниты» — вкладки «Герои» и «Транспорт» -->
+  <div id="iso-units" hidden><div class="ro-card"><div class="ro-head"><h2>Юниты</h2><button data-un-close aria-label="Закрыть">✕</button></div><div class="un-tabs"><button data-utab="heroes">Герои</button><button data-utab="vehicles">Транспорт</button><button data-un-edit class="un-edit" title="Сменить героев и технику">◎ Отряд</button></div><div class="un-list"></div></div></div>
+  <div id="iso-roster" hidden><div class="ro-card"><div class="ro-head"><h2>Отряд</h2><button data-ro-close aria-label="Закрыть">✕</button></div><div class="ro-list"></div></div></div>
+  <div id="iso-death" hidden role="dialog" aria-label="Гибель"><div class="death-card"><h2>Вы погибли</h2><p id="iso-death-text">Прохождение бункера начнётся сначала.</p><button id="iso-cp" hidden>С контрольной точки</button><button id="iso-restart">Начать заново</button></div></div>
+  <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · I — вещи · нажмите на героя справа внизу — снаряжение · Q — следующий · колесо — масштаб</div>
+
+  <!-- Ядро и данные — те же, что у основной игры -->
+  <script src="js/core/ids.js"></script>
+  <script src="js/data/assets.manifest.js"></script>
+  <script src="js/data/animations.js"></script>
+  <script src="js/data/characters.js"></script>
+  <script src="js/data/rooms.js"></script>
+  <script src="js/data/events.js"></script>
+  <script src="js/data/items.js"></script>
+  <script src="js/data/enemies.js"></script>
+  <script src="js/data/dialogs.js"></script>
+  <script src="js/data/equipment.js"></script>
+  <script src="js/data/quests.js"></script>
+  <script src="js/data/logs.js"></script>
+  <script src="js/data/sectors.js"></script>
+  <script src="js/data/arenas.js"></script>
+  <script src="js/data/perks.js"></script>
+  <script src="js/data/barks/CHAR-001.js"></script>
+  <script src="js/data/barks/CHAR-002.js"></script>
+  <script src="js/data/barks/CHAR-003.js"></script>
+  <script src="js/data/barks/ENEMY-002.js"></script>
+  <script src="js/data/rigs/MARK.js"></script>
+  <script src="js/data/rigs/MARK2.js"></script>
+  <script src="js/data/rigs/MARK3.js"></script>
+  <script src="js/data/rigs/MUTANT.js"></script>
+  <script src="js/data/rigs/COMPANION.js"></script>
+  <script src="js/data/rigs/HALE.js"></script>
+  <script src="js/data/rigs.js"></script>
+  <script src="js/data/rigs/EXOSUIT.js"></script>
+  <script src="js/data/rigs/EXOSUIT_ART.js"></script>
+  <script src="js/data/rigs/EXOSUIT_HALE_ART.js"></script>
+  <script src="js/data/rigs/EXOSUIT_HALE_WALK.js"></script>
+  <script src="js/data/iso-layouts.js"></script>
+  <script src="js/data/iso-quests.js"></script>
+  <script src="js/data/overworld.js"></script>
+  <script src="js/data/iso-acts.js"></script>
+  <script src="js/data/iso-act3-mira.js"></script>
+  <script src="js/data/weapons.js"></script>
+  <script src="js/data/base.js"></script>
+  <!-- Из старых систем: ресурсы, анимации, персонажи и отряд, инвентарь, оборудование,
+       состояние помещений (предметы, доступ к дверям), отрисовка составных персонажей -->
+  <script src="js/systems/asset-manager.js"></script>
+  <script src="js/systems/animation-manager.js"></script>
+  <script src="js/systems/character-system.js"></script>
+  <script src="js/systems/party.js"></script>
+  <script src="js/systems/room-system.js"></script>
+  <script src="js/systems/inventory.js"></script>
+  <script src="js/systems/equipment-system.js"></script>
+  <script src="js/systems/dialog.js"></script>
+  <script src="js/systems/quest-system.js"></script>
+  <script src="js/systems/perks.js"></script>
+  <script src="js/systems/progress.js"></script>
+  <script src="js/render/renderer.js"></script>
+  <!-- Изометрическая сцена -->
+  <script src="js/iso/iso-world.js"></script>
+  <script src="js/iso/iso-party.js"></script>
+  <script src="js/iso/iso-stash.js"></script>
+  <script src="js/iso/iso-bridge.js"></script>
+  <script src="js/iso/iso-interact.js"></script>
+  <script src="js/iso/iso-enemies.js"></script>
+  <script src="js/iso/iso-combat.js"></script>
+  <script src="js/iso/iso-suit.js"></script>
+  <script src="js/iso/iso-inventory.js"></script>
+  <script src="js/iso/iso-story.js"></script>
+  <script src="js/iso/iso-game.js"></script>
+  <script src="js/iso/iso-map.js"></script>
+  <script src="js/iso/iso-nest.js"></script>
+  <script src="js/iso/iso-boss.js"></script>
+  <script src="js/data/vehicles.js"></script>
+  <script src="js/iso/iso-roster.js"></script>
+  <script src="js/iso/iso-vfx.js"></script>
+  <script src="js/iso/iso-mapui.js"></script>
+  <script src="js/iso/iso-overworld.js"></script>
+  <script src="js/data/surface-a1.js"></script>
+  <script src="js/data/surface-a1-story.js"></script>
+  <script src="js/iso/iso-surface.js"></script>
+  <script src="js/iso/iso-acts.js"></script>
+  <script src="js/iso/iso-mira.js"></script>
+  <script src="js/iso/iso-mira-phases.js"></script>
+  <script src="js/iso/iso-dev.js"></script>
+  <script src="js/base/grids.js"></script>
+  <script src="js/base/base-sim.js"></script>
+  <script src="js/iso/iso-base.js"></script>
+  <script src="js/base/base-view.js"></script>
+  <script src="js/base/base-build.js"></script>
+  <script src="js/iso/iso-reward.js"></script>
+  <script src="js/iso/iso-companion.js"></script>
+  <script src="js/iso/iso-guard.js"></script>
+  <script src="js/iso/iso-crowd.js"></script>
+  <script src="js/iso/iso-fx.js"></script>
+  <script src="js/iso/iso-audio.js"></script>
+  <script src="js/iso/iso-patch.js"></script>
+  <script src="js/iso/iso-render.js"></script>
+  <script src="js/iso/iso-settings.js"></script>
+  <script src="js/iso/iso-abilities.js"></script>
+  <script src="js/iso/iso-input.js"></script>
+  <script src="js/iso/iso-main.js"></script>
+</body>
+</html>

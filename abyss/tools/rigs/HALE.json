@@ -1,0 +1,17 @@
+{
+  "rig": "HALE",
+  "height_units": 112,
+  "out_dir": "assets/char003/v1",
+  "js_out": "js/data/rigs/HALE.js",
+  "background": "green",
+  "variants": { "01": { "image": "assets/source/CHAR003-01.png" } },
+  "points": {
+    "crown": [520, 20], "neck": [510, 205], "hip": [500, 720],
+    "shoulder_near": [355, 290], "elbow_near": [300, 520], "wrist_near": [285, 655], "hand_near": [298, 880],
+    "shoulder_far": [630, 300], "elbow_far": [680, 520], "wrist_far": [722, 650], "hand_far": [735, 775],
+    "knee_near": [425, 1010], "ankle_near": [375, 1320], "toe_near": [360, 1495],
+    "knee_far": [638, 1010], "ankle_far": [650, 1320], "toe_far": [740, 1445],
+    "sole_y": 1510
+  },
+  "radius": { "head": 95, "torso": 135, "arm": 55, "leg": 75 }
+}
