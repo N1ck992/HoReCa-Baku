@@ -549,16 +549,21 @@ AB.IsoSurface = (() => {
   function showCmd(cx, cy, k, m) {
     cmd = { k, m };
     const el = document.getElementById('sf-cmd');
-    const d = m ? NK(m) : null;
-    el.querySelector('b').textContent = m ? d.name : k.site ? k.site.name : (K[k.kind].name || 'Клетка');
-    el.querySelector('small').textContent = m ? `${d.text} · ${m.hp}/${m.max}` : '';
     el.querySelector('[data-cmd="auto"]').hidden = !!m;
     el.querySelector('[data-cmd="follow"]').hidden = !!m;
     el.querySelector('[data-cmd="attack"]').hidden = !m;
     el.hidden = false;
-    const W2 = el.offsetWidth, H2 = el.offsetHeight, root = document.getElementById('sf').getBoundingClientRect();
-    el.style.left = `${Math.max(8, Math.min(root.width - W2 - 8, cx - root.left - W2 / 2))}px`;
-    el.style.top = `${Math.max(60, Math.min(root.height - H2 - 110, cy - root.top - H2 - 18))}px`;
+    placeCmd();
+  }
+  // №143: кнопки — над нажатой клеткой (или над NPC); едут вместе с картой
+  function placeCmd() {
+    if (!cmd) return;
+    const el = document.getElementById('sf-cmd'), kk = kScale();
+    const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r);
+    const x = ((p.x - cam.x) * kk + cv.width / 2) / dpr, y = ((p.y - cam.y) * kk + cv.height / 2) / dpr;
+    const W2 = cv.clientWidth, H2 = cv.clientHeight;
+    el.style.left = `${Math.max(48, Math.min(W2 - 48, x))}px`;
+    el.style.top = `${Math.max(110, Math.min(H2 - 40, y))}px`;
   }
   // кто выполняет приказ: «Выбрать всех» — все герои снаружи (нет никого — выходят все); иначе — выбранный
   function movers() {
@@ -650,6 +655,7 @@ AB.IsoSurface = (() => {
     // база и отряды — сверху вниз, чтобы ближние перекрывали дальних
     [base, ...outSquads(), ...mobs].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : u.kind === 'squad' ? drawSquad(u, p.x, p.y) : drawMob(u)));
     drawFloats();
+    if (cmd) { const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r); g.strokeStyle = cmd.m ? 'rgba(255,120,90,.95)' : 'rgba(255,226,140,.95)'; g.lineWidth = 2.5; hexPath(p.x, p.y, S0 * 0.82, g); g.stroke(); }
     // подписи — постоянного размера на экране
     const fs = 11 * dpr / k;
     g.textAlign = 'center'; g.font = `600 ${fs}px "Share Tech Mono", monospace`;
@@ -745,6 +751,7 @@ AB.IsoSurface = (() => {
     barUi();
     if (follow) { const p = posOf(flyU || selU()); cam.x += (p.x - cam.x) * Math.min(1, dt * 5); cam.y += (p.y - cam.y) * Math.min(1, dt * 5); clampCam(); }
     draw();
+    placeCmd();
     requestAnimationFrame(loop);
   }
   function setZoom(z) { zoomK = Math.max(minZoom(), Math.min(2.2, z)); fit(); clampCam(); }
@@ -855,7 +862,6 @@ AB.IsoSurface = (() => {
       if (e.target.closest('[data-sf-allsel]')) { selAll = !selAll; if (selAll) drive = false; barSig = ''; say(selAll ? 'Выбрать всех: вкл — приказ получает весь отряд' : 'Выбрать всех: выкл — приказ получает выбранный герой'); }
       if (e.target.closest('[data-sf-squad]')) { AB.IsoRoster.open(); }
       const cb = e.target.closest('[data-cmd]'); if (cb) { command(cb.dataset.cmd); return; }
-      if (e.target.closest('[data-cmd-x]')) { hideCmd(); return; }
       if (e.target.closest('[data-sf-items]')) AB.IsoInventory.open();
       if (e.target.closest('[data-sf-drive]')) { drive = !drive; selAll = false; if (drive) { sel = 'base'; flyU = base; say('Вести базу: вкл — нажмите на клетку, капсула поедет туда'); } else say('Вести базу: выкл'); barSig = ''; }
       const bk = e.target.closest('[data-do="back"]'), sl = e.target.closest('[data-u]');

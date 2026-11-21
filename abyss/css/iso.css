@@ -773,16 +773,6 @@ body.map-fan-on [data-sf-drive], body.map-fan-on #ow-above, body.map-fan-on .map
 
 /* №142: «Выбрать всех» и «Отряд» над ячейками; приказы по нажатию; окно «Отряд» */
 .map-sqbtns { display: flex; gap: 6px; }
-#sf-cmd { position: absolute; z-index: 4; min-width: 200px; max-width: min(320px, calc(100vw - 24px)); display: grid; gap: 6px; padding: 9px 10px; background: rgba(8, 12, 14, .94); border: 1px solid rgba(255, 226, 168, .4); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, .6); }
-#sf-cmd[hidden] { display: none; }
-#sf-cmd b { font: 600 14px var(--display); letter-spacing: .5px; color: #fff1d2; }
-#sf-cmd small { font-size: 11px; line-height: 1.35; color: var(--muted); }
-#sf-cmd small:empty { display: none; }
-.sf-cmd-row { display: flex; gap: 6px; flex-wrap: wrap; }
-.sf-cmd-row button { flex: 1 1 auto; font: 600 13px var(--display); letter-spacing: .5px; padding: 8px 10px; border-radius: 6px; cursor: pointer; color: #e6faff; background: #10181c; border: 1px solid rgba(94, 230, 255, .45); }
-.sf-cmd-row button[hidden] { display: none; }
-.sf-cmd-row [data-cmd="auto"], .sf-cmd-row [data-cmd="attack"] { color: #ffd0b0; border-color: rgba(255, 140, 100, .55); }
-.sf-cmd-row [data-cmd-x] { flex: 0 0 auto; color: var(--muted); border-color: var(--line); }
 #iso-roster { position: fixed; inset: 0; z-index: 21; display: grid; place-items: center; padding: 12px; background: rgba(0, 0, 0, .62); }
 #iso-roster[hidden] { display: none; }
 .ro-card { width: min(640px, 100%); max-height: calc(100vh - 24px); overflow: auto; padding: 12px 14px; background: #0b1013; border: 1px solid rgba(94, 230, 255, .35); border-radius: 10px; }
@@ -806,3 +796,18 @@ body.map-fan-on [data-sf-drive], body.map-fan-on #ow-above, body.map-fan-on .map
 .ro-sw button:disabled { opacity: .35; cursor: default; }
 .ro-note { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 @media (max-width: 560px) { .ro-slot { grid-template-columns: 1fr; } }
+
+/* №143: приказ — две маленькие круглые кнопки веером над точкой, без фона и названия */
+#sf-cmd { position: absolute; z-index: 4; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+#sf-cmd[hidden] { display: none; }
+#sf-cmd button { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; pointer-events: auto;
+  background: rgba(8, 14, 18, .9); border: 2px solid rgba(94, 230, 255, .6); color: #e6faff; box-shadow: 0 0 10px rgba(0, 0, 0, .6); animation: sfcmd .16s ease-out; }
+#sf-cmd button[hidden] { display: none; }
+#sf-cmd button i { font-style: normal; font-size: 19px; line-height: 1; margin-top: 2px; }
+#sf-cmd button span { position: absolute; top: 47px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 600 10px var(--display); letter-spacing: .5px; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+#sf-cmd [data-cmd="auto"], #sf-cmd [data-cmd="attack"] { border-color: rgba(255, 140, 100, .8); color: #ffc8a8; }
+/* веер: Автобой — вверх-влево, Следовать — вверх-вправо; Атаковать — прямо над NPC */
+#sf-cmd [data-cmd="auto"] { left: -40px; top: -46px; }
+#sf-cmd [data-cmd="follow"] { left: 40px; top: -46px; }
+#sf-cmd [data-cmd="attack"] { left: 0; top: -58px; }
+@keyframes sfcmd { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
