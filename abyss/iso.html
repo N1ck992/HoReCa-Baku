@@ -94,21 +94,22 @@
     <!-- №140: нижняя панель как на дне: «Моя база» (нажать — к капсуле, ещё раз — войти; держать и потянуть — веер масштаба), «Вести базу», ячейки отрядов -->
     <div id="sf-bar">
       <div id="sf-left">
-        <div id="sf-above"><button data-sf-drive class="ow-mini" title="Вести капсулу по карте: вкл/выкл">⇄ Вести базу: <b>выкл</b></button></div>
+        <div id="sf-above"><button data-sf-drive class="ow-mini" title="Вести капсулу по карте: вкл/выкл">⇄ Вести базу</button></div>
         <div id="sf-row">
           <div class="mb-wrap"><div class="map-fan" id="sf-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div><button id="sf-mybase" title="Моя база: нажатие — к капсуле, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button></div>
           <button data-sf-items class="map-inv" title="Инвентарь отряда">▤</button>
+          <button data-sf-units class="map-units" title="Юниты: герои и транспорт">Юниты</button>
         </div>
       </div>
       <div id="sf-right">
-        <div class="map-sqbtns"><button data-sf-allsel class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Выбрать всех: <b>выкл</b></button><button data-sf-squad class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
+        <div class="map-sqbtns"><button data-sf-allsel class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-sf-squad class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
         <div id="sf-slots" aria-label="Отряды"></div>
       </div>
     </div>
     <div id="sf-pop" hidden><i class="sf-side"></i><b></b><p></p><small></small><div class="sf-row"><button data-sf-act disabled></button><button data-sf-x aria-label="Закрыть">✕</button></div></div>
     <div id="sf-say"></div>
     <!-- №142–143: приказ по нажатию на клетку — две маленькие кнопки веером вокруг точки: «Автобой» / «Следовать»; на NPC — «Атаковать» -->
-    <div id="sf-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button></div>
+    <div id="sf-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button></div>
   </div>
   <div id="ow" hidden>
     <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
@@ -120,17 +121,18 @@
       <!-- №70: слева — над «Моя база» маленькие «Вести базу» (вкл/выкл) и «Всплыть»; справа — «Отряд» над ячейками героев -->
       <div id="ow-left">
         <div id="ow-above">
-          <button data-ow="drive" class="ow-mini" title="Вести капсулу по дну (5 с на клетку): вкл/выкл">⇄ Вести базу: <b>выкл</b></button>
+          <button data-ow="drive" class="ow-mini" title="Вести капсулу по дну (5 с на клетку): вкл/выкл">⇄ Вести базу</button>
           <button data-ow="surface" class="ow-mini up" hidden title="Всплыть на поверхность">⇧ Всплыть</button>
         </div>
         <div id="ow-row">
           <!-- №141: «Моя база» с веером масштаба и маленький значок инвентаря — как на поверхности -->
           <div class="mb-wrap"><div class="map-fan" id="ow-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div><button id="ow-mybase" title="Моя база: нажатие — к базе, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button></div>
           <button data-ow="items" class="map-inv" title="Инвентарь отряда">▤</button>
+          <button data-ow="units" class="map-units" title="Юниты: герои и транспорт">Юниты</button>
         </div>
       </div>
       <div id="ow-right">
-        <div class="map-sqbtns" id="ow-sqbtns"><button data-ow="allsel" class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Выбрать всех: <b>выкл</b></button><button data-ow="all" class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
+        <div class="map-sqbtns" id="ow-sqbtns"><button data-ow="allsel" class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-ow="all" class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
         <div id="ow-slots" aria-label="Отряды"></div>
       </div>
     </div>
@@ -139,10 +141,14 @@
     <div id="ow-pop" hidden><b></b><button id="ow-act"></button><button id="ow-pop-x" aria-label="Закрыть">✕</button></div>
     <div id="ow-hint">Выберите карточку справа внизу и нажмите на клетку — туда пойдёт отряд или капсула. Нажмите на тварь — отряд подойдёт и ударит.</div>
     <div id="ow-say"></div>
+    <!-- №144: приказ по нажатию — тот же веер, что на поверхности -->
+    <div id="ow-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button></div>
   </div>
   <div id="iso-dev" hidden></div>
   <div id="iso-set" hidden></div>
   <!-- №142: окно «Отряд» — кто в какой технике (iso-roster.js) -->
+  <!-- №144: окно «Юниты» — вкладки «Герои» и «Транспорт» -->
+  <div id="iso-units" hidden><div class="ro-card"><div class="ro-head"><h2>Юниты</h2><button data-un-close aria-label="Закрыть">✕</button></div><div class="un-tabs"><button data-utab="heroes">Герои</button><button data-utab="vehicles">Транспорт</button><button data-un-edit class="un-edit" title="Сменить героев и технику">◎ Отряд</button></div><div class="un-list"></div></div></div>
   <div id="iso-roster" hidden><div class="ro-card"><div class="ro-head"><h2>Отряд</h2><button data-ro-close aria-label="Закрыть">✕</button></div><div class="ro-list"></div></div></div>
   <div id="iso-death" hidden role="dialog" aria-label="Гибель"><div class="death-card"><h2>Вы погибли</h2><p id="iso-death-text">Прохождение бункера начнётся сначала.</p><button id="iso-cp" hidden>С контрольной точки</button><button id="iso-restart">Начать заново</button></div></div>
   <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · I — вещи · нажмите на героя справа внизу — снаряжение · Q — следующий · колесо — масштаб</div>

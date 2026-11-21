@@ -90,5 +90,41 @@ AB.IsoRoster = (() => {
     }
     el.hidden = false; render();          // сначала показать: портреты рисуются по размеру холста
   }
-  return { list, sync, set, vehicleOf, open, close: () => { if (el) el.hidden = true; }, isOpen: () => !!el && !el.hidden, setOutFn: (f) => { outFn = f || (() => false); }, V, owned };
+  // ---------- №144: окно «Юниты» — вкладки «Герои» и «Транспорт» (просмотр) ----------
+  let uel = null, tab = 'heroes';
+  const where = (id) => { const s = sync().find((q) => q.hero === id); return !s ? 'без техники' : outFn(id) ? `снаружи · ${V(s.vehicle).name}` : `в базе · ${V(s.vehicle).name}`; };
+  function unitsRender() {
+    for (const b of uel.querySelectorAll('[data-utab]')) b.classList.toggle('on', b.dataset.utab === tab);
+    const box = uel.querySelector('.un-list');
+    if (tab === 'heroes') {
+      box.innerHTML = crew().map((id) => {
+        const d = AB.ID.get(id), c = AB.Chars.get(id), max = (d.stats || {}).maxHp || 100, hp = c ? Math.round(c.hp) : max;
+        const w = AB.Inventory && AB.Inventory.weapon ? AB.Inventory.weapon(id) : null, wd = w && AB.ID.get(w.item);
+        return `<div class="un-card"><canvas data-pt="${id}"></canvas><div><b>${d.name}</b><small>${d.role || ''}</small>
+          <p>Здоровье <b>${hp}/${max}</b> · В руках: <b>${wd ? wd.name : '—'}</b></p><p class="un-where">${where(id)}</p></div></div>`;
+      }).join('') || '<p class="ro-note">В экипаже никого</p>';
+    } else {
+      box.innerHTML = owned().map((vid) => {
+        const v = V(vid), s = sync().find((q) => q.vehicle === vid), h = s && s.hero ? AB.ID.get(s.hero).name : null;
+        return `<div class="un-card"><img src="${v.img}" alt=""><div><b>${v.name}</b><small>${v.desc || ''}</small>
+          <p>Скорость <b>${v.speed}</b> кл/мин · Удар <b>${v.attack}</b> / ${v.rate} с · Броня <b>${Math.round(v.armor * 100)}%</b></p>
+          <p class="un-where">${h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
+      }).join('') + `<div class="un-card un-base"><i class="cap"></i><div><b>Капсула-батискаф</b><small>База отряда: ездит по карте, внутри — трюм с устройствами.</small><p>Скорость <b>${AB.VEHICLES_BASE.speed}</b> кл/мин</p></div></div>`;
+    }
+    for (const c of box.querySelectorAll('canvas[data-pt]')) if (AB.IsoRender && AB.IsoRender.portrait) AB.IsoRender.portrait(c, c.dataset.pt, 1);
+  }
+  function units(t) {
+    if (!uel) {
+      uel = document.getElementById('iso-units');
+      uel.addEventListener('pointerdown', (e) => e.stopPropagation());
+      uel.addEventListener('click', (e) => {
+        if (e.target === uel || e.target.closest('[data-un-close]')) { uel.hidden = true; return; }
+        const b = e.target.closest('[data-utab]'); if (b) { tab = b.dataset.utab; unitsRender(); }
+        if (e.target.closest('[data-un-edit]')) { uel.hidden = true; open(); }
+      });
+    }
+    if (t) tab = t;
+    uel.hidden = false; unitsRender();
+  }
+  return { units, list, sync, set, vehicleOf, open, close: () => { if (el) el.hidden = true; }, isOpen: () => !!el && !el.hidden, setOutFn: (f) => { outFn = f || (() => false); }, V, owned };
 })();

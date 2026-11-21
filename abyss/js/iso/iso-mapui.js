@@ -42,6 +42,11 @@ AB.IsoMapUI = (() => {
     fanEl.addEventListener('pointerdown', (e) => e.stopPropagation());
     fanEl.addEventListener('click', (e) => { const b = e.target.closest('[data-fan]'); if (b) { e.stopPropagation(); show(false); pick(b.dataset.fan); } });
   }
+  // №143–144: веер приказа над точкой — держать кнопки в пределах экрана
+  function placeCmd(el, x, y, W, H) {
+    el.style.left = `${Math.max(48, Math.min(W - 48, x))}px`;
+    el.style.top = `${Math.max(110, Math.min(H - 40, y))}px`;
+  }
   const label = (key) => (FAN.find((f) => f.key === key) || {}).label || key;
-  return { fan, label, FAN };
+  return { fan, label, FAN, placeCmd };
 })();

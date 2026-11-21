@@ -245,7 +245,7 @@ AB.IsoOverworld = (() => {
       if (ptrs.size < 2) pinch = null;
       if (drag && !drag.moved && e.type === 'pointerup') {
         const t = pick(e.clientX, e.clientY);
-        if (t && cells.has(key(t.q, t.r))) tapCell(t);
+        if (t && cells.has(key(t.q, t.r))) tapCell(t); else hideCmd();
       }
       drag = null;
     };
@@ -257,6 +257,9 @@ AB.IsoOverworld = (() => {
       if (s.key === 'abyss') back(); else if (AB.IsoActs) AB.IsoActs.doSite(s);
     });
     document.getElementById('ow-pop-x').addEventListener('click', () => { pend = null; onSite = undefined; });
+    const cmdEl = document.getElementById('ow-cmd');
+    cmdEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+    cmdEl.addEventListener('click', (e) => { const b = e.target.closest('[data-cmd]'); if (b) { e.stopPropagation(); command(b.dataset.cmd); } });
     document.getElementById('ow-pop').addEventListener('pointerdown', (e) => e.stopPropagation());
     // №68: нижняя панель как в Warpath. «Моя база» — войти в капсулу; меню — вести базу, вещи, все отряды, всплыть;
     // ячейки отрядов: нажатие — выйти из базы / выбрать и подлететь; у выбранного — «Отозвать»
@@ -274,8 +277,9 @@ AB.IsoOverworld = (() => {
           else { const s = outSquads()[0]; sel = s ? s.id : 'base'; say('Вести базу: выкл'); }
         }
         if (k === 'items') AB.IsoInventory.open();
+        if (k === 'units') AB.IsoRoster.units();          // №144: окно «Юниты»
         // №142: «Выбрать всех» — переключатель; «◎ Отряд» — окно состава (герои и техника)
-        if (k === 'allsel') { selAll = !selAll; if (selAll) drive = false; say(selAll ? 'Выбрать всех: вкл — приказ получает весь отряд' : 'Выбрать всех: выкл — приказ получает выбранный'); }
+        if (k === 'allsel') { selAll = !selAll; if (selAll) drive = false; say(selAll ? 'Все: приказ получает весь отряд' : 'Приказ получает выбранный'); }
         if (k === 'all') { if (mode !== 'capsule') say('Состав отряда меняется на базе-капсуле'); else AB.IsoRoster.open(); }
         if (k === 'surface') AB.IsoActs.surface();
         squadsSig = ''; return;
@@ -322,7 +326,69 @@ AB.IsoOverworld = (() => {
     if (u.kind === 'squad') u.target = null;
     u.path = best;
   }
+  // №144: нажатие на клетку — веер приказа (как на поверхности): ⚔ «Автобой» / ➜ «Следовать»; на твари — ⚔ «Атаковать».
+  // Сразу, без веера: капсула при «Вести базу», возврат отряда нажатием на свою базу
+  let cmd = null;                                   // { t, mb, st }
+  function hideCmd() { cmd = null; const el = document.getElementById('ow-cmd'); if (el) el.hidden = true; }
   function tapCell(t) {
+    hideCmd();
+    const u = selU(), mb = mobAt(t.q, t.r), st = siteAt(t.q, t.r);
+    if (drive && mode === 'capsule') { sel = 'base'; doTap(t); return; }
+    if (u.kind === 'squad' && !selAll && baseHere(t.q, t.r)) { recall(u.id); return; }
+    if (selAll && baseHere(t.q, t.r)) { for (const q of outSquads()) recall(q.id); return; }
+    const c = cells.get(key(t.q, t.r));
+    if (!mb && !st && !passable(t.q, t.r)) { say(c && c.kind === 'rock' ? 'Скала — сюда не пройти' : c && c.kind === 'trench' ? 'Расселина — сюда не пройти' : 'Туда не пройти'); return; }
+    cmd = { t, mb: mb && mb.hp > 0 ? mb : null, st: st && shown(st) && c && c.seen ? st : null };
+    const el = document.getElementById('ow-cmd');
+    el.querySelector('[data-cmd="auto"]').hidden = !!cmd.mb;
+    el.querySelector('[data-cmd="follow"]').hidden = !!cmd.mb;
+    el.querySelector('[data-cmd="attack"]').hidden = !cmd.mb;
+    el.hidden = false; placeCmd();
+  }
+  function placeCmd() {
+    if (!cmd) return;
+    const el = document.getElementById('ow-cmd'), p = cmd.mb ? curMob(cmd.mb) : px(cmd.t.q, cmd.t.r);
+    AB.IsoMapUI.placeCmd(el, (p.x - cam.x + cv.width / 2) / dpr, (p.y - cam.y + cv.height / 2) / dpr, cv.clientWidth, cv.clientHeight);
+  }
+  // кто исполняет: «Все» — весь отряд (кто в базе — выходит); иначе — выбранный (никого снаружи — выходит первый)
+  function doers() {
+    if (mode !== 'capsule') { const m = unit('CHAR-001'); return m && m.state === 'out' ? [m] : []; }
+    if (selAll) { for (const q of squads) if (q.vehicle && q.state === 'home') deploy(q.id); return outSquads().filter((q) => q.state === 'out'); }
+    let u = selU();
+    if (u.kind === 'base') { const q = squads.find((x) => x.vehicle && x.state !== 'retreat'); if (q && q.state === 'home') deploy(q.id); u = q && q.state === 'out' ? q : null; }
+    return u && u.kind === 'squad' && u.state === 'out' ? [u] : [];
+  }
+  function command(kind) {
+    if (!cmd) return; const { t, mb, st } = cmd; hideCmd();
+    const us = doers(); if (!us.length) { say('Нужен отряд в транспорте: «Выйти» на карточке героя'); return; }
+    if (kind === 'attack') {
+      for (const u of us) { u.mode = 'auto'; u.target = mb; u.zone = null; u.path = []; }
+      sel = us[0].id; squadsSig = ''; return;
+    }
+    if (st && blocked(t.q, t.r)) { const u = us[0]; sel = u.id; u.mode = kind; u.zone = null; goSite(st); return; }   // точка-объект — подойти, окошко действия
+    const spots = [t, ...DIRS.map(([dq, dr]) => ({ q: t.q + dq, r: t.r + dr })).filter((c) => passable(c.q, c.r) && !baseHere(c.q, c.r))];
+    let any = false;
+    us.forEach((u, i) => {
+      const z = spots[i % spots.length]; u.mode = kind; u.target = null; u.zone = z;
+      if (u.q === z.q && u.r === z.r && !u.anim) { any = true; return; }
+      const p = route(at(u), z, u); if (p) { u.path = p; any = true; }
+    });
+    if (!any) say('Туда не пройти');
+    sel = us[0].id; squadsSig = '';
+  }
+  // №144: «Автобой» на дне — отряд бьёт тварей, которые охотятся на отряд, в 3 клетках; после — дальше к точке
+  function autoFight() {
+    for (const s of outSquads()) {
+      if (s.state !== 'out' || s.mode !== 'auto') continue;
+      if (s.target && s.target.hp <= 0) s.target = null;
+      if (!s.target) {
+        const foe = mobs.filter((m) => m.hp > 0 && m.hunt && dist(m, at(s)) <= 3).sort((a, b) => dist(a, at(s)) - dist(b, at(s)))[0];
+        if (foe) { s.target = foe; s.path = []; s.resume = !!s.zone; }
+        else if (s.resume && !s.anim && !s.path.length && s.zone) { s.resume = false; const p = route(at(s), s.zone, s); if (p) s.path = p; }
+      }
+    }
+  }
+  function doTap(t) {
     const st = siteAt(t.q, t.r);
     if (st && blocked(t.q, t.r) && shown(st) && cells.get(key(t.q, t.r)).seen) { goSite(st); return; }
     // «Все отряды»: ведём всех снаружи разом
@@ -384,7 +450,7 @@ AB.IsoOverworld = (() => {
     close();
     AB.Bus.emit('ow:exit', {});
   }
-  function close() { open_ = false; document.getElementById('ow').hidden = true; }
+  function close() { open_ = false; hideCmd(); document.getElementById('ow').hidden = true; }
   function say(t) { const el = document.getElementById('ow-say'); el.textContent = t; el.classList.add('show'); clearTimeout(say.t); say.t = setTimeout(() => el.classList.remove('show'), 2000 + t.length * 40); }
 
   // масштаб и свободная камера (№65)
@@ -426,6 +492,7 @@ AB.IsoOverworld = (() => {
 
   // ---------- движение ----------
   function stepUnit(u, dt, secs) {
+    if (AB.IsoDev && AB.IsoDev.speed) secs /= AB.IsoDev.speed();          // №144: DEV — быстрое передвижение
     if (u.kind === 'squad' && u.target && u.target.hp > 0 && u.state === 'out') {
       if (canHit(at(u), u.target, SUIT().weapon.reachCells)) u.path = [];
       else if (!u.path.length && !u.anim) { const p = route(u, u.target, u); if (p) u.path = p; }
@@ -458,6 +525,7 @@ AB.IsoOverworld = (() => {
     for (const s of outSquads()) { stepUnit(s, dt, STEP); if (!s.anim && loot.size) pickLoot(s); }
     dig(dt);
     heal(dt);
+    autoFight();
     fight(dt);
     wildTick(dt);
     if (fly) {
@@ -466,6 +534,8 @@ AB.IsoOverworld = (() => {
       if (Math.hypot(c.x - cam.x, c.y - cam.y) < 2 && !fly.anim) fly = null;
     }
     draw();
+    if (cmd) { const p = cmd.mb ? curMob(cmd.mb) : px(cmd.t.q, cmd.t.r); g.setTransform(1, 0, 0, 1, 0, 0); g.strokeStyle = cmd.mb ? 'rgba(255,120,90,.95)' : 'rgba(255,226,140,.95)'; g.lineWidth = 2.5 * dpr; hex(p.x - cam.x + cv.width / 2, p.y - cam.y + cv.height / 2, size * 0.82); g.stroke(); }
+    placeCmd();
     hud();
     requestAnimationFrame(loop);
   }
@@ -874,9 +944,9 @@ AB.IsoOverworld = (() => {
     mb.querySelector('span').textContent = ascend ? 'Всплывает' : base.anim || base.path.length ? 'База в пути' : 'Моя база';
     document.querySelector('#ow-above [data-ow="surface"]').hidden = !up;
     const dr = document.querySelector('#ow-above [data-ow="drive"]');
-    dr.hidden = mode !== 'capsule'; dr.classList.toggle('on', drive); dr.querySelector('b').textContent = drive ? 'вкл' : 'выкл';
+    dr.hidden = mode !== 'capsule'; dr.classList.toggle('on', drive);
     const allB = document.querySelector('#ow-right [data-ow="allsel"]');
-    allB.classList.toggle('on', selAll); allB.querySelector('b').textContent = selAll ? 'вкл' : 'выкл';
+    allB.classList.toggle('on', selAll);
     document.getElementById('ow-sqbtns').hidden = mode !== 'capsule';
     const slots = [];
     for (const s of squads) {
@@ -902,7 +972,8 @@ AB.IsoOverworld = (() => {
   return {
     init, enter, back, close, say, isOpen: () => open_,
     setMode(m) { mode = m; if (m === 'capsule') { for (const s of squads) if (s.state !== 'home') dock(s); sel = 'base'; if (blocked(base.q, base.r)) { const c = DIRS.map(([dq, dr]) => ({ q: base.q + dq, r: base.r + dr })).find((x) => passable(x.q, x.r)); if (c) { base.q = c.q; base.r = c.r; for (const s of squads) if (s.state === 'home') { s.q = c.q; s.r = c.r; } } } } }, mode: () => mode, los: (a, b) => clearLine(a, b), cell: (q, r) => cells.get(key(q, r)), refresh() { onSite = undefined; },
-    goSite(q, r) { const s = siteAt(q, r); if (s) goSite(s); return !!s; }, popVisible: () => !document.getElementById('ow-pop').hidden,
+    goSite(q, r) { const s = siteAt(q, r); if (s) goSite(s); return !!s; },
+    tap: (q, r) => tapCell({ q, r }), cmd: (k) => command(k), cmdOpen: () => !!cmd, popVisible: () => !document.getElementById('ow-pop').hidden,
     mobs: () => mobs.filter((m) => m.hp > 0).map((m) => ({ id: m.id, kind: m.kind, q: m.q, r: m.r, hp: m.hp, hunt: m.hunt })), dropLoot,
     attack(id) { const m = mobs.find((q) => q.id === id), s = selU(); if (m && s.kind === 'squad') s.target = m; },
     pos: () => ({ q: selU().q, r: selU().r }),

@@ -38,7 +38,7 @@ AB.IsoParty = (() => {
   }
 
   const lead = () => members[leader];
-  const speedOf = (m, run) => { const st = AB.IsoSuit && AB.IsoSuit.suited(m) ? AB.IsoSuit.rig() : AB.ID.get(m.id).stats; return ((run ? st.runSpeed : st.speed) / PX_PER_TILE) * (AB.Perks ? AB.Perks.mod('moveSpeed') : 1) * (m.slowT > 0 ? 0.5 : 1); };   // №118: споры копий Миры замедляют
+  const speedOf = (m, run) => { const st = AB.IsoSuit && AB.IsoSuit.suited(m) ? AB.IsoSuit.rig() : AB.ID.get(m.id).stats; return ((run ? st.runSpeed : st.speed) / PX_PER_TILE) * (AB.Perks ? AB.Perks.mod('moveSpeed') : 1) * (m.slowT > 0 ? 0.5 : 1) * (AB.IsoDev && AB.IsoDev.speed ? AB.IsoDev.speed() : 1); };   // №144: DEV — быстрое передвижение   // №118: споры копий Миры замедляют
 
   // ведущему: идти к точке (путь в обход препятствий)
   function goTo(x, y) {

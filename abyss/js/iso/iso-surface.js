@@ -251,7 +251,8 @@ AB.IsoSurface = (() => {
   // капсула-батискаф — база: ездит по карте («Вести базу»), внутрь можно войти («Моя база»);
   // герои выходят из неё в своих экзокостюмах, ходят, возвращаются и стыкуются рядом
   // №142: скорость — у техники (js/data/vehicles.js, клеток в минуту по дороге); бездорожье — дольше по цене клетки
-  const STEP_OF = (u) => 60 / (u.kind === 'base' ? AB.VEHICLES_BASE.speed : (AB.VEHICLES[u.vehicle] || { speed: 30 }).speed);
+  const devFast = () => (AB.IsoDev && AB.IsoDev.speed ? AB.IsoDev.speed() : 1);      // DEV: «Скорость ×5»
+  const STEP_OF = (u) => 60 / (u.kind === 'base' ? AB.VEHICLES_BASE.speed : (AB.VEHICLES[u.vehicle] || { speed: 30 }).speed) / devFast();
   const base = { id: 'base', kind: 'base', c: 0, r: 0, path: [], anim: null, face: 1, stride: 0 };
   const squads = [];                                 // { id, kind: 'squad', vehicle, state: 'home'|'out'|'retreat', c, r, path, anim, face, stride }
   let sel = 'base', drive = false, selAll = false, pendSite = null, follow = true, flyU = null;
@@ -561,9 +562,7 @@ AB.IsoSurface = (() => {
     const el = document.getElementById('sf-cmd'), kk = kScale();
     const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r);
     const x = ((p.x - cam.x) * kk + cv.width / 2) / dpr, y = ((p.y - cam.y) * kk + cv.height / 2) / dpr;
-    const W2 = cv.clientWidth, H2 = cv.clientHeight;
-    el.style.left = `${Math.max(48, Math.min(W2 - 48, x))}px`;
-    el.style.top = `${Math.max(110, Math.min(H2 - 40, y))}px`;
+    AB.IsoMapUI.placeCmd(el, x, y, cv.clientWidth, cv.clientHeight);
   }
   // кто выполняет приказ: «Выбрать всех» — все герои снаружи (нет никого — выходят все); иначе — выбранный
   function movers() {
@@ -790,7 +789,7 @@ AB.IsoSurface = (() => {
     const mb = document.getElementById('sf-mybase'); if (!mb) return;
     mb.classList.toggle('on', drive);
     mb.querySelector('span').textContent = base.anim || base.path.length ? 'База в пути' : 'Моя база';
-    const dr = document.querySelector('[data-sf-drive]'); dr.classList.toggle('on', drive); dr.querySelector('b').textContent = drive ? 'вкл' : 'выкл';
+    const dr = document.querySelector('[data-sf-drive]'); dr.classList.toggle('on', drive);
     const slots = [];
     for (const q of squads) {
       const c = AB.Chars.get(q.id), d = AB.ID.get(q.id), hp = c && d.stats ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
@@ -803,7 +802,7 @@ AB.IsoSurface = (() => {
     slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');
     slots.push('<div class="ow-slot lock"><span>Условие:</span><em>модуль «Ангар»</em></div>');
     slots.push('<div class="ow-slot lock"><i>🔒</i></div>');
-    const allB = document.querySelector('[data-sf-allsel]'); if (allB) { allB.classList.toggle('on', selAll); allB.querySelector('b').textContent = selAll ? 'вкл' : 'выкл'; }
+    const allB = document.querySelector('[data-sf-allsel]'); if (allB) allB.classList.toggle('on', selAll);
     const sig = slots.join('') + sel + drive + selAll;
     if (sig === barSig) return;
     barSig = sig;
@@ -859,10 +858,11 @@ AB.IsoSurface = (() => {
     root.addEventListener('pointerdown', (e) => e.stopPropagation());
     root.addEventListener('click', (e) => {
       if (e.target.closest('[data-sf-x]')) hidePop();
-      if (e.target.closest('[data-sf-allsel]')) { selAll = !selAll; if (selAll) drive = false; barSig = ''; say(selAll ? 'Выбрать всех: вкл — приказ получает весь отряд' : 'Выбрать всех: выкл — приказ получает выбранный герой'); }
+      if (e.target.closest('[data-sf-allsel]')) { selAll = !selAll; if (selAll) drive = false; barSig = ''; say(selAll ? 'Все: приказ получает весь отряд' : 'Приказ получает выбранный герой'); }
       if (e.target.closest('[data-sf-squad]')) { AB.IsoRoster.open(); }
       const cb = e.target.closest('[data-cmd]'); if (cb) { command(cb.dataset.cmd); return; }
       if (e.target.closest('[data-sf-items]')) AB.IsoInventory.open();
+      if (e.target.closest('[data-sf-units]')) AB.IsoRoster.units();
       if (e.target.closest('[data-sf-drive]')) { drive = !drive; selAll = false; if (drive) { sel = 'base'; flyU = base; say('Вести базу: вкл — нажмите на клетку, капсула поедет туда'); } else say('Вести базу: выкл'); barSig = ''; }
       const bk = e.target.closest('[data-do="back"]'), sl = e.target.closest('[data-u]');
       if (bk && sl) { recall(sl.dataset.u); return; }

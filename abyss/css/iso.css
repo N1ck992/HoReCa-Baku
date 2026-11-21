@@ -798,16 +798,36 @@ body.map-fan-on [data-sf-drive], body.map-fan-on #ow-above, body.map-fan-on .map
 @media (max-width: 560px) { .ro-slot { grid-template-columns: 1fr; } }
 
 /* №143: приказ — две маленькие круглые кнопки веером над точкой, без фона и названия */
-#sf-cmd { position: absolute; z-index: 4; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
-#sf-cmd[hidden] { display: none; }
-#sf-cmd button { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; pointer-events: auto;
+.map-cmd { position: absolute; z-index: 4; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.map-cmd[hidden] { display: none; }
+.map-cmd button { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; pointer-events: auto;
   background: rgba(8, 14, 18, .9); border: 2px solid rgba(94, 230, 255, .6); color: #e6faff; box-shadow: 0 0 10px rgba(0, 0, 0, .6); animation: sfcmd .16s ease-out; }
-#sf-cmd button[hidden] { display: none; }
-#sf-cmd button i { font-style: normal; font-size: 19px; line-height: 1; margin-top: 2px; }
-#sf-cmd button span { position: absolute; top: 47px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 600 10px var(--display); letter-spacing: .5px; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; }
-#sf-cmd [data-cmd="auto"], #sf-cmd [data-cmd="attack"] { border-color: rgba(255, 140, 100, .8); color: #ffc8a8; }
+.map-cmd button[hidden] { display: none; }
+.map-cmd button i { font-style: normal; font-size: 19px; line-height: 1; margin-top: 2px; }
+.map-cmd button span { position: absolute; top: 47px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 600 10px var(--display); letter-spacing: .5px; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.map-cmd [data-cmd="auto"], .map-cmd [data-cmd="attack"] { border-color: rgba(255, 140, 100, .8); color: #ffc8a8; }
 /* веер: Автобой — вверх-влево, Следовать — вверх-вправо; Атаковать — прямо над NPC */
-#sf-cmd [data-cmd="auto"] { left: -40px; top: -46px; }
-#sf-cmd [data-cmd="follow"] { left: 40px; top: -46px; }
-#sf-cmd [data-cmd="attack"] { left: 0; top: -58px; }
+.map-cmd [data-cmd="auto"] { left: -40px; top: -46px; }
+.map-cmd [data-cmd="follow"] { left: 40px; top: -46px; }
+.map-cmd [data-cmd="attack"] { left: 0; top: -58px; }
 @keyframes sfcmd { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* №144: кнопка и окно «Юниты» */
+.map-units { height: 42px; padding: 0 12px; border-radius: 21px; font: 600 13px var(--display); letter-spacing: .5px; cursor: pointer; color: #9fe7ff; background: rgba(8, 14, 18, .88); border: 1px solid rgba(94, 230, 255, .45); box-shadow: 0 0 8px rgba(0, 0, 0, .5); align-self: flex-end; }
+body.map-fan-on .map-units { visibility: hidden; }
+#iso-units { position: fixed; inset: 0; z-index: 21; display: grid; place-items: center; padding: 12px; background: rgba(0, 0, 0, .62); }
+#iso-units[hidden] { display: none; }
+.un-tabs { display: flex; gap: 6px; margin-top: 10px; }
+.un-tabs button { font: 600 13px var(--display); letter-spacing: 1px; padding: 6px 14px; border-radius: 16px; cursor: pointer; color: #cfe6ee; background: #10161a; border: 1px solid var(--line); }
+.un-tabs button.on { color: #ffe2a8; border-color: rgba(255, 210, 120, .7); }
+.un-tabs .un-edit { margin-left: auto; color: #9fe7ff; border-color: rgba(94, 230, 255, .4); }
+.un-list { display: grid; gap: 8px; margin-top: 10px; }
+.un-card { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; background: radial-gradient(circle at 70% 60%, #142228, #0a1013); }
+.un-card canvas { width: 46px; height: 60px; flex: none; }
+.un-card img { height: 64px; flex: none; filter: drop-shadow(0 0 3px #000); }
+.un-card b { font: 600 15px var(--display); color: #fff; }
+.un-card small { display: block; font-size: 11px; line-height: 1.35; color: var(--muted); }
+.un-card p { margin: 3px 0 0; font-size: 12px; color: #cfe6ee; }
+.un-card p b { font: inherit; color: #ffe2a8; }
+.un-card .un-where { font-size: 11px; color: #9fe7ff; }
+.un-base .cap { display: block; flex: none; width: 52px; height: 24px; margin: 0 4px; border-radius: 50%; background: #c9a24a; box-shadow: inset 0 -5px 0 #8a6e30; }
