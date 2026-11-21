@@ -124,6 +124,7 @@ AB.IsoSuit = (() => {
     const fa = -atk * (SWING[key] || 1.0) + (amp ? sw * 0.12 : 0);   // №121: Хейл целится инжектором — рука поднимается меньше
     piv(J.elbow, fa);
     put('forearm_near');
+    if (pose.gun && J.wrist && J.hand) armGun(g, J, pose);   // №147: орудие в руке (экзокостюм на картах)
     g.restore();
     if (pose.hurt) {
       const rg = g.createRadialGradient(J.hip[0], J.hip[1] - 300, 40, J.hip[0], J.hip[1] - 300, 700);
@@ -237,5 +238,37 @@ AB.IsoSuit = (() => {
     g.restore();
   }
 
-  return { suited, weapon, poseOf, draw, rig: R };
+  // №147: ручной энергомёт «Искра» на предплечье экзокостюма Марка (рисунок кодом, до картинки автора).
+  // Координаты — в пикселях исходного рисунка костюма; ствол идёт вдоль предплечья от запястья
+  function armGun(g, J, pose) {
+    const ang = Math.atan2(J.hand[1] - J.wrist[1], J.hand[0] - J.wrist[0]);
+    const t = (pose.t || 0), hot = pose.attack >= 0 ? Math.sin(pose.attack * Math.PI) : 0;
+    g.save(); g.translate(J.wrist[0] - 30, J.wrist[1] - 10); g.rotate(ang); g.scale(1.3, 1.3);
+    // корпус: светлый металл с тёмной окантовкой, полосы цвета костюма
+    g.fillStyle = '#1a1e21'; g.beginPath(); g.roundRect(-66, -68, 342, 136, 30); g.fill();
+    g.fillStyle = '#6a737b'; g.beginPath(); g.roundRect(-56, -58, 322, 116, 24); g.fill();
+    g.fillStyle = '#8c969e'; g.beginPath(); g.roundRect(-44, -50, 296, 46, 18); g.fill();
+    g.fillStyle = '#d9a23e'; g.fillRect(-30, 22, 210, 16); g.fillRect(-30, -56, 130, 10);
+    // катушки
+    for (let i = 0; i < 3; i++) {
+      const x = 70 + i * 60, a = 0.55 + 0.35 * Math.sin(t * 6 + i) + hot * 0.4;
+      g.strokeStyle = '#1a1e21'; g.lineWidth = 26; g.beginPath(); g.ellipse(x, 0, 18, 72, 0, 0, 7); g.stroke();
+      g.strokeStyle = `rgba(94,230,255,${Math.min(1, a)})`; g.lineWidth = 14; g.beginPath(); g.ellipse(x, 0, 18, 72, 0, 0, 7); g.stroke();
+    }
+    // дуло: светящееся ядро
+    const r = 54 + hot * 30, gr = g.createRadialGradient(300, 0, 4, 300, 0, r * 2.2);
+    gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(0.25, `rgba(94,230,255,${0.8 + hot * 0.2})`); gr.addColorStop(1, 'rgba(94,230,255,0)');
+    g.fillStyle = '#1a1e21'; g.beginPath(); g.ellipse(282, 0, 46, 72, 0, 0, 7); g.fill();
+    g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.beginPath(); g.arc(300, 0, r * 2.2, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over';
+    g.restore();
+  }
+  // где дуло на экране: (x, y) — точка на полу под костюмом, k — масштаб (как в draw)
+  function muzzle(pose, x, y, k = 1) {
+    const A = AB.RIGS[artName(pose.id)]; if (!A || !A.joints.wrist) return { x: x + 20 * k * (pose.facing || 1), y: y - 60 * k };
+    const J = A.joints, s = k * (R().height / A.heightPx), f = pose.facing >= 0 ? 1 : -1;
+    const ang = Math.atan2(J.hand[1] - J.wrist[1], J.hand[0] - J.wrist[0]);
+    const lx = J.wrist[0] - 30 + Math.cos(ang) * 390, ly = J.wrist[1] - 10 + Math.sin(ang) * 390;   // дуло — 300 × 1.3
+    return { x: x + (lx - J.hip[0]) * s * f, y: y + (ly - A.soleY) * s };
+  }
+  return { suited, weapon, poseOf, draw, rig: R, muzzle };
 })();

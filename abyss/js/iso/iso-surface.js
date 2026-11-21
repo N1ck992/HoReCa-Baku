@@ -364,6 +364,12 @@ AB.IsoSurface = (() => {
   // группы стоят в случайных местах; сами не нападают; ударили одного — вступается вся группа;
   // за убийство — награда в вещи отряда. Отряд в «Автобое» бьёт тех, кто нападает на него или
   // на союзников рядом (3 клетки); «Атаковать» — напасть на выбранного.
+  // №147: эффекты атаки техники (энергосгустки экзокостюма) — js/iso/iso-vfx.js
+  const vfx = AB.IsoVFX ? AB.IsoVFX.create() : null;
+  let frameDt = 0;
+  const suitK = () => (S0 * 1.3) / ((AB.RIGS && AB.RIGS.EXOSUIT && AB.RIGS.EXOSUIT.height) || 100);
+  const poseOf = (s) => ({ id: (AB.VEHICLES[s.vehicle] || {}).look || s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time, gun: !!(AB.VEHICLES[s.vehicle] || {}).gun });
+  const muzzleOf = (s) => { const p = posOf(s); return AB.IsoSuit && AB.IsoSuit.muzzle ? AB.IsoSuit.muzzle(poseOf(s), p.x, p.y + S0 * 0.2, suitK()) : { x: p.x, y: p.y - S0 * 0.6 }; };
   const NPC = () => D().npcs;
   const NK = (m) => NPC().kinds[m.kind];
   const mobs = [], floats = [];
@@ -481,7 +487,12 @@ AB.IsoSurface = (() => {
       // №146: вне базы в движении не атакуют — сначала остановка, удар только стоя
       if (s.anim) return;
       if (s.path.length) { s.path = []; return; }
-      if (s.atkT <= 0) { s.atkT = v.rate; s.atk = { t: 0 }; s.face = posOf(m).x >= posOf(s).x ? 1 : -1; hurtMob(m, v.attack, s); }
+      if (s.atkT <= 0) {
+        s.atkT = v.rate; s.atk = { t: 0 }; s.face = posOf(m).x >= posOf(s).x ? 1 : -1;
+        // экзокостюм — выстрел сгустком: урон — когда сгусток долетит; остальная техника бьёт сразу
+        if (v.fx && vfx) vfx.shot(v.fx, () => muzzleOf(s), () => { const p = posOf(m); return { x: p.x, y: p.y - S0 * 0.35 }; }, S0, () => { if (m.hp > 0) hurtMob(m, v.attack, s); });
+        else hurtMob(m, v.attack, s);
+      }
     } else if (!s.anim && ((s.repath = (s.repath || 0) - dt) <= 0 || !s.path.length)) {
       s.repath = 0.6; s.path = pathTo(curCell(s), (x) => dist(x, curCell(m)) <= v.reach) || [];
     }
@@ -526,7 +537,7 @@ AB.IsoSurface = (() => {
       g.strokeStyle = '#3f5a48'; g.lineWidth = 2; for (let i = 0; i < 4; i++) { const ax = -10 + i * 7; g.beginPath(); g.moveTo(ax, -6); g.quadraticCurveTo(ax + Math.sin(time * 2 + i) * 4, -1, ax + 3, 2); g.stroke(); }
       for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(160,255,150,${0.5 + 0.4 * Math.sin(time * 2.4 + i)})`; g.beginPath(); g.arc(-6 + i * 6, -11 - bob, 1.8, 0, 7); g.fill(); }
     }
-    if (m.flash > 0) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(255,80,60,.45)'; g.fillRect(-20, -40, 40, 44); g.globalCompositeOperation = 'source-over'; }
+    if (m.flash > 0) { const fr = g.createRadialGradient(0, -14, 2, 0, -14, 22); fr.addColorStop(0, `rgba(255,90,60,${0.55 * m.flash / 0.25})`); fr.addColorStop(1, 'rgba(255,90,60,0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = fr; g.beginPath(); g.arc(0, -14, 22, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over'; }   // №147: вспышка ранения — по фигуре, без прямоугольника
     g.restore();
     if (m.hp > 0) {
       if (m.hp < m.max || m.aggro) hpBar(x, y - S0 * 1.25, m.hp / m.max, m.aggro ? '#ff5a4a' : '#e0c080');
@@ -713,6 +724,7 @@ AB.IsoSurface = (() => {
     { const u = selU(), p = posOf(u); g.strokeStyle = drive ? 'rgba(255,210,120,.95)' : 'rgba(94,230,255,.9)'; g.lineWidth = 2; g.beginPath(); g.ellipse(p.x, p.y + 4, S0 * (u === base ? 0.85 : 0.5), S0 * (u === base ? 0.36 : 0.22), 0, 0, 7); g.stroke(); }
     // база и отряды — сверху вниз, чтобы ближние перекрывали дальних
     [base, ...outSquads(), ...mobs].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : u.kind === 'squad' ? drawSquad(u, p.x, p.y) : drawMob(u)));
+    if (vfx) vfx.draw(g, frameDt);
     drawFloats();
     if (cmd) { const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r); g.strokeStyle = cmd.m ? 'rgba(255,120,90,.95)' : 'rgba(255,226,140,.95)'; g.lineWidth = 2.5; hexPath(p.x, p.y, S0 * 0.82, g); g.stroke(); }
     // подписи — постоянного размера на экране
@@ -746,8 +758,7 @@ AB.IsoSurface = (() => {
   // герой в экзокостюме — той же фигурой, что на дне (AB.IsoSuit)
   function drawSquad(s, x, y) {
     if (s.state === 'retreat') g.globalAlpha = 0.8;
-    const look = (AB.VEHICLES[s.vehicle] || {}).look || s.id;
-    const pose = { id: look, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
+    const pose = poseOf(s);
     if (AB.IsoSuit && AB.RIGS && AB.RIGS.EXOSUIT) AB.IsoSuit.draw(g, pose, x, y + S0 * 0.2, (S0 * 1.3) / AB.RIGS.EXOSUIT.height);
     else { g.fillStyle = '#c9853a'; g.beginPath(); g.arc(x, y - 10, 8, 0, 7); g.fill(); }
     g.globalAlpha = 1;
@@ -804,7 +815,7 @@ AB.IsoSurface = (() => {
   // ---------- цикл ----------
   function loop(now) {
     if (!open_) return;
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt; frameDt = dt;
     stepUnit(base, dt); for (const s of outSquads()) stepUnit(s, dt);
     combatTick(dt);
     if (AB.IsoAudio && AB.IsoAudio.surfaceTick) AB.IsoAudio.surfaceTick(dt);

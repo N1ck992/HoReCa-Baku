@@ -519,7 +519,7 @@ AB.IsoOverworld = (() => {
   // ---------- кадр ----------
   function loop(now) {
     if (!open_) return;
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt; frameDt = dt;
     if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
     if (ascend) { ascendTick(dt); requestAnimationFrame(loop); return; }
     if (mode === 'capsule') stepUnit(base, dt, BASE_STEP);
@@ -690,7 +690,12 @@ AB.IsoOverworld = (() => {
         if (s.path.length) { if (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) s.path = []; continue; }
         const foe = (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) ? s.target
           : mobs.filter((m) => m.hp > 0 && (m.hunt || s.target === m) && canHit(m, here, sw.reachCells)).sort((a, b) => dist(a, here) - dist(b, here))[0];
-        if (foe) { s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1; }
+        if (foe) {
+          s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1;
+          // №147: экзокостюм — выстрел энергосгустком (только картинка; урон — как раньше, в момент удара)
+          const V = AB.VEHICLES && AB.VEHICLES[s.vehicle];
+          if (V && V.fx && vfx) { const me = s, m = foe; vfx.shot(V.fx, () => muzzleOf(me), () => { const p = curMob(m); return { x: p.x, y: p.y - size * 0.3 }; }, size); }
+        }
       }
     }
   }
@@ -827,6 +832,7 @@ AB.IsoOverworld = (() => {
     if (mode === 'capsule') things.push({ y: curPos(base).y, f: drawBase });
     for (const s of outSquads()) things.push({ y: curPos(s).y, f: () => drawSquad(s) });
     things.sort((a, b) => a.y - b.y).forEach((t) => t.f());
+    if (vfx) vfx.draw(g, frameDt);                               // №147: энергосгустки экзокостюма
     for (const u of [base, ...outSquads()]) {
       const c = curPos(u), lg = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, size * 3.2);
       lg.addColorStop(0, 'rgba(120,200,220,.07)'); lg.addColorStop(1, 'rgba(120,200,220,0)');
@@ -855,9 +861,17 @@ AB.IsoOverworld = (() => {
     g.fillStyle = '#8a6e30'; g.fillRect(c.x - 14 * dpr, c.y - 2, 28 * dpr, 4 * dpr);
     g.fillStyle = '#5ee6ff'; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(c.x + i * 8 * dpr, c.y - 8, 2.6 * dpr, 0, 7); g.fill(); }
   }
+  // №147: эффекты атаки техники и орудие в руках (экзокостюм)
+  const vfx = AB.IsoVFX ? AB.IsoVFX.create() : null;
+  let frameDt = 0;
+  const gunOf = (s) => !!(AB.VEHICLES && AB.VEHICLES[s.vehicle] && AB.VEHICLES[s.vehicle].gun);
+  function muzzleOf(s) {
+    const c = slotPos(s), pose = { id: (AB.VEHICLES && AB.VEHICLES[s.vehicle] || {}).look || s.id, facing: s.face, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1 };
+    return AB.IsoSuit.muzzle ? AB.IsoSuit.muzzle(pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height) : { x: c.x, y: c.y - size * 0.6 };
+  }
   function drawSquad(s) {
     const c = slotPos(s), me = AB.Chars.get(s.id);
-    const pose = { id: (AB.VEHICLES && AB.VEHICLES[s.vehicle] || {}).look || s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
+    const pose = { gun: gunOf(s), id: (AB.VEHICLES && AB.VEHICLES[s.vehicle] || {}).look || s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
     if (s.state === 'retreat') g.globalAlpha = 0.75;
     AB.IsoSuit.draw(g, pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height);
     g.globalAlpha = 1;
