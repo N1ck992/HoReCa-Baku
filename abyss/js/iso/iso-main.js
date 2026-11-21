@@ -265,8 +265,10 @@
     $('#iso-restart-top').addEventListener('click', () => AB.IsoGame.restart());
     // №60: временно — на весь экран (и горизонтально, где браузер позволяет)
     const fsBtn = $('#iso-fs'), fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
-    fsBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-    fsBtn.addEventListener('click', async () => {
+    // №146: та же кнопка ⛶ и на картах (дно, поверхность) — [data-fs]
+    const fsBtns = [fsBtn, ...document.querySelectorAll('[data-fs]')];
+    for (const b of fsBtns) { b.addEventListener('pointerdown', (e) => e.stopPropagation()); b.addEventListener('click', fsToggle); }
+    async function fsToggle() {
       try {
         if (fsEl()) { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
         const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -274,10 +276,11 @@
         await req.call(el, { navigationUI: 'hide' });
         try { if (screen.orientation && screen.orientation.lock && isTouch) await screen.orientation.lock('landscape'); } catch (e) { /* поворот не разрешён — повернёте сами */ }
       } catch (e) {
-        toast('Браузер не разрешил полный экран здесь. Откройте игру в отдельной вкладке или добавьте на главный экран', 'info');
+        const t = 'Браузер не разрешил полный экран здесь. Откройте игру в отдельной вкладке или добавьте на главный экран';
+        if (AB.IsoSurface && AB.IsoSurface.isOpen()) AB.IsoSurface.say(t); else if (AB.IsoOverworld.isOpen()) AB.IsoOverworld.say(t); else toast(t, 'info');
       }
-    });
-    const fsSync = () => { fsBtn.textContent = fsEl() ? '✕⛶' : '⛶'; fsBtn.title = fsEl() ? 'Выйти из полноэкранного режима' : 'На весь экран'; setTimeout(() => window.dispatchEvent(new Event('resize')), 120); };
+    }
+    const fsSync = () => { for (const b of fsBtns) { b.textContent = fsEl() ? '✕⛶' : '⛶'; b.title = fsEl() ? 'Выйти из полноэкранного режима' : 'На весь экран'; } setTimeout(() => window.dispatchEvent(new Event('resize')), 120); };
     document.addEventListener('fullscreenchange', fsSync); document.addEventListener('webkitfullscreenchange', fsSync);
     // №87: телефон держат вертикально — просим повернуть (и пробуем сами: полный экран + горизонтально)
     let rtSkip = false;

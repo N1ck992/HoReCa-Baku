@@ -331,7 +331,7 @@ AB.IsoSurface = (() => {
     if (!u.anim && u.path.length) {
       const nx = u.path.shift();
       u.face = upx(nx.c, nx.r).x >= upx(u.c, u.r).x ? 1 : -1;
-      u.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: STEP_OF(u) * cost(nx) };
+      u.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: STEP_OF(u) * cost(nx) }; u.atk = null;
     }
     if (!u.anim) return;
     u.anim.t += dt / u.anim.dur; u.stride += dt * 90;
@@ -451,7 +451,8 @@ AB.IsoSurface = (() => {
       m.aggro = null; m.path = curCell(m) === home ? [] : pathTo(curCell(m), (x) => x === home) || [];
     } else if (t) {
       if (dist(curCell(m), curCell(t)) <= 1) {
-        if (!m.anim) { m.path = []; if (m.atkT <= 0) { m.atkT = d.rate; m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1; hurtSquad(t, d.attack, m); } }
+        if (!m.anim && m.path.length) m.path = [];
+        else if (!m.anim && m.atkT <= 0 && !t.anim) { m.atkT = d.rate; m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1; hurtSquad(t, d.attack, m); }
       } else if (!m.anim && ((m.repath -= dt) <= 0 || !m.path.length)) {
         m.repath = 0.6; m.path = pathTo(curCell(m), (x) => dist(x, curCell(t)) <= 1) || [];
       }
@@ -477,7 +478,10 @@ AB.IsoSurface = (() => {
     if (!m) { if (s.resume && !s.anim) { s.resume = false; if (s.zone && curCell(s) !== s.zone) goTo(s, s.zone, true); } return; }
     const v = AB.VEHICLES[s.vehicle] || { attack: 10, rate: 1.2, reach: 1 };
     if (dist(curCell(s), curCell(m)) <= v.reach) {
-      if (!s.anim) { s.path = []; if (s.atkT <= 0) { s.atkT = v.rate; s.atk = { t: 0 }; s.face = posOf(m).x >= posOf(s).x ? 1 : -1; hurtMob(m, v.attack, s); } }
+      // №146: вне базы в движении не атакуют — сначала остановка, удар только стоя
+      if (s.anim) return;
+      if (s.path.length) { s.path = []; return; }
+      if (s.atkT <= 0) { s.atkT = v.rate; s.atk = { t: 0 }; s.face = posOf(m).x >= posOf(s).x ? 1 : -1; hurtMob(m, v.attack, s); }
     } else if (!s.anim && ((s.repath = (s.repath || 0) - dt) <= 0 || !s.path.length)) {
       s.repath = 0.6; s.path = pathTo(curCell(s), (x) => dist(x, curCell(m)) <= v.reach) || [];
     }

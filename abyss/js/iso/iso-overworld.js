@@ -499,7 +499,7 @@ AB.IsoOverworld = (() => {
       else if (!u.path.length && !u.anim) { const p = route(u, u.target, u); if (p) u.path = p; }
     }
     if (!u.anim && u.path.length && occupied(u.path[0].q, u.path[0].r, u)) { if (u.kind === 'base') say('Клетка занята — капсула остановилась'); u.path = []; }
-    if (!u.anim && u.path.length) u.anim = { from: { q: u.q, r: u.r }, to: u.path.shift(), t: 0 };
+    if (!u.anim && u.path.length) { u.anim = { from: { q: u.q, r: u.r }, to: u.path.shift(), t: 0 }; if (u.atk) u.atk = null; }   // №146: пошёл — замах сорван
     if (!u.anim) return;
     u.stride += dt / secs * 78;
     const a0 = px(u.anim.from.q, u.anim.from.r), a1 = px(u.anim.to.q, u.anim.to.r);
@@ -647,7 +647,7 @@ AB.IsoOverworld = (() => {
       const here = at(tgt);
       m.face = px(here.q, here.r).x >= px(m.q, m.r).x ? 1 : -1;
       if (d <= 1) {
-        if (m.atkT <= 0) { m.anim = 'ATTACK'; m.t = 0; m.atkT = def.attack.cooldown + def.attack.windup; m.hit = def.attack.windup; m.victim = tgt; }
+        if (m.atkT <= 0 && m.mt >= 1) { m.anim = 'ATTACK'; m.t = 0; m.atkT = def.attack.cooldown + def.attack.windup; m.hit = def.attack.windup; m.victim = tgt; }
         if (m.hit != null) {
           m.hit -= dt;
           if (m.hit <= 0) {
@@ -686,10 +686,11 @@ AB.IsoOverworld = (() => {
           }
         }
         if (s.atk.t > 0.8) s.atk = null;
-      } else if (s.atkT <= 0 && !s.anim && (!s.path.length || s.target)) {   // на марше приказ «иди» важнее: сам бьёт, когда стоит
+      } else if (s.atkT <= 0 && !s.anim) {   // №146: в движении не атакуют — бьют только стоя (цель рядом — сначала остановка)
+        if (s.path.length) { if (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) s.path = []; continue; }
         const foe = (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) ? s.target
           : mobs.filter((m) => m.hp > 0 && (m.hunt || s.target === m) && canHit(m, here, sw.reachCells)).sort((a, b) => dist(a, here) - dist(b, here))[0];
-        if (foe) { s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1; s.path = []; }
+        if (foe) { s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1; }
       }
     }
   }
