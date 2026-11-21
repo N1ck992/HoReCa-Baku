@@ -250,7 +250,8 @@ AB.IsoSurface = (() => {
   // ---------- отряды и база (№140: как на дне) ----------
   // капсула-батискаф — база: ездит по карте («Вести базу»), внутрь можно войти («Моя база»);
   // герои выходят из неё в своих экзокостюмах, ходят, возвращаются и стыкуются рядом
-  const BASE_STEP = 0.9, SUIT_STEP = 0.3;            // секунд на клетку дороги (бездорожье — дольше, по цене клетки)
+  // №142: скорость — у техники (js/data/vehicles.js, клеток в минуту по дороге); бездорожье — дольше по цене клетки
+  const STEP_OF = (u) => 60 / (u.kind === 'base' ? AB.VEHICLES_BASE.speed : (AB.VEHICLES[u.vehicle] || { speed: 30 }).speed);
   const base = { id: 'base', kind: 'base', c: 0, r: 0, path: [], anim: null, face: 1, stride: 0 };
   const squads = [];                                 // { id, kind: 'squad', vehicle, state: 'home'|'out'|'retreat', c, r, path, anim, face, stride }
   let sel = 'base', drive = false, selAll = false, pendSite = null, follow = true, flyU = null;
@@ -258,12 +259,20 @@ AB.IsoSurface = (() => {
   const outSquads = () => squads.filter((s) => s.state !== 'home');
   const selU = () => { const u = unit(sel); return u && (u === base || u.state !== 'home') ? u : base; };
   const curCell = (u) => (u.anim ? cell(u.anim.to.c, u.anim.to.r) : cell(u.c, u.r));
-  const VEHICLE = { 'CHAR-001': 'EQUIP-005', 'CHAR-003': 'EQUIP-018' };
+  // №142: кто в какой технике — окно «Отряд» (js/iso/iso-roster.js); в базе можно пересаживаться
   function syncSquads() {
-    const crew = AB.IsoActs ? AB.IsoActs.crew() : ['CHAR-001'];
-    for (const id of crew) if (VEHICLE[id] && !squads.some((s) => s.id === id)) squads.push({ id, kind: 'squad', vehicle: VEHICLE[id], state: 'home', c: base.c, r: base.r, path: [], anim: null, face: 1, stride: 0 });
+    const ro = AB.IsoRoster ? AB.IsoRoster.list() : [];
+    for (const sl of ro) {
+      if (!sl.hero) continue;
+      let s = squads.find((q) => q.id === sl.hero);
+      if (!s) { s = { id: sl.hero, kind: 'squad', vehicle: sl.vehicle, state: 'home', c: base.c, r: base.r, path: [], anim: null, face: 1, stride: 0, mode: 'follow', target: null }; squads.push(s); }
+      if (s.state === 'home') s.vehicle = sl.vehicle;
+    }
+    for (let i = squads.length - 1; i >= 0; i--) if (squads[i].state === 'home' && !ro.some((sl) => sl.hero === squads[i].id)) squads.splice(i, 1);
+    squads.sort((a, b) => ro.findIndex((sl) => sl.hero === a.id) - ro.findIndex((sl) => sl.hero === b.id));
     for (const s of squads) if (s.state === 'home') { s.c = base.c; s.r = base.r; }
   }
+  AB.Bus.on('roster:changed', () => { if (built) { syncSquads(); barSig = ''; } });
   const taken = (k, self) => (k.c === base.c && k.r === base.r) || outSquads().some((s) => s !== self && curCell(s) === k);
   const besideBase = (self) => nbrs(curCell(base)).find((k) => passable(k) && !taken(k, self)) || null;
   function deploy(id) {
@@ -306,8 +315,9 @@ AB.IsoSurface = (() => {
     }
     if (found.length) say(`Найдено: ${found.map((s) => s.name).join(', ')}`);
   }
-  function goTo(u, k) {
+  function goTo(u, k, keep) {
     if (!passable(k)) { say(K[k.kind].block); return false; }
+    if (!keep && u.kind === 'squad') { u.mode = 'follow'; u.target = null; u.zone = k; }
     const from = curCell(u);
     if (from === k) { u.path = []; if (k.site) showSite(k.site); return true; }
     const p = search(from, (m) => m === k, (m) => (passable(m) ? cost(m) : Infinity));
@@ -320,7 +330,7 @@ AB.IsoSurface = (() => {
     if (!u.anim && u.path.length) {
       const nx = u.path.shift();
       u.face = upx(nx.c, nx.r).x >= upx(u.c, u.r).x ? 1 : -1;
-      u.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: (u === base ? BASE_STEP : SUIT_STEP) * cost(nx) };
+      u.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: STEP_OF(u) * cost(nx) };
     }
     if (!u.anim) return;
     u.anim.t += dt / u.anim.dur; u.stride += dt * 90;
@@ -347,6 +357,233 @@ AB.IsoSurface = (() => {
     const s = squads.find((q) => q.state === 'home');
     if (s && deploy(s.id)) return s;
     return base;
+  }
+
+  // ---------- №142: нейтральные NPC и бой ----------
+  // группы стоят в случайных местах; сами не нападают; ударили одного — вступается вся группа;
+  // за убийство — награда в вещи отряда. Отряд в «Автобое» бьёт тех, кто нападает на него или
+  // на союзников рядом (3 клетки); «Атаковать» — напасть на выбранного.
+  const NPC = () => D().npcs;
+  const NK = (m) => NPC().kinds[m.kind];
+  const mobs = [], floats = [];
+  let mobSeq = 0, respawnT = [];
+  const alive = () => mobs.filter((m) => m.hp > 0);
+  const mobAt = (k) => alive().find((m) => curCell(m) === k) || null;
+  const eyesNear = (k) => [base, ...outSquads()].some((u) => dist(k, curCell(u)) <= VIEW + 1);
+  const visibleMob = (m) => { const k = curCell(m); return k.seen && eyesNear(k); };
+  const pathTo = (from, goal) => search(from, goal, (x) => (passable(x) && x !== curCell(base) && !(mobAt(x) && !goal(x)) ? cost(x) : Infinity));
+  const floatText = (p, text, col) => floats.push({ x: p.x, y: p.y - S0 * 0.9, t: 0, text, col });
+  function spawnGroup() {
+    const B = curCell(base);
+    const all = cells.filter((k) => passable(k) && !k.site && !k.road && k.r > 2 && k.r < H - 2 && sites.every((s) => dist(s, k) >= 3) && dist(k, B) >= 5 && alive().every((m) => dist(curCell(m), k) >= 4));
+    if (!all.length) return;
+    const k = all[Math.floor(Math.random() * all.length)];
+    const kinds = Object.keys(NPC().kinds).filter((id) => NPC().kinds[id].side === k.side);
+    const kind = kinds[Math.floor(Math.random() * kinds.length)], d = NPC().kinds[kind];
+    const [a, b] = NPC().perGroup, n = a + Math.floor(Math.random() * (b - a + 1)), grp = ++mobSeq;
+    const spots = [k, ...nbrs(k).filter((x) => passable(x) && !x.site)];
+    for (let i = 0; i < n && i < spots.length; i++) {
+      mobs.push({ id: `npc${++mobSeq}`, kind: 'npc', type: kind, grp, c: spots[i].c, r: spots[i].r, home: { c: k.c, r: k.r }, hp: d.hp, max: d.hp,
+        aggro: null, atkT: 0, atk: null, path: [], anim: null, face: Math.random() < 0.5 ? 1 : -1, stride: 0, flash: 0, wanderT: 2 + Math.random() * 6, repath: 0, deadT: 0 });
+      mobs[mobs.length - 1].kind = kind;
+    }
+  }
+  function spawnMobs() { mobs.length = 0; respawnT = []; for (let i = 0; i < NPC().groups; i++) spawnGroup(); }
+  function mobStep(m, dt) {
+    const d = NK(m);
+    if (!m.anim && m.path.length) {
+      const nx = m.path.shift();
+      const busy = (mobAt(nx) && mobAt(nx) !== m) || nx === curCell(base) || outSquads().some((s) => curCell(s) === nx);
+      if (busy || !passable(nx)) m.path = [];
+      else { m.face = upx(nx.c, nx.r).x >= upx(m.c, m.r).x ? 1 : -1; m.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: 60 / d.speed * cost(nx) }; }
+    }
+    if (!m.anim) return;
+    m.anim.t += dt / m.anim.dur; m.stride += dt * 90;
+    if (m.anim.t >= 1) { m.c = m.anim.to.c; m.r = m.anim.to.r; m.anim = null; }
+  }
+  const herName = (id) => AB.ID.get(id).name;
+  const fem = (id) => id === 'CHAR-002' || id === 'CHAR-003';
+  function hurtSquad(s, dmg, m) {
+    const c = AB.Chars.get(s.id), v = AB.VEHICLES[s.vehicle] || { armor: 0 };
+    const real = Math.max(1, Math.round(dmg * (1 - v.armor)));
+    AB.Bus.emit('surface:hit', { npc: false });
+    if (c) c.hp = Math.max(0, c.hp - real);
+    s.flash = 0.25; floatText(posOf(s), `−${real}`, '#ff8a6a');
+    if (s.mode === 'auto' && !s.target) s.target = m;          // автобой: ответный удар
+    barSig = '';
+    if (c && c.hp <= 0) squadDown(s);
+  }
+  // костюм разбит — герой очнулся в батискафе (как на дне), здоровье восстановлено
+  function squadDown(s) {
+    const c = AB.Chars.get(s.id), max = (AB.ID.get(s.id).stats || {}).maxHp || 100;
+    if (c) { c.hp = max; c.dead = false; }
+    for (const m of mobs) if (m.aggro === s) m.aggro = null;
+    Object.assign(s, { state: 'home', path: [], anim: null, target: null, zone: null, c: base.c, r: base.r });
+    if (sel === s.id) sel = 'base';
+    barSig = '';
+    say(`${herName(s.id)}: костюм разбит — очнул${fem(s.id) ? 'ась' : 'ся'} в батискафе`);
+  }
+  function hurtMob(m, dmg, s) {
+    const d = NK(m), real = Math.max(1, Math.round(dmg * (1 - d.armor)));
+    AB.Bus.emit('surface:hit', { npc: true });
+    m.hp -= real; m.flash = 0.25; floatText(posOf(m), `−${real}`, '#ffe2a8');
+    for (const o of alive()) if (o.grp === m.grp && !o.aggro) o.aggro = s;   // за своего вступается вся группа
+    m.aggro = m.aggro || s;
+    if (m.hp <= 0) mobDead(m);
+  }
+  function mobDead(m) {
+    m.hp = 0; m.deadT = 1.4; m.path = []; m.anim = null;
+    const d = NK(m), got = [];
+    for (const [item, n, ch] of d.reward) if (Math.random() < ch) { if (AB.IsoStash) AB.IsoStash.add(item, n); got.push(`${AB.ID.get(item).name} ×${n}`); }
+    floatText(posOf(m), got.length ? `+ ${got.join(', ')}` : d.name, '#ffd27a');
+    say(`${d.name} повержен. Награда: ${got.join(', ') || 'ничего'}`);
+    AB.Bus.emit('surface:kill', { kind: m.kind, reward: got });
+    for (const q of squads) if (q.target === m) q.target = null;
+    if (!alive().some((o) => o.grp === m.grp)) respawnT.push(NPC().respawn);
+  }
+  function mobTick(m, dt) {
+    const d = NK(m);
+    m.flash = Math.max(0, m.flash - dt); m.atkT = Math.max(0, m.atkT - dt);
+    if (m.atk) { m.atk.t += dt; if (m.atk.t > 0.6) m.atk = null; }
+    const home = cell(m.home.c, m.home.r), t = m.aggro;
+    if (t && (t.state === 'home' || dist(curCell(m), home) > 7)) {      // ушёл в базу или увёл далеко — назад, домой
+      m.aggro = null; m.path = curCell(m) === home ? [] : pathTo(curCell(m), (x) => x === home) || [];
+    } else if (t) {
+      if (dist(curCell(m), curCell(t)) <= 1) {
+        if (!m.anim) { m.path = []; if (m.atkT <= 0) { m.atkT = d.rate; m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1; hurtSquad(t, d.attack, m); } }
+      } else if (!m.anim && ((m.repath -= dt) <= 0 || !m.path.length)) {
+        m.repath = 0.6; m.path = pathTo(curCell(m), (x) => dist(x, curCell(t)) <= 1) || [];
+      }
+    } else if (!m.anim && !m.path.length && (m.wanderT -= dt) <= 0) {      // бродит возле своего места
+      m.wanderT = 4 + Math.random() * 8;
+      const opts = nbrs(curCell(m)).filter((x) => passable(x) && !mobAt(x) && !x.site && x !== curCell(base) && dist(x, home) <= 2);
+      if (opts.length) m.path = [opts[Math.floor(Math.random() * opts.length)]];
+    }
+    mobStep(m, dt);
+  }
+  function squadTick(s, dt) {
+    s.flash = Math.max(0, (s.flash || 0) - dt); s.atkT = Math.max(0, (s.atkT || 0) - dt);
+    if (s.atk) { s.atk.t += dt; if (s.atk.t > 0.8) s.atk = null; }
+    if (s.state !== 'out') return;
+    if (s.target && s.target.hp <= 0) { s.target = null; if (s.mode === 'auto' && s.zone && curCell(s) !== s.zone) s.resume = true; }
+    // автобой: бьёт тех, кто нападает на него или на союзников рядом
+    if (!s.target && s.mode === 'auto') {
+      const foe = alive().filter((m) => m.aggro && m.aggro.kind === 'squad' && dist(curCell(m), curCell(s)) <= 3)
+        .sort((a, b) => dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s)))[0];
+      if (foe) { s.target = foe; if (s.zone) s.resume = true; }
+    }
+    const m = s.target;
+    if (!m) { if (s.resume && !s.anim) { s.resume = false; if (s.zone && curCell(s) !== s.zone) goTo(s, s.zone, true); } return; }
+    const v = AB.VEHICLES[s.vehicle] || { attack: 10, rate: 1.2, reach: 1 };
+    if (dist(curCell(s), curCell(m)) <= v.reach) {
+      if (!s.anim) { s.path = []; if (s.atkT <= 0) { s.atkT = v.rate; s.atk = { t: 0 }; s.face = posOf(m).x >= posOf(s).x ? 1 : -1; hurtMob(m, v.attack, s); } }
+    } else if (!s.anim && ((s.repath = (s.repath || 0) - dt) <= 0 || !s.path.length)) {
+      s.repath = 0.6; s.path = pathTo(curCell(s), (x) => dist(x, curCell(m)) <= v.reach) || [];
+    }
+  }
+  function combatTick(dt) {
+    for (const m of mobs) if (m.hp > 0) mobTick(m, dt); else m.deadT -= dt;
+    for (let i = mobs.length - 1; i >= 0; i--) if (mobs[i].hp <= 0 && mobs[i].deadT <= 0) mobs.splice(i, 1);
+    for (const s of squads) squadTick(s, dt);
+    for (let i = respawnT.length - 1; i >= 0; i--) { respawnT[i] -= dt; if (respawnT[i] <= 0) { respawnT.splice(i, 1); spawnGroup(); } }
+    for (const f of floats) f.t += dt;
+    for (let i = floats.length - 1; i >= 0; i--) if (floats[i].t > 1.4) floats.splice(i, 1);
+  }
+  // рисунок NPC (условный, до картинок автора): u — размер клетки
+  function drawMob(m) {
+    if (!visibleMob(m)) return;
+    const p = posOf(m), x = p.x, y = p.y + S0 * 0.15, f = m.face || 1;
+    const a = m.hp > 0 ? 1 : Math.max(0, m.deadT / 1.4); if (a <= 0) return;
+    const bob = m.anim ? Math.abs(Math.sin(m.stride / 10)) * 2 : 0, lunge = m.atk ? Math.sin(Math.min(1, m.atk.t / 0.6) * Math.PI) * 5 * f : 0;
+    g.save(); g.globalAlpha = a; g.translate(x + lunge, y);
+    if (m.hp <= 0) g.rotate(1.2 * f);
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 2, 11, 4, 0, 0, 7); g.fill();
+    const K = m.kind;
+    if (K === 'raider') {
+      g.fillStyle = '#3a2c1c'; g.fillRect(-5, -8 - bob, 3, 8); g.fillRect(2, -8 - bob, 3, 8);
+      g.fillStyle = '#b88a50'; g.beginPath(); g.moveTo(-8, -6 - bob); g.lineTo(8, -6 - bob); g.lineTo(5, -24 - bob); g.lineTo(-5, -24 - bob); g.fill();
+      g.fillStyle = '#a3302a'; g.fillRect(-6, -14 - bob, 12, 3);
+      g.fillStyle = '#c08a5a'; g.beginPath(); g.arc(0, -28 - bob, 5, 0, 7); g.fill();
+      g.fillStyle = '#e8dcc0'; g.beginPath(); g.ellipse(0, -31 - bob, 6, 3.5, 0, 0, 7); g.fill();
+      g.strokeStyle = '#d8dde0'; g.lineWidth = 2; g.beginPath(); g.moveTo(5 * f, -16 - bob); g.lineTo((m.atk ? 18 : 10) * f, (m.atk ? -22 : -30) - bob); g.stroke();
+    } else if (K === 'shellback') {
+      g.fillStyle = '#5a4430'; for (const lx of [-9, -3, 3, 9]) g.fillRect(lx - 1.5, -6, 3, 7);
+      g.fillStyle = '#8a6a48'; g.beginPath(); g.ellipse(0, -11 - bob, 15, 10, 0, Math.PI, 0); g.fill();
+      g.strokeStyle = '#5a4430'; g.lineWidth = 1.5; for (const lx of [-6, 0, 6]) { g.beginPath(); g.moveTo(lx, -20 - bob); g.lineTo(lx * 1.4, -11 - bob); g.stroke(); }
+      g.fillStyle = '#6a5038'; g.beginPath(); g.ellipse(14 * f, -9 - bob, 5, 4, 0, 0, 7); g.fill();
+    } else if (K === 'thrall') {
+      g.fillStyle = '#3a4434'; g.fillRect(-5, -8 - bob, 3, 8); g.fillRect(2, -8 - bob, 3, 8);
+      g.fillStyle = '#6a7a5a'; g.beginPath(); g.ellipse(2 * f, -17 - bob, 7, 10, 0.35 * f, 0, 7); g.fill();
+      g.fillStyle = '#8a9a78'; g.beginPath(); g.arc(7 * f, -27 - bob, 5, 0, 7); g.fill();
+      for (let i = 0; i < 4; i++) { g.fillStyle = `rgba(240,130,210,${0.5 + 0.4 * Math.sin(time * 3 + i + m.grp)})`; g.beginPath(); g.arc(-3 + i * 3, -24 + (i % 2) * 6 - bob, 1.6, 0, 7); g.fill(); }
+    } else {                                                            // топляк
+      g.fillStyle = '#2f4436'; g.beginPath(); g.ellipse(0, -7 - bob, 15, 8, 0, Math.PI, 0); g.lineTo(15, -6); g.lineTo(-15, -6); g.fill();
+      g.strokeStyle = '#3f5a48'; g.lineWidth = 2; for (let i = 0; i < 4; i++) { const ax = -10 + i * 7; g.beginPath(); g.moveTo(ax, -6); g.quadraticCurveTo(ax + Math.sin(time * 2 + i) * 4, -1, ax + 3, 2); g.stroke(); }
+      for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(160,255,150,${0.5 + 0.4 * Math.sin(time * 2.4 + i)})`; g.beginPath(); g.arc(-6 + i * 6, -11 - bob, 1.8, 0, 7); g.fill(); }
+    }
+    if (m.flash > 0) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(255,80,60,.45)'; g.fillRect(-20, -40, 40, 44); g.globalCompositeOperation = 'source-over'; }
+    g.restore();
+    if (m.hp > 0) {
+      if (m.hp < m.max || m.aggro) hpBar(x, y - S0 * 1.25, m.hp / m.max, m.aggro ? '#ff5a4a' : '#e0c080');
+      if (m.aggro) { g.fillStyle = '#ff5a4a'; g.font = `700 ${12}px "Oswald", sans-serif`; g.textAlign = 'center'; g.fillText('!', x, y - S0 * 1.35); }
+    }
+  }
+  function hpBar(x, y, f, col) {
+    const w = S0 * 0.9;
+    g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(x - w / 2, y, w, 4);
+    g.fillStyle = col; g.fillRect(x - w / 2, y, w * Math.max(0, f), 4);
+  }
+  function drawFloats() {
+    const k = kScale(), fs = 11 * dpr / k;
+    g.textAlign = 'center'; g.font = `700 ${fs}px "Share Tech Mono", monospace`;
+    for (const f of floats) {
+      const y = f.y - f.t * S0 * 0.6; g.globalAlpha = Math.max(0, 1 - f.t / 1.4);
+      g.lineWidth = 3 * dpr / k; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(f.text, f.x, y); g.fillStyle = f.col; g.fillText(f.text, f.x, y);
+    }
+    g.globalAlpha = 1;
+  }
+
+  // ---------- №142: приказ по нажатию — «Автобой», «Следовать» (на NPC — «Атаковать») ----------
+  let cmd = null;                      // { k, m }
+  function hideCmd() { cmd = null; const el = document.getElementById('sf-cmd'); if (el) el.hidden = true; }
+  function showCmd(cx, cy, k, m) {
+    cmd = { k, m };
+    const el = document.getElementById('sf-cmd');
+    const d = m ? NK(m) : null;
+    el.querySelector('b').textContent = m ? d.name : k.site ? k.site.name : (K[k.kind].name || 'Клетка');
+    el.querySelector('small').textContent = m ? `${d.text} · ${m.hp}/${m.max}` : '';
+    el.querySelector('[data-cmd="auto"]').hidden = !!m;
+    el.querySelector('[data-cmd="follow"]').hidden = !!m;
+    el.querySelector('[data-cmd="attack"]').hidden = !m;
+    el.hidden = false;
+    const W2 = el.offsetWidth, H2 = el.offsetHeight, root = document.getElementById('sf').getBoundingClientRect();
+    el.style.left = `${Math.max(8, Math.min(root.width - W2 - 8, cx - root.left - W2 / 2))}px`;
+    el.style.top = `${Math.max(60, Math.min(root.height - H2 - 110, cy - root.top - H2 - 18))}px`;
+  }
+  // кто выполняет приказ: «Выбрать всех» — все герои снаружи (нет никого — выходят все); иначе — выбранный
+  function movers() {
+    if (selAll) {
+      for (const q of squads) if (q.state === 'home') deploy(q.id);     // весь отряд: кто в капсуле — тоже выходит
+      const outs = outSquads();
+      if (outs.length) return outs;
+    }
+    const u = mover(); return u.kind === 'squad' ? [u] : [];
+  }
+  function command(kind) {
+    if (!cmd) return; const { k, m } = cmd; hideCmd();
+    const us = movers(); if (!us.length) { say('Некому идти — выпустите героя из капсулы'); return; }
+    if (kind === 'attack') {
+      if (!m || m.hp <= 0) return;
+      for (const s of us) { s.mode = 'auto'; s.target = m; s.zone = null; s.path = []; s.repath = 0; if (s.state === 'retreat') s.state = 'out'; }
+      flyU = us[0]; follow = true; barSig = '';
+      say(`${us.length > 1 ? 'Отряд' : herName(us[0].id)}: атака — ${NK(m).name}`);
+      return;
+    }
+    const spots = [k, ...nbrs(k).filter((x) => passable(x) && x !== curCell(base) && !mobAt(x))];
+    us.forEach((s, i) => { s.mode = kind === 'auto' ? 'auto' : 'follow'; s.target = null; s.zone = spots[i % spots.length]; goTo(s, s.zone, true); });
+    pendSite = k.site ? { s: k.site, u: us[0] } : null;
+    flyU = us[0]; follow = true; barSig = '';
+    say(kind === 'auto' ? 'Автобой: идут туда и отвечают всем, кто нападёт на отряд' : 'Следовать: идут, не ввязываясь в бой');
   }
 
   // ---------- карточка точки ----------
@@ -411,7 +648,8 @@ AB.IsoSurface = (() => {
     // кольцо под выбранным
     { const u = selU(), p = posOf(u); g.strokeStyle = drive ? 'rgba(255,210,120,.95)' : 'rgba(94,230,255,.9)'; g.lineWidth = 2; g.beginPath(); g.ellipse(p.x, p.y + 4, S0 * (u === base ? 0.85 : 0.5), S0 * (u === base ? 0.36 : 0.22), 0, 0, 7); g.stroke(); }
     // база и отряды — сверху вниз, чтобы ближние перекрывали дальних
-    [base, ...outSquads()].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : drawSquad(u, p.x, p.y)));
+    [base, ...outSquads(), ...mobs].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : u.kind === 'squad' ? drawSquad(u, p.x, p.y) : drawMob(u)));
+    drawFloats();
     // подписи — постоянного размера на экране
     const fs = 11 * dpr / k;
     g.textAlign = 'center'; g.font = `600 ${fs}px "Share Tech Mono", monospace`;
@@ -443,10 +681,13 @@ AB.IsoSurface = (() => {
   // герой в экзокостюме — той же фигурой, что на дне (AB.IsoSuit)
   function drawSquad(s, x, y) {
     if (s.state === 'retreat') g.globalAlpha = 0.8;
-    const pose = { id: s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: -1, hurt: 0, dead: false, t: time };
+    const look = (AB.VEHICLES[s.vehicle] || {}).look || s.id;
+    const pose = { id: look, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
     if (AB.IsoSuit && AB.RIGS && AB.RIGS.EXOSUIT) AB.IsoSuit.draw(g, pose, x, y + S0 * 0.2, (S0 * 1.3) / AB.RIGS.EXOSUIT.height);
     else { g.fillStyle = '#c9853a'; g.beginPath(); g.arc(x, y - 10, 8, 0, 7); g.fill(); }
     g.globalAlpha = 1;
+    const c = AB.Chars.get(s.id), max = (AB.ID.get(s.id).stats || {}).maxHp || 100;
+    if (c && (c.hp < max || s.target)) hpBar(x, y - S0 * 1.45, c.hp / max, '#5ee6ff');
   }
   function drawSite(s) {
     const p = bpx(s.c, s.r), x = p.x, y = p.y, u = S0;
@@ -499,6 +740,8 @@ AB.IsoSurface = (() => {
     if (!open_) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
     stepUnit(base, dt); for (const s of outSquads()) stepUnit(s, dt);
+    combatTick(dt);
+    if (AB.IsoAudio && AB.IsoAudio.surfaceTick) AB.IsoAudio.surfaceTick(dt);
     barUi();
     if (follow) { const p = posOf(flyU || selU()); cam.x += (p.x - cam.x) * Math.min(1, dt * 5); cam.y += (p.y - cam.y) * Math.min(1, dt * 5); clampCam(); }
     draw();
@@ -511,31 +754,27 @@ AB.IsoSurface = (() => {
     const u = unitCell((bx - org.x) / S0, (by - org.y) / S0);
     return cell(u.c, u.r);
   }
-  function tap(k) {
-    hidePop();
+  function tap(k, cx, cy) {
+    hidePop(); hideCmd();
     if (!k) return;
     // нажали на капсулу: выбран отряд снаружи — вернуть его; иначе — выбрать капсулу
     if (k === curCell(base)) {
       const u = selU();
-      if (u.kind === 'squad') { recall(u.id); return; }
+      if (u.kind === 'squad' && !selAll) { recall(u.id); return; }
+      if (selAll && outSquads().length) { for (const q of outSquads()) recall(q.id); return; }
       sel = 'base'; flyU = base; follow = true; barSig = ''; say('Капсула. «Вести базу» — ехать на ней; удерживайте «Моя база» — масштаб карты'); return;
     }
     // нажали на своего героя — выбрать его
     const s = outSquads().find((q) => curCell(q) === k);
-    if (s) { sel = s.id; drive = false; flyU = s; follow = true; barSig = ''; return; }
+    if (s) { sel = s.id; drive = false; selAll = false; flyU = s; follow = true; barSig = ''; return; }
+    // NPC — «Атаковать»
+    const m = mobAt(k);
+    if (m && visibleMob(m) && !drive) { showCmd(cx, cy, k, m); return; }
     if (!k.site && !k.seen && !passable(k)) { say('Там ещё никто не был'); return; }
-    // «◎ Отряд»: все герои снаружи идут туда — первый в саму клетку, остальные рядом
-    const outs = outSquads().filter((q) => q.state === 'out');
-    if (selAll && !drive && outs.length > 1 && passable(k)) {
-      const spots = [k, ...nbrs(k).filter((m) => passable(m) && m !== curCell(base))];
-      outs.forEach((q, i) => goTo(q, spots[i % spots.length]));
-      pendSite = k.site ? { s: k.site, u: outs[0] } : null; flyU = outs[0];
-      return;
-    }
-    const u = mover();
-    pendSite = k.site ? { s: k.site, u } : null;
-    if (k.site && !u.anim && u.c === k.c && u.r === k.r) { showSite(k.site); pendSite = null; return; }
-    goTo(u, k);
+    if (!passable(k)) { say(K[k.kind].block); return; }
+    // «Вести базу» — капсула едет сразу
+    if (drive) { pendSite = k.site ? { s: k.site, u: base } : null; goTo(base, k); return; }
+    showCmd(cx, cy, k, null);
   }
   // ---------- нижняя панель: «Моя база» (с веером масштаба), «Вести базу», ячейки отрядов ----------
   const STATE = { home: 'в капсуле', out: 'снаружи', retreat: 'возвращается' };
@@ -548,16 +787,16 @@ AB.IsoSurface = (() => {
     const slots = [];
     for (const q of squads) {
       const c = AB.Chars.get(q.id), d = AB.ID.get(q.id), hp = c && d.stats ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
-      const st = q.state === 'out' && (q.anim || q.path.length) ? 'в пути' : STATE[q.state];
+      const st = q.state === 'out' && q.target ? 'в бою' : q.state === 'out' && (q.anim || q.path.length) ? (q.mode === 'auto' ? 'автобой' : 'в пути') : STATE[q.state];
       const on = (selAll && q.state === 'out') || (!selAll && sel === q.id && q.state !== 'home');
       const back = on && q.state === 'out' ? '<button data-do="back" title="Вернуть в капсулу">↩</button>' : '';
-      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${q.id}"></canvas><img src="assets/exosuit/v2/body.png" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}</div>`);
+      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · ${(AB.VEHICLES[q.vehicle] || {}).name || 'экзокостюм'} · скорость ${(AB.VEHICLES[q.vehicle] || {}).speed || '?'} кл/мин · ${st}"><canvas data-pt="${q.id}"></canvas><img src="${(AB.VEHICLES[q.vehicle] || {}).img || 'assets/exosuit/v2/body.png'}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}</div>`);
     }
     // как на дне: место под следующий транспорт и закрытые ячейки
     slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');
     slots.push('<div class="ow-slot lock"><span>Условие:</span><em>модуль «Ангар»</em></div>');
     slots.push('<div class="ow-slot lock"><i>🔒</i></div>');
-    const allB = document.querySelector('[data-sf-all]'); if (allB) allB.classList.toggle('on', selAll);
+    const allB = document.querySelector('[data-sf-allsel]'); if (allB) { allB.classList.toggle('on', selAll); allB.querySelector('b').textContent = selAll ? 'вкл' : 'выкл'; }
     const sig = slots.join('') + sel + drive + selAll;
     if (sig === barSig) return;
     barSig = sig;
@@ -604,7 +843,7 @@ AB.IsoSurface = (() => {
     });
     const up = (e) => {
       ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
-      if (drag && !drag.moved && e.type === 'pointerup') tap(pick(e.clientX, e.clientY));
+      if (drag && !drag.moved && e.type === 'pointerup') tap(pick(e.clientX, e.clientY), e.clientX, e.clientY);
       drag = null;
     };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -613,7 +852,10 @@ AB.IsoSurface = (() => {
     root.addEventListener('pointerdown', (e) => e.stopPropagation());
     root.addEventListener('click', (e) => {
       if (e.target.closest('[data-sf-x]')) hidePop();
-      if (e.target.closest('[data-sf-all]')) { selAll = !selAll && outSquads().filter((q) => q.state === 'out').length > 0; drive = false; barSig = ''; say(selAll ? 'Выбраны все герои снаружи' : 'Выбор: один герой'); }
+      if (e.target.closest('[data-sf-allsel]')) { selAll = !selAll; if (selAll) drive = false; barSig = ''; say(selAll ? 'Выбрать всех: вкл — приказ получает весь отряд' : 'Выбрать всех: выкл — приказ получает выбранный герой'); }
+      if (e.target.closest('[data-sf-squad]')) { AB.IsoRoster.open(); }
+      const cb = e.target.closest('[data-cmd]'); if (cb) { command(cb.dataset.cmd); return; }
+      if (e.target.closest('[data-cmd-x]')) { hideCmd(); return; }
       if (e.target.closest('[data-sf-items]')) AB.IsoInventory.open();
       if (e.target.closest('[data-sf-drive]')) { drive = !drive; selAll = false; if (drive) { sel = 'base'; flyU = base; say('Вести базу: вкл — нажмите на клетку, капсула поедет туда'); } else say('Вести базу: выкл'); barSig = ''; }
       const bk = e.target.closest('[data-do="back"]'), sl = e.target.closest('[data-u]');
@@ -649,6 +891,9 @@ AB.IsoSurface = (() => {
     for (const id of ['iso-act', 'iso-inv']) { const el = document.getElementById(id); if (el) el.hidden = true; }
     if (fresh || !load()) spawn();
     syncSquads(); barSig = '';
+    if (fresh || !mobs.length) spawnMobs();
+    hideCmd();
+    if (AB.IsoRoster) AB.IsoRoster.setOutFn((id) => { const q = unit(id); return !!q && q.state !== 'home'; });
     save();
     hidePop();
     open_ = true; document.getElementById('sf').hidden = false;
@@ -661,15 +906,22 @@ AB.IsoSurface = (() => {
     if (fresh) say(`Капсулу вынесло на сушу — зона A1, вокруг ${hereSide}. Нажмите на клетку — герой выйдет в экзокостюме; «Вести базу» — ехать капсулой`);
   }
   let inZone = false;           // отряд уже на поверхности: из капсулы выходим сюда, а не на дно
-  function close() { open_ = false; const el = document.getElementById('sf'); if (el) el.hidden = true; document.body.classList.remove('sf-on'); }
+  function close() { if (open_) setTimeout(() => AB.Bus.emit('surface:close', {}), 0); open_ = false; const el = document.getElementById('sf'); if (el) el.hidden = true; document.body.classList.remove('sf-on'); }
 
   return {
-    enter, close, isOpen: () => open_, say, active: () => inZone, enterBase, deploy, recall,
+    enter, close, isOpen: () => open_, say,
+    // №142: для звука — сколько вокруг выбранного пустыни и болота (0…1)
+    ambMix() {
+      if (!built) return { desert: 1, swamp: 0 };
+      const u = curCell(selU()); let d = 0, w = 0;
+      for (const k of cells) if (dist(k, u) <= 3) { if (k.side === 'desert') d++; else w++; }
+      const n = Math.max(1, d + w); return { desert: d / n, swamp: w / n };
+    }, active: () => inZone, enterBase, deploy, recall,
     revealAll() { for (const k of cells) if (!k.seen) { k.seen = true; clearFog(k); } save(); },
     zoom: (z) => setZoom(z),
     // для проверок
     _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
-    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _passable: (c, r) => passable(cell(c, r)),
+    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _mobs: () => mobs, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _passable: (c, r) => passable(cell(c, r)),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
   };
 })();

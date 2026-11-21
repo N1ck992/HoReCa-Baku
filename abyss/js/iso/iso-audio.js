@@ -118,6 +118,7 @@ AB.IsoAudio = (() => {
 
   // ---------- атмосфера ----------
   function mood() {
+    if (AB.IsoSurface && AB.IsoSurface.isOpen()) return {};          // №142: на поверхности — свой фон (surfAmb), корабля не слышно
     const sec = AB.IsoGame && AB.IsoGame.sector ? AB.IsoGame.sector() : '';
     const ship = /^SECTOR-00[1-4]$/.test(sec), base = sec === 'SECTOR-005';
     const m = { ...(ship ? RULES.amb.ship : base ? RULES.amb.base : RULES.amb.other) };
@@ -137,6 +138,86 @@ AB.IsoAudio = (() => {
       }
       if (L) { L.g.gain.cancelScheduledValues(t); L.g.gain.setTargetAtTime(v, t, 1.2); }   // плавно, за пару секунд
     }
+    surfAmb();
+  }
+
+  // ---------- №142: фон поверхности (собирается кодом) ----------
+  // пустыня — ветер (шум через фильтр, порывы медленно гуляют); болото — плеск и гул топи,
+  // лягушки и насекомые (surfaceTick); сколько чего — по местности вокруг выбранного (AB.IsoSurface.ambMix)
+  const SURF = { wind: 0.34, gust: 0.18, marsh: 0.2, frog: [1.4, 4.5], bug: [2.5, 7], bird: [9, 20] };
+  let sw = null, frogT = 2, bugT = 4, birdT = 10, mixT = 0;
+  function surfLoops() {
+    if (sw || !ctx) return sw;
+    const t = ctx.currentTime;
+    const mk = (type, freq, q) => { const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q) f.Q.value = q; return f; };
+    // ветер: шум → полосовой фильтр, частота качается медленным генератором; громкость — порывами
+    const ws = ctx.createBufferSource(); ws.buffer = noise(); ws.loop = true;
+    const wf = mk('bandpass', 420, 0.8), wl = ctx.createOscillator(), wlg = ctx.createGain();
+    wl.frequency.value = 0.07; wlg.gain.value = 260; wl.connect(wlg); wlg.connect(wf.frequency);
+    const wg = ctx.createGain(); wg.gain.value = 0; const gust = ctx.createGain(); gust.gain.value = 1;
+    const gl = ctx.createOscillator(), glg = ctx.createGain(); gl.frequency.value = 0.11; glg.gain.value = 0.45; gl.connect(glg); glg.connect(gust.gain);
+    ws.connect(wf); wf.connect(gust); gust.connect(wg); wg.connect(out);
+    // болото: низкий гул и плеск — шум через низкие фильтры
+    const ms = ctx.createBufferSource(); ms.buffer = noise(); ms.loop = true;
+    const mf = mk('lowpass', 320), mf2 = mk('peaking', 140, 1); mf2.gain.value = 6;
+    const mg = ctx.createGain(); mg.gain.value = 0;
+    ms.connect(mf); mf.connect(mf2); mf2.connect(mg); mg.connect(out);
+    ws.start(t, Math.random()); ms.start(t, Math.random()); wl.start(t); gl.start(t);
+    sw = { wg, mg, stop() { for (const n of [ws, ms, wl, gl]) try { n.stop(); } catch (e) { /* уже */ } } };
+    return sw;
+  }
+  function surfAmb() {
+    if (!ctx) return;
+    const onS = on && AB.IsoSurface && AB.IsoSurface.isOpen();
+    if (!onS && !sw) return;
+    const L = surfLoops(); if (!L) return;
+    const mix = onS && AB.IsoSurface.ambMix ? AB.IsoSurface.ambMix() : { desert: 0, swamp: 0 }, t = ctx.currentTime;
+    L.wg.gain.setTargetAtTime(onS ? SURF.wind * (0.35 + 0.65 * mix.desert) : 0, t, 1.5);
+    L.mg.gain.setTargetAtTime(onS ? SURF.marsh * mix.swamp : 0, t, 1.5);
+  }
+  // каждый кадр на поверхности: лягушки, насекомые, птицы; пересчёт смеси фона раз в 2 с
+  function surfaceTick(dt) {
+    if (!ctx || !on) return;
+    mixT -= dt; if (mixT <= 0) { mixT = 2; surfAmb(); }
+    const mix = AB.IsoSurface && AB.IsoSurface.ambMix ? AB.IsoSurface.ambMix() : { desert: 1, swamp: 0 };
+    const t = ctx.currentTime, pan = () => { const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) { p.pan.value = rnd(-0.8, 0.8); p.connect(out); } return p || out; };
+    frogT -= dt; bugT -= dt; birdT -= dt;
+    if (frogT <= 0) {                                                     // лягушка: низкое «ква» из нескольких толчков
+      frogT = rnd(...SURF.frog) / Math.max(0.2, mix.swamp);
+      if (mix.swamp > 0.15) {
+        const o = ctx.createOscillator(), e = ctx.createGain(), f = rnd(95, 160), n = 2 + Math.floor(Math.random() * 3);
+        o.type = 'sawtooth'; o.frequency.value = f; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600;
+        e.gain.value = 0; for (let i = 0; i < n; i++) { const ti = t + i * 0.11; e.gain.setValueAtTime(0, ti); e.gain.linearRampToValueAtTime(0.09 * mix.swamp, ti + 0.02); e.gain.exponentialRampToValueAtTime(0.001, ti + 0.09); }
+        o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * 0.8, t + n * 0.11);
+        o.connect(lp); lp.connect(e); e.connect(pan()); o.start(t); o.stop(t + n * 0.11 + 0.1);
+      }
+    }
+    if (bugT <= 0) {                                                      // насекомые: высокий стрекот
+      bugT = rnd(...SURF.bug);
+      if (mix.swamp > 0.15) {
+        const o = ctx.createOscillator(), am = ctx.createOscillator(), amg = ctx.createGain(), e = ctx.createGain(), len = rnd(0.6, 1.6);
+        o.type = 'sine'; o.frequency.value = rnd(4200, 6200); am.frequency.value = rnd(28, 45); amg.gain.value = 0.5;
+        e.gain.value = 0; e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(0.025 * mix.swamp, t + 0.15); e.gain.linearRampToValueAtTime(0, t + len);
+        const g2 = ctx.createGain(); g2.gain.value = 0.5; am.connect(amg); amg.connect(g2.gain);
+        o.connect(g2); g2.connect(e); e.connect(pan()); o.start(t); am.start(t); o.stop(t + len + 0.05); am.stop(t + len + 0.05);
+      }
+    }
+    if (birdT <= 0) {                                                     // далёкая птица над пустыней: свист вниз
+      birdT = rnd(...SURF.bird);
+      if (mix.desert > 0.3) {
+        const o = ctx.createOscillator(), e = ctx.createGain(), f = rnd(1800, 2600);
+        o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.7);
+        e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(0.03 * mix.desert, t + 0.08); e.gain.exponentialRampToValueAtTime(0.001, t + 0.75);
+        o.connect(e); e.connect(pan()); o.start(t); o.stop(t + 0.8);
+      }
+    }
+  }
+  B_surface();
+  function B_surface() {
+    AB.Bus.on('surface:enter', () => setTimeout(ambience, 50));
+    AB.Bus.on('surface:close', () => setTimeout(ambience, 50));
+    AB.Bus.on('surface:hit', ({ npc }) => { play(npc ? 'pipe_hit' : 'flesh_hit', { vol: 0.6, rate: rnd(0.9, 1.1) }); });
+    AB.Bus.on('surface:kill', () => play('reward', { vol: 0.6 }));
   }
 
   // ---------- события игры ----------
@@ -201,6 +282,7 @@ AB.IsoAudio = (() => {
   let distantT = rnd(...RULES.distant), moanT = rnd(...RULES.idleMoan), fixT = 1;
   function update(dt) {
     if (!ctx || !on) return;
+    if (AB.IsoSurface && AB.IsoSurface.isOpen()) return;          // поверхность: своё (surfaceTick)
     const l = listener();
     for (const m of [...AB.IsoParty.members(), ...AB.IsoParty.npcs()]) {
       if (m.hidden || m.ext) continue;
@@ -237,6 +319,7 @@ AB.IsoAudio = (() => {
     out.gain.cancelScheduledValues(t);
     if (!on) {
       out.gain.setValueAtTime(0, t);
+      if (sw) { sw.stop(); sw = null; }
       for (const [k, L] of Object.entries(loops)) { try { L.s.stop(); } catch (e) { /* уже остановлен */ } try { L.s.disconnect(); L.g.disconnect(); } catch (e) { /* уже отключён */ } delete loops[k]; }
       ctx.suspend().catch(() => {});
     } else {
@@ -248,5 +331,5 @@ AB.IsoAudio = (() => {
   function toggle() { setOn(!on); }
   // №132: кнопка звука — в настройках (⚙); старая кнопка сверху скрыта
 
-  return { play, synth, update, toggle, setOn, start, RULES, on: () => on, ready: () => !!ctx, state: () => (ctx ? ctx.state : 'none'), loops: () => Object.keys(loops).length };
+  return { play, synth, update, surfaceTick, toggle, setOn, start, RULES, on: () => on, ready: () => !!ctx, state: () => (ctx ? ctx.state : 'none'), loops: () => Object.keys(loops).length };
 })();

@@ -142,13 +142,19 @@ AB.IsoOverworld = (() => {
   const at = (u) => (u.anim ? u.anim.to : { q: u.q, r: u.r });
   const outSquads = () => squads.filter((s) => s.state === 'out' || s.state === 'retreat');   // 'inside' — герой в здании, транспорт у входа скрыт
   // у кого из экипажа есть транспорт (пока один экзокостюм — у Марка)
+  // №142: кто в какой технике — из окна «Отряд» (iso-roster.js); пересадка — только у тех, кто в базе.
+  // Акт II (костюм, без капсулы): за бортом только Марк в экзокостюме, как было
   function syncSquads() {
-    const crew = AB.IsoActs ? AB.IsoActs.crew() : ['CHAR-001'];
-    for (const id of crew) if (!squads.some((s) => s.id === id)) {
-      const vehicle = id === 'CHAR-001' ? 'EQUIP-005' : id === 'CHAR-003' ? 'EQUIP-018' : null;   // №121: у Хейл — свой костюм
-      squads.push({ id, kind: 'squad', vehicle, state: 'home', q: base.q, r: base.r, path: [], anim: null, target: null, atk: null, atkT: 0, flash: 0, stride: 0, face: 1 });
+    const ro = mode === 'suit' || !AB.IsoRoster ? [{ hero: 'CHAR-001', vehicle: 'EQUIP-005' }] : AB.IsoRoster.list();
+    for (const sl of ro) {
+      if (!sl.hero) continue;
+      let s = squads.find((q) => q.id === sl.hero);
+      if (!s) { s = { id: sl.hero, kind: 'squad', vehicle: sl.vehicle, state: 'home', q: base.q, r: base.r, path: [], anim: null, target: null, atk: null, atkT: 0, flash: 0, stride: 0, face: 1 }; squads.push(s); }
+      if (s.state === 'home') s.vehicle = sl.vehicle;
     }
+    for (let i = squads.length - 1; i >= 0; i--) if (squads[i].state === 'home' && !ro.some((sl) => sl.hero === squads[i].id)) squads.splice(i, 1);
   }
+  AB.Bus.on('roster:changed', () => { if (open_) { syncSquads(); squadsSig = ''; } });
   // №69: в клетке — только один юнит (база, отряд или тварь)
   const baseHere = (q, r) => mode === 'capsule' && base.q === q && base.r === r;
   function occupied(q, r, self) {
@@ -268,7 +274,9 @@ AB.IsoOverworld = (() => {
           else { const s = outSquads()[0]; sel = s ? s.id : 'base'; say('Вести базу: выкл'); }
         }
         if (k === 'items') AB.IsoInventory.open();
-        if (k === 'all') { selAll = !selAll && outSquads().some((s) => s.state === 'out'); say(selAll ? 'Выбраны все отряды снаружи' : 'Выбор: один отряд'); }
+        // №142: «Выбрать всех» — переключатель; «◎ Отряд» — окно состава (герои и техника)
+        if (k === 'allsel') { selAll = !selAll; if (selAll) drive = false; say(selAll ? 'Выбрать всех: вкл — приказ получает весь отряд' : 'Выбрать всех: выкл — приказ получает выбранный'); }
+        if (k === 'all') { if (mode !== 'capsule') say('Состав отряда меняется на базе-капсуле'); else AB.IsoRoster.open(); }
         if (k === 'surface') AB.IsoActs.surface();
         squadsSig = ''; return;
       }
@@ -353,6 +361,7 @@ AB.IsoOverworld = (() => {
   function enter() {
     open_ = true;
     syncSquads();
+    if (AB.IsoRoster) AB.IsoRoster.setOutFn((id) => { const q = unit(id); return !!q && q.state !== 'home'; });
     for (const s of squads) if (s.state === 'inside') { s.state = 'out'; sel = s.id; }   // вышли из здания — транспорт снова на карте
     // акт II: базы-капсулы нет, Марк выходит из «Абисса» сразу в костюме
     if (mode === 'suit') { const m = unit('CHAR-001'); if (m && m.state === 'home') { const c = besideBase(m) || { q: base.q + 1, r: base.r }; m.state = 'out'; m.q = c.q; m.r = c.r; } sel = 'CHAR-001'; }
@@ -776,7 +785,7 @@ AB.IsoOverworld = (() => {
   }
   function drawSquad(s) {
     const c = slotPos(s), me = AB.Chars.get(s.id);
-    const pose = { id: s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
+    const pose = { id: (AB.VEHICLES && AB.VEHICLES[s.vehicle] || {}).look || s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
     if (s.state === 'retreat') g.globalAlpha = 0.75;
     AB.IsoSuit.draw(g, pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height);
     g.globalAlpha = 1;
@@ -866,8 +875,9 @@ AB.IsoOverworld = (() => {
     document.querySelector('#ow-above [data-ow="surface"]').hidden = !up;
     const dr = document.querySelector('#ow-above [data-ow="drive"]');
     dr.hidden = mode !== 'capsule'; dr.classList.toggle('on', drive); dr.querySelector('b').textContent = drive ? 'вкл' : 'выкл';
-    const allB = document.querySelector('#ow-right [data-ow="all"]');
-    allB.classList.toggle('on', selAll); allB.hidden = mode !== 'capsule';
+    const allB = document.querySelector('#ow-right [data-ow="allsel"]');
+    allB.classList.toggle('on', selAll); allB.querySelector('b').textContent = selAll ? 'вкл' : 'выкл';
+    document.getElementById('ow-sqbtns').hidden = mode !== 'capsule';
     const slots = [];
     for (const s of squads) {
       if (!s.vehicle || (mode === 'suit' && s.id !== 'CHAR-001')) continue;
@@ -875,7 +885,7 @@ AB.IsoOverworld = (() => {
       const st = s.state === 'out' && s.atk ? 'в бою' : s.state === 'out' && (s.anim || s.path.length) ? 'в пути' : STATE[s.state];
       const on = (selAll && s.state === 'out') || (!selAll && sel === s.id && s.state !== 'home');
       const recallBtn = on && mode !== 'suit' && s.state === 'out' ? '<button data-do="back" title="Отозвать на базу">↩</button>' : '';
-      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${s.state}" data-u="${s.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${s.id}"></canvas><img src="assets/exosuit/v2/body.png" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${recallBtn}</div>`);
+      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${s.state}" data-u="${s.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${s.id}"></canvas><img src="${(AB.VEHICLES && AB.VEHICLES[s.vehicle] || {}).img || 'assets/exosuit/v2/body.png'}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${recallBtn}</div>`);
     }
     // ещё одна ячейка — когда появится второй транспорт; дальше — закрытые (черновик условия)
     slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');

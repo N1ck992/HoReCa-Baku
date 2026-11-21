@@ -101,12 +101,14 @@
         </div>
       </div>
       <div id="sf-right">
-        <button data-sf-all class="ow-mini" title="Выбрать весь отряд снаружи: нажатие на клетку ведёт всех">◎ Отряд</button>
+        <div class="map-sqbtns"><button data-sf-allsel class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Выбрать всех: <b>выкл</b></button><button data-sf-squad class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
         <div id="sf-slots" aria-label="Отряды"></div>
       </div>
     </div>
     <div id="sf-pop" hidden><i class="sf-side"></i><b></b><p></p><small></small><div class="sf-row"><button data-sf-act disabled></button><button data-sf-x aria-label="Закрыть">✕</button></div></div>
     <div id="sf-say"></div>
+    <!-- №142: приказ по нажатию на клетку: «Автобой» / «Следовать»; на NPC — «Атаковать» -->
+    <div id="sf-cmd" hidden><b></b><small></small><div class="sf-cmd-row"><button data-cmd="auto" title="Идти туда и бить всех, кто нападает на отряд или союзников рядом">⚔ Автобой</button><button data-cmd="follow" title="Идти туда, не ввязываясь в бой">➜ Следовать</button><button data-cmd="attack" title="Напасть">⚔ Атаковать</button><button data-cmd-x aria-label="Закрыть">✕</button></div></div>
   </div>
   <div id="ow" hidden>
     <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
@@ -128,7 +130,7 @@
         </div>
       </div>
       <div id="ow-right">
-        <button data-ow="all" class="ow-mini" title="Выбрать весь отряд снаружи: нажатие на клетку ведёт всех">◎ Отряд</button>
+        <div class="map-sqbtns" id="ow-sqbtns"><button data-ow="allsel" class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Выбрать всех: <b>выкл</b></button><button data-ow="all" class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
         <div id="ow-slots" aria-label="Отряды"></div>
       </div>
     </div>
@@ -140,6 +142,8 @@
   </div>
   <div id="iso-dev" hidden></div>
   <div id="iso-set" hidden></div>
+  <!-- №142: окно «Отряд» — кто в какой технике (iso-roster.js) -->
+  <div id="iso-roster" hidden><div class="ro-card"><div class="ro-head"><h2>Отряд</h2><button data-ro-close aria-label="Закрыть">✕</button></div><div class="ro-list"></div></div></div>
   <div id="iso-death" hidden role="dialog" aria-label="Гибель"><div class="death-card"><h2>Вы погибли</h2><p id="iso-death-text">Прохождение бункера начнётся сначала.</p><button id="iso-cp" hidden>С контрольной точки</button><button id="iso-restart">Начать заново</button></div></div>
   <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · I — вещи · нажмите на героя справа внизу — снаряжение · Q — следующий · колесо — масштаб</div>
 
@@ -210,6 +214,8 @@
   <script src="js/iso/iso-map.js"></script>
   <script src="js/iso/iso-nest.js"></script>
   <script src="js/iso/iso-boss.js"></script>
+  <script src="js/data/vehicles.js"></script>
+  <script src="js/iso/iso-roster.js"></script>
   <script src="js/iso/iso-mapui.js"></script>
   <script src="js/iso/iso-overworld.js"></script>
   <script src="js/data/surface-a1.js"></script>
