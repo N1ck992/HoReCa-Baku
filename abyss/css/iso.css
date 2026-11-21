@@ -831,3 +831,32 @@ body.map-fan-on .map-units { visibility: hidden; }
 .un-card p b { font: inherit; color: #ffe2a8; }
 .un-card .un-where { font-size: 11px; color: #9fe7ff; }
 .un-base .cap { display: block; flex: none; width: 52px; height: 24px; margin: 0 4px; border-radius: 50%; background: #c9a24a; box-shadow: inset 0 -5px 0 #8a6e30; }
+
+/* №145: подписи зоны и сторон — только издалека («Город», «Мир»); цель задания — всегда */
+#sf:not(.map-far) #sf-top > b, #sf:not(.map-far) #sf-top > span, #sf:not(.map-far) #sf-legend { display: none; }
+#ow:not(.map-far) #ow-top > b, #ow:not(.map-far) #ow-top > span { display: none; }
+#sf-goal { display: block; margin-top: 4px; font-style: normal; font-size: 12px; color: #ffd27a; max-width: calc(100vw - 150px); text-shadow: 0 0 4px #000, 0 0 4px #000; }
+#sf-goal:empty { display: none; }
+.sf-side.story { color: #ffd27a; border: 1px solid rgba(255, 210, 120, .5); }
+#sf-pop p .who { font: 600 13px var(--display); letter-spacing: .5px; color: #9fe7ff; }
+#sf-pop p em { font-style: normal; color: #c6f0a8; }
+
+/* №145: «Юниты» — квадратные иконки, по нажатию — карточка */
+.un-list.grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.un-tile { position: relative; width: 86px; height: 86px; padding: 0; border-radius: 8px; overflow: hidden; cursor: pointer; display: grid; place-items: center; background: radial-gradient(circle at 50% 60%, #1d3038, #0a1013); border: 1px solid rgba(255, 255, 255, .16); }
+.un-tile:hover, .un-tile:focus-visible { border-color: rgba(94, 230, 255, .8); }
+.un-tile.out { border-color: rgba(94, 230, 255, .6); box-shadow: 0 0 0 1px rgba(94, 230, 255, .3) inset; }
+.un-tile canvas { width: 50px; height: 66px; margin-bottom: 12px; }
+.un-tile img { height: 62px; margin-bottom: 12px; filter: drop-shadow(0 0 3px #000); }
+.un-tile .cap { display: block; width: 52px; height: 24px; margin-bottom: 14px; border-radius: 50%; background: #c9a24a; box-shadow: inset 0 -5px 0 #8a6e30; }
+.un-tile span { position: absolute; left: 0; right: 0; bottom: 4px; font: 600 11px var(--display); color: #fff; text-shadow: 0 0 3px #000; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; }
+.un-back { justify-self: start; font: 12px var(--mono); padding: 5px 10px; border-radius: 5px; cursor: pointer; color: #9fe7ff; background: #10161a; border: 1px solid rgba(94, 230, 255, .4); }
+.un-detail { display: flex; gap: 12px; align-items: flex-start; padding: 10px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; background: radial-gradient(circle at 70% 60%, #142228, #0a1013); }
+.un-detail canvas.big { width: 76px; height: 100px; flex: none; }
+.un-detail img.big { height: 110px; flex: none; filter: drop-shadow(0 0 4px #000); }
+.un-detail .cap.big { display: block; flex: none; width: 76px; height: 34px; margin-top: 20px; border-radius: 50%; background: #c9a24a; box-shadow: inset 0 -7px 0 #8a6e30; }
+.un-detail b { font: 600 17px var(--display); color: #fff; }
+.un-detail small { display: block; font-size: 12px; line-height: 1.4; color: var(--muted); margin-top: 2px; }
+.un-detail p { margin: 4px 0 0; font-size: 12px; color: #cfe6ee; }
+.un-detail p b { font: inherit; color: #ffe2a8; }
+.un-detail .un-where { color: #9fe7ff; }

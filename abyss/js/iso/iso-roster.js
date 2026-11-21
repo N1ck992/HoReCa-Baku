@@ -93,23 +93,35 @@ AB.IsoRoster = (() => {
   // ---------- №144: окно «Юниты» — вкладки «Герои» и «Транспорт» (просмотр) ----------
   let uel = null, tab = 'heroes';
   const where = (id) => { const s = sync().find((q) => q.hero === id); return !s ? 'без техники' : outFn(id) ? `снаружи · ${V(s.vehicle).name}` : `в базе · ${V(s.vehicle).name}`; };
+  // №145: вкладка — сетка квадратных иконок; нажатие на иконку — карточка юнита (назад — к сетке)
+  let pick = null;                                    // открытая карточка: ID героя или техники
+  function heroCard(id) {
+    const d = AB.ID.get(id), c = AB.Chars.get(id), max = (d.stats || {}).maxHp || 100, hp = c ? Math.round(c.hp) : max;
+    const w = AB.Inventory && AB.Inventory.weapon ? AB.Inventory.weapon(id) : null, wd = w && AB.ID.get(w.item);
+    return `<div class="un-detail"><canvas data-pt="${id}" class="big"></canvas><div><b>${d.name}</b><small>${d.role || ''}</small>
+      <p>Здоровье <b>${hp}/${max}</b></p><p>В руках: <b>${wd ? wd.name : '—'}</b></p>${wd && wd.desc ? `<small>${wd.desc}</small>` : ''}
+      <p class="un-where">${where(id)}</p></div></div>`;
+  }
+  function vehCard(vid) {
+    if (vid === 'base') return `<div class="un-detail"><i class="cap big"></i><div><b>Капсула-батискаф</b><small>База отряда: ездит по карте, внутри — трюм с устройствами. Из неё выходят герои в технике.</small><p>Скорость <b>${AB.VEHICLES_BASE.speed}</b> кл/мин</p></div></div>`;
+    const v = V(vid), s = sync().find((q) => q.vehicle === vid), h = s && s.hero ? AB.ID.get(s.hero).name : null;
+    return `<div class="un-detail"><img src="${v.img}" alt="" class="big"><div><b>${v.name}</b><small>${v.desc || ''}</small>
+      <p>Скорость <b>${v.speed}</b> кл/мин</p><p>Удар <b>${v.attack}</b> раз в ${v.rate} с · дальность ${v.reach}</p><p>Броня <b>${Math.round(v.armor * 100)}%</b></p>
+      <p class="un-where">${h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
+  }
   function unitsRender() {
     for (const b of uel.querySelectorAll('[data-utab]')) b.classList.toggle('on', b.dataset.utab === tab);
     const box = uel.querySelector('.un-list');
-    if (tab === 'heroes') {
-      box.innerHTML = crew().map((id) => {
-        const d = AB.ID.get(id), c = AB.Chars.get(id), max = (d.stats || {}).maxHp || 100, hp = c ? Math.round(c.hp) : max;
-        const w = AB.Inventory && AB.Inventory.weapon ? AB.Inventory.weapon(id) : null, wd = w && AB.ID.get(w.item);
-        return `<div class="un-card"><canvas data-pt="${id}"></canvas><div><b>${d.name}</b><small>${d.role || ''}</small>
-          <p>Здоровье <b>${hp}/${max}</b> · В руках: <b>${wd ? wd.name : '—'}</b></p><p class="un-where">${where(id)}</p></div></div>`;
-      }).join('') || '<p class="ro-note">В экипаже никого</p>';
+    if (pick) {
+      box.className = 'un-list one';
+      box.innerHTML = `<button class="un-back" data-un-back>◀ Назад</button>` + (tab === 'heroes' ? heroCard(pick) : vehCard(pick));
     } else {
-      box.innerHTML = owned().map((vid) => {
-        const v = V(vid), s = sync().find((q) => q.vehicle === vid), h = s && s.hero ? AB.ID.get(s.hero).name : null;
-        return `<div class="un-card"><img src="${v.img}" alt=""><div><b>${v.name}</b><small>${v.desc || ''}</small>
-          <p>Скорость <b>${v.speed}</b> кл/мин · Удар <b>${v.attack}</b> / ${v.rate} с · Броня <b>${Math.round(v.armor * 100)}%</b></p>
-          <p class="un-where">${h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
-      }).join('') + `<div class="un-card un-base"><i class="cap"></i><div><b>Капсула-батискаф</b><small>База отряда: ездит по карте, внутри — трюм с устройствами.</small><p>Скорость <b>${AB.VEHICLES_BASE.speed}</b> кл/мин</p></div></div>`;
+      box.className = 'un-list grid';
+      const tiles = tab === 'heroes'
+        ? crew().map((id) => `<button class="un-tile ${outFn(id) ? 'out' : ''}" data-un="${id}" title="${AB.ID.get(id).name}"><canvas data-pt="${id}"></canvas><span>${AB.ID.get(id).name}</span></button>`)
+        : [...owned().map((vid) => `<button class="un-tile ${(() => { const s = sync().find((q) => q.vehicle === vid); return s && s.hero && outFn(s.hero) ? 'out' : ''; })()}" data-un="${vid}" title="${V(vid).name}"><img src="${V(vid).img}" alt=""><span>${V(vid).short || V(vid).name}</span></button>`),
+          '<button class="un-tile" data-un="base" title="Капсула-батискаф"><i class="cap"></i><span>Капсула</span></button>'];
+      box.innerHTML = tiles.join('') || '<p class="ro-note">Никого</p>';
     }
     for (const c of box.querySelectorAll('canvas[data-pt]')) if (AB.IsoRender && AB.IsoRender.portrait) AB.IsoRender.portrait(c, c.dataset.pt, 1);
   }
@@ -119,12 +131,14 @@ AB.IsoRoster = (() => {
       uel.addEventListener('pointerdown', (e) => e.stopPropagation());
       uel.addEventListener('click', (e) => {
         if (e.target === uel || e.target.closest('[data-un-close]')) { uel.hidden = true; return; }
-        const b = e.target.closest('[data-utab]'); if (b) { tab = b.dataset.utab; unitsRender(); }
+        const b = e.target.closest('[data-utab]'); if (b) { tab = b.dataset.utab; pick = null; unitsRender(); return; }
+        const t = e.target.closest('[data-un]'); if (t) { pick = t.dataset.un; unitsRender(); return; }
+        if (e.target.closest('[data-un-back]')) { pick = null; unitsRender(); return; }
         if (e.target.closest('[data-un-edit]')) { uel.hidden = true; open(); }
       });
     }
     if (t) tab = t;
-    uel.hidden = false; unitsRender();
+    pick = null; uel.hidden = false; unitsRender();
   }
   return { units, list, sync, set, vehicleOf, open, close: () => { if (el) el.hidden = true; }, isOpen: () => !!el && !el.hidden, setOutFn: (f) => { outFn = f || (() => false); }, V, owned };
 })();

@@ -590,11 +590,65 @@ AB.IsoSurface = (() => {
     say(kind === 'auto' ? 'Автобой: идут туда и отвечают всем, кто нападёт на отряд' : 'Следовать: идут, не ввязываясь в бой');
   }
 
+  // ---------- №145: цепочка «Дорога на север» (js/data/surface-a1-story.js) — открывает мосты в Б1 ----------
+  const STORY_KEY = 'abyss_a1_story';
+  const ST = () => AB.SURFACE_A1_STORY;
+  let story = null;                                   // { stage, kills: { вид: n } }
+  function storyLoad() { if (story) return; try { story = JSON.parse(localStorage.getItem(STORY_KEY) || 'null'); } catch (e) { story = null; } if (!story || typeof story.stage !== 'number') story = { stage: 0, kills: {} }; }
+  function storySave() { try { localStorage.setItem(STORY_KEY, JSON.stringify(story)); } catch (e) { /* без хранилища */ } }
+  const stageNow = () => (ST() ? ST().stages[story.stage] || null : null);
+  const bridgesOpen = () => !!story && !!ST() && story.stage >= ST().stages.length;
+  function goalText() {
+    const st = stageNow(); if (!st) return ST() ? ST().done.goal : '';
+    if (st.kills) { const [k, n] = Object.entries(st.kills)[0]; return `${st.goal}: ${Math.min(n, story.kills[k] || 0)}/${n}`; }
+    return st.goal;
+  }
+  function goalUi() { const el = document.getElementById('sf-goal'); if (el) el.textContent = ST() ? `▸ ${goalText()}` : ''; }
+  function storyAdvance() {
+    const st = stageNow(); if (!st) return;
+    for (const [item, n] of st.reward || []) if (AB.IsoStash) { AB.IsoStash.add(item, n); floatText(posOf(selU()), `+ ${AB.ID.get(item).name} ×${n}`, '#ffd27a'); }
+    story.stage++; story.kills = {}; storySave();
+    const nx = stageNow();
+    if (nx && nx.say) say(nx.say);
+    if (!nx) { say(ST().done.say); if (AB.Flags) AB.Flags.add('a1-bridges'); AB.Bus.emit('surface:bridges', {}); }
+    else if (!nx.say) say(`Задание: ${nx.goal}`);
+    if (AB.Bus) AB.Bus.emit('quest:start', {});
+    goalUi();
+  }
+  function storyEnter() {
+    storyLoad();
+    if (story.stage === 0 && ST()) { const s0 = ST().stages[0]; story.stage = 1; storySave(); setTimeout(() => say(s0.say), 1800); }
+    goalUi();
+  }
+  AB.Bus.on('surface:kill', ({ kind }) => {
+    if (!story) return; const st = stageNow(); if (!st || !st.kills || !st.kills[kind]) return;
+    story.kills[kind] = (story.kills[kind] || 0) + 1; storySave(); goalUi();
+    if (Object.entries(st.kills).every(([k, n]) => (story.kills[k] || 0) >= n)) setTimeout(storyAdvance, 800);
+  });
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  // нужный герой стоит на точке (или рядом)
+  const heroAt = (id, site) => outSquads().some((q) => q.id === id && !q.anim && dist(curCell(q), site) <= 1);
+  let storyCard = null;
+  function showStory(s, st) {
+    const el = document.getElementById('sf-pop'), ok = !st.hero || heroAt(st.hero, s);
+    storyCard = ok ? st : null;
+    el.querySelector('b').textContent = s.name;
+    el.querySelector('i').textContent = `Задание · ${ST().name}`;
+    el.querySelector('i').className = 'sf-side story';
+    el.querySelector('p').innerHTML = ok ? st.lines.map(([who, t]) => (who ? `<span class="who">${esc(who)}</span> ${esc(t)}` : `<em>${esc(t)}</em>`)).join('<br>') : esc(st.wait || '');
+    el.querySelector('small').textContent = '';
+    const btn = el.querySelector('[data-sf-act]');
+    btn.textContent = ok ? st.button : 'Нужна доктор Хейл';
+    btn.disabled = !ok;
+    el.hidden = false;
+  }
+
   // ---------- карточка точки ----------
   const ACT = { capital: 'Предстать перед Хранителем — скоро', village: 'Войти в деревню — скоро', ford: 'Зайти на брод — скоро', shrine: 'Подойти к купели — скоро' };
   let popSite = null;
   function showSite(s) {
-    popSite = s;
+    popSite = s; storyCard = null;
+    { const st = stageNow(); if (st && st.at === s.key) { showStory(s, st); return; } }
     const el = document.getElementById('sf-pop'), f = D().factions[s.side];
     el.querySelector('b').textContent = s.name;
     el.querySelector('i').textContent = f ? `${f.tag} · ${f.name}` : `Выход · зона ${s.to}`;
@@ -602,7 +656,9 @@ AB.IsoSurface = (() => {
     el.querySelector('p').textContent = s.text;
     el.querySelector('small').textContent = f ? f.text : 'Эта зона ещё не открыта — появится в следующих обновлениях.';
     const btn = el.querySelector('[data-sf-act]');
-    btn.textContent = f ? ACT[s.kind] : `Перейти в зону ${s.to} — закрыто`;
+    const open = s.kind === 'bridge' && bridgesOpen();
+    if (open) { el.querySelector('i').textContent = 'Мост открыт · зона Б1'; el.querySelector('small').textContent = 'За ущельем — «Железный Предел», земли синтетиков и киборгов. Сама зона — следующий этап.'; }
+    btn.textContent = f ? ACT[s.kind] : open ? 'Перейти в зону Б1 — скоро' : s.kind === 'bridge' ? 'Мост закрыт — нужна печать Кадзэ' : `Перейти в зону ${s.to} — закрыто`;
     btn.disabled = true;
     el.hidden = false;
   }
@@ -733,7 +789,8 @@ AB.IsoSurface = (() => {
         const dir = s.kind === 'bridge' ? [0, -1] : [s.dir, 0], bob2 = Math.sin(time * 3) * 2;
         g.fillStyle = 'rgba(94,230,255,.85)'; g.save(); g.translate(x + dir[0] * (8 + bob2), y - 6 + dir[1] * (8 + bob2)); g.rotate(Math.atan2(dir[1], dir[0]));
         g.beginPath(); g.moveTo(9, 0); g.lineTo(-4, -7); g.lineTo(-4, 7); g.closePath(); g.fill(); g.restore();
-        g.strokeStyle = 'rgba(255,120,100,.9)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(x - 6, y - 12); g.lineTo(x + 6, y); g.moveTo(x + 6, y - 12); g.lineTo(x - 6, y); g.stroke();
+        if (s.kind === 'bridge' && bridgesOpen()) { g.strokeStyle = 'rgba(140,255,160,.95)'; g.lineWidth = 3; g.beginPath(); g.moveTo(x - 6, y - 6); g.lineTo(x - 1, y); g.lineTo(x + 7, y - 12); g.stroke(); }
+        else { g.strokeStyle = 'rgba(255,120,100,.9)'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(x - 6, y - 12); g.lineTo(x + 6, y); g.moveTo(x + 6, y - 12); g.lineTo(x - 6, y); g.stroke(); }
         break;
       }
       default:
@@ -753,7 +810,9 @@ AB.IsoSurface = (() => {
     placeCmd();
     requestAnimationFrame(loop);
   }
-  function setZoom(z) { zoomK = Math.max(minZoom(), Math.min(2.2, z)); fit(); clampCam(); }
+  function setZoom(z) { zoomK = Math.max(minZoom(), Math.min(2.2, z)); fit(); clampCam(); farUi(); }
+  // №145: заголовок зоны и подписи сторон — только издалека («Город», «Мир»); цель задания видна всегда
+  function farUi() { const el = document.getElementById('sf'); if (el) el.classList.toggle('map-far', zoomK < 0.8); }
   function pick(cx, cy) {
     const rc2 = cv.getBoundingClientRect(), k = kScale();
     const bx = ((cx - rc2.left) * dpr - cv.width / 2) / k + cam.x, by = ((cy - rc2.top) * dpr - cv.height / 2) / k + cam.y;
@@ -858,6 +917,7 @@ AB.IsoSurface = (() => {
     root.addEventListener('pointerdown', (e) => e.stopPropagation());
     root.addEventListener('click', (e) => {
       if (e.target.closest('[data-sf-x]')) hidePop();
+      if (e.target.closest('[data-sf-act]') && storyCard) { storyCard = null; hidePop(); storyAdvance(); return; }
       if (e.target.closest('[data-sf-allsel]')) { selAll = !selAll; if (selAll) drive = false; barSig = ''; say(selAll ? 'Все: приказ получает весь отряд' : 'Приказ получает выбранный герой'); }
       if (e.target.closest('[data-sf-squad]')) { AB.IsoRoster.open(); }
       const cb = e.target.closest('[data-cmd]'); if (cb) { command(cb.dataset.cmd); return; }
@@ -904,9 +964,10 @@ AB.IsoSurface = (() => {
     hidePop();
     open_ = true; document.getElementById('sf').hidden = false;
     document.body.classList.add('sf-on');
-    fit(); flyU = selU(); const p = posOf(flyU); cam.x = p.x; cam.y = p.y; follow = true; inZone = true;
+    fit(); farUi(); flyU = selU(); const p = posOf(flyU); cam.x = p.x; cam.y = p.y; follow = true; inZone = true;
     last = performance.now(); requestAnimationFrame(loop);
     if (AB.Flags) AB.Flags.add('zone-a1');
+    storyEnter();
     AB.Bus.emit('surface:enter', { zone: D().id });
     const hereSide = cell(base.c, base.r).side === 'desert' ? 'пустыня Домов Песка' : 'болота Детей Хора';
     if (fresh) say(`Капсулу вынесло на сушу — зона A1, вокруг ${hereSide}. Нажмите на клетку — герой выйдет в экзокостюме; «Вести базу» — ехать капсулой`);
@@ -927,7 +988,7 @@ AB.IsoSurface = (() => {
     zoom: (z) => setZoom(z),
     // для проверок
     _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
-    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _mobs: () => mobs, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _passable: (c, r) => passable(cell(c, r)),
+    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _mobs: () => mobs, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
   };
 })();

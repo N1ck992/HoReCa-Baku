@@ -468,6 +468,7 @@ AB.IsoOverworld = (() => {
     cam.x *= zoomK / k0; cam.y *= zoomK / k0;            // масштаб вокруг центра экрана
     if (fly) { const p = curPos(fly); fly.tx = p.x; fly.ty = p.y; }
     clampCam();
+    document.getElementById('ow').classList.toggle('map-far', zoomK < 0.85);   // №145: заголовок — только издалека
   }
   function clampCam() {
     const R = D().radius + 1, lim = size * SQ3 * R;
