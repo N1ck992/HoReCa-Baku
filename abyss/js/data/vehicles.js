@@ -15,7 +15,7 @@ AB.VEHICLES = {
     speed: 30, attack: 22, rate: 1.1, reach: 2, armor: 0.2,
     look: 'CHAR-001', img: 'assets/exosuit/v2/body.png',
     // №147: ручной энергомёт «Искра» — стреляет энергетическими сгустками (кадры автора, assets/fx/suit-orb)
-    gun: 'Энергомёт «Искра»', fx: 'suit-orb',
+    gun: 'Энергомёт «Искра»', gunImg: 'assets/weapons/iskra/iskra.webp', fx: 'suit-orb',
     desc: 'Глубоководный экзокостюм с «Абисса». Тяжёлый, но крепкий: гидравлика держит удар.',
   },
   'EQUIP-018': {

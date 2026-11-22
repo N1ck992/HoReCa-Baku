@@ -239,8 +239,29 @@ AB.IsoSuit = (() => {
   }
 
   // №147: ручной энергомёт «Искра» на предплечье экзокостюма Марка (рисунок кодом, до картинки автора).
-  // Координаты — в пикселях исходного рисунка костюма; ствол идёт вдоль предплечья от запястья
+  // Координаты — в пикселях исходного рисунка костюма; ствол идёт вдоль предплечья от запястья (№148: теперь — картинка автора)
+  // №148: картинка орудия автора (assets/weapons/iskra/iskra.webp): манжета слева, дуло — справа
+  // GUN: длина и высота в пикселях рисунка костюма; lens — где линза дула (доли картинки); ox, oy — сдвиг от запястья
+  const GUN = { L: 572, H: 185, lens: [0.936, 0.476], cuff: [0.06, 0.42], ox: -40, oy: -10 };
+  const gunImg = new Image(); gunImg.src = 'assets/weapons/iskra/iskra.webp';
   function armGun(g, J, pose) {
+    if (gunImg.complete && gunImg.naturalWidth) {
+      const ang = Math.atan2(J.hand[1] - J.wrist[1], J.hand[0] - J.wrist[0]), hot = pose.attack >= 0 ? Math.sin(pose.attack * Math.PI) : 0;
+      g.save(); g.translate(J.wrist[0] + GUN.ox, J.wrist[1] + GUN.oy); g.rotate(ang);
+      const x0 = -GUN.L * GUN.cuff[0], y0 = -GUN.H * GUN.cuff[1];
+      g.drawImage(gunImg, x0, y0, GUN.L, GUN.H);
+      // дуло разгорается при выстреле
+      const mx = x0 + GUN.L * GUN.lens[0], my = y0 + GUN.H * GUN.lens[1], r = GUN.H * (0.35 + hot * 0.45) + Math.sin((pose.t || 0) * 6) * 6;
+      const gr = g.createRadialGradient(mx, my, 2, mx, my, r);
+      gr.addColorStop(0, `rgba(220,255,255,${0.35 + hot * 0.6})`); gr.addColorStop(1, 'rgba(94,230,255,0)');
+      g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.beginPath(); g.arc(mx, my, r, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over';
+      g.restore();
+      return;
+    }
+    armGunDrawn(g, J, pose);
+  }
+  // нарисованный кодом (№147) — пока картинка не загрузилась
+  function armGunDrawn(g, J, pose) {
     const ang = Math.atan2(J.hand[1] - J.wrist[1], J.hand[0] - J.wrist[0]);
     const t = (pose.t || 0), hot = pose.attack >= 0 ? Math.sin(pose.attack * Math.PI) : 0;
     g.save(); g.translate(J.wrist[0] - 30, J.wrist[1] - 10); g.rotate(ang); g.scale(1.3, 1.3);
@@ -267,7 +288,9 @@ AB.IsoSuit = (() => {
     const A = AB.RIGS[artName(pose.id)]; if (!A || !A.joints.wrist) return { x: x + 20 * k * (pose.facing || 1), y: y - 60 * k };
     const J = A.joints, s = k * (R().height / A.heightPx), f = pose.facing >= 0 ? 1 : -1;
     const ang = Math.atan2(J.hand[1] - J.wrist[1], J.hand[0] - J.wrist[0]);
-    const lx = J.wrist[0] - 30 + Math.cos(ang) * 390, ly = J.wrist[1] - 10 + Math.sin(ang) * 390;   // дуло — 300 × 1.3
+    // дуло по картинке орудия (№148): от запястья вдоль предплечья
+    const lxl = -GUN.L * GUN.cuff[0] + GUN.L * GUN.lens[0], lyl = -GUN.H * GUN.cuff[1] + GUN.H * GUN.lens[1];
+    const lx = J.wrist[0] + GUN.ox + Math.cos(ang) * lxl - Math.sin(ang) * lyl, ly = J.wrist[1] + GUN.oy + Math.sin(ang) * lxl + Math.cos(ang) * lyl;
     return { x: x + (lx - J.hip[0]) * s * f, y: y + (ly - A.soleY) * s };
   }
   return { suited, weapon, poseOf, draw, rig: R, muzzle };
