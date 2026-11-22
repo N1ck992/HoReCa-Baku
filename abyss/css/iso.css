@@ -883,3 +883,6 @@ body.map-fan-on .map-units { visibility: hidden; }
 .dmg-tab td { color: #e6e0d6; }
 .dmg-tab td.hi { color: #ffb040; font-weight: 700; }
 .dmg-tab td.lo { color: #7f9aa4; }
+
+/* №153: устройство, на которое не хватает материалов */
+.bx-bp.lack { opacity: .6; border-color: rgba(255, 120, 100, .35); }

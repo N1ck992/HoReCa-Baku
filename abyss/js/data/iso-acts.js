@@ -331,7 +331,7 @@ AB.QUESTS.push(
     start: { event: 'EVENT-022' }, requires: [], items: [], skills: [], rooms: [],
     stages: [
       { id: 'base', objectives: [
-        { id: 'module', text: 'Построить в капсуле 3D-принтер: «Стройка» → каркас → строители', done: { flag: 'module' } },   // №71: вместо готовых модулей — конструктор базы
+        { id: 'module', text: 'Построить в капсуле 3D-принтер: «Стройка» → место «+» → 3D-принтер', done: { flag: 'module' } },   // №71: вместо готовых модулей — конструктор базы
       ] },
       { id: 'up', objectives: [
         { id: 'up', text: 'Всплыть на поверхность: «Всплыть» на карточке базы', done: { flag: 'surfaced' } },

@@ -528,7 +528,7 @@ AB.BaseSim = (() => {
     const hostRoom = host && room(host);
     if (!hostRoom || !hostRoom.built) return res(false, 'Ставится внутри построенного помещения');
     // №79: оборудование ставится только вдоль проводки — к нему должен примыкать кабель (по полу или в стене)
-    if (!b.core && !spec.skipWire) {
+    if (!b.core && !spec.skipWire && !SIMPLE()) {
       const own = new Set(cells.map(([x, y]) => `${x},${y}`));
       const along = S.cables.some((c2) => rcells(c2).some(([cx, cy]) => !own.has(`${cx},${cy}`) && cells.some(([x, y]) => Math.abs(cx - x) + Math.abs(cy - y) === 1)));
       if (!along) return res(false, 'Только вдоль проводки: сначала проложите кабель (можно внутри стены)');
@@ -556,7 +556,26 @@ AB.BaseSim = (() => {
     if (b.kind === 'room') { o.grid = spec.grid || 'GRID-001'; o.need = costOf(b, o); o.work = workOf(b, o); }
     if (b.kind === 'cable') { o.uid = o.uid.replace(/^d/, 'c'); S.cables.push(o); } else if (b.kind === 'room') { o.look = b.look; S.rooms.push(o); } else { o.lvl = 1; o.prio = 2; o.room = c.room; S.devs.push(o); if (b.store) { o.mat = null; o.n = 0; o.auto = false; o.no = S.devs.filter((d) => d.bp === b.id).length; } }
     dirty();
+    if (SIMPLE() && b.kind === 'device') { for (const [i, n] of o.need) spend(i, n); complete(o); }   // №153: сразу готово
     return { ...c, uid: o.uid };
+  }
+  // №153: гнёзда трюма: какое занято чем
+  function slots() {
+    if (!SIMPLE()) return [];
+    const over = (a, b2) => a.x < b2.x + b2.w && b2.x < a.x + a.w && a.y < b2.y + b2.h && b2.y < a.y + a.h;
+    return D().simple.slots.map((sl) => { const d = S.devs.find((q) => over(q, sl)); return { ...sl, dev: d ? d.uid : null, core: !!(d && d.core) }; });
+  }
+  // что можно поставить в гнездо (изученное, не ядро, не «на россыпи»)
+  const slotBps = () => S.unlocked.map(bp).filter((b) => b && b.kind === 'device' && !b.core && !b.site);
+  function buildAt(slotId, bpId) {
+    const sl = slots().find((q) => q.id === slotId), b = bp(bpId);
+    if (!sl || !b) return { ok: false, why: 'Нет такого места' };
+    if (sl.dev) return { ok: false, why: 'Место занято' };
+    let w = b.w, h = b.h; if (w > sl.w || h > sl.h) [w, h] = [h, w];
+    if (w > sl.w || h > sl.h) return { ok: false, why: 'Не помещается в гнездо' };
+    const lack = costOf(b, { w, h }).filter(([i, n]) => stockOf(i) < n);
+    if (lack.length) return { ok: false, why: `Не хватает: ${lack.map(([i, n]) => `${nm(i)} ${stockOf(i)}/${n}`).join(', ')}`, miss: lack.map(([i, n]) => [i, n, stockOf(i)]) };
+    return place({ bp: bpId, x: sl.x, y: sl.y, w, h, skipWire: true, slot: true });
   }
   // передвинуть или изменить размер. Каркас — бесплатно; построенное снова становится каркасом:
   // уже вложенное засчитывается, недостающее довезут, работы — треть от новой постройки
@@ -770,8 +789,15 @@ AB.BaseSim = (() => {
   // Сеть — связанные кабели и всё, к чему они примыкают (устройства, реактор, батареи, турбины).
   // Устройства друг через друга ток не передают — только кабелем.
   let P = null;           // кэш сетей: { nets: [{ id, members:[uid] }], of: Map(uid → id) }
+  // №153: упрощённая стройка — готовые гнёзда, общее питание, постройка сразу
+  const SIMPLE = () => !!(D().simple && D().simple.on);
   function networks() {
     if (P) return P;
+    if (SIMPLE()) {                                    // одна сеть на всю капсулу: кабели не нужны
+      const members = S.devs.filter((d) => d.built && (par(d).draw || par(d).gen || par(d).battery)).map((d) => d.uid);
+      P = { nets: [{ id: 0, members }], of: new Map(members.map((u) => [u, 0])) };
+      return P;
+    }
     const g = geom(), W = g.w;
     const parent = new Map(), find = (a) => { while (parent.get(a) !== a) { parent.set(a, parent.get(parent.get(a))); a = parent.get(a); } return a; };
     const union = (a, b) => { const x = find(a), y = find(b); if (x !== y) parent.set(x, y); };
@@ -977,7 +1003,7 @@ AB.BaseSim = (() => {
     ensure, tick, catchUp, save, load, reset() { S = null; G = null; store.set(null); },
     setExt(e) { ext = { ...ext, ...e }; },
     insOf, eff, hull, fx, buildable, autoPlace, research, techState, techCost, techName, stockOf, cellsOf, state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
-    check, place, modify, remove, assign, workers, setJobs, worker, order, setRack, amount,
+    check, place, modify, remove, assign, slots, slotBps, buildAt, simple: SIMPLE, workers, setJobs, worker, order, setRack, amount,
     receive(item, n) { ensure(); S.pile[item] = (S.pile[item] || 0) + n; },
     costOf, workOf,
   };

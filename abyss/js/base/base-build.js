@@ -15,10 +15,13 @@ AB.BaseBuild = (() => {
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const nm = (i) => (AB.ID.get(i) || {}).name || i;
   let on = false, ghost = null, sel = null, drag = null, delAsk = false, chk = null, chkKey = '';
+  // №153: упрощённая стройка — выбранное гнездо трюма
+  let slotSel = null;
+  const SIMPLE = () => !!(sim().simple && sim().simple());
 
   function toggle(v) {
     on = v == null ? !on : !!v;
-    ghost = null; sel = null; drag = null; delAsk = false;
+    ghost = null; sel = null; drag = null; delAsk = false; slotSel = null;
     if (on && AB.BaseView) AB.BaseView.close();
     render();
   }
@@ -143,6 +146,12 @@ AB.BaseBuild = (() => {
   }
   function tap(cx, cy) {
     const c = cellAt(cx, cy);
+    if (SIMPLE()) {                                    // №153: нажали на гнездо — выбрать его
+      const x = Math.floor(c.x), y = Math.floor(c.y);
+      const sl = sim().slots().find((q) => x >= q.x && y >= q.y && x < q.x + q.w && y < q.y + q.h);
+      slotSel = sl ? sl.id : null; sel = null; delAsk = false;
+      render(); return true;
+    }
     if (ghost) {
       const g = snapG(ghost.grid).snap(c, ghost.w, ghost.h);
       ghost.x = g.x; ghost.y = g.y; render(); return true;
@@ -178,6 +187,17 @@ AB.BaseBuild = (() => {
   // ---------- рисование на полу ----------
   function drawFloor(ctx, toScreen, time, poly, rectPts) {
     const S = sim().state();
+    if (SIMPLE()) {                                    // №153: гнёзда — свободные пунктиром с «+», выбранное — жёлтым
+      for (const sl of sim().slots()) {
+        if (sl.core) continue;
+        const me = sl.id === slotSel;
+        poly(ctx, toScreen, rectPts(sl));
+        if (!sl.dev) { ctx.fillStyle = me ? 'rgba(255,226,140,.22)' : `rgba(94,230,255,${0.08 + Math.sin(time * 3) * 0.03})`; ctx.fill(); ctx.setLineDash([5, 4]); }
+        ctx.strokeStyle = me ? 'rgba(255,226,140,.95)' : sl.dev ? 'rgba(255,255,255,.18)' : 'rgba(94,230,255,.7)'; ctx.lineWidth = me ? 2.5 : 1.5; ctx.stroke(); ctx.setLineDash([]);
+        if (!sl.dev) { const c = toScreen(sl.x + sl.w / 2, sl.y + sl.h / 2); ctx.fillStyle = me ? '#ffe2a8' : 'rgba(160,240,255,.95)'; ctx.font = '700 18px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('+', c.x, c.y + 6); }
+      }
+      return;
+    }
     if (sel && !ghost) { const o = sim().obj(sel); if (o) { poly(ctx, toScreen, rectPts(o)); ctx.fillStyle = 'rgba(255,226,168,.12)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,226,168,.9)'; ctx.lineWidth = 2; ctx.stroke(); } }
     if (!ghost) return;
     if (floating()) placeFloat(ctx, toScreen);
@@ -208,6 +228,7 @@ AB.BaseBuild = (() => {
     // №114: устройство подтверждается кнопками ✓ / ✕ прямо над призраком (панель — только для кабеля)
     const floatOn = on && !!ghost && floating();
     if (fl) { fl.hidden = !floatOn; if (floatOn) { const c = check(); fl.querySelector('.nm').textContent = sim().bp(ghost.bp).name + (c.ok ? '' : ` — ${c.why}`); fl.querySelector('.yes').disabled = !c.ok; fl.classList.toggle('bad', !c.ok); } }
+    if (SIMPLE()) { renderSimple(cat, bar); return; }
     cat.hidden = !on || !!ghost || !!sel;
     bar.hidden = !on || (!ghost && !sel) || floatOn;
     if (!on) return;
@@ -250,6 +271,33 @@ AB.BaseBuild = (() => {
       </div>
       <div class="muted">${o.built ? `При сносе в приёмник вернётся половина материалов${b.kind === 'room' ? '; помещение должно быть пустым' : ''}.` : 'Каркас: при сносе всё принесённое вернётся в приёмник.'}</div>`;
   }
+  // №153: панель упрощённой стройки: подсказка / список устройств для гнезда / занятое гнездо
+  function renderSimple(cat, bar) {
+    const fl = el('bx-confirm'); if (fl) fl.hidden = true;
+    bar.hidden = true;
+    cat.hidden = !on;
+    if (!on) return;
+    const sl = slotSel && sim().slots().find((q) => q.id === slotSel);
+    const free = sim().slots().filter((q) => !q.dev).length;
+    if (!sl) {
+      cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Нажмите на свободное место «+» в трюме. Свободно: ${free} из ${sim().slots().length}. Кабели не нужны — питание общее от реактора.</span><button class="bx-chip" data-b="exit">✕ Закрыть</button></div>`;
+      return;
+    }
+    if (sl.dev) {
+      const o = sim().obj(sl.dev);
+      cat.innerHTML = `<div class="bx-cat-head"><b>${esc(o ? AB.BaseView.title(o) : 'Занято')}</b><span class="muted">Место ${esc(sl.id.slice(1))}</span></div>
+        <div class="bx-row">${o && !o.core ? `<button class="bx-chip" data-b="sinfo|${o.uid}">Открыть устройство</button><button class="bx-chip ${delAsk ? 'bad' : ''}" data-b="sdel|${o.uid}">${delAsk ? 'Точно разобрать? Ещё раз' : '🗑 Разобрать'}</button>` : '<span class="muted">Это часть капсулы — разобрать нельзя</span>'}
+        <button class="bx-chip" data-b="sback">◀ Назад</button></div>
+        <div class="muted">При разборке половина материалов вернётся в приёмник.</div>`;
+      return;
+    }
+    const list = sim().slotBps().map((b) => {
+      const cost = (b.cost || []), lack = cost.some(([i, n]) => AB.BaseView.stock(i) < n);
+      return `<button class="bx-bp ${lack ? 'lack' : ''}" data-b="build|${b.id}"><b>${esc(b.name)}</b><span>${b.w}×${b.h} · ${cost.length ? costLine(cost) : 'бесплатно'}</span>${b.desc ? `<span class="muted">${esc(b.desc)}</span>` : ''}</button>`;
+    }).join('');
+    cat.innerHTML = `<div class="bx-cat-head"><b>Место ${esc(sl.id.slice(1))}: что поставить?</b><span class="muted">Устройство появится сразу, материалы спишутся со стеллажей и из шкафчиков.</span><button class="bx-chip" data-b="sback">◀ Назад</button></div>
+      <div class="bx-cat-list">${list}</div><div class="muted">Новые устройства — в «Науке».</div>`;
+  }
   const floating = () => !!ghost && sim().bp(ghost.bp).kind === 'device';
   // ставит ✓ / ✕ над призраком: верхний угол призрака на экране → координаты страницы
   function placeFloat(ctx, toScreen) {
@@ -268,6 +316,14 @@ AB.BaseBuild = (() => {
     const btn = e.target.closest('[data-b]'); if (!btn || btn.disabled) return;
     const [a, v] = btn.dataset.b.split('|');
     if (a === 'exit') toggle(false);
+    else if (a === 'build') {                          // №153: поставить в выбранное гнездо
+      const b = sim().bp(v), r = sim().buildAt(slotSel, v);
+      if (!r.ok) { say(r.miss ? missText(b, r.miss) : `${b.name}: ${r.why}`); return; }
+      AB.Bus.emit('iso:toast', { text: `${b.name}: готово`, kind: 'good' }); slotSel = null; sim().save(); render();
+    }
+    else if (a === 'sback') { slotSel = null; delAsk = false; render(); }
+    else if (a === 'sinfo') { toggle(false); AB.BaseView.open(v); }
+    else if (a === 'sdel') { sel = v; remove(); if (!delAsk) slotSel = null; render(); }
     else if (a === 'new') auto(v);
     else if (a === 'w') resize(+v, 0);
     else if (a === 'h') resize(0, +v);
