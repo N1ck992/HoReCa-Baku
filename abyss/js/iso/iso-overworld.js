@@ -299,8 +299,11 @@ AB.IsoOverworld = (() => {
   }
   function myBaseTap() {
     if (mode !== 'capsule') { say('База появится вместе с капсулой'); return; }
-    const c = curPos(base), centred = Math.hypot(c.x - cam.x, c.y - cam.y) < size * 0.6;
-    if (!centred && fly !== base) { flyTo(base); squadsSig = ''; return; }
+    // №155: камера уже на капсуле — войти сразу; иначе первое нажатие подводит камеру, повторное (6 с) — входит
+    const c = curPos(base), onScreen = Math.abs(c.x - cam.x) < cv.width * 0.3 && Math.abs(c.y - cam.y) < cv.height * 0.3;
+    const armed = performance.now() - (myBaseTap.t || 0) < 6000;
+    if (!armed && !onScreen) { flyTo(base); squadsSig = ''; myBaseTap.t = performance.now(); say('Капсула. Нажмите «Моя база» ещё раз — войти'); return; }
+    myBaseTap.t = 0;
     for (const s of squads) if (s.state !== 'home') dock(s);
     AB.IsoActs.enterBase();
   }

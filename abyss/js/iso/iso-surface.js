@@ -1114,11 +1114,18 @@ AB.IsoSurface = (() => {
     save(); close();
     AB.IsoActs.enterBase();
   }
+  // №155: «Моя база»: камера уже на капсуле — войти сразу; иначе первое нажатие подводит камеру,
+  // повторное (в течение 6 с) — входит, даже если у края карты камера не может встать ровно по центру
+  let baseArmT = 0;
   function myBaseTap() {
-    const c = posOf(base), centred = Math.hypot(c.x - cam.x, c.y - cam.y) < S0 * 0.8 && follow && flyU === base;
-    if (!centred) { sel = drive ? 'base' : sel; flyU = base; follow = true; barSig = ''; return; }
-    enterBase();
+    const c = posOf(base), k = kScale();
+    const onScreen = Math.abs(c.x - cam.x) * k < cv.width * 0.3 && Math.abs(c.y - cam.y) * k < cv.height * 0.3;
+    const armed = performance.now() - baseArmT < 6000;
+    if (armed || (onScreen && follow && flyU === base)) { baseArmT = 0; enterBase(); return; }
+    sel = drive ? 'base' : sel; flyU = base; follow = true; barSig = ''; baseArmT = performance.now();
+    say('Капсула. Нажмите «Моя база» ещё раз — войти');
   }
+
   // №140–141: веер на «Моя база» (общий для карт — js/iso/iso-mapui.js): масштаб карты
   const SCALE = { troops: 1.7, village: 1.05, city: 0.62, world: 0 };
   function scaleTo(key) {
