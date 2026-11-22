@@ -123,3 +123,27 @@ AB.SURFACE_A1.trade = {
     { id: 'spread', text: 'Единый тихо прорастает в Меновом Узле: торговцы спорят, пускать ли лекарей на рынок', route: null, secs: 0 },
   ],
 };
+
+// №154: патрули трёх сторон — по 3 бойца ходят по кругу между своими поселениями и Меновым Узлом.
+// Сами не нападают; ударили одного — отвечает весь патруль; бьют издалека (reach — клеток), только стоя.
+// Выстрел рисуется своим: пуля (кланы), луч (Наследники), споровый сгусток (Единый). Перебили — новый
+// патруль выходит из столицы через respawn секунд. Цифры — черновик баланса.
+AB.SURFACE_A1.patrols = {
+  respawn: 150,
+  groups: [
+    { side: 'east', kind: 'samurai', n: 3, route: ['kadze', 'hagane', 'uzel', 'igla'] },
+    { side: 'desert', kind: 'cyborg', n: 3, route: ['predel', 'zavod', 'uzel', 'zerkala'] },
+    { side: 'organic', kind: 'warden', n: 3, route: ['kupel', 'koren', 'uzel', 'svai'] },
+  ],
+  kinds: {
+    samurai: { name: 'Стрелок клана', squad: 'Патруль кланов Стали', side: 'east', look: 'samurai', shot: 'bullet',
+      armorType: 'kinetic', dtype: 'kinetic', hp: 90, attack: 7, rate: 1.6, reach: 3, speed: 24, armor: 0.15,
+      reward: [['ITEM-002', 1, 1], ['ITEM-001', 2, 1]], text: 'Воин клана в пластинчатом доспехе с винтовкой: охраняет дороги кланов.' },
+    cyborg: { name: 'Боевой киборг', squad: 'Патруль Наследников', side: 'desert', look: 'cyborg', shot: 'beam',
+      armorType: 'energy', dtype: 'energy', hp: 80, attack: 5, rate: 2.0, reach: 3, speed: 20, armor: 0.1,
+      reward: [['ITEM-002', 2, 1], ['ITEM-003', 1, 0.6]], text: 'Перенесённое сознание в боевом корпусе: лучевой излучатель вместо руки.' },
+    warden: { name: 'Страж Единого', squad: 'Патруль Детей Единого', side: 'organic', look: 'warden', shot: 'spore',
+      armorType: 'none', dtype: 'thermal', hp: 130, attack: 5, rate: 1.5, reach: 3, speed: 22, armor: 0,
+      reward: [['ITEM-005', 1, 0.7], ['ITEM-007', 2, 1]], text: 'Высший последователь с изменённым телом: плюётся жгучими спорами.' },
+  },
+};

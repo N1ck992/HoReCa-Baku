@@ -411,7 +411,8 @@ AB.IsoSurface = (() => {
   const poseOf = (s) => ({ id: (AB.VEHICLES[s.vehicle] || {}).look || s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time, gun: !!(AB.VEHICLES[s.vehicle] || {}).gun });
   const muzzleOf = (s) => { const p = posOf(s); return AB.IsoSuit && AB.IsoSuit.muzzle ? AB.IsoSuit.muzzle(poseOf(s), p.x, p.y + S0 * 0.2, suitK()) : { x: p.x, y: p.y - S0 * 0.6 }; };
   const NPC = () => D().npcs;
-  const NK = (m) => NPC().kinds[m.kind];
+  const PAT = () => D().patrols;
+  const NK = (m) => NPC().kinds[m.kind] || (PAT() && PAT().kinds[m.kind]);   // №154: и бойцы патрулей
   const mobs = [], floats = [];
   let mobSeq = 0, respawnT = [];
   const alive = () => mobs.filter((m) => m.hp > 0);
@@ -422,7 +423,7 @@ AB.IsoSurface = (() => {
   const floatText = (p, text, col) => floats.push({ x: p.x, y: p.y - S0 * 0.9, t: 0, text, col });
   function spawnGroup() {
     const B = curCell(base);
-    const all = cells.filter((k) => passable(k) && !k.site && !k.road && k.r > 2 && k.r < H - 2 && sites.every((s) => dist(s, k) >= 3) && dist(k, B) >= 5 && alive().every((m) => dist(curCell(m), k) >= 4));
+    const all = cells.filter((k) => passable(k) && !k.site && !k.road && k.r > 2 && k.r < H - 2 && sites.every((s) => dist(s, k) >= 3) && dist(k, B) >= 5 && alive().filter((m) => !m.patrol).every((m) => dist(curCell(m), k) >= 4));
     if (!all.length) return;
     const k = all[Math.floor(Math.random() * all.length)];
     const kinds = Object.keys(NPC().kinds).filter((id) => NPC().kinds[id].side === k.side);
@@ -435,7 +436,7 @@ AB.IsoSurface = (() => {
       mobs[mobs.length - 1].kind = kind;
     }
   }
-  function spawnMobs() { mobs.length = 0; respawnT = []; for (let i = 0; i < NPC().groups; i++) spawnGroup(); }
+  function spawnMobs() { mobs.length = 0; respawnT = []; for (let i = 0; i < NPC().groups; i++) spawnGroup(); spawnPatrols(); }
   function mobStep(m, dt) {
     const d = NK(m);
     if (!m.anim && m.path.length) {
@@ -476,7 +477,7 @@ AB.IsoSurface = (() => {
     const real = Math.max(1, Math.round(dmg * mul * (1 - d.armor)));
     AB.Bus.emit('surface:hit', { npc: true });
     m.hp -= real; m.flash = 0.25; floatText(posOf(m), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ffb040' : mul <= 0.76 ? '#9fb4bc' : '#ffe2a8');
-    for (const o of alive()) if (o.grp === m.grp && !o.aggro) o.aggro = s;   // за своего вступается вся группа
+    for (const o of alive()) if (o.grp === m.grp && !o.aggro) { o.aggro = s; if (o.patrol) o.home = { c: curCell(o).c, r: curCell(o).r }; }   // за своего вступается вся группа
     m.aggro = m.aggro || s;
     if (m.hp <= 0) mobDead(m);
   }
@@ -488,21 +489,81 @@ AB.IsoSurface = (() => {
     say(`${d.name} повержен. Награда: ${got.join(', ') || 'ничего'}`);
     AB.Bus.emit('surface:kill', { kind: m.kind, reward: got });
     for (const q of squads) if (q.target === m) q.target = null;
-    if (!alive().some((o) => o.grp === m.grp)) respawnT.push(NPC().respawn);
+    if (m.patrol) { if (!alive().some((o) => o.grp === m.grp)) patrolT.push({ gi: m.patrol.gi, t: PAT().respawn }); }
+    else if (!alive().some((o) => o.grp === m.grp)) respawnT.push(NPC().respawn);
+  }
+  // ---------- №154: патрули фракций ----------
+  let patrolT = [];
+  const siteCell = (key) => { const st = sites.find((x) => x.key === key); return st ? cell(st.c, st.r) : null; };
+  function spawnPatrol(gi) {
+    const G = PAT().groups[gi], d = PAT().kinds[G.kind], start = siteCell(G.route[0]); if (!start) return;
+    const grp = ++mobSeq, spots = [start, ...nbrs(start).filter((x) => passable(x) && x !== curCell(base))];
+    for (let i = 0; i < G.n && i < spots.length; i++) {
+      mobs.push({ id: `pat${++mobSeq}`, kind: G.kind, grp, c: spots[i].c, r: spots[i].r, home: { c: spots[i].c, r: spots[i].r }, hp: d.hp, max: d.hp,
+        aggro: null, atkT: Math.random(), atk: null, path: [], anim: null, face: 1, stride: 0, flash: 0, wanderT: 0, repath: 0, deadT: 0,
+        patrol: { gi, lead: i === 0, wp: 1 } });
+    }
+  }
+  function spawnPatrols() { patrolT = []; if (!PAT()) return; PAT().groups.forEach((_, gi) => spawnPatrol(gi)); }
+  // идти по маршруту: ведущий — к следующей точке; остальные — следом, рядом с ведущим
+  function patrolMove(m, dt) {
+    if (m.anim || m.path.length) return;
+    const G = PAT().groups[m.patrol.gi];
+    if (m.patrol.lead) {
+      let tgt = siteCell(G.route[m.patrol.wp % G.route.length]);
+      if (tgt && dist(curCell(m), tgt) <= 1) { m.patrol.wp++; tgt = siteCell(G.route[m.patrol.wp % G.route.length]); m.wanderT = 2 + Math.random() * 3; }
+      if ((m.wanderT -= dt) > 0) return;
+      if (tgt) m.path = pathTo(curCell(m), (x) => dist(x, tgt) <= 1) || [];
+    } else {
+      const L = mobs.find((o) => o.grp === m.grp && o.hp > 0 && o.patrol && o.patrol.lead) || mobs.find((o) => o.grp === m.grp && o.hp > 0 && o !== m);
+      if (!L) return;
+      if (!L.patrol.lead) L.patrol.lead = true;                       // ведущий пал — ведёт следующий
+      if (dist(curCell(m), curCell(L)) > 1) m.path = (pathTo(curCell(m), (x) => dist(x, curCell(L)) <= 1) || []).slice(0, 3);
+    }
+  }
+  // снаряды патрулей: пуля / луч / спора; урон — по прилёте
+  const shots = [];
+  function patrolShot(m, t) {
+    const d = NK(m), a = posOf(m), b = posOf(t), len = Math.hypot(b.x - a.x, b.y - a.y) / S0;
+    shots.push({ kind: d.shot, from: { x: a.x + (b.x > a.x ? 8 : -8), y: a.y - S0 * 0.55 }, to: () => { const q = posOf(t); return { x: q.x, y: q.y - S0 * 0.4 }; }, t: 0, dur: d.shot === 'beam' ? 0.12 : d.shot === 'spore' ? 0.18 + len * 0.09 : 0.08 + len * 0.04,
+      hit: () => { if (t.state === 'out' && m.hp > 0) hurtSquad(t, d.attack, m); } });
+  }
+  function shotsTick(dt) { for (let i = shots.length - 1; i >= 0; i--) { const sh = shots[i]; sh.t += dt; if (sh.t >= sh.dur && !sh.done) { sh.done = true; sh.hit(); } if (sh.t > sh.dur + 0.25) shots.splice(i, 1); } }
+  function drawShots() {
+    for (const sh of shots) {
+      const to = sh.to(), u = Math.min(1, sh.t / sh.dur), fade = sh.t > sh.dur ? 1 - (sh.t - sh.dur) / 0.25 : 1;
+      if (sh.kind === 'beam') {                    // луч Наследников: сразу до цели, гаснет
+        g.globalAlpha = fade; g.strokeStyle = 'rgba(255,70,110,.9)'; g.lineWidth = 3; g.beginPath(); g.moveTo(sh.from.x, sh.from.y); g.lineTo(to.x, to.y); g.stroke();
+        g.strokeStyle = 'rgba(255,220,230,.9)'; g.lineWidth = 1; g.stroke(); g.globalAlpha = 1;
+      } else if (sh.kind === 'spore') {            // споры Единого: дуга, зелёный сгусток
+        if (sh.done) { g.globalAlpha = fade; g.fillStyle = 'rgba(150,255,120,.5)'; g.beginPath(); g.arc(to.x, to.y, 10 * (2 - fade), 0, 7); g.fill(); g.globalAlpha = 1; continue; }
+        const x = sh.from.x + (to.x - sh.from.x) * u, y = sh.from.y + (to.y - sh.from.y) * u - Math.sin(u * Math.PI) * S0 * 0.8;
+        g.fillStyle = 'rgba(150,255,120,.9)'; g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); g.fillStyle = 'rgba(240,140,210,.8)'; g.beginPath(); g.arc(x + 2, y - 1, 1.8, 0, 7); g.fill();
+      } else {                                     // пуля кланов: трассер
+        if (sh.done) continue;
+        const x = sh.from.x + (to.x - sh.from.x) * u, y = sh.from.y + (to.y - sh.from.y) * u, dx = (to.x - sh.from.x), dy = (to.y - sh.from.y), n = Math.hypot(dx, dy) || 1;
+        g.strokeStyle = 'rgba(255,220,120,.95)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - dx / n * 10, y - dy / n * 10); g.lineTo(x, y); g.stroke();
+      }
+    }
   }
   function mobTick(m, dt) {
     const d = NK(m);
     m.flash = Math.max(0, m.flash - dt); m.atkT = Math.max(0, m.atkT - dt);
     if (m.atk) { m.atk.t += dt; if (m.atk.t > 0.6) m.atk = null; }
-    const home = cell(m.home.c, m.home.r), t = m.aggro;
-    if (t && (t.state === 'home' || dist(curCell(m), home) > 7)) {      // ушёл в базу или увёл далеко — назад, домой
+    const home = cell(m.home.c, m.home.r), t = m.aggro, reach = d.reach || 1;
+    if (m.patrol && !t) { patrolMove(m, dt); mobStep(m, dt); return; }   // №154: патруль идёт своим маршрутом
+    if (m.patrol && t && (t.state === 'home' || dist(curCell(m), home) > 8)) { m.aggro = null; m.path = []; mobStep(m, dt); return; }
+    if (t && !m.patrol && (t.state === 'home' || dist(curCell(m), home) > 7)) {      // ушёл в базу или увёл далеко — назад, домой
       m.aggro = null; m.path = curCell(m) === home ? [] : pathTo(curCell(m), (x) => x === home) || [];
     } else if (t) {
-      if (dist(curCell(m), curCell(t)) <= 1) {
+      if (dist(curCell(m), curCell(t)) <= reach) {
         if (!m.anim && m.path.length) m.path = [];
-        else if (!m.anim && m.atkT <= 0 && !t.anim) { m.atkT = d.rate; m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1; hurtSquad(t, d.attack, m); }
+        else if (!m.anim && m.atkT <= 0 && (reach > 1 || !t.anim)) {
+          m.atkT = d.rate; m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1;
+          if (d.shot) patrolShot(m, t); else hurtSquad(t, d.attack, m);   // №154: дальний — снаряд, урон по прилёте
+        }
       } else if (!m.anim && ((m.repath -= dt) <= 0 || !m.path.length)) {
-        m.repath = 0.6; m.path = pathTo(curCell(m), (x) => dist(x, curCell(t)) <= 1) || [];
+        m.repath = 0.6; m.path = pathTo(curCell(m), (x) => dist(x, curCell(t)) <= reach) || [];
       }
     } else if (!m.anim && !m.path.length && (m.wanderT -= dt) <= 0) {      // бродит возле своего места
       m.wanderT = 4 + Math.random() * 8;
@@ -544,6 +605,8 @@ AB.IsoSurface = (() => {
     for (let i = mobs.length - 1; i >= 0; i--) if (mobs[i].hp <= 0 && mobs[i].deadT <= 0) mobs.splice(i, 1);
     for (const s of squads) squadTick(s, dt);
     for (let i = respawnT.length - 1; i >= 0; i--) { respawnT[i] -= dt; if (respawnT[i] <= 0) { respawnT.splice(i, 1); spawnGroup(); } }
+    shotsTick(dt);
+    for (let i = patrolT.length - 1; i >= 0; i--) { patrolT[i].t -= dt; if (patrolT[i].t <= 0) { const gi = patrolT[i].gi; patrolT.splice(i, 1); spawnPatrol(gi); say(`${PAT().kinds[PAT().groups[gi].kind].squad}: новый отряд вышел на маршрут`); } }
     for (const f of floats) f.t += dt;
     for (let i = floats.length - 1; i >= 0; i--) if (floats[i].t > 1.4) floats.splice(i, 1);
   }
@@ -557,7 +620,26 @@ AB.IsoSurface = (() => {
     if (m.hp <= 0) g.rotate(1.2 * f);
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 2, 11, 4, 0, 0, 7); g.fill();
     const NKd = NK(m), K = NKd.look || m.kind, col = NKd.col || {};
-    if (K === 'raider') {
+    if (K === 'samurai') {                           // стрелок клана: пластинчатый доспех, рогатый шлем, винтовка
+      g.fillStyle = '#2a2224'; g.fillRect(-5, -9 - bob, 4, 9); g.fillRect(1, -9 - bob, 4, 9);
+      g.fillStyle = '#7a2a24'; g.fillRect(-8, -22 - bob, 16, 14); g.fillStyle = '#3a3036'; for (let i = 0; i < 3; i++) g.fillRect(-8, -20 + i * 4 - bob, 16, 1.5);
+      g.fillStyle = '#c9a24a'; g.fillRect(-9, -23 - bob, 18, 3);
+      g.fillStyle = '#2a2224'; g.beginPath(); g.arc(0, -28 - bob, 5.5, Math.PI, 0); g.fill(); g.fillRect(-6, -28 - bob, 12, 3);
+      g.strokeStyle = '#d9a23e'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-4, -32 - bob); g.lineTo(-7, -37 - bob); g.moveTo(4, -32 - bob); g.lineTo(7, -37 - bob); g.stroke();
+      g.strokeStyle = '#4a4038'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(-2 * f, -16 - bob); g.lineTo(16 * f, -19 - bob); g.stroke();
+    } else if (K === 'cyborg') {                     // боевой киборг: металлический корпус, красный визор, излучатель
+      g.fillStyle = '#4a5058'; g.fillRect(-5, -9 - bob, 3, 9); g.fillRect(2, -9 - bob, 3, 9);
+      g.fillStyle = '#8a949e'; g.beginPath(); g.roundRect(-8, -24 - bob, 16, 16, 4); g.fill(); g.fillStyle = '#5a6470'; g.fillRect(-8, -16 - bob, 16, 2);
+      g.fillStyle = '#6a747e'; g.beginPath(); g.roundRect(-5, -32 - bob, 10, 8, 3); g.fill();
+      g.fillStyle = `rgba(255,70,110,${0.7 + 0.3 * Math.sin(time * 6)})`; g.fillRect(-4 + f, -29 - bob, 8, 2);
+      g.fillStyle = '#3a4048'; g.fillRect(f > 0 ? 6 : -16, -19 - bob, 10, 4); g.fillStyle = 'rgba(255,70,110,.9)'; g.beginPath(); g.arc(f > 0 ? 16 : -16, -17 - bob, 2, 0, 7); g.fill();
+    } else if (K === 'warden') {                     // страж Единого: высокий, в наростах, светится
+      g.fillStyle = '#3a4a3a'; g.fillRect(-4, -9 - bob, 3, 9); g.fillRect(1, -9 - bob, 3, 9);
+      g.fillStyle = '#5a6a4a'; g.beginPath(); g.ellipse(0, -21 - bob, 8, 13, 0, 0, 7); g.fill();
+      g.fillStyle = '#7a8a62'; g.beginPath(); g.arc(1 * f, -36 - bob, 5.5, 0, 7); g.fill();
+      for (let i = 0; i < 5; i++) { g.fillStyle = `rgba(${i % 2 ? '240,140,210' : '150,255,140'},${0.55 + 0.35 * Math.sin(time * 3 + i + m.grp)})`; g.beginPath(); g.arc(-5 + i * 2.5, -30 + (i % 3) * 7 - bob, 2, 0, 7); g.fill(); }
+      g.strokeStyle = '#6a5a6a'; g.lineWidth = 2; g.beginPath(); g.moveTo(-6, -26 - bob); g.quadraticCurveTo(-12, -34 - bob, -9, -42 - bob); g.moveTo(6, -26 - bob); g.quadraticCurveTo(12, -34 - bob, 9, -42 - bob); g.stroke();
+    } else if (K === 'raider') {
       g.fillStyle = '#3a2c1c'; g.fillRect(-5, -8 - bob, 3, 8); g.fillRect(2, -8 - bob, 3, 8);
       g.fillStyle = col.robe || '#b88a50'; g.beginPath(); g.moveTo(-8, -6 - bob); g.lineTo(8, -6 - bob); g.lineTo(5, -24 - bob); g.lineTo(-5, -24 - bob); g.fill();
       g.fillStyle = col.sash || '#a3302a'; g.fillRect(-6, -14 - bob, 12, 3);
@@ -581,6 +663,11 @@ AB.IsoSurface = (() => {
     }
     if (m.flash > 0) { const fr = g.createRadialGradient(0, -14, 2, 0, -14, 22); fr.addColorStop(0, `rgba(255,90,60,${0.55 * m.flash / 0.25})`); fr.addColorStop(1, 'rgba(255,90,60,0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = fr; g.beginPath(); g.arc(0, -14, 22, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over'; }   // №147: вспышка ранения — по фигуре, без прямоугольника
     g.restore();
+    if (m.hp > 0 && m.patrol && m.patrol.lead) {      // №154: флажок стороны над ведущим патруля
+      const fc = { east: '#c0503a', desert: '#9aa4ab', organic: '#6aaa5a' }[NK(m).side] || '#ddd', fy = y - S0 * 1.55;
+      g.strokeStyle = '#2a2a2a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + 9, y - S0 * 0.9); g.lineTo(x + 9, fy); g.stroke();
+      g.fillStyle = fc; g.beginPath(); g.moveTo(x + 9, fy); g.lineTo(x + 19 + Math.sin(time * 4) * 1.5, fy + 3); g.lineTo(x + 9, fy + 7); g.fill();
+    }
     if (m.hp > 0) {
       if (m.hp < m.max || m.aggro) hpBar(x, y - S0 * 1.25, m.hp / m.max, m.aggro ? '#ff5a4a' : '#e0c080');
       if (m.aggro) { g.fillStyle = '#ff5a4a'; g.font = `700 ${12}px "Oswald", sans-serif`; g.textAlign = 'center'; g.fillText('!', x, y - S0 * 1.35); }
@@ -842,6 +929,7 @@ AB.IsoSurface = (() => {
     // база и отряды — сверху вниз, чтобы ближние перекрывали дальних
     [base, ...outSquads(), ...mobs].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : u.kind === 'squad' ? drawSquad(u, p.x, p.y) : drawMob(u)));
     drawCaravans();
+    drawShots();
     if (vfx) vfx.draw(g, frameDt);
     drawFloats();
     if (cmd) { const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r); g.strokeStyle = cmd.m ? 'rgba(255,120,90,.95)' : 'rgba(255,226,140,.95)'; g.lineWidth = 2.5; hexPath(p.x, p.y, S0 * 0.82, g); g.stroke(); }
@@ -1141,7 +1229,7 @@ AB.IsoSurface = (() => {
     zoom: (z) => setZoom(z),
     // для проверок
     _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
-    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _trade: () => trade, _tradeTick: (dt) => tradeTick(dt), _mobs: () => mobs, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
+    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _trade: () => trade, _tradeTick: (dt) => tradeTick(dt), _mobs: () => mobs, _shots: () => shots, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
   };
 })();
