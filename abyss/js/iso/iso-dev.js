@@ -83,7 +83,7 @@ AB.IsoDev = (() => {
     { id: 'sf-a1', group: 'Поверхность', name: 'Зона A1 (после всплытия, случайная точка)', st: () => ({
       sector: 'SECTOR-003', at: { x: 72.5, y: 28.5 }, party: ['CHAR-001', 'CHAR-003'], story: A3, equipment: EQ3, power: true,
       weapons: ARMS, stash: [['ITEM-005', 2], ['ITEM-009', 1], ...RES],
-      dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked', 'recruit', 'module', 'surface-ready', 'mira-fled', 'surfaced', 'lens'],
+      dead: [...DEAD1, 'ENEMY-003', 'ENEMY-008'], nestDone: true, openDoors: ['K', 'S', 'W', 'R', 'V', 'X'], flags: ['undocked', 'recruit', 'module', 'surface-ready', 'mira-fled', 'surfaced', 'lens', 'hale-signal'],
       quests: [...Q1END, done('QUEST-006'), done('QUEST-007'), done('QUEST-008'), done('QUEST-009'), done('QUEST-010')],   // акт III пройден целиком
       after: () => {
         AB.IsoActs.devSet({ act: 3, crew: ['CHAR-001', 'CHAR-003'], built: ['MOD-003'] });

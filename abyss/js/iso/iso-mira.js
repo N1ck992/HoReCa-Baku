@@ -30,6 +30,7 @@ AB.IsoMira = (() => {
   // ---------- этап 1: в базе после первого устройства — сбой ЭХО ----------
   function checkEcho() {
     if (!AB.Flags.has('module') || AB.Flags.has('hale-signal') || AB.IsoActs.act() < 3) return;
+    if (AB.Flags.has('mira-fled') || AB.Flags.has('surfaced')) return;     // №151: Мира уже позади (всплыли) — не повторять
     if (AB.IsoGame.sector() !== 'SECTOR-005' || AB.IsoOverworld.isOpen() || AB.IsoGame.busy()) return;
     AB.Flags.add('hale-signal');
     setTimeout(() => AB.IsoStory.trigger('act3:echo'), 600);
