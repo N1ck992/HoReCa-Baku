@@ -286,7 +286,7 @@ AB.BaseView = (() => {
     if (!card || !sim().on() || AB.IsoGame.sector() !== SEC || AB.IsoOverworld.isOpen()) { box.hidden = true; return; }
     const html = card.science ? scienceCard() : card.crew !== undefined ? crewCard() : objCard();
     if (html == null) { close(); return; }
-    if (html !== cardHtml) { box.innerHTML = html; cardHtml = html; }
+    if (html !== cardHtml) { box.innerHTML = html; cardHtml = html; if (AB.IsoRender && AB.IsoRender.portrait) for (const c of box.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(c, c.dataset.pt, 1); if (card.pick) box.scrollTop = box.scrollHeight; }
     box.hidden = false;
   }
   function matLine(items) { return items.map(([i, n, have]) => `<span class="${have != null && have < n ? 'bad' : ''}">${esc(nm(i))} ${have != null ? `${Math.min(have, n)}/` : ''}${n}</span>`).join(' · '); }
@@ -294,7 +294,8 @@ AB.BaseView = (() => {
     const S = sim().state(), o = sim().obj(card.uid);
     if (!o) return null;
     const b = sim().bp(o.bp);
-    const head = (sub) => `<div class="bx-head"><b>${esc(title(o))}</b><button class="bx-x" data-act="close" aria-label="Закрыть">✕</button></div>${sub ? `<div class="muted">${sub}</div>` : ''}`;
+    const head = (sub) => `<div class="bx-head"><b>${esc(title(o))}</b><button class="bx-x" data-act="close" aria-label="Закрыть">✕</button></div>${sub ? `<div class="muted bx-short">${sub}</div>` : ''}`;
+    const brief = esc(shortDesc(b));
     if (!o.built) {
       const builders = Object.values(S.crew).filter((w) => w.jobs.includes('build')).map((w) => crewName(w.id));
       const need = o.need.map(([i, n]) => [i, n, o.got[i] || 0]);
@@ -322,42 +323,43 @@ AB.BaseView = (() => {
         <div class="muted">${o.mat ? (o.auto ? 'Герои сами приносят сюда этот материал: из приёмника и с выхода станков.' : 'Включите автохранение — и материал будут приносить сюда без приказов.') : 'Назначьте материал или отнесите сюда груз из приёмника или со станка.'}</div>
         ${o.n === 0 ? `<div class="bx-row">${chips(mats.map((i) => [`mat|${i}`, esc(nm(i)), o.mat === i]))}${o.mat ? chips([['mat|', 'Снять назначение']]) : ''}</div>` : ''}`;
     }
-    if (b.research) {
-      const T = S.tech, cur = T.cur, ws = sim().workers(o.uid), pw = powerState(o);
-      return `${head(b.desc)}
-        <div class="bx-st ${cur ? (pw && pw.c === 'bad' ? 'bad' : o.crafter ? 'ok' : 'wait') : 'wait'}">${cur ? `${esc(sim().techName(cur.id))}: ${Math.round(100 - (cur.left / cur.total) * 100)}%${pw && pw.c === 'bad' ? ` — ${esc(pw.t)}` : o.crafter ? ' — идёт' : ws.length ? ' — ждёт работника' : ' — нет работника'}` : 'Исследование не выбрано'}</div>
-        <div class="bx-row">${chips([['science', 'Открыть «Науку»']])}</div>
-        <div>Энергия: ${sim().par(o).draw} в секунду, пока идёт исследование</div>
-        ${netLine(o)}
-        <div class="muted">Работники (нужен хотя бы один):</div>
-        <div class="bx-row">${chips(AB.IsoActs.crew().map((id) => [`work|${id}`, esc(crewName(id)), ws.includes(id)]))}</div>`;
+    if (b.research) {                                  // №156: коротко — исследование и работник
+      const cur = S.tech.cur;
+      return `${head(brief)}
+        <div class="bx-st ${cur ? 'ok' : 'wait'}">${cur ? `${esc(sim().techName(cur.id))} — ${Math.round(100 - (cur.left / cur.total) * 100)}%` : 'Исследование не выбрано'}</div>
+        ${workerBar(o)}
+        <div class="bx-row">${chips([['science', 'Открыть «Науку»']])}</div>`;
     }
     if (b.gen || b.battery) {
       const p = sim().par(o), nt = netOf(o), st = nt && nt.st;
-      return `${head(b.desc)}
+      return `${head(brief)}
         ${p.gen ? `<div>Выработка сейчас: <b class="v">${sim().genOf(o).toFixed(1)}</b> энергии/с${b.wave ? ` (в среднем ${p.gen}, течение меняется)` : ''}</div>` : ''}
         ${p.battery ? `<div>Заряд: <b class="v">${Math.round(o.charge || 0)}</b> из ${p.battery}</div>` : ''}
         ${netLine(o)}
         ${o.core ? '' : upLine(o)}`;
     }
-    if (b.recipe) {
-      const r = sim().par(o), st = status(o), crewIds = AB.IsoActs.crew();
-      const ws = sim().workers(o.uid);
-      const outN = (o.out || {})[r.out] || 0;
-      const insT = sim().insOf(r).map(([i, n]) => `${esc(nm(i))} ×${n}`).join(' + ');
-      return `${head(`${insT ? `${insT} → ` : 'Без сырья → '}${esc(nm(r.out))} ×${r.outN} за ${r.time} с`)}
-        <div class="bx-st ${st.c}">${esc(st.t)}</div>
-        <div>${insT ? `Вход: ${sim().insOf(r).map(([i]) => `${esc(nm(i))} ${(o.in || {})[i] || 0}/${r.inCap}`).join(', ')} · ` : ''}Выход: ${esc(nm(r.out))} ${outN}/${r.outCap} · сделано всего: ${o.made || 0}</div>
-        <div>Энергия: ${r.draw} в секунду, пока работает · приоритет:</div>
-        <div class="bx-row">${chips([[`prio|3`, 'высокий', o.prio === 3], [`prio|2`, 'обычный', (o.prio || 2) === 2], [`prio|1`, 'низкий', o.prio === 1]])}</div>
-        ${netLine(o)}
-        ${upLine(o)}
-        <div class="muted">Работники (нужен хотя бы один):</div>
-        <div class="bx-row">${chips(crewIds.map((id) => [`work|${id}`, esc(crewName(id)), ws.includes(id)]))}</div>
-        ${outN ? `<div class="bx-line"><span>Отнести ${esc(nm(r.out).toLowerCase())} (${outN}) на склад:</span>${rackPick(`out|${o.uid}|${r.out}`, r.out)}</div>` : ''}
-        <div class="muted">${insT ? `Работник сам носит сырьё со стеллажей (а чего там нет — из шкафчиков экипажа).` : 'Сырья не нужно — только энергия и работник.'} Готовое уносит на стеллаж с автохранением этого материала — пока его нет, станок встанет, когда выход заполнится.</div>`;
+    if (b.recipe) {                                    // №156: коротко — описание, шкала «Работник», улучшение
+      return `${head(brief)}${workerBar(o)}${upButton(o)}`;
     }
-    return head(b.desc || '');
+    return head(brief);
+  }
+  // №156: первое предложение описания здания — коротко под названием
+  function shortDesc(b) { const t = String(b.short || b.desc || ''); const m = t.match(/^.*?[.!?](\s|$)/); return (m ? m[0] : t).trim(); }
+  // №156: шкала «Работник» — портреты назначенных (нажатие снимает) и «+»; «+» открывает ряд иконок героев
+  function workerBar(o) {
+    const ws = sim().workers(o.uid), crew = AB.IsoActs.crew(), free = crew.filter((id) => !ws.includes(id));
+    const ico = (id, act, extra = '') => `<button class="bx-hero ${extra}" data-act="${act}|${id}" title="${esc(crewName(id))}"><canvas data-pt="${id}"></canvas><span>${esc(crewName(id))}</span></button>`;
+    const picking = card && card.pick === o.uid;
+    return `<div class="bx-work"><span class="bx-work-l">Работник</span>
+      <div class="bx-work-row">${ws.map((id) => ico(id, 'unwork', 'on')).join('')}${free.length ? `<button class="bx-hero add ${picking ? 'on' : ''}" data-act="pick" title="Назначить героя">+</button>` : ''}</div>
+      ${picking ? `<div class="bx-work-row pick">${free.map((id) => ico(id, 'work')).join('')}</div>` : ''}
+      ${ws.length ? '' : '<span class="bx-work-hint bad">Нужен работник</span>'}</div>`;
+  }
+  function upButton(o) {
+    const b = sim().bp(o.bp), L = b.levels || [], lv = o.lvl || 1;
+    if (!L.length || lv >= L.length) return '';
+    const cost = L[lv].up.map(([i, n]) => `${esc(short(i))} ${n}`).join(' · ');
+    return `<div class="bx-row">${chips([['upg', `⬆ Улучшить до ${lv + 1} · ${cost}`]])}</div>`;
   }
   // №72: строка про сеть устройства и улучшение
   function netLine(o) {
@@ -438,7 +440,9 @@ AB.BaseView = (() => {
     if (a === 'prio' && o) sim().setPrio(o.uid, +x);
     if (a === 'upg' && o) { const r = sim().upgrade(o.uid); toast(r.ok ? 'Улучшение: строители принесут материалы — пока устройство стоит' : r.why, r.ok ? 'good' : 'info'); }
     if (a === 'mat' && o) sim().setRack(o.uid, { mat: x || null });
-    if (a === 'work' && o) sim().assign(x, o.uid, !sim().workers(o.uid).includes(x));
+    if (a === 'work' && o) { sim().assign(x, o.uid, true); card.pick = null; }
+    if (a === 'unwork' && o) sim().assign(x, o.uid, false);
+    if (a === 'pick' && o) card.pick = card.pick === o.uid ? null : o.uid;
     if (a === 'give') {
       // give|pile|ITEM|rack  или  give|out|dev|ITEM|rack
       const parts = btn.dataset.act.split('|');

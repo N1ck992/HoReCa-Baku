@@ -886,3 +886,17 @@ body.map-fan-on .map-units { visibility: hidden; }
 
 /* №153: устройство, на которое не хватает материалов */
 .bx-bp.lack { opacity: .6; border-color: rgba(255, 120, 100, .35); }
+
+/* №156: окно устройства — коротко: описание, шкала «Работник» с портретами и «+» */
+#bx-card .bx-short { margin-top: -2px; }
+.bx-work { display: grid; gap: 6px; margin-top: 6px; padding: 8px; border-radius: 8px; background: rgba(255, 255, 255, .04); }
+.bx-work-l { font: 600 12px var(--display); letter-spacing: 1px; text-transform: uppercase; color: #9fe7ff; }
+.bx-work-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.bx-work-row.pick { padding-top: 6px; border-top: 1px dashed rgba(94, 230, 255, .3); }
+.bx-hero { position: relative; width: 62px; height: 70px; padding: 0; border-radius: 8px; cursor: pointer; overflow: hidden; background: radial-gradient(circle at 50% 60%, #1d3038, #0a1013); border: 1px solid rgba(255, 255, 255, .16); }
+.bx-hero.on { border-color: #5ee6ff; box-shadow: 0 0 0 1px rgba(94, 230, 255, .3) inset; }
+.bx-hero canvas { width: 38px; height: 50px; margin-top: 2px; }
+.bx-hero span { position: absolute; left: 0; right: 0; bottom: 3px; font: 600 10px var(--display); color: #fff; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+.bx-hero.add { display: grid; place-items: center; font: 300 34px var(--display); color: #9fe7ff; border-style: dashed; border-color: rgba(94, 230, 255, .5); }
+.bx-hero.add.on { color: #ffe2a8; border-color: rgba(255, 210, 120, .7); }
+.bx-work-hint { font-size: 11px; }
