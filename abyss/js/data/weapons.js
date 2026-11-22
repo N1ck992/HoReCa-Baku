@@ -44,8 +44,8 @@ AB.WEAPONS = {
     name: 'Инжектор уязвимости', kind: 'ranged', folder: 'assets/weapons/injector',
     params: { damage: 3, range: 520, cooldown: 1.3, hitAt: 0.1, ranged: true, infinite: true, dart: true, bash: 3, vuln: { mult: 1.5, time: 6 }, aura: { radius: 200, heal: 0.8 }, inArt: true },
     sound: { shot: null, hit: null },
-    design: { icon: null, held: 'нарисован на картинке доктора Хейл (assets/source/CHAR003-01.png)', status: 'готово (на картинке героя)' },
-    notes: 'Оружие доктора Хейл: ампула делает цель уязвимее — 6 с любой урон ×1,5.',
+    design: { icon: null, held: 'нарисован на картинке профессора Хейл (assets/source/CHAR003-01.png)', status: 'готово (на картинке героя)' },
+    notes: 'Оружие профессора Хейл: ампула делает цель уязвимее — 6 с любой урон ×1,5.',
   },
   'EQUIP-005': {
     name: 'Манипуляторы экзокостюма', kind: 'melee', folder: 'assets/weapons/exosuit-arms',

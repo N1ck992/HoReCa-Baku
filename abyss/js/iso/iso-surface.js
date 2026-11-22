@@ -318,11 +318,12 @@ AB.IsoSurface = (() => {
   const besideBase = (self) => nbrs(curCell(base)).find((k) => passable(k) && !taken(k, self)) || null;
   function deploy(id) {
     const s = unit(id); if (!s || s.state !== 'home') return false;
+    if (broken[s.vehicle]) { restore(id); return false; }          // №157: разбитая техника — сперва восстановить за энергию
     if (base.anim) { say('Капсула в пути — выйти можно, когда остановится'); return false; }
     const k = besideBase(s); if (!k) { say('Вокруг капсулы нет свободной клетки'); return false; }
     Object.assign(s, { state: 'out', c: k.c, r: k.r, path: [], anim: null });
     sel = id; drive = false; flyU = s; follow = true; barSig = '';
-    say(`${AB.ID.get(id).name}: экзокостюм вышел из капсулы`);
+    say(`${AB.ID.get(id).name}: ${(AB.VEHICLES[s.vehicle] || {}).name || 'экзокостюм'} вышел из капсулы`);
     reveal(); return true;
   }
   function dock(s) { Object.assign(s, { state: 'home', path: [], anim: null, c: base.c, r: base.r }); if (sel === s.id) sel = 'base'; barSig = ''; }
@@ -412,7 +413,7 @@ AB.IsoSurface = (() => {
   const muzzleOf = (s) => { const p = posOf(s); return AB.IsoSuit && AB.IsoSuit.muzzle ? AB.IsoSuit.muzzle(poseOf(s), p.x, p.y + S0 * 0.2, suitK()) : { x: p.x, y: p.y - S0 * 0.6 }; };
   const NPC = () => D().npcs;
   const PAT = () => D().patrols;
-  const NK = (m) => NPC().kinds[m.kind] || (PAT() && PAT().kinds[m.kind]);   // №154: и бойцы патрулей
+  const NK = (m) => m.d || NPC().kinds[m.kind] || (PAT() && PAT().kinds[m.kind]);   // №157: у боссов и союзников — свои данные   // №154: и бойцы патрулей
   const mobs = [], floats = [];
   let mobSeq = 0, respawnT = [];
   const alive = () => mobs.filter((m) => m.hp > 0);
@@ -423,10 +424,11 @@ AB.IsoSurface = (() => {
   const floatText = (p, text, col) => floats.push({ x: p.x, y: p.y - S0 * 0.9, t: 0, text, col });
   function spawnGroup() {
     const B = curCell(base);
-    const all = cells.filter((k) => passable(k) && !k.site && !k.road && k.r > 2 && k.r < H - 2 && sites.every((s) => dist(s, k) >= 3) && dist(k, B) >= 5 && alive().filter((m) => !m.patrol).every((m) => dist(curCell(m), k) >= 4));
+    const all = cells.filter((k) => passable(k) && !k.site && !k.road && k.r > 2 && k.r < H - 2 && sites.every((s) => dist(s, k) >= 3) && dist(k, B) >= 5 && camps.every((cp) => dist(cell(cp.c, cp.r), k) >= 4) && alive().filter((m) => !m.patrol).every((m) => dist(curCell(m), k) >= 4));
     if (!all.length) return;
     const k = all[Math.floor(Math.random() * all.length)];
     const kinds = Object.keys(NPC().kinds).filter((id) => NPC().kinds[id].side === k.side);
+    if (!kinds.length) return;                                       // ничьи земли (пояса, Узел) — без группы
     const kind = kinds[Math.floor(Math.random() * kinds.length)], d = NPC().kinds[kind];
     const [a, b] = NPC().perGroup, n = a + Math.floor(Math.random() * (b - a + 1)), grp = ++mobSeq;
     const spots = [k, ...nbrs(k).filter((x) => passable(x) && !x.site)];
@@ -436,7 +438,7 @@ AB.IsoSurface = (() => {
       mobs[mobs.length - 1].kind = kind;
     }
   }
-  function spawnMobs() { mobs.length = 0; respawnT = []; for (let i = 0; i < NPC().groups; i++) spawnGroup(); spawnPatrols(); }
+  function spawnMobs() { mobs.length = 0; respawnT = []; allies.length = 0; loot.length = 0; spawnCamps(); spawnBosses(); for (let i = 0; i < NPC().groups; i++) spawnGroup(); spawnPatrols(); }
   function mobStep(m, dt) {
     const d = NK(m);
     if (!m.anim && m.path.length) {
@@ -451,14 +453,20 @@ AB.IsoSurface = (() => {
   }
   const herName = (id) => AB.ID.get(id).name;
   const fem = (id) => id === 'CHAR-002' || id === 'CHAR-003';
-  function hurtSquad(s, dmg, m) {
-    const c = AB.Chars.get(s.id), v = AB.VEHICLES[s.vehicle] || { armor: 0 };
-    const mul = AB.Damage ? AB.Damage.mult(NK(m).dtype, v.armorType) : 1;          // №152: тип урона × защита
-    const real = Math.max(1, Math.round(dmg * mul * (1 - v.armor)));
+  function hurtSquad(s, dmg, m, opt = {}) {
+    if (s.ally) { const r = Math.max(1, Math.round(dmg * (1 - (s.d.armor || 0)))); s.hp -= r; s.flash = 0.25; floatText(posOf(s), `−${r}`, '#ff8a6a'); if (s.hp <= 0) { s.hp = 0; s.state = 'home'; } return; }   // №157: союзник
+    const c = AB.Chars.get(s.id), v = AB.VEHICLES[s.vehicle] || { armor: 0 }, d = NK(m);
+    const mul = AB.Damage ? AB.Damage.mult(d.dtype, v.armorType) : 1;          // №152: тип урона × защита
+    let a, k = 1;
+    if ((a = hasAb(s, 'plates')) && (d.reach || 1) > 1) k *= a.mult;            // №157: бронелисты — меньше урона издалека
+    let real = Math.max(1, Math.round(dmg * mul * k * (1 - v.armor)));
+    if (s.shield > 0) { const take = Math.min(s.shield, real); s.shield -= take; real -= take; floatText(posOf(s), `🛡−${take}`, '#8cff9a'); if (!real) { s.flash = 0.1; return; } }   // №157: щит гасит урон
     AB.Bus.emit('surface:hit', { npc: false });
     if (c) c.hp = Math.max(0, c.hp - real);
     s.flash = 0.25; floatText(posOf(s), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ff5a3a' : mul <= 0.76 ? '#9fb4bc' : '#ff8a6a');
-    if (s.mode === 'auto' && !s.target) s.target = m;          // автобой: ответный удар
+    if (!opt.dot && m.hp > 0 && (d.reach || 1) <= 1 && (a = hasAb(s, 'hotarmor'))) hurtMob(m, dmg * a.part, s, { reflect: true });        // раскалённая броня
+    if (!opt.dot && m.hp > 0 && (a = hasAb(s, 'riposte')) && Math.random() < a.chance && dist(curCell(s), curCell(m)) <= (v.reach || 1)) { floatText(posOf(s), 'ответ!', '#ffd27a'); hurtMob(m, v.attack, s); }
+    if (s.mode === 'auto' && !s.target && !s.siege) s.target = m;          // автобой: ответный удар
     barSig = '';
     if (c && c.hp <= 0) squadDown(s);
   }
@@ -467,28 +475,36 @@ AB.IsoSurface = (() => {
     const c = AB.Chars.get(s.id), max = (AB.ID.get(s.id).stats || {}).maxHp || 100;
     if (c) { c.hp = max; c.dead = false; }
     for (const m of mobs) if (m.aggro === s) m.aggro = null;
-    Object.assign(s, { state: 'home', path: [], anim: null, target: null, zone: null, c: base.c, r: base.r });
+    Object.assign(s, { state: 'home', path: [], anim: null, target: null, zone: null, siege: null, pick: null, shield: 0, poison: null, c: base.c, r: base.r });
     if (sel === s.id) sel = 'base';
-    barSig = '';
-    say(`${herName(s.id)}: костюм разбит — очнул${fem(s.id) ? 'ась' : 'ся'} в батискафе`);
+    broken[s.vehicle] = true;                                   // №157: технику восстанавливают за энергию отряда
+    barSig = ''; save();
+    say(`${herName(s.id)}: ${(AB.VEHICLES[s.vehicle] || {}).name || 'костюм'} разбит — очнул${fem(s.id) ? 'ась' : 'ся'} в батискафе. Восстановить — ⚡${E().restore}`);
   }
-  function hurtMob(m, dmg, s) {
-    const d = NK(m), v = AB.VEHICLES[s.vehicle] || {}, mul = AB.Damage ? AB.Damage.mult(v.dtype, d.armorType) : 1;   // №152
-    const real = Math.max(1, Math.round(dmg * mul * (1 - d.armor)));
+  function hurtMob(m, dmg, s, opt = {}) {
+    if (m.hp <= 0) return;
+    const d = NK(m), v = s.ally ? { dtype: s.dtype } : AB.VEHICLES[s.vehicle] || {}, dt = opt.dot ? 'thermal' : v.dtype, mul = AB.Damage ? AB.Damage.mult(dt, d.armorType) : 1;   // №152
+    const pierce = !s.ally && hasAb(s, 'thermite');                 // №157: термит не замечает броню цели
+    let real = Math.max(1, Math.round(dmg * mul * (1 - (pierce ? 0 : d.armor || 0))));
+    if (m.shield > 0) { const take = Math.min(m.shield, real); m.shield -= take; real -= take; if (!real) { floatText(posOf(m), '🛡', '#5ee6ff'); m.aggro = m.aggro || s; return; } }   // щит Архива
     AB.Bus.emit('surface:hit', { npc: true });
     m.hp -= real; m.flash = 0.25; floatText(posOf(m), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ffb040' : mul <= 0.76 ? '#9fb4bc' : '#ffe2a8');
-    for (const o of alive()) if (o.grp === m.grp && !o.aggro) { o.aggro = s; if (o.patrol) o.home = { c: curCell(o).c, r: curCell(o).r }; }   // за своего вступается вся группа
+    for (const o of alive()) if (o.grp === m.grp && !o.aggro && !o.boss) { o.aggro = s; if (o.patrol) o.home = { c: curCell(o).c, r: curCell(o).r }; }   // за своего вступается вся группа
     m.aggro = m.aggro || s;
     if (m.hp <= 0) mobDead(m);
   }
   function mobDead(m) {
-    m.hp = 0; m.deadT = 1.4; m.path = []; m.anim = null;
-    const d = NK(m), got = [];
-    for (const [item, n, ch] of d.reward) if (Math.random() < ch) { if (AB.IsoStash) AB.IsoStash.add(item, n); got.push(`${AB.ID.get(item).name} ×${n}`); }
-    floatText(posOf(m), got.length ? `+ ${got.join(', ')}` : d.name, '#ffd27a');
-    say(`${d.name} повержен. Награда: ${got.join(', ') || 'ничего'}`);
-    AB.Bus.emit('surface:kill', { kind: m.kind, reward: got });
+    m.hp = 0; m.deadT = 1.4; m.path = []; m.anim = null; m.burn = null;
     for (const q of squads) if (q.target === m) q.target = null;
+    if (m.boss) { bossDead(m); return; }
+    const d = NK(m), got = [], items = [];
+    // №157: добыча падает на землю — поднять за энергию отряда
+    for (const [item, n, ch] of d.reward) if (Math.random() < ch) { items.push([item, n]); got.push(`${AB.ID.get(item).name} ×${n}`); }
+    dropLoot(m, items, null);
+    floatText(posOf(m), got.length ? 'добыча на земле' : d.name, '#ffd27a');
+    say(`${d.name} повержен. ${got.length ? `На земле: ${got.join(', ')} — поднять за ⚡${E().pick}` : 'Ничего не выпало'}`);
+    AB.Bus.emit('surface:kill', { kind: m.kind, reward: got });
+    if (m.camp) { if (!campLeft(m.camp)) campCleared(m.camp); return; }
     if (m.patrol) { if (!alive().some((o) => o.grp === m.grp)) patrolT.push({ gi: m.patrol.gi, t: PAT().respawn }); }
     else if (!alive().some((o) => o.grp === m.grp)) respawnT.push(NPC().respawn);
   }
@@ -528,10 +544,24 @@ AB.IsoSurface = (() => {
     shots.push({ kind: d.shot, from: { x: a.x + (b.x > a.x ? 8 : -8), y: a.y - S0 * 0.55 }, to: () => { const q = posOf(t); return { x: q.x, y: q.y - S0 * 0.4 }; }, t: 0, dur: d.shot === 'beam' ? 0.12 : d.shot === 'spore' ? 0.18 + len * 0.09 : 0.08 + len * 0.04,
       hit: () => { if (t.state === 'out' && m.hp > 0) hurtSquad(t, d.attack, m); } });
   }
+  // №157: выстрел новой техники (урон уже нанесён — это только след): луч, трассер, огонь
+  function vehShot(s, m) {
+    const a = posOf(s), b = posOf(m), cls = VD(s).class, kind = cls === 'energy' ? 'zap' : cls === 'thermal' ? 'flame' : 'bullet';
+    shots.push({ kind, from: { x: a.x, y: a.y - S0 * 0.5 }, to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.35 }; }, t: 0, dur: 0.12, hit: () => {} });
+  }
   function shotsTick(dt) { for (let i = shots.length - 1; i >= 0; i--) { const sh = shots[i]; sh.t += dt; if (sh.t >= sh.dur && !sh.done) { sh.done = true; sh.hit(); } if (sh.t > sh.dur + 0.25) shots.splice(i, 1); } }
   function drawShots() {
     for (const sh of shots) {
       const to = sh.to(), u = Math.min(1, sh.t / sh.dur), fade = sh.t > sh.dur ? 1 - (sh.t - sh.dur) / 0.25 : 1;
+      if (sh.kind === 'zap') {                     // №157: разряд — ломаная молния
+        g.globalAlpha = fade; g.strokeStyle = 'rgba(140,230,255,.95)'; g.lineWidth = 2; g.beginPath(); g.moveTo(sh.from.x, sh.from.y);
+        for (let i = 1; i < 5; i++) { const u2 = i / 5; g.lineTo(sh.from.x + (to.x - sh.from.x) * u2 + (Math.random() - 0.5) * 10, sh.from.y + (to.y - sh.from.y) * u2 + (Math.random() - 0.5) * 10); }
+        g.lineTo(to.x, to.y); g.stroke(); g.globalAlpha = 1; continue;
+      }
+      if (sh.kind === 'flame') {                   // №157: струя огня
+        g.globalAlpha = fade * 0.85; for (let i = 0; i < 6; i++) { const u2 = i / 6; g.fillStyle = i % 2 ? 'rgba(255,200,80,.9)' : 'rgba(255,100,40,.9)'; g.beginPath(); g.arc(sh.from.x + (to.x - sh.from.x) * u2, sh.from.y + (to.y - sh.from.y) * u2, 2 + u2 * 5, 0, 7); g.fill(); }
+        g.globalAlpha = 1; continue;
+      }
       if (sh.kind === 'beam') {                    // луч Наследников: сразу до цели, гаснет
         g.globalAlpha = fade; g.strokeStyle = 'rgba(255,70,110,.9)'; g.lineWidth = 3; g.beginPath(); g.moveTo(sh.from.x, sh.from.y); g.lineTo(to.x, to.y); g.stroke();
         g.strokeStyle = 'rgba(255,220,230,.9)'; g.lineWidth = 1; g.stroke(); g.globalAlpha = 1;
@@ -550,6 +580,14 @@ AB.IsoSurface = (() => {
     const d = NK(m);
     m.flash = Math.max(0, m.flash - dt); m.atkT = Math.max(0, m.atkT - dt);
     if (m.atk) { m.atk.t += dt; if (m.atk.t > 0.6) m.atk = null; }
+    if (m.stunT > 0) { m.stunT -= dt; return; }                     // №157: оглушён
+    if (m.boss) { bossTick(m, dt); return; }                        // №157: большой моб стоит на месте
+    if (m.aggro && m.aggro.ally && m.aggro.state !== 'out') m.aggro = null;
+    // №157: гарнизон лагеря нападает, если подойти; патрули чужих сторон враждебны союзнику их соперника
+    if (!m.aggro && (m.camp || (m.patrol && Q && Q.ally && d.side !== Q.ally))) {
+      const foe = fieldSquads().find((q) => dist(curCell(q), curCell(m)) <= 2);
+      if (foe) for (const o of alive()) if (o.grp === m.grp && !o.aggro) o.aggro = foe;
+    }
     const home = cell(m.home.c, m.home.r), t = m.aggro, reach = d.reach || 1;
     if (m.patrol && !t) { patrolMove(m, dt); mobStep(m, dt); return; }   // №154: патруль идёт своим маршрутом
     if (m.patrol && t && (t.state === 'home' || dist(curCell(m), home) > 8)) { m.aggro = null; m.path = []; mobStep(m, dt); return; }
@@ -559,7 +597,7 @@ AB.IsoSurface = (() => {
       if (dist(curCell(m), curCell(t)) <= reach) {
         if (!m.anim && m.path.length) m.path = [];
         else if (!m.anim && m.atkT <= 0 && (reach > 1 || !t.anim)) {
-          m.atkT = d.rate; m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1;
+          m.atkT = d.rate * (m.slowT > 0 ? 1.3 : 1); m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1;
           if (d.shot) patrolShot(m, t); else hurtSquad(t, d.attack, m);   // №154: дальний — снаряд, урон по прилёте
         }
       } else if (!m.anim && ((m.repath -= dt) <= 0 || !m.path.length)) {
@@ -567,7 +605,7 @@ AB.IsoSurface = (() => {
       }
     } else if (!m.anim && !m.path.length && (m.wanderT -= dt) <= 0) {      // бродит возле своего места
       m.wanderT = 4 + Math.random() * 8;
-      const opts = nbrs(curCell(m)).filter((x) => passable(x) && !mobAt(x) && !x.site && x !== curCell(base) && dist(x, home) <= 2);
+      const opts = nbrs(curCell(m)).filter((x) => passable(x) && !mobAt(x) && !x.site && x !== curCell(base) && dist(x, home) <= (m.camp ? 1 : 2));
       if (opts.length) m.path = [opts[Math.floor(Math.random() * opts.length)]];
     }
     mobStep(m, dt);
@@ -576,6 +614,9 @@ AB.IsoSurface = (() => {
     s.flash = Math.max(0, (s.flash || 0) - dt); s.atkT = Math.max(0, (s.atkT || 0) - dt);
     if (s.atk) { s.atk.t += dt; if (s.atk.t > 0.8) s.atk = null; }
     if (s.state !== 'out') return;
+    if (s.anim) s.moved = true;                                     // №157: «с разбега» — первый удар после движения
+    if (s.pick) { const L = s.pick, k = cell(L.c, L.r); if (!loot.includes(L)) s.pick = null; else if (!s.anim && !s.path.length && dist(curCell(s), k) <= 1) pickLoot(s, L); }
+    if (s.siege && siegeStep(s, dt)) return;                         // №157: осада — сперва встать кольцом
     if (s.target && s.target.hp <= 0) { s.target = null; if (s.mode === 'auto' && s.zone && curCell(s) !== s.zone) s.resume = true; }
     // автобой: бьёт тех, кто нападает на него или на союзников рядом
     if (!s.target && s.mode === 'auto') {
@@ -592,9 +633,10 @@ AB.IsoSurface = (() => {
       if (s.path.length) { s.path = []; return; }
       if (s.atkT <= 0) {
         s.atkT = v.rate; s.atk = { t: 0 }; s.face = posOf(m).x >= posOf(s).x ? 1 : -1;
+        const hit = strike(s, m);                                    // №157: сила удара со способностями
         // экзокостюм — выстрел сгустком: урон — когда сгусток долетит; остальная техника бьёт сразу
-        if (v.fx && vfx) vfx.shot(v.fx, () => muzzleOf(s), () => { const p = posOf(m); return { x: p.x, y: p.y - S0 * 0.35 }; }, S0, () => { if (m.hp > 0) hurtMob(m, v.attack, s); });
-        else hurtMob(m, v.attack, s);
+        if (v.fx && vfx) vfx.shot(v.fx, () => muzzleOf(s), () => { const p = posOf(m); return { x: p.x, y: p.y - S0 * 0.35 }; }, S0, () => { if (m.hp > 0) { hurtMob(m, hit.dmg, s); afterHit(s, m); } });
+        else { if (v.reach > 1) vehShot(s, m); hurtMob(m, hit.dmg, s); afterHit(s, m); }
       }
     } else if (!s.anim && ((s.repath = (s.repath || 0) - dt) <= 0 || !s.path.length)) {
       s.repath = 0.6; s.path = pathTo(curCell(s), (x) => dist(x, curCell(m)) <= v.reach) || [];
@@ -604,6 +646,13 @@ AB.IsoSurface = (() => {
     for (const m of mobs) if (m.hp > 0) mobTick(m, dt); else m.deadT -= dt;
     for (let i = mobs.length - 1; i >= 0; i--) if (mobs[i].hp <= 0 && mobs[i].deadT <= 0) mobs.splice(i, 1);
     for (const s of squads) squadTick(s, dt);
+    // №157: способности, союзники, большие мобы, добыча, осады
+    abilityTick(dt); lootTick(dt);
+    for (const a of allies) if (a.state === 'out') { a.life -= dt; if (a.life <= 0) a.state = 'home'; else allyTick(a, dt); }
+    for (let i = allies.length - 1; i >= 0; i--) if (allies[i].state !== 'out') allies.splice(i, 1);
+    allyCd = Math.max(0, allyCd - dt);
+    for (const q of squads) if (q.siege) q.siege.t += dt / squads.filter((x) => x.siege === q.siege).length;
+    for (let i = bossT.length - 1; i >= 0; i--) { bossT[i].t -= dt; if (bossT[i].t <= 0) { const sp = bossT[i].spot; bossT.splice(i, 1); spawnBoss(sp); } }
     for (let i = respawnT.length - 1; i >= 0; i--) { respawnT[i] -= dt; if (respawnT[i] <= 0) { respawnT.splice(i, 1); spawnGroup(); } }
     shotsTick(dt);
     for (let i = patrolT.length - 1; i >= 0; i--) { patrolT[i].t -= dt; if (patrolT[i].t <= 0) { const gi = patrolT[i].gi; patrolT.splice(i, 1); spawnPatrol(gi); say(`${PAT().kinds[PAT().groups[gi].kind].squad}: новый отряд вышел на маршрут`); } }
@@ -618,9 +667,28 @@ AB.IsoSurface = (() => {
     const bob = m.anim ? Math.abs(Math.sin(m.stride / 10)) * 2 : 0, lunge = m.atk ? Math.sin(Math.min(1, m.atk.t / 0.6) * Math.PI) * 5 * f : 0;
     g.save(); g.globalAlpha = a; g.translate(x + lunge, y);
     if (m.hp <= 0) g.rotate(1.2 * f);
-    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 2, 11, 4, 0, 0, 7); g.fill();
     const NKd = NK(m), K = NKd.look || m.kind, col = NKd.col || {};
-    if (K === 'samurai') {                           // стрелок клана: пластинчатый доспех, рогатый шлем, винтовка
+    if (m.boss) g.scale(NKd.size, NKd.size);                        // №157: большие мобы — крупнее по уровню
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 2, 11, 4, 0, 0, 7); g.fill();
+    if (K === 'golem') {                             // Каменный страж: груда скал, горящие глаза
+      g.fillStyle = '#5a5650'; g.fillRect(-9, -10, 6, 10); g.fillRect(3, -10, 6, 10);
+      g.fillStyle = '#7a756c'; g.beginPath(); g.moveTo(-14, -10); g.lineTo(-12, -30); g.lineTo(0, -36); g.lineTo(12, -30); g.lineTo(14, -10); g.fill();
+      g.fillStyle = '#6a655c'; g.beginPath(); g.arc(-15, -24, 6, 0, 7); g.arc(15, -24, 6, 0, 7); g.fill();
+      g.fillStyle = `rgba(255,160,60,${0.7 + 0.3 * Math.sin(time * 3)})`; g.fillRect(-6, -29, 4, 3); g.fillRect(2, -29, 4, 3);
+      g.strokeStyle = '#4a463e'; g.lineWidth = 1; g.beginPath(); g.moveTo(-8, -20); g.lineTo(-2, -16); g.lineTo(4, -22); g.stroke();
+    } else if (K === 'archive') {                    // Страж Архива: боевой автомат на гусеницах, излучатель
+      g.fillStyle = '#2a2e34'; g.beginPath(); g.roundRect(-14, -8, 28, 8, 3); g.fill();
+      g.fillStyle = '#7a848e'; g.beginPath(); g.roundRect(-11, -26, 22, 18, 4); g.fill(); g.fillStyle = '#4a5058'; g.fillRect(-11, -18, 22, 2);
+      g.fillStyle = '#5a6470'; g.beginPath(); g.ellipse(0, -30, 8, 5, 0, 0, 7); g.fill();
+      g.fillStyle = `rgba(255,70,110,${0.6 + 0.4 * Math.sin(time * 5)})`; g.beginPath(); g.arc(0, -30, 2.5, 0, 7); g.fill();
+      g.fillStyle = '#3a4048'; g.fillRect(f > 0 ? 9 : -21, -22, 12, 4);
+      if (m.shield > 0) { g.strokeStyle = `rgba(94,230,255,${0.5 + 0.3 * Math.sin(time * 6)})`; g.lineWidth = 2; g.beginPath(); g.ellipse(0, -16, 20, 24, 0, 0, 7); g.stroke(); }
+    } else if (K === 'devourer') {                   // Цветок-пожиратель: бутон на стебле, лепестки, пасть
+      g.strokeStyle = '#4a6a3a'; g.lineWidth = 4; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(-4, -12, 0, -20); g.stroke();
+      for (let i = 0; i < 6; i++) { const an = i / 6 * Math.PI * 2 + Math.sin(time + i) * 0.15; g.fillStyle = i % 2 ? '#b24a8e' : '#9a3a7a'; g.beginPath(); g.ellipse(Math.cos(an) * 10, -24 + Math.sin(an) * 7, 8, 4, an, 0, 7); g.fill(); }
+      const op = 2 + 2 * Math.abs(Math.sin(time * 2)); g.fillStyle = '#3a1a2a'; g.beginPath(); g.ellipse(0, -24, 6, op, 0, 0, 7); g.fill();
+      for (let i = 0; i < 5; i++) { g.fillStyle = `rgba(150,255,120,${0.4 + 0.4 * Math.sin(time * 3 + i)})`; g.beginPath(); g.arc(-12 + i * 6, -36 - (i % 2) * 4, 1.8, 0, 7); g.fill(); }
+    } else if (K === 'samurai') {                           // стрелок клана: пластинчатый доспех, рогатый шлем, винтовка
       g.fillStyle = '#2a2224'; g.fillRect(-5, -9 - bob, 4, 9); g.fillRect(1, -9 - bob, 4, 9);
       g.fillStyle = '#7a2a24'; g.fillRect(-8, -22 - bob, 16, 14); g.fillStyle = '#3a3036'; for (let i = 0; i < 3; i++) g.fillRect(-8, -20 + i * 4 - bob, 16, 1.5);
       g.fillStyle = '#c9a24a'; g.fillRect(-9, -23 - bob, 18, 3);
@@ -661,12 +729,22 @@ AB.IsoSurface = (() => {
       g.strokeStyle = '#3f5a48'; g.lineWidth = 2; for (let i = 0; i < 4; i++) { const ax = -10 + i * 7; g.beginPath(); g.moveTo(ax, -6); g.quadraticCurveTo(ax + Math.sin(time * 2 + i) * 4, -1, ax + 3, 2); g.stroke(); }
       for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(160,255,150,${0.5 + 0.4 * Math.sin(time * 2.4 + i)})`; g.beginPath(); g.arc(-6 + i * 6, -11 - bob, 1.8, 0, 7); g.fill(); }
     }
+    if (m.burn) { for (let i = 0; i < 3; i++) { g.fillStyle = i % 2 ? 'rgba(255,200,80,.85)' : 'rgba(255,100,40,.85)'; g.beginPath(); g.arc(-6 + i * 6, -12 - ((time * 30 + i * 9) % 16), 2.5, 0, 7); g.fill(); } }
+    if (m.stunT > 0) { g.fillStyle = '#9fe7ff'; for (let i = 0; i < 3; i++) { const an = time * 5 + i * 2.1; g.beginPath(); g.arc(Math.cos(an) * 8, -36 + Math.sin(an) * 2, 1.8, 0, 7); g.fill(); } }
     if (m.flash > 0) { const fr = g.createRadialGradient(0, -14, 2, 0, -14, 22); fr.addColorStop(0, `rgba(255,90,60,${0.55 * m.flash / 0.25})`); fr.addColorStop(1, 'rgba(255,90,60,0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = fr; g.beginPath(); g.arc(0, -14, 22, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over'; }   // №147: вспышка ранения — по фигуре, без прямоугольника
     g.restore();
     if (m.hp > 0 && m.patrol && m.patrol.lead) {      // №154: флажок стороны над ведущим патруля
       const fc = { east: '#c0503a', desert: '#9aa4ab', organic: '#6aaa5a' }[NK(m).side] || '#ddd', fy = y - S0 * 1.55;
       g.strokeStyle = '#2a2a2a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + 9, y - S0 * 0.9); g.lineTo(x + 9, fy); g.stroke();
       g.fillStyle = fc; g.beginPath(); g.moveTo(x + 9, fy); g.lineTo(x + 19 + Math.sin(time * 4) * 1.5, fy + 3); g.lineTo(x + 9, fy + 7); g.fill();
+    }
+    if (m.ally && m.hp > 0) { hpBar(x, y - S0 * 1.25, m.hp / m.max, '#8cff9a'); g.fillStyle = '#8cff9a'; g.font = '700 11px "Oswald", sans-serif'; g.textAlign = 'center'; g.fillText('✦', x, y - S0 * 1.35); return; }
+    if (m.boss && m.hp > 0) {                        // №157: у большого моба — имя, уровень и полоса здоровья всегда
+      const by = y - S0 * (0.9 + 0.55 * NK(m).size), k2 = kScale();
+      hpBar(x, by, m.hp / m.max, m.aggro ? '#ff5a4a' : '#e0a040');
+      g.font = `700 ${10 * dpr / k2}px "Oswald", sans-serif`; g.textAlign = 'center'; g.lineWidth = 3 * dpr / k2; g.strokeStyle = 'rgba(0,0,0,.85)';
+      const t2 = `${NK(m).name} · ур. ${NK(m).lvl}`; g.strokeText(t2, x, by - 4); g.fillStyle = ['#ffe2a8', '#ffb060', '#ff6a4a'][NK(m).lvl - 1]; g.fillText(t2, x, by - 4);
+      return;
     }
     if (m.hp > 0) {
       if (m.hp < m.max || m.aggro) hpBar(x, y - S0 * 1.25, m.hp / m.max, m.aggro ? '#ff5a4a' : '#e0c080');
@@ -688,15 +766,388 @@ AB.IsoSurface = (() => {
     g.globalAlpha = 1;
   }
 
+  // ---------- №157: способности героев и техники ----------
+  // способность героя — только в технике его класса (энергетик — в энергетической); способность техники — всегда
+  const HEROD = (id) => (AB.HEROES && AB.HEROES[id]) || null;
+  const VD = (s) => AB.VEHICLES[s.vehicle] || {};
+  const heroAb = (s) => { const h = HEROD(s.id); return h && h.ability && VD(s).class === h.role ? h.ability : null; };
+  const hasAb = (s, id) => { if (!s || s.ally) return null; const a = heroAb(s); if (a && a.id === id) return a; const b = VD(s).ability; return b && b.id === id ? b : null; };
+  const fieldSquads = () => squads.filter((q) => q.state === 'out');
+  const nearSq = (u, r) => fieldSquads().filter((q) => dist(curCell(q), curCell(u)) <= r);
+  const maxOf = (s) => (AB.ID.get(s.id).stats || {}).maxHp || 100;
+  function healSq(q, n) { const c = AB.Chars.get(q.id); if (!c || n <= 0) return 0; const was = c.hp; c.hp = Math.min(maxOf(q), c.hp + n); return c.hp - was; }
+  function giveShield(q, n) { q.shield = Math.max(q.shield || 0, n); q.shieldT = 15; }
+  const inFight = (q) => !!q.target || alive().some((m) => m.aggro === q && m.hp > 0);
+  const rings = [];                                 // круги эффектов: купол, обвал, облако
+  const ring = (u, r, col) => { const p = posOf(u); rings.push({ x: p.x, y: p.y, r: r * S0 * SQ3, col, t: 0 }); };
+  // сила удара отряда с учётом способностей
+  function strike(s, m) {
+    const v = VD(s); let dmg = v.attack, a;
+    if ((a = hasAb(s, 'shieldFury')) && s.shield > 0) dmg *= a.mult;                         // Марк: +20% под щитом
+    if ((a = hasAb(s, 'focus'))) { s.focusN = s.lastT === m ? Math.min(Math.round(a.max / a.step), (s.focusN || 0) + 1) : 0; dmg *= 1 + a.step * s.focusN; }
+    if ((a = hasAb(s, 'ram')) && s.lastT !== m) dmg *= a.mult;
+    if ((a = hasAb(s, 'charge')) && s.moved) dmg *= a.mult;
+    if ((a = hasAb(s, 'purge')) && (NK(m).armorType || 'none') === 'none') dmg *= a.mult;
+    s.moved = false; s.lastT = m;
+    return { dmg, pierce: !!hasAb(s, 'thermite') };
+  }
+  // после удара — счётчики «каждый n-й»
+  function afterHit(s, m) {
+    s.nAtk = (s.nAtk || 0) + 1; const n = s.nAtk, v = VD(s); let a;
+    if (s.siege && s.siege.bearer === s.id) s.siege.hit = true;
+    if ((a = hasAb(s, 'dome')) && n % a.every === 0) { for (const q of nearSq(s, a.radius)) giveShield(q, a.amount); ring(s, a.radius, '140,255,160'); floatText(posOf(s), `Купол +${a.amount}`, '#8cff9a'); }
+    if ((a = hasAb(s, 'mend')) && n % a.every === 0) {
+      const q = nearSq(s, a.radius).filter((x) => AB.Chars.get(x.id)).sort((x, y) => AB.Chars.get(x.id).hp / maxOf(x) - AB.Chars.get(y.id).hp / maxOf(y))[0];
+      const got = q ? healSq(q, a.amount) : 0; if (got) floatText(posOf(q), `+${Math.round(got)}`, '#8cff9a');
+    }
+    if ((a = hasAb(s, 'impulse')) && n % a.every === 0) { ring(m, 1, '94,230,255'); for (const o of alive()) if (o !== m && dist(curCell(o), curCell(m)) <= 1) hurtMob(o, v.attack * a.part, s); }
+    if ((a = hasAb(s, 'firefield')) && n % a.every === 0) { ring(m, 1, '255,122,74'); for (const o of alive()) if (dist(curCell(o), curCell(m)) <= 1) o.burn = { dps: a.dps, t: a.time, s, acc: 0 }; }
+    if ((a = hasAb(s, 'chain')) && n % a.every === 0) {
+      const o = alive().filter((x) => x !== m && dist(curCell(x), curCell(m)) <= a.radius)[0];
+      if (o) { const p = posOf(m), q = posOf(o), dmg = v.attack * a.part; shots.push({ kind: 'zap', from: { x: p.x, y: p.y - S0 * 0.4 }, to: () => ({ x: q.x, y: q.y - S0 * 0.4 }), t: 0, dur: 0.1, hit: () => { if (o.hp > 0) hurtMob(o, dmg, s); } }); }
+    }
+    if (m.hp <= 0) return;
+    if ((a = hasAb(s, 'stun')) && n % a.every === 0) { m.stunT = a.time; floatText(posOf(m), 'оглушён', '#5ee6ff'); }
+    if ((a = hasAb(s, 'ignite'))) m.burn = { dps: a.dps, t: a.time, s, acc: m.burn ? m.burn.acc : 0 };
+    if ((a = hasAb(s, 'suppress'))) m.slowT = a.time;
+  }
+  // постоянные способности: аптечка, ремонтные дроны, полевой ремонт; щиты гаснут; горение и яд
+  function abilityTick(dt) {
+    for (const s of fieldSquads()) {
+      if (s.shield > 0 && (s.shieldT -= dt) <= 0) s.shield = 0;
+      let a;
+      if ((a = hasAb(s, 'medkit'))) for (const q of nearSq(s, a.radius)) healSq(q, a.hps * dt);
+      if ((a = hasAb(s, 'repair')) && ((s.repT = (s.repT || 0) + dt) >= a.every)) { s.repT = 0; let any = false; for (const q of nearSq(s, a.radius)) if (healSq(q, a.amount) > 0) any = true; if (any) ring(s, a.radius, '140,255,160'); }
+      // Механик Ода: вне боя чинит всю дружественную технику рядом
+      if ((a = hasAb(s, 'fieldfix'))) { const near = nearSq(s, a.radius); if (!near.some(inFight)) { let got = 0; for (const q of near) got += healSq(q, a.hps * dt); if (got > 0 && ((s.fixT = (s.fixT || 0) + dt) > 1.5)) { s.fixT = 0; floatText(posOf(s), 'ремонт', '#8cff9a'); } } }
+      if (s.poison && (s.poison.t -= dt) > 0) { s.poison.acc += dt; if (s.poison.acc >= 1) { s.poison.acc -= 1; hurtSquad(s, s.poison.dps, s.poison.m, { dot: true }); } } else s.poison = null;
+    }
+    for (const m of alive()) {
+      if (m.slowT > 0) m.slowT -= dt;
+      if (m.burn && (m.burn.t -= dt) > 0) { m.burn.acc += dt; if (m.burn.acc >= 1) { m.burn.acc -= 1; hurtMob(m, m.burn.dps, m.burn.s, { dot: true }); } } else if (m.burn) m.burn = null;
+    }
+    for (let i = rings.length - 1; i >= 0; i--) if ((rings[i].t += dt) > 0.7) rings.splice(i, 1);
+  }
+  function drawRings() {
+    for (const r of rings) { const u = r.t / 0.7; g.strokeStyle = `rgba(${r.col},${0.8 * (1 - u)})`; g.lineWidth = 3; g.beginPath(); g.ellipse(r.x, r.y, r.r * (0.3 + 0.7 * u), r.r * (0.3 + 0.7 * u) * TILT, 0, 0, 7); g.stroke(); }
+  }
+
+  // ---------- №157: большие мобы — по 3 на землю, уровни 1–3, стоят на месте ----------
+  const BOSS = () => D().bosses;
+  let bossT = [];
+  const freeNear = (at, ok) => cells.filter((k) => passable(k) && !k.site && !k.road && ok(k)).sort((a, b) => dist(a, cell(at[0], at[1])) - dist(b, cell(at[0], at[1])))[0] || null;
+  function spawnBoss(spot) {
+    const B = BOSS(), K0 = B.kinds[spot.kind], L = B.levels[spot.lvl];
+    const k = freeNear(spot.at, (x) => !mobAt(x) && dist(x, curCell(base)) >= 4 && !x.camp); if (!k) return;
+    const hp = Math.round(K0.hp * L.k);
+    const d = { ...K0, kind: spot.kind, lvl: spot.lvl, hp, attack: Math.round(K0.attack * Math.sqrt(L.k)), size: L.size, reward: L.reward, speed: 1 };
+    mobs.push({ id: `boss${++mobSeq}`, kind: spot.kind, boss: true, spot, d, grp: ++mobSeq, c: k.c, r: k.r, home: { c: k.c, r: k.r }, hp, max: hp,
+      aggro: null, atkT: 1, atk: null, path: [], anim: null, face: -1, stride: 0, flash: 0, wanderT: 0, repath: 0, deadT: 0, abT: 0, shield: 0 });
+  }
+  function spawnBosses() { bossT = []; if (BOSS()) for (const sp of BOSS().spots) spawnBoss(sp); }
+  const foesOf = () => [...fieldSquads(), ...allies.filter((a) => a.hp > 0)];
+  function bossTick(m, dt) {
+    const d = m.d, me = curCell(m), A = d.ability;
+    if (m.aggro && (m.aggro.state !== 'out' || m.aggro.hp <= 0 || dist(curCell(m.aggro), me) > d.aggro + 5)) m.aggro = null;
+    const inReach = foesOf().filter((q) => dist(curCell(q), me) <= d.reach).sort((a, b) => dist(curCell(a), me) - dist(curCell(b), me));
+    if (!m.aggro) { const f = foesOf().filter((q) => dist(curCell(q), me) <= d.aggro)[0]; if (f) { m.aggro = f; say(`${d.name} (ур. ${d.lvl}) заметил отряд!`); } }
+    const t = m.aggro && dist(curCell(m.aggro), me) <= d.reach ? m.aggro : inReach[0];
+    if (!m.aggro && !t) { m.hp = Math.min(m.max, m.hp + m.max * 0.02 * dt); m.abT = 0; return; }   // в покое — заживает
+    if ((m.abT += dt) >= A.every) {
+      m.abT = 0;
+      if (A.id === 'quake') { ring(m, A.radius, '217,162,62'); floatText(posOf(m), A.name, '#ffd27a'); for (const q of foesOf()) if (dist(curCell(q), me) <= A.radius) hurtSquad(q, d.attack * A.part, m); }
+      if (A.id === 'barrier') { m.shield = A.amount * (1 + (d.lvl - 1) * 0.5); floatText(posOf(m), A.name, '#5ee6ff'); }
+      if (A.id === 'cloud') { ring(m, A.radius, '150,255,120'); floatText(posOf(m), A.name, '#9fff8a'); for (const q of foesOf()) if (dist(curCell(q), me) <= A.radius) { if (q.ally) hurtSquad(q, A.dps * A.time, m, { dot: true }); else q.poison = { dps: A.dps, t: A.time, acc: 0, m }; } m.hp = Math.min(m.max, m.hp + m.max * A.heal); }
+    }
+    if (t && m.atkT <= 0 && (d.reach > 1 || !t.anim)) {
+      m.atkT = d.rate * (m.slowT > 0 ? 1.3 : 1); m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1;
+      if (d.shot) patrolShot(m, t); else hurtSquad(t, d.attack, m);
+    }
+  }
+  function bossDead(m) {
+    const d = m.d, items = [];
+    for (const [item, n, ch] of d.reward) if (Math.random() < ch) items.push([item, n]);
+    items.push([d.trophy, 1]);
+    const veh = d.lvl === 3 && AB.IsoRoster && !AB.IsoRoster.owned().includes(d.vehicle) ? d.vehicle : null;
+    dropLoot(m, items, veh);
+    floatText(posOf(m), 'Добыча на земле', '#ffd27a');
+    say(`${d.name} (ур. ${d.lvl}) повержен! Добыча — на земле${veh ? `, и среди неё — ${AB.VEHICLES[veh].name}` : ''}. Поднять — ⚡${E().pick}`);
+    AB.Bus.emit('surface:kill', { kind: `boss${d.lvl}`, boss: m.kind, reward: [] });
+    bossT.push({ spot: m.spot, t: 480 });
+  }
+
+  // ---------- №157: добыча на земле и энергия отряда ----------
+  const E = () => D().energy || { max: 100, start: 60, regen: 0.5, pick: 2, restore: 30, lootLife: 180 };
+  let energy = null;
+  const broken = {};                                  // разбитая техника: восстановить — за энергию
+  const loot = [];                                    // { c, r, items: [[id, n]], veh, t }
+  const lootAt = (k) => loot.find((l) => l.c === k.c && l.r === k.r) || null;
+  function dropLoot(m, items, veh) {
+    if (!items.length && !veh) return;
+    const k = curCell(m); let L = lootAt(k);
+    if (!L) { L = { c: k.c, r: k.r, items: [], t: 0 }; loot.push(L); }
+    for (const [id, n] of items) { const e = L.items.find((x) => x[0] === id); if (e) e[1] += n; else L.items.push([id, n]); }
+    if (veh) L.veh = veh; L.t = 0;
+  }
+  function pickLoot(s, L) {
+    s.pick = null;
+    if (!loot.includes(L)) return;
+    if (energy < E().pick) { say(`Мало энергии отряда (⚡${Math.floor(energy)}): поднять — ⚡${E().pick}. Капсула подзаряжается, стоя на месте`); return; }
+    energy -= E().pick;
+    const got = [];
+    for (const [id, n] of L.items) { if (AB.IsoStash) AB.IsoStash.add(id, n); got.push(`${AB.ID.get(id).name} ×${n}`); }
+    if (L.veh && AB.IsoRoster) { AB.IsoRoster.unlock({ vehicle: L.veh }); got.push(AB.VEHICLES[L.veh].name); }
+    loot.splice(loot.indexOf(L), 1);
+    floatText(posOf(s), `+ ${got.join(', ')}`, '#ffd27a');
+    say(`${herName(s.id)} поднял${fem(s.id) ? 'а' : ''}: ${got.join(', ')} (−⚡${E().pick})`);
+    barSig = '';
+  }
+  function lootTick(dt) {
+    if (energy === null) energy = E().start;
+    if (!base.anim && !base.path.length) energy = Math.min(E().max, energy + E().regen * dt);
+    for (let i = loot.length - 1; i >= 0; i--) if (!loot[i].veh && (loot[i].t += dt) > E().lootLife) loot.splice(i, 1);
+    const el = document.getElementById('sf-energy'); if (el) { const t = `⚡ ${Math.floor(energy)}/${E().max}`; if (el.textContent !== t) el.textContent = t; }
+  }
+  function drawLoot() {
+    for (const L of loot) {
+      const k = cell(L.c, L.r); if (!k.seen) continue;
+      const p = bpx(L.c, L.r), x = p.x + S0 * 0.25, y = p.y + S0 * 0.2, big = !!L.veh;
+      g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x, y + 2, big ? 12 : 8, 3, 0, 0, 7); g.fill();
+      g.fillStyle = big ? '#6a7a8a' : '#7a5a32'; g.fillRect(x - (big ? 10 : 7), y - (big ? 12 : 9), big ? 20 : 14, big ? 12 : 9);
+      g.fillStyle = big ? '#9fe7ff' : '#c9a24a'; g.fillRect(x - (big ? 10 : 7), y - (big ? 8 : 6), big ? 20 : 14, 2);
+      const a = 0.5 + 0.5 * Math.sin(time * 4 + L.c); g.fillStyle = `rgba(255,230,140,${a})`; g.beginPath(); g.arc(x + 4, y - (big ? 14 : 11), 2, 0, 7); g.fill();
+    }
+  }
+  // разбитую технику восстанавливают за энергию (кнопка в ячейке героя)
+  function restore(id) {
+    const q = unit(id); if (!q || !broken[q.vehicle]) return;
+    if (energy < E().restore) { say(`Восстановить ${AB.VEHICLES[q.vehicle].name}: нужно ⚡${E().restore}, есть ⚡${Math.floor(energy)}`); return; }
+    energy -= E().restore; delete broken[q.vehicle]; barSig = ''; save();
+    say(`${AB.VEHICLES[q.vehicle].name} восстановлен (−⚡${E().restore})`);
+  }
+
+  // ---------- №157: лагеря разбойников с пленниками ----------
+  const camps = [];                                   // { key, name, c, r, d }
+  function spawnCamps() {
+    camps.length = 0; for (const k of cells) k.camp = null;
+    for (const d of D().camps || []) {
+      const k = freeNear(d.at, (x) => dist(x, curCell(base)) >= 3 && nbrs(x).filter(passable).length >= 4); if (!k) continue;
+      const cp = { key: d.key, name: d.name, c: k.c, r: k.r, d }; camps.push(cp); k.camp = cp;
+      if (qs().camps[d.key]) continue;
+      const grp = ++mobSeq, spots = nbrs(k).filter((x) => passable(x) && !x.site && !mobAt(x));
+      let i = 0;
+      for (const [kind, n] of d.garrison) for (let j = 0; j < n && i < spots.length; j++, i++) {
+        const dd = NPC().kinds[kind];
+        mobs.push({ id: `camp${++mobSeq}`, kind, camp: d.key, grp, c: spots[i].c, r: spots[i].r, home: { c: spots[i].c, r: spots[i].r }, hp: dd.hp, max: dd.hp,
+          aggro: null, atkT: 0, atk: null, path: [], anim: null, face: 1, stride: 0, flash: 0, wanderT: 3 + Math.random() * 5, repath: 0, deadT: 0 });
+      }
+    }
+  }
+  const campAt = (k) => camps.find((cp) => dist(cell(cp.c, cp.r), k) <= 0) || null;
+  const campLeft = (key) => alive().filter((m) => m.camp === key).length;
+  function campCleared(key) {
+    if (qs().camps[key]) return; qs().camps[key] = true; qSave();
+    const cp = camps.find((x) => x.key === key);
+    say(`${cp ? cp.name : 'Лагерь'} взят! Клетка с пленником — в лагере («Изучить»)`);
+    AB.Bus.emit('surface:camp', { key });
+  }
+  function drawCamp(cp) {
+    const p = bpx(cp.c, cp.r), x = p.x, y = p.y, done = !!qs().camps[cp.key];
+    const tent = (tx, ty, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(tx - 9, ty); g.lineTo(tx, ty - 13); g.lineTo(tx + 9, ty); g.fill(); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(tx - 2, ty - 5, 4, 5); };
+    tent(x - 12, y + 2, '#6a5038'); tent(x + 12, y + 4, '#5a4a38');
+    g.fillStyle = 'rgba(255,140,60,.8)'; g.beginPath(); g.arc(x, y + 8, 3 + Math.sin(time * 8) * 0.8, 0, 7); g.fill();
+    g.strokeStyle = '#2a2a2a'; g.lineWidth = 1.6;                  // клетка с пленником
+    for (let i = 0; i < 4; i++) { const bx = x - 6 + i * 4; g.beginPath(); g.moveTo(bx, y - 4); g.lineTo(bx, done && i > 1 ? y - 10 : y - 18); g.stroke(); }
+    g.beginPath(); g.moveTo(x - 7, y - 18); g.lineTo(x + 7, y - 18); g.stroke();
+    if (!done) { g.fillStyle = '#d8b090'; g.beginPath(); g.arc(x, y - 11, 3, 0, 7); g.fill(); }
+    if (!done) { g.fillStyle = '#ff5a4a'; g.font = '700 10px "Oswald", sans-serif'; g.textAlign = 'center'; g.fillText('☠', x, y - 22); }
+  }
+
+  // ---------- №157: осада — отряд встаёт кольцом вокруг цели, первым бьёт щитоносец ----------
+  let shieldId = null;                                // кто несёт щит отряда (выбор в ячейке снизу)
+  const sgDone = (sg) => (sg.T.isCamp ? !campLeft(sg.T.key) : sg.T.hp <= 0);
+  const sgCenter = (T) => (T.isCamp ? cell(T.c, T.r) : curCell(T));
+  function sgTarget(sg, s) {
+    if (!sg.T.isCamp) return sg.T.hp > 0 ? sg.T : null;
+    return alive().filter((m) => m.camp === sg.T.key).sort((a, b) => dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s)))[0] || null;
+  }
+  function startSiege(us, T) {
+    const C = sgCenter(T), bearer = us.find((q) => q.id === shieldId) ? shieldId : null;
+    const order = [...us].sort((a, b) => (b.id === bearer) - (a.id === bearer));
+    const sg = { T, bearer, phase: 'gather', t: 0, hit: false, members: order };
+    const used = new Set();
+    for (const s of order) {
+      const R = Math.max(1, Math.min(3, VD(s).reach || 1));
+      const free = (x) => passable(x) && x !== curCell(base) && !mobAt(x) && !used.has(x) && !outSquads().some((q) => q !== s && curCell(q) === x);
+      const spot = cells.filter((x) => free(x) && dist(x, C) === R).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0]
+        || cells.filter((x) => free(x) && dist(x, C) <= R + 1 && dist(x, C) >= 1).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0];
+      if (spot) used.add(spot);
+      Object.assign(s, { siege: sg, spot, mode: 'auto', target: null, zone: null, pick: null });
+      if (s.state === 'retreat') s.state = 'out';
+      if (spot && spot !== curCell(s)) goTo(s, spot, true); else s.path = [];
+    }
+    say(`Осада: ${T.isCamp ? T.name : NK(T).name} — отряд окружает цель${bearer ? `, первым бьёт ${herName(bearer)} (щит)` : ''}`);
+  }
+  // true — отряд в осаде ещё не бьёт (стоит/идёт на место)
+  function siegeStep(s, dt) {
+    const sg = s.siege;
+    if (sgDone(sg)) { for (const q of sg.members) if (q.siege === sg) { q.siege = null; q.target = null; } say('Осада окончена: цель повержена'); return false; }
+    if (sg.phase === 'gather') {
+      const here = (q) => q.state !== 'out' || (!q.anim && !q.path.length);
+      if (!s.anim && !s.path.length && s.spot && curCell(s) !== s.spot && (s.repath = (s.repath || 0) - dt) <= 0) { s.repath = 1.5; if (!goTo(s, s.spot, true)) s.spot = null; }
+      const engaged = alive().some((m) => m.aggro && sg.members.includes(m.aggro) && (sg.T.isCamp ? m.camp === sg.T.key : m === sg.T));   // цель уже напала — бой начинается
+      if (sg.members.every(here) || sg.t > 20 || engaged) { sg.phase = sg.bearer ? 'first' : 'all'; sg.t0 = sg.t; if (sg.bearer) say(`${herName(sg.bearer)} начинает — под щитом`); }
+      return true;
+    }
+    if (sg.phase === 'first' && (sg.hit || sg.t - sg.t0 > 4)) sg.phase = 'all';
+    if (sg.phase === 'first' && s.id !== sg.bearer) return true;
+    if (!s.target || s.target.hp <= 0) s.target = sgTarget(sg, s);
+    return false;
+  }
+
+  // ---------- №157: союзная армия приходит в осаду ----------
+  const allies = [];
+  let allyCd = 0;
+  const ALLY_KIND = { east: 'samurai', desert: 'cyborg', organic: 'warden' };
+  function callArmy(T) {
+    const A = D().alliance, side = qs().ally;
+    if (!side) { say('Союзника пока нет: задание «Союз» в Меновом Узле'); return; }
+    if (allyCd > 0) { say(`Армия союзника соберётся через ${Math.ceil(allyCd)} с`); return; }
+    const C = sgCenter(T), dk = PAT().kinds[ALLY_KIND[side]];
+    const spots = cells.filter((x) => passable(x) && !mobAt(x) && x !== curCell(base) && dist(x, C) >= 2 && dist(x, C) <= 4).sort(() => Math.random() - 0.5);
+    for (let i = 0; i < A.units && i < spots.length; i++) {
+      const hp = Math.round(dk.hp * 1.3);
+      allies.push({ id: `ally${++mobSeq}`, kind: 'ally', ally: true, d: { ...dk, name: `${dk.name} (союзник)` }, dtype: dk.dtype, state: 'out', T, c: spots[i].c, r: spots[i].r,
+        hp, max: hp, life: A.life, path: [], anim: null, face: 1, stride: 0, flash: 0, atkT: Math.random(), atk: null, repath: 0 });
+    }
+    allyCd = A.cooldown;
+    say(`${D().factions[side].name}: армия союзника пришла на подмогу (${A.units} бойца, ${A.life} с)`);
+  }
+  function allyTick(a, dt) {
+    a.flash = Math.max(0, a.flash - dt); a.atkT = Math.max(0, a.atkT - dt); if (a.atk) { a.atk.t += dt; if (a.atk.t > 0.6) a.atk = null; }
+    const C = sgCenter(a.T);
+    let t = a.T.isCamp ? alive().filter((m) => m.camp === a.T.key)[0] : a.T.hp > 0 ? a.T : null;
+    if (!t) t = alive().filter((m) => m.aggro && (m.aggro.kind === 'squad' || m.aggro.ally) && dist(curCell(m), C) <= 6)[0] || null;
+    if (!t) { a.life = Math.min(a.life, 3); mobStep(a, dt); return; }
+    const reach = a.d.reach || 1;
+    if (dist(curCell(a), curCell(t)) <= reach) {
+      if (!a.anim && a.path.length) a.path = [];
+      else if (!a.anim && a.atkT <= 0) {
+        a.atkT = a.d.rate; a.atk = { t: 0 }; a.face = posOf(t).x >= posOf(a).x ? 1 : -1;
+        const p = posOf(a), tt = t;
+        shots.push({ kind: a.d.shot, from: { x: p.x, y: p.y - S0 * 0.55 }, to: () => { const q = posOf(tt); return { x: q.x, y: q.y - S0 * 0.4 }; }, t: 0, dur: 0.15, hit: () => { if (tt.hp > 0 && a.hp > 0) hurtMob(tt, a.d.attack, a); } });
+      }
+    } else if (!a.anim && ((a.repath -= dt) <= 0 || !a.path.length)) { a.repath = 0.8; a.path = pathTo(curCell(a), (x) => dist(x, curCell(t)) <= reach) || []; }
+    mobStep(a, dt);
+  }
+
+  // ---------- №157: задания открытия героев и техники (js/data/heroes.js) ----------
+  const QKEY = 'abyss_a1_quests';
+  const QS = () => AB.SURFACE_A1_QUESTS || [];
+  let Q = null;                                       // { done, st: { id: { stage, kills } }, camps, ally, shield, told }
+  function qs() {
+    if (!Q) { try { Q = JSON.parse(localStorage.getItem(QKEY) || 'null'); } catch (e) { Q = null; } if (!Q || !Array.isArray(Q.done)) Q = { done: [], st: {}, camps: {}, ally: null, shield: null, told: [] }; shieldId = Q.shield || null; }
+    return Q;
+  }
+  function qSave() { Q.shield = shieldId; try { localStorage.setItem(QKEY, JSON.stringify(Q)); } catch (e) { /* без хранилища */ } }
+  const qOpen = (q) => { const Z = qs(), r = q.requires || {}; storyLoad(); return !Z.done.includes(q.id) && (r.story == null || story.stage >= r.story) && (r.done == null || Z.done.length >= r.done); };
+  const qState = (q) => qs().st[q.id] || (qs().st[q.id] = { stage: 0, kills: {} });
+  const qStage = (q) => q.stages[qState(q).stage] || null;
+  const activeQ = () => QS().filter(qOpen);
+  const qAt = (key) => activeQ().filter((q) => { const st = qStage(q); return st && st.at === key; });
+  function qNotify() {
+    const fresh = activeQ().filter((q) => !qs().told.includes(q.id)); if (!fresh.length) return;
+    for (const q of fresh) qs().told.push(q.id); qSave();
+    setTimeout(() => say(`Новое задание: ${fresh.map((q) => `«${q.name}» — ${q.stages[0].goal}`).join('; ')}`), 2600);
+  }
+  function qAdvance(q) {
+    const s = qState(q); s.stage++; s.kills = {};
+    if (s.stage >= q.stages.length) { qFinish(q); return; }
+    const nx = qStage(q); qSave(); goalUi();
+    say(`${q.name}: ${nx.goal}`);
+    if (nx.siege && qs().camps[nx.siege]) setTimeout(() => qAdvance(q), 600);
+  }
+  function qFinish(q) {
+    const Z = qs(); Z.done.push(q.id); delete Z.st[q.id]; qSave();
+    const r = q.reward || {}, got = [];
+    if (r.hero && AB.IsoRoster) { AB.IsoRoster.unlock({ hero: r.hero }); got.push(`${AB.ID.get(r.hero).name} — в отряде`); }
+    if (r.vehicle && AB.IsoRoster) { AB.IsoRoster.unlock({ vehicle: r.vehicle }); got.push(`${AB.VEHICLES[r.vehicle].name} — в капсуле`); }
+    for (const [item, n] of r.items || []) { if (AB.IsoStash) AB.IsoStash.add(item, n); got.push(`${AB.ID.get(item).name} ×${n}`); }
+    say(`Задание «${q.name}» выполнено. ${got.join('. ')}`);
+    AB.Bus.emit('quest:start', {});
+    goalUi(); qNotify();
+  }
+  AB.Bus.on('surface:kill', ({ kind }) => {
+    if (!Q) return;
+    for (const q of activeQ()) {
+      const st = qStage(q); if (!st || !st.kills || !st.kills[kind]) continue;
+      const s = qState(q); s.kills[kind] = (s.kills[kind] || 0) + 1; qSave(); goalUi();
+      if (Object.entries(st.kills).every(([k, n]) => (s.kills[k] || 0) >= n)) setTimeout(() => qAdvance(q), 900);
+    }
+  });
+  AB.Bus.on('surface:camp', ({ key }) => { for (const q of activeQ()) { const st = qStage(q); if (st && st.siege === key) qAdvance(q); } });
+  const payHave = (st) => (st.pay || []).every(([id, n]) => (AB.IsoStash ? AB.IsoStash.count(id) : 0) >= n);
+  function showQuest(where, q) {
+    const st = qStage(q), el = document.getElementById('sf-pop');
+    storyCard = { quest: q, st };
+    el.querySelector('b').textContent = where.name;
+    el.querySelector('i').textContent = `Задание · ${q.name}`; el.querySelector('i').className = 'sf-side story';
+    let html = st.lines.map(([who, t]) => (who ? `<span class="who">${esc(who)}</span> ${esc(t)}` : `<em>${esc(t)}</em>`)).join('<br>');
+    if (st.choose) html += `<span class="sf-ally">${Object.entries(D().factions).map(([k, f]) => `<button data-ally="${k}">${esc(f.name)}</button>`).join('')}</span>`;
+    el.querySelector('p').innerHTML = html;
+    const btn = el.querySelector('[data-sf-act]'), cost = (st.pay || []).map(([id, n]) => `${AB.ID.get(id).name} ×${n}`).join(', ');
+    el.querySelector('small').textContent = cost ? `Нужно: ${cost}` : st.choose ? 'Союзник даст армию в осаду (кнопка «Армия»); остальные две стороны станут враждебнее.' : '';
+    btn.hidden = !!st.choose; btn.textContent = st.button || 'Дальше'; btn.disabled = !!st.pay && !payHave(st);
+    el.hidden = false;
+  }
+  function questAct(q, st) {
+    if (st.pay) { if (!payHave(st)) { say('Не хватает вещей'); return; } for (const [id, n] of st.pay) AB.IsoStash.remove(id, n); }
+    qAdvance(q);
+  }
+  function chooseAlly(side) {
+    const q = storyCard && storyCard.quest; if (!q) return;
+    qs().ally = side; qSave(); storyCard = null; hidePop();
+    say(`Союз заключён: ${D().factions[side].name}. В осаде — кнопка «Армия»`);
+    qAdvance(q);
+  }
+
+  // ---------- №157: «Изучить» — карточка цели ----------
+  function study(c) {
+    const el = document.getElementById('sf-pop'); storyCard = null;
+    const btn = el.querySelector('[data-sf-act]'); btn.hidden = false; btn.disabled = true; btn.textContent = 'Изучено';
+    const A = (t) => (AB.Damage ? AB.Damage.armorName(t) : t), Dm = (t) => (AB.Damage ? AB.Damage.name(t || 'kinetic') : t);
+    if (c.m) {
+      const d = NK(c.m), m = c.m, ab = d.ability;
+      el.querySelector('b').textContent = m.boss ? `${d.name} · ур. ${d.lvl}` : d.name;
+      el.querySelector('i').textContent = m.boss ? 'Большой моб · стоит на месте' : m.patrol ? (d.squad || 'Патруль') : m.camp ? 'Гарнизон лагеря' : 'Нейтральный';
+      el.querySelector('i').className = `sf-side ${d.side || ''}`;
+      el.querySelector('p').innerHTML = `${esc(d.text || '')}<br>Здоровье <b>${Math.ceil(m.hp)}/${m.max}</b> · удар <b>${d.attack}</b> раз в ${d.rate} с · дальность ${d.reach || 1}<br>Урон: <b>${Dm(d.dtype)}</b> · Защита: <b>${A(d.armorType)}</b>${ab ? `<br><b>${esc(ab.name)}</b> — ${esc(ab.text)}` : ''}`;
+      el.querySelector('small').textContent = m.boss ? `Добыча: ${AB.ID.get(d.trophy).name}${d.lvl === 3 ? ` и ${AB.VEHICLES[d.vehicle].name}` : ''}. Нападает, если подойти на ${d.aggro} кл. Совет: «Осада» со щитоносцем.` : 'Добыча падает на землю: поднять — за энергию отряда.';
+    } else if (c.camp) {
+      const cp = c.camp, done = !!qs().camps[cp.key], q = qAt(cp.key)[0];
+      if (done && q) { showQuest(cp, q); return; }
+      el.querySelector('b').textContent = cp.name;
+      el.querySelector('i').textContent = done ? 'Лагерь взят' : `Лагерь разбойников · гарнизон: ${campLeft(cp.key)}`;
+      el.querySelector('i').className = `sf-side ${cp.d.side}`;
+      el.querySelector('p').textContent = cp.d.text;
+      el.querySelector('small').textContent = done ? 'Пленника освобождают по заданию (в нём — что делать дальше).' : `В клетке — пленник (${AB.ID.get(cp.d.prisoner).name}). «Осада» — окружить и взять лагерь.`;
+    } else if (c.k && c.k.site) { showSite(c.k.site); return; }
+    el.hidden = false;
+  }
+
   // ---------- №142: приказ по нажатию — «Автобой», «Следовать» (на NPC — «Атаковать») ----------
   let cmd = null;                      // { k, m }
   function hideCmd() { cmd = null; const el = document.getElementById('sf-cmd'); if (el) el.hidden = true; }
-  function showCmd(cx, cy, k, m) {
-    cmd = { k, m };
-    const el = document.getElementById('sf-cmd');
-    el.querySelector('[data-cmd="auto"]').hidden = !!m;
-    el.querySelector('[data-cmd="follow"]').hidden = !!m;
-    el.querySelector('[data-cmd="attack"]').hidden = !m;
+  // №157: на NPC, патруле, большом мобе — «Атаковать», «Осада», «Изучить» (и «Армия» союзника);
+  // на лагере — «Осада», «Изучить»; на поселении — «Следовать», «Изучить»; на добыче — «Поднять»; на пустой клетке — «Автобой», «Следовать»
+  function showCmd(cx, cy, k, m, camp) {
+    cmd = { k, m, camp: camp || null };
+    const el = document.getElementById('sf-cmd'), L = !m && !camp && lootAt(k), target = !!(m || camp);
+    el.dataset.ctx = m ? 'mob' : camp ? 'camp' : L ? 'loot' : k.site ? 'site' : 'cell';
+    const show = { auto: !target && !k.site && !L, follow: !target, attack: !!m, siege: target, study: target || !!k.site, army: target && !!qs().ally, pick: !!L };
+    for (const [key, on] of Object.entries(show)) { const b = el.querySelector(`[data-cmd="${key}"]`); if (b) b.hidden = !on; }
+    const pb = el.querySelector('[data-cmd="pick"] span'); if (pb) pb.textContent = `Поднять ⚡${E().pick}`;
+    const ab = el.querySelector('[data-cmd="army"] span'); if (ab) ab.textContent = allyCd > 0 ? `Армия ${Math.ceil(allyCd)}с` : 'Армия';
     el.hidden = false;
     placeCmd();
   }
@@ -705,6 +1156,7 @@ AB.IsoSurface = (() => {
     if (!cmd) return;
     const el = document.getElementById('sf-cmd'), kk = kScale();
     const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r);
+    if (cmd.m && cmd.m.boss) p.y -= S0 * 0.5 * NK(cmd.m).size;
     const x = ((p.x - cam.x) * kk + cv.width / 2) / dpr, y = ((p.y - cam.y) * kk + cv.height / 2) / dpr;
     AB.IsoMapUI.placeCmd(el, x, y, cv.clientWidth, cv.clientHeight);
   }
@@ -718,11 +1170,23 @@ AB.IsoSurface = (() => {
     const u = mover(); return u.kind === 'squad' ? [u] : [];
   }
   function command(kind) {
-    if (!cmd) return; const { k, m } = cmd; hideCmd();
+    if (!cmd) return; const { k, m, camp } = cmd; hideCmd();
+    if (kind === 'study') { study({ k, m, camp }); return; }                    // №157: «Изучить» — без похода
+    const T = m || (camp ? { ...camp, isCamp: true } : null);
+    if (kind === 'army') { if (T) callArmy(T); return; }
     const us = movers(); if (!us.length) { say('Некому идти — выпустите героя из капсулы'); return; }
+    if (kind === 'siege') { if (T && (camp ? campLeft(camp.key) : m.hp > 0)) { startSiege(us, T); flyU = us[0]; follow = true; barSig = ''; } else say('Здесь уже некого брать в осаду'); return; }
+    if (kind === 'pick') {                                                   // поднять добычу: идёт ближайший
+      const L = lootAt(k); if (!L) return;
+      const s0 = [...us].sort((a, b) => dist(curCell(a), k) - dist(curCell(b), k))[0];
+      Object.assign(s0, { pick: L, target: null, siege: null, mode: 'follow', zone: k });
+      if (dist(curCell(s0), k) <= 1 && !s0.anim) pickLoot(s0, L); else goTo(s0, k, true);
+      flyU = s0; follow = true; barSig = ''; return;
+    }
+    for (const s of us) s.siege = null;
     if (kind === 'attack') {
       if (!m || m.hp <= 0) return;
-      for (const s of us) { s.mode = 'auto'; s.target = m; s.zone = null; s.path = []; s.repath = 0; if (s.state === 'retreat') s.state = 'out'; }
+      for (const s of us) { s.mode = 'auto'; s.target = m; s.zone = null; s.path = []; s.repath = 0; s.pick = null; if (s.state === 'retreat') s.state = 'out'; }
       flyU = us[0]; follow = true; barSig = '';
       say(`${us.length > 1 ? 'Отряд' : herName(us[0].id)}: атака — ${NK(m).name}`);
       return;
@@ -747,7 +1211,16 @@ AB.IsoSurface = (() => {
     if (st.kills) { const [k, n] = Object.entries(st.kills)[0]; return `${st.goal}: ${Math.min(n, story.kills[k] || 0)}/${n}`; }
     return st.goal;
   }
-  function goalUi() { const el = document.getElementById('sf-goal'); if (el) el.textContent = ST() ? `▸ ${goalText()}` : ''; }
+  function goalUi() {
+    const el = document.getElementById('sf-goal'); if (!el) return;
+    // №157: под главной целью — начатые задания открытия героев (до двух)
+    const side = Q ? activeQ().filter((q) => qState(q).stage > 0).slice(0, 2).map((q) => {
+      const st = qStage(q); let t = st.goal;
+      if (st.kills) { const [k, n] = Object.entries(st.kills)[0]; t += `: ${Math.min(n, qState(q).kills[k] || 0)}/${n}`; }
+      return `<small>• ${esc(t)}</small>`;
+    }) : [];
+    el.innerHTML = (ST() ? `▸ ${esc(goalText())}` : '') + side.map((x) => `<br>${x}`).join('');
+  }
   function storyAdvance() {
     const st = stageNow(); if (!st) return;
     for (const [item, n] of st.reward || []) if (AB.IsoStash) { AB.IsoStash.add(item, n); floatText(posOf(selU()), `+ ${AB.ID.get(item).name} ×${n}`, '#ffd27a'); }
@@ -757,10 +1230,10 @@ AB.IsoSurface = (() => {
     if (!nx) { say(ST().done.say); if (AB.Flags) AB.Flags.add('a1-bridges'); AB.Bus.emit('surface:bridges', {}); }
     else if (!nx.say) say(`Задание: ${nx.goal}`);
     if (AB.Bus) AB.Bus.emit('quest:start', {});
-    goalUi();
+    goalUi(); qNotify();
   }
   function storyEnter() {
-    storyLoad();
+    storyLoad(); qs(); qNotify();
     if (story.stage === 0 && ST()) { const s0 = ST().stages[0]; story.stage = 1; storySave(); setTimeout(() => say(s0.say), 1800); }
     goalUi();
   }
@@ -775,6 +1248,7 @@ AB.IsoSurface = (() => {
   let storyCard = null;
   function showStory(s, st) {
     const el = document.getElementById('sf-pop'), ok = !st.hero || heroAt(st.hero, s);
+    el.querySelector('[data-sf-act]').hidden = false;
     storyCard = ok ? st : null;
     el.querySelector('b').textContent = s.name;
     el.querySelector('i').textContent = `Задание · ${ST().name}`;
@@ -782,7 +1256,7 @@ AB.IsoSurface = (() => {
     el.querySelector('p').innerHTML = ok ? st.lines.map(([who, t]) => (who ? `<span class="who">${esc(who)}</span> ${esc(t)}` : `<em>${esc(t)}</em>`)).join('<br>') : esc(st.wait || '');
     el.querySelector('small').textContent = '';
     const btn = el.querySelector('[data-sf-act]');
-    btn.textContent = ok ? st.button : 'Нужна доктор Хейл';
+    btn.textContent = ok ? st.button : 'Нужна профессор Хейл';
     btn.disabled = !ok;
     el.hidden = false;
   }
@@ -867,6 +1341,8 @@ AB.IsoSurface = (() => {
   function showSite(s) {
     popSite = s; storyCard = null;
     { const st = stageNow(); if (st && st.at === s.key) { showStory(s, st); return; } }
+    { const q = qAt(s.key)[0]; if (q) { showQuest(s, q); return; } }           // №157: задания открытия героев
+    document.querySelector('#sf-pop [data-sf-act]').hidden = false;
     const el = document.getElementById('sf-pop'), f = D().factions[s.side];
     el.querySelector('b').textContent = s.name;
     el.querySelector('i').textContent = f ? `${f.tag} · ${f.name}` : `Выход · зона ${s.to}`;
@@ -915,6 +1391,8 @@ AB.IsoSurface = (() => {
     g.fillStyle = gr; g.fillRect(cam.x - cv.width / k, cam.y - cv.height / k, cv.width * 2 / k, cv.height * 2 / k);
     // точки (только открытые)
     for (const s of sites) if (cell(s.c, s.r).seen) drawSite(s);
+    for (const cp of camps) if (cell(cp.c, cp.r).seen) drawCamp(cp);   // №157: лагеря и добыча на земле
+    drawLoot();
     // пути: у выбранного — ярче
     for (const u of [base, ...outSquads()]) {
       if (!u.path.length) continue;
@@ -927,9 +1405,9 @@ AB.IsoSurface = (() => {
     // кольцо под выбранным
     { const u = selU(), p = posOf(u); g.strokeStyle = drive ? 'rgba(255,210,120,.95)' : 'rgba(94,230,255,.9)'; g.lineWidth = 2; g.beginPath(); g.ellipse(p.x, p.y + 4, S0 * (u === base ? 0.85 : 0.5), S0 * (u === base ? 0.36 : 0.22), 0, 0, 7); g.stroke(); }
     // база и отряды — сверху вниз, чтобы ближние перекрывали дальних
-    [base, ...outSquads(), ...mobs].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : u.kind === 'squad' ? drawSquad(u, p.x, p.y) : drawMob(u)));
+    [base, ...outSquads(), ...mobs, ...allies].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : u.kind === 'squad' ? drawSquad(u, p.x, p.y) : drawMob(u)));
     drawCaravans();
-    drawShots();
+    drawShots(); drawRings();
     if (vfx) vfx.draw(g, frameDt);
     drawFloats();
     if (cmd) { const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r); g.strokeStyle = cmd.m ? 'rgba(255,120,90,.95)' : 'rgba(255,226,140,.95)'; g.lineWidth = 2.5; hexPath(p.x, p.y, S0 * 0.82, g); g.stroke(); }
@@ -965,11 +1443,61 @@ AB.IsoSurface = (() => {
   function drawSquad(s, x, y) {
     if (s.state === 'retreat') g.globalAlpha = 0.8;
     const pose = poseOf(s);
-    if (AB.IsoSuit && AB.RIGS && AB.RIGS.EXOSUIT) AB.IsoSuit.draw(g, pose, x, y + S0 * 0.2, (S0 * 1.3) / AB.RIGS.EXOSUIT.height);
+    if (!VD(s).look) drawVeh(s, x, y);                               // №157: новая техника — условный рисунок
+    else if (AB.IsoSuit && AB.RIGS && AB.RIGS.EXOSUIT) AB.IsoSuit.draw(g, pose, x, y + S0 * 0.2, (S0 * 1.3) / AB.RIGS.EXOSUIT.height);
     else { g.fillStyle = '#c9853a'; g.beginPath(); g.arc(x, y - 10, 8, 0, 7); g.fill(); }
     g.globalAlpha = 1;
+    if (s.shield > 0) {                                              // №157: щит — светящийся купол
+      const a = Math.min(1, s.shield / 25) * (0.45 + 0.15 * Math.sin(time * 5));
+      g.strokeStyle = `rgba(140,255,160,${a + 0.2})`; g.fillStyle = `rgba(140,255,160,${a * 0.25})`; g.lineWidth = 2;
+      g.beginPath(); g.ellipse(x, y - S0 * 0.45, S0 * 0.62, S0 * 0.85, 0, 0, 7); g.fill(); g.stroke();
+    }
+    if (s.poison) { g.fillStyle = 'rgba(150,255,120,.7)'; for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(x - 8 + i * 8, y - S0 * 1.1 - ((time * 20 + i * 7) % 14), 2, 0, 7); g.fill(); } }
+    if (s.id === shieldId) { g.font = `${12}px sans-serif`; g.textAlign = 'center'; g.fillText('🛡', x + S0 * 0.55, y - S0 * 1.2); }
     const c = AB.Chars.get(s.id), max = (AB.ID.get(s.id).stats || {}).maxHp || 100;
     if (c && (c.hp < max || s.target)) hpBar(x, y - S0 * 1.45, c.hp / max, '#5ee6ff');
+  }
+  // №157: новая техника (до картинок автора): корпус по форме, цвет — класс; сверху — голова героя
+  function drawVeh(s, x, y) {
+    const v = VD(s), col = (AB.HERO_ROLES[v.class] || {}).col || '#ccc', f = s.face || 1;
+    const bob = s.anim ? Math.abs(Math.sin(s.stride / 10)) * 2 : 0, lunge = s.atk ? Math.sin(Math.min(1, s.atk.t / 0.8) * Math.PI) * 4 * f : 0;
+    g.save(); g.translate(x + lunge, y + S0 * 0.15);
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 2, 15, 5, 0, 0, 7); g.fill();
+    let top = -26;
+    switch (v.shape) {
+      case 'tank':
+        g.fillStyle = '#2a2a2a'; for (const wx of [-10, 0, 10]) { g.beginPath(); g.arc(wx, -2, 4, 0, 7); g.fill(); }
+        g.fillStyle = '#5a5a48'; g.beginPath(); g.roundRect(-16, -14 - bob, 32, 11, 3); g.fill(); g.fillStyle = col; g.fillRect(-16, -9 - bob, 32, 2);
+        g.fillStyle = '#6a6a58'; g.beginPath(); g.roundRect(-7, -21 - bob, 14, 8, 2); g.fill(); g.strokeStyle = '#3a3a30'; g.lineWidth = 3; g.beginPath(); g.moveTo(5 * f, -18 - bob); g.lineTo(18 * f, -19 - bob); g.stroke();
+        top = -22; break;
+      case 'walker':
+        g.fillStyle = '#4a4038'; g.fillRect(-9, -12, 5, 12); g.fillRect(4, -12, 5, 12);
+        g.fillStyle = '#7a6a58'; g.beginPath(); g.roundRect(-12, -30 - bob, 24, 19, 4); g.fill(); g.fillStyle = col; g.fillRect(-12, -22 - bob, 24, 2);
+        g.fillStyle = '#5a5048'; g.beginPath(); g.arc(14 * f, -20 - bob, 6, 0, 7); g.fill(); top = -31; break;
+      case 'arc':
+        g.strokeStyle = '#6a7480'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(-6, 0); g.lineTo(-3, -12); g.moveTo(6, 0); g.lineTo(3, -12); g.stroke();
+        g.fillStyle = '#8a949e'; g.beginPath(); g.ellipse(0, -18 - bob, 10, 7, 0, 0, 7); g.fill();
+        g.fillStyle = `rgba(94,230,255,${0.6 + 0.4 * Math.sin(time * 8)})`; g.beginPath(); g.arc(11 * f, -20 - bob, 3.5, 0, 7); g.fill(); top = -26; break;
+      case 'crawler':
+        g.strokeStyle = '#4a3020'; g.lineWidth = 2; for (const lx of [-9, -3, 3, 9]) { g.beginPath(); g.moveTo(lx, -8); g.lineTo(lx * 1.3, 0); g.stroke(); }
+        g.fillStyle = '#8a4a2a'; g.beginPath(); g.ellipse(0, -11 - bob, 15, 7, 0, 0, 7); g.fill(); g.fillStyle = col; g.fillRect(-10, -12 - bob, 20, 2);
+        g.fillStyle = '#3a3030'; g.fillRect(f > 0 ? 10 : -18, -14 - bob, 8, 3); if (s.atk) { g.fillStyle = 'rgba(255,140,50,.8)'; g.beginPath(); g.arc(20 * f, -13 - bob, 4, 0, 7); g.fill(); }
+        top = -18; break;
+      case 'forge':
+        g.fillStyle = '#3a3030'; g.fillRect(-10, -8, 6, 8); g.fillRect(4, -8, 6, 8);
+        g.fillStyle = '#5a4a40'; g.beginPath(); g.roundRect(-13, -30 - bob, 26, 23, 3); g.fill();
+        for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(255,${110 + i * 30},50,${0.6 + 0.3 * Math.sin(time * 3 + i)})`; g.fillRect(-10, -26 + i * 6 - bob, 20, 3); }
+        top = -31; break;
+      default:                                                         // drone — носитель «Улей»
+        g.fillStyle = '#6a7470'; g.beginPath(); g.ellipse(0, -16 - bob * 2, 14, 5, 0, 0, 7); g.fill(); g.fillStyle = col; g.fillRect(-10, -17 - bob * 2, 20, 2);
+        for (let i = 0; i < 3; i++) { const a = time * 2 + i * 2.1; g.fillStyle = 'rgba(140,255,160,.9)'; g.beginPath(); g.arc(Math.cos(a) * 18, -24 + Math.sin(a) * 5, 2, 0, 7); g.fill(); }
+        top = -22;
+    }
+    const h = HEROD(s.id), lk = h && h.look;                         // голова героя
+    g.fillStyle = '#d8b090'; g.beginPath(); g.arc(0, top - 4 - bob, 4.5, 0, 7); g.fill();
+    g.fillStyle = lk ? lk.hair : s.id === 'CHAR-003' ? '#e8e0d0' : '#4a3020'; g.beginPath(); g.arc(0, top - 5.5 - bob, 4.6, Math.PI, 0); g.fill();
+    if (s.flash > 0) { const fr = g.createRadialGradient(0, -14, 2, 0, -14, 22); fr.addColorStop(0, `rgba(255,90,60,${0.55 * s.flash / 0.25})`); fr.addColorStop(1, 'rgba(255,90,60,0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = fr; g.beginPath(); g.arc(0, -14, 22, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over'; }
+    g.restore();
   }
   function drawSite(s) {
     const p = bpx(s.c, s.r), x = p.x, y = p.y, u = S0;
@@ -1075,6 +1603,8 @@ AB.IsoSurface = (() => {
     // NPC — «Атаковать»
     const m = mobAt(k);
     if (m && visibleMob(m) && !drive) { showCmd(cx, cy, k, m); return; }
+    const cp = campAt(k);                                            // №157: лагерь — «Осада», «Изучить»
+    if (cp && k.seen && !drive) { showCmd(cx, cy, k, null, cp); return; }
     if (!k.site && !k.seen && !passable(k)) { say('Там ещё никто не был'); return; }
     if (!passable(k)) { say(K[k.kind].block); return; }
     // «Вести базу» — капсула едет сразу
@@ -1092,10 +1622,11 @@ AB.IsoSurface = (() => {
     const slots = [];
     for (const q of squads) {
       const c = AB.Chars.get(q.id), d = AB.ID.get(q.id), hp = c && d.stats ? Math.round((c.hp / d.stats.maxHp) * 100) : 100;
-      const st = q.state === 'out' && q.target ? 'в бою' : q.state === 'out' && (q.anim || q.path.length) ? (q.mode === 'auto' ? 'автобой' : 'в пути') : STATE[q.state];
+      const st = q.state === 'home' && broken[q.vehicle] ? `разбит · ⚡${E().restore}` : q.siege ? 'осада' : q.state === 'out' && q.target ? 'в бою' : q.state === 'out' && (q.anim || q.path.length) ? (q.mode === 'auto' ? 'автобой' : 'в пути') : STATE[q.state];
       const on = (selAll && q.state === 'out') || (!selAll && sel === q.id && q.state !== 'home');
       const back = on && q.state === 'out' ? '<button data-do="back" title="Вернуть в капсулу">↩</button>' : '';
-      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · ${(AB.VEHICLES[q.vehicle] || {}).name || 'экзокостюм'} · скорость ${(AB.VEHICLES[q.vehicle] || {}).speed || '?'} кл/мин · ${st}"><canvas data-pt="${q.id}"></canvas><img src="${(AB.VEHICLES[q.vehicle] || {}).img || 'assets/exosuit/v2/body.png'}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}</div>`);
+      const shb = `<button data-do="shield" class="sh ${shieldId === q.id ? 'on' : ''}" title="Щит отряда: в осаде эта техника бьёт первой">🛡</button>`;   // №157
+      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · ${(AB.VEHICLES[q.vehicle] || {}).name || 'экзокостюм'} · скорость ${(AB.VEHICLES[q.vehicle] || {}).speed || '?'} кл/мин · ${st}"><canvas data-pt="${q.id}"></canvas><img src="${AB.IsoRoster.vimg(q.vehicle)}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}${shb}</div>`);
     }
     // как на дне: место под следующий транспорт и закрытые ячейки
     slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');
@@ -1106,7 +1637,7 @@ AB.IsoSurface = (() => {
     if (sig === barSig) return;
     barSig = sig;
     const el = document.getElementById('sf-slots'); el.innerHTML = slots.join('');
-    if (AB.IsoRender && AB.IsoRender.portrait) for (const c2 of el.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(c2, c2.dataset.pt, 1);
+    for (const c2 of el.querySelectorAll('canvas[data-pt]')) AB.IsoRoster.portrait(c2, c2.dataset.pt, 1);
   }
   // войти в капсулу: отряды стыкуются, карта закрывается; выйдя из капсулы — снова здесь (iso-acts: leaveBase)
   function enterBase() {
@@ -1164,15 +1695,21 @@ AB.IsoSurface = (() => {
     root.addEventListener('pointerdown', (e) => e.stopPropagation());
     root.addEventListener('click', (e) => {
       if (e.target.closest('[data-sf-x]')) hidePop();
+      const al = e.target.closest('[data-ally]'); if (al) { chooseAlly(al.dataset.ally); return; }
+      if (e.target.closest('[data-sf-act]') && storyCard && storyCard.quest) { const { quest, st } = storyCard; storyCard = null; hidePop(); questAct(quest, st); return; }
       if (e.target.closest('[data-sf-act]') && storyCard) { storyCard = null; hidePop(); storyAdvance(); return; }
       if (e.target.closest('[data-sf-allsel]')) { selAll = !selAll; if (selAll) drive = false; barSig = ''; say(selAll ? 'Все: приказ получает весь отряд' : 'Приказ получает выбранный герой'); }
       if (e.target.closest('[data-sf-squad]')) { AB.IsoRoster.open(); }
+      // №157: «⟲» — выбрать всех и вернуть домой, в капсулу
+      if (e.target.closest('[data-sf-home]')) { const outs = outSquads(); if (!outs.length) say('Все в капсуле'); else { selAll = true; drive = false; for (const q of outs) { q.target = null; q.siege = null; recall(q.id); } barSig = ''; say('Все — домой, в капсулу'); } }
       const cb = e.target.closest('[data-cmd]'); if (cb) { command(cb.dataset.cmd); return; }
       if (e.target.closest('[data-sf-items]')) AB.IsoInventory.open();
       if (e.target.closest('[data-sf-units]')) AB.IsoRoster.units();
       if (e.target.closest('[data-sf-drive]')) { drive = !drive; selAll = false; if (drive) { sel = 'base'; flyU = base; say('Вести базу: вкл — нажмите на клетку, капсула поедет туда'); } else say('Вести базу: выкл'); barSig = ''; }
       const bk = e.target.closest('[data-do="back"]'), sl = e.target.closest('[data-u]');
       if (bk && sl) { recall(sl.dataset.u); return; }
+      const sh = e.target.closest('[data-do="shield"]');
+      if (sh && sl) { shieldId = shieldId === sl.dataset.u ? null : sl.dataset.u; qs(); qSave(); barSig = ''; say(shieldId ? `Щит отряда — ${herName(shieldId)}: в осаде бьёт первым` : 'Щит отряда снят'); return; }
       if (sl) { const q = unit(sl.dataset.u); if (!q) return; drive = false; selAll = false; if (q.state === 'home') deploy(q.id); else { sel = q.id; flyU = q; follow = true; barSig = ''; } }
     });
     window.addEventListener('resize', () => { if (open_) fit(); });
@@ -1182,7 +1719,7 @@ AB.IsoSurface = (() => {
 
   // ---------- сохранение (только эта зона) ----------
   function save() {
-    try { localStorage.setItem(SAVE, JSON.stringify({ base: [base.c, base.r], sq: squads.map((q) => [q.id, q.state === 'home' ? 'home' : 'out', curCell(q).c, curCell(q).r]), seen: cells.filter((k) => k.seen).map((k) => idx(k.c, k.r)) })); } catch (e) { /* нет хранилища — не беда */ }
+    try { localStorage.setItem(SAVE, JSON.stringify({ base: [base.c, base.r], sq: squads.map((q) => [q.id, q.state === 'home' ? 'home' : 'out', curCell(q).c, curCell(q).r]), seen: cells.filter((k) => k.seen).map((k) => idx(k.c, k.r)), energy, broken })); } catch (e) { /* нет хранилища — не беда */ }
   }
   function load() {
     try {
@@ -1191,6 +1728,8 @@ AB.IsoSurface = (() => {
       squads.length = 0; syncSquads();
       for (const [id, state, c, r] of s.sq || []) { const q = unit(id); if (q && state === 'out' && passable(cell(c, r))) Object.assign(q, { state: 'out', c, r }); }
       for (const i of s.seen) if (cells[i] && !cells[i].seen) { cells[i].seen = true; clearFog(cells[i]); }
+      if (typeof s.energy === 'number') energy = s.energy;
+      for (const k of Object.keys(broken)) delete broken[k]; Object.assign(broken, s.broken || {});
       return passable(cell(base.c, base.r));
     } catch (e) { return false; }
   }
@@ -1237,6 +1776,9 @@ AB.IsoSurface = (() => {
     // для проверок
     _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
     _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _trade: () => trade, _tradeTick: (dt) => tradeTick(dt), _mobs: () => mobs, _shots: () => shots, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
+    _camps: () => camps, _loot: () => loot, _allies: () => allies, _energy: (v) => { if (typeof v === 'number') energy = v; return energy; }, _broken: () => broken,
+    _quests: () => qs(), _qAdvance: (id) => qAdvance(QS().find((q) => q.id === id)), _shield: (id) => { shieldId = id; }, _tapCamp: (key) => { const cp = camps.find((x) => x.key === key); tap(cell(cp.c, cp.r), 400, 200); },
+    _study: () => document.querySelector('#sf-pop p').textContent, _choose: (side) => chooseAlly(side),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
   };
 })();

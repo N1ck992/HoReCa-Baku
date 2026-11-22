@@ -280,6 +280,8 @@ AB.IsoOverworld = (() => {
         if (k === 'units') AB.IsoRoster.units();          // №144: окно «Юниты»
         // №142: «Выбрать всех» — переключатель; «◎ Отряд» — окно состава (герои и техника)
         if (k === 'allsel') { selAll = !selAll; if (selAll) drive = false; say(selAll ? 'Все: приказ получает весь отряд' : 'Приказ получает выбранный'); }
+        // №157: «⟲» — выбрать всех и вернуть домой, в базу
+        if (k === 'home') { const outs = outSquads(); if (!outs.length) say('Все дома'); else { selAll = true; drive = false; for (const q of outs) recall(q.id); say('Все — домой'); } }
         if (k === 'all') { if (mode !== 'capsule') say('Состав отряда меняется на базе-капсуле'); else AB.IsoRoster.open(); }
         if (k === 'surface') AB.IsoActs.surface();
         squadsSig = ''; return;
@@ -976,7 +978,7 @@ AB.IsoOverworld = (() => {
       const st = s.state === 'out' && s.atk ? 'в бою' : s.state === 'out' && (s.anim || s.path.length) ? 'в пути' : STATE[s.state];
       const on = (selAll && s.state === 'out') || (!selAll && sel === s.id && s.state !== 'home');
       const recallBtn = on && mode !== 'suit' && s.state === 'out' ? '<button data-do="back" title="Отозвать на базу">↩</button>' : '';
-      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${s.state}" data-u="${s.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${s.id}"></canvas><img src="${(AB.VEHICLES && AB.VEHICLES[s.vehicle] || {}).img || 'assets/exosuit/v2/body.png'}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${recallBtn}</div>`);
+      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${s.state}" data-u="${s.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${s.id}"></canvas><img src="${AB.IsoRoster ? AB.IsoRoster.vimg(s.vehicle) : 'assets/exosuit/v2/body.png'}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${recallBtn}</div>`);
     }
     // ещё одна ячейка — когда появится второй транспорт; дальше — закрытые (черновик условия)
     slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');
@@ -987,7 +989,7 @@ AB.IsoOverworld = (() => {
     squadsSig = sig;
     const el = document.getElementById('ow-slots');
     el.innerHTML = slots.join('');
-    for (const cv2 of el.querySelectorAll('canvas[data-pt]')) AB.IsoRender.portrait(cv2, cv2.dataset.pt, 1);
+    for (const cv2 of el.querySelectorAll('canvas[data-pt]')) AB.IsoRoster.portrait(cv2, cv2.dataset.pt, 1);
   }
 
   return {

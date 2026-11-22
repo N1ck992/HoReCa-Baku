@@ -24,8 +24,8 @@ AB.ASSET_MANIFEST = [
   { id: 'ASSET-ENEMY002-01', owner: 'ENEMY-002', type: 'sprite', src: null, desc: 'Преследователь: силуэт' },
 
   // ---- Первый акт, развязка: графика — заглушки, ждут генерации ----
-  // №125: доктор Хейл — картинка автора (assets/source/CHAR003-01.png), разметка tools/rigs/HALE.json. Откат: type 'sprite', src null.
-  { id: 'ASSET-CHAR003-01', owner: 'CHAR-003', type: 'rig', rig: 'HALE', variant: '01', src: null, desc: 'Доктор Хейл' },
+  // №125: профессор Хейл — картинка автора (assets/source/CHAR003-01.png), разметка tools/rigs/HALE.json. Откат: type 'sprite', src null.
+  { id: 'ASSET-CHAR003-01', owner: 'CHAR-003', type: 'rig', rig: 'HALE', variant: '01', src: null, desc: 'Профессор Хейл' },
   { id: 'ASSET-ENEMY003-01', owner: 'ENEMY-003', type: 'sprite', src: null, desc: 'Колосс' },
   { id: 'ASSET-ITEM013-01', owner: 'ITEM-013', type: 'icon', src: null, desc: 'Водорослевая паста' },
   // №55, акты II–III (черновик): картинок пока нет — заглушки

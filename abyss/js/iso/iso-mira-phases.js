@@ -11,7 +11,7 @@
 //   разрядник: встать на его площадку и продержаться 3 с; после разряда она
 //   оглушена и открыта, разрядник — на перезарядке (она рвёт кабели).
 // Фаза 3 «Разум»: гигант распадается — выползает худая Мира (ENEMY-014). Удар по
-//   сознанию: экран плывёт, личинки видятся людьми экипажа, доктор Хейл —
+//   сознанию: экран плывёт, личинки видятся людьми экипажа, профессор Хейл —
 //   чудовищем; верить меткам ЭХО. Обессилев, Мира падает — «Добить»: удерживать.
 //   Дальше — сцены (js/data/iso-act3-mira.js): последние слова, спора, разлом,
 //   преследователь утаскивает тело Миры в разлом, побег на капсуле.
@@ -396,7 +396,7 @@ AB.IsoMiraP = (() => {
     const y = p.y - h - 22 + Math.sin(now() * 4) * 3;
     ctx.fillStyle = 'rgba(255,70,50,.9)'; ctx.beginPath(); ctx.moveTo(p.x - 7, y - 9); ctx.lineTo(p.x + 7, y - 9); ctx.lineTo(p.x, y); ctx.closePath(); ctx.fill();
   }
-  // фаза «Разум»: личинки — люди экипажа; доктор Хейл — чудовище
+  // фаза «Разум»: личинки — люди экипажа; профессор Хейл — чудовище
   function drawLarva(ctx, e, p, drawFig) {
     if (!S || S.phase !== 'mind' || !e.larva || e.state === 'DEAD') return false;
     const f = Object.create(P().find('CHAR-004') || { id: 'CHAR-004' });
@@ -410,7 +410,7 @@ AB.IsoMiraP = (() => {
     const h = 150, w = img.naturalWidth * (h / img.naturalHeight);
     ctx.save(); ctx.globalAlpha = 0.85 + Math.sin(now() * 5) * 0.1; ctx.translate(p.x, p.y); if ((m.facing || 1) < 0) ctx.scale(-1, 1);
     ctx.filter = 'hue-rotate(-40deg) brightness(0.8)'; ctx.drawImage(img, -w / 2, -h * 0.97, w, h); ctx.filter = 'none'; ctx.restore();
-    ctx.font = '600 10px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(120,255,170,.9)'; ctx.fillText('ЭХО: свой — доктор Хейл', p.x, p.y - h - 8);
+    ctx.font = '600 10px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(120,255,170,.9)'; ctx.fillText('ЭХО: свой — профессор Хейл', p.x, p.y - h - 8);
     return true;
   }
 

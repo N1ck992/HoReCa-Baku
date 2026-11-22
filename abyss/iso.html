@@ -98,18 +98,18 @@
         <div id="sf-row">
           <div class="mb-wrap"><div class="map-fan" id="sf-fan" hidden><button data-fan="troops">Войска</button><button data-fan="village">Деревня</button><button data-fan="city">Город</button><button data-fan="world">Мир</button></div><button id="sf-mybase" title="Моя база: нажатие — к капсуле, повторное — войти; удерживать и потянуть — масштаб карты"><i class="cap"></i><span>Моя база</span></button></div>
           <button data-sf-items class="map-inv" title="Инвентарь отряда">▤</button>
-          <button data-sf-units class="map-units" title="Юниты: герои и транспорт">Юниты</button>
+          <button data-sf-units class="map-units" title="Юниты: герои и транспорт">Юниты</button><span id="sf-energy" class="map-energy" title="Энергия отряда: подбор добычи и восстановление разбитой техники. Капсула подзаряжается, стоя на месте">⚡</span>
         </div>
       </div>
       <div id="sf-right">
-        <div class="map-sqbtns"><button data-sf-allsel class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-sf-squad class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
+        <div class="map-sqbtns"><button data-sf-allsel class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-sf-home class="ow-mini" title="Домой: выбрать всех и вернуть в капсулу">⟲</button><button data-sf-squad class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
         <div id="sf-slots" aria-label="Отряды"></div>
       </div>
     </div>
     <div id="sf-pop" hidden><i class="sf-side"></i><b></b><p></p><small></small><div class="sf-row"><button data-sf-act disabled></button><button data-sf-x aria-label="Закрыть">✕</button></div></div>
     <div id="sf-say"></div>
     <!-- №142–143: приказ по нажатию на клетку — две маленькие кнопки веером вокруг точки: «Автобой» / «Следовать»; на NPC — «Атаковать» -->
-    <div id="sf-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button></div>
+    <div id="sf-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button><button data-cmd="siege" title="Осада: отряд встаёт кольцом вокруг цели и атакует; первым — щитоносец"><i>⛬</i><span>Осада</span></button><button data-cmd="study" title="Изучить: что это и чем опасно"><i>?</i><span>Изучить</span></button><button data-cmd="army" title="Армия союзника приходит в осаду"><i>⚑</i><span>Армия</span></button><button data-cmd="pick" title="Поднять добычу (тратит энергию отряда)"><i>⬇</i><span>Поднять</span></button></div>
   </div>
   <div id="ow" hidden>
     <canvas id="ow-map" aria-label="Дно океана: карта из шестиугольников"></canvas>
@@ -132,7 +132,7 @@
         </div>
       </div>
       <div id="ow-right">
-        <div class="map-sqbtns" id="ow-sqbtns"><button data-ow="allsel" class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-ow="all" class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
+        <div class="map-sqbtns" id="ow-sqbtns"><button data-ow="allsel" class="ow-mini" title="Приказ получает весь отряд (вкл) или выбранный герой (выкл)">☰ Все</button><button data-ow="home" class="ow-mini" title="Домой: выбрать всех и вернуть в капсулу">⟲</button><button data-ow="all" class="ow-mini" title="Отряд: сменить героев и технику (только у тех, кто в базе)">◎ Отряд</button></div>
         <div id="ow-slots" aria-label="Отряды"></div>
       </div>
     </div>
@@ -142,7 +142,7 @@
     <div id="ow-hint">Выберите карточку справа внизу и нажмите на клетку — туда пойдёт отряд или капсула. Нажмите на тварь — отряд подойдёт и ударит.</div>
     <div id="ow-say"></div>
     <!-- №144: приказ по нажатию — тот же веер, что на поверхности -->
-    <div id="ow-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button></div>
+    <div id="ow-cmd" class="map-cmd" hidden><button data-cmd="auto" title="Автобой: идти туда и бить всех, кто нападает на отряд или союзников рядом"><i>⚔</i><span>Автобой</span></button><button data-cmd="follow" title="Следовать: идти туда, не ввязываясь в бой"><i>➜</i><span>Следовать</span></button><button data-cmd="attack" title="Атаковать"><i>⚔</i><span>Атаковать</span></button><button data-cmd="siege" title="Осада: отряд встаёт кольцом вокруг цели и атакует; первым — щитоносец"><i>⛬</i><span>Осада</span></button><button data-cmd="study" title="Изучить: что это и чем опасно"><i>?</i><span>Изучить</span></button><button data-cmd="army" title="Армия союзника приходит в осаду"><i>⚑</i><span>Армия</span></button><button data-cmd="pick" title="Поднять добычу (тратит энергию отряда)"><i>⬇</i><span>Поднять</span></button></div>
   </div>
   <div id="iso-dev" hidden></div>
   <div id="iso-set" hidden></div>
@@ -229,6 +229,7 @@
   <script src="js/iso/iso-overworld.js"></script>
   <script src="js/data/surface-a1.js"></script>
   <script src="js/data/surface-a1-story.js"></script>
+  <script src="js/data/heroes.js"></script>
   <script src="js/iso/iso-surface.js"></script>
   <script src="js/iso/iso-acts.js"></script>
   <script src="js/iso/iso-mira.js"></script>

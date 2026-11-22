@@ -900,3 +900,26 @@ body.map-fan-on .map-units { visibility: hidden; }
 .bx-hero.add { display: grid; place-items: center; font: 300 34px var(--display); color: #9fe7ff; border-style: dashed; border-color: rgba(94, 230, 255, .5); }
 .bx-hero.add.on { color: #ffe2a8; border-color: rgba(255, 210, 120, .7); }
 .bx-work-hint { font-size: 11px; }
+
+/* №157: веер — осада, изучить, армия, поднять; раскладка по тому, на что нажали */
+.map-cmd [data-cmd="siege"], .map-cmd [data-cmd="army"] { border-color: rgba(255, 140, 100, .8); color: #ffc8a8; }
+.map-cmd [data-cmd="study"], .map-cmd [data-cmd="pick"] { border-color: rgba(255, 210, 120, .8); color: #ffe2a8; }
+.map-cmd[data-ctx="site"] [data-cmd="follow"], .map-cmd[data-ctx="loot"] [data-cmd="follow"], .map-cmd[data-ctx="camp"] [data-cmd="siege"] { left: -40px; top: -46px; }
+.map-cmd[data-ctx="site"] [data-cmd="study"], .map-cmd[data-ctx="loot"] [data-cmd="pick"], .map-cmd[data-ctx="camp"] [data-cmd="study"] { left: 40px; top: -46px; }
+.map-cmd[data-ctx="mob"] [data-cmd="attack"] { left: 0; top: -64px; }
+.map-cmd[data-ctx="mob"] [data-cmd="siege"] { left: -52px; top: -30px; }
+.map-cmd[data-ctx="mob"] [data-cmd="study"] { left: 52px; top: -30px; }
+.map-cmd [data-cmd="army"] { left: 0; top: 40px; }
+.map-energy { font: 700 11px var(--mono); color: #9fe7ff; padding: 5px 8px; border-radius: 12px; background: rgba(8, 14, 18, .88); border: 1px solid rgba(94, 230, 255, .35); white-space: nowrap; align-self: center; }
+.ow-slot button.sh { right: 3px; left: auto; top: 3px; bottom: auto; opacity: .45; color: #8cff9a; border-color: rgba(140, 255, 160, .4); }
+.ow-slot button.sh.on { opacity: 1; box-shadow: 0 0 6px rgba(140, 255, 160, .6); }
+.sf-ally { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.sf-ally button { font: 600 12px var(--display); padding: 6px 10px; border-radius: 6px; cursor: pointer; background: rgba(20, 28, 34, .95); color: #ffe2a8; border: 1px solid rgba(255, 210, 120, .6); }
+#sf-goal small { font-size: 11px; color: #e6e0d6; }
+.un-tile.lock { opacity: .55; }
+.un-tile.lock i { font-style: normal; font-size: 22px; display: grid; place-items: center; height: 46px; }
+.un-ab { color: #b8f0c0; }
+/* №157: героев и техники много — ряд ячеек прокручивается, кнопки «Все / ⟲ / Отряд» остаются на экране */
+#sf-right, #ow-right { min-width: 0; flex: 0 1 auto; }
+#sf-slots, #ow-slots { max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+#ow-right { max-width: calc(100vw - 280px); }

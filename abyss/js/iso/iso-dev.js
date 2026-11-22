@@ -94,6 +94,12 @@ AB.IsoDev = (() => {
         AB.IsoSurface.enter(true);
       },
     }) },
+    // №157: то же, но открыты все 12 героев и вся техника — проверить способности
+    { id: 'sf-a1-all', group: 'Поверхность', name: 'Зона A1: все герои и техника открыты', st: () => {
+      const st = JUMPS.find((j) => j.id === 'sf-a1').st(), after = st.after;
+      st.after = () => { for (const id of Object.keys(AB.HEROES || {})) AB.IsoRoster.unlock({ hero: id }); for (const v of Object.keys(AB.VEHICLES)) AB.IsoRoster.unlock({ vehicle: v }); after(); };
+      return st;
+    } },
   ];
 
   function jump(id) {

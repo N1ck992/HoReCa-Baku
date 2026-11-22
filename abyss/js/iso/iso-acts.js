@@ -158,7 +158,7 @@ AB.IsoActs = (() => {
   function checkEnd() {
     if (canSurface() && !AB.Flags.has('surface-ready')) {
       AB.Flags.add('surface-ready');
-      setTimeout(() => { const t = 'Доктор Хейл: «Капсула готова к всплытию. Наверху — поверхность и другие люди. Нажми «Всплыть» на карточке базы»'; if (AB.IsoOverworld.isOpen()) AB.IsoOverworld.say(t); else toast(t, 'good'); }, 1500);
+      setTimeout(() => { const t = 'Профессор Хейл: «Капсула готова к всплытию. Наверху — поверхность и другие люди. Нажми «Всплыть» на карточке базы»'; if (AB.IsoOverworld.isOpen()) AB.IsoOverworld.say(t); else toast(t, 'good'); }, 1500);
     }
   }
   function surface() {

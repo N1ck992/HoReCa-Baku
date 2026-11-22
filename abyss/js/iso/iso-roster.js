@@ -12,10 +12,52 @@ AB.IsoRoster = (() => {
   const DEFAULT = { 'EQUIP-005': 'CHAR-001', 'EQUIP-018': 'CHAR-003' };   // кто обычно в какой технике
   let slots = null;                       // [{ vehicle, hero }]
   let outFn = () => false;                // карта сообщает: этот герой снаружи (его менять нельзя)
-  const crew = () => (AB.IsoActs ? AB.IsoActs.crew() : ['CHAR-001']);
-  // какая техника есть у отряда: экзокостюм «Абисса»; костюм Хейл — когда она в экипаже
-  const owned = () => Object.keys(AB.VEHICLES).filter((v) => v !== 'EQUIP-018' || crew().includes('CHAR-003'));
+  // №157: открытые заданиями герои и техника (localStorage «abyss_unlock»)
+  const UKEY = 'abyss_unlock';
+  let unl = null;
+  function U() { if (!unl) { try { unl = JSON.parse(localStorage.getItem(UKEY) || 'null'); } catch (e) { unl = null; } if (!unl || !Array.isArray(unl.heroes)) unl = { heroes: [], vehicles: [] }; } return unl; }
+  function unlock({ hero, vehicle } = {}) {
+    const u = U(); let got = false;
+    if (hero && !u.heroes.includes(hero)) { u.heroes.push(hero); got = true; ensureChar(hero); }
+    if (vehicle && !u.vehicles.includes(vehicle)) { u.vehicles.push(vehicle); got = true; }
+    try { localStorage.setItem(UKEY, JSON.stringify(u)); } catch (e) { /* без хранилища */ }
+    if (got) AB.Bus.emit('roster:changed', {});
+    return got;
+  }
+  // у нового героя — своё состояние (здоровье), как у экипажа; в мире корабля он не появляется
+  function ensureChar(id) { if (AB.Chars && !AB.Chars.get(id) && AB.Chars.spawn && AB.ID.has(id)) { const c = AB.Chars.spawn(id, { room: null, x: 0 }); if (c) { c.hidden = true; c.controllable = false; } } }
+  const baseCrew = () => (AB.IsoActs ? AB.IsoActs.crew() : ['CHAR-001']);
+  const crew = () => { const c = [...baseCrew()]; for (const h of U().heroes) if (!c.includes(h)) { ensureChar(h); c.push(h); } return c; };
+  // какая техника есть у отряда: экзокостюм «Абисса»; костюм Хейл — когда она в экипаже; №157: новая — за задания и больших мобов
+  const owned = () => Object.keys(AB.VEHICLES).filter((v) => (v === 'EQUIP-005' ? true : v === 'EQUIP-018' ? crew().includes('CHAR-003') : U().vehicles.includes(v)));
   const V = (id) => AB.VEHICLES[id] || null;
+  // №157: картинка техники — у новой своей ещё нет: значок класса (цвет роли и первая буква)
+  const imgCache = {};
+  function vimg(id) {
+    const v = V(id); if (!v) return '';
+    if (v.img) return v.img;
+    if (imgCache[id]) return imgCache[id];
+    const col = (AB.HERO_ROLES && AB.HERO_ROLES[v.class] || {}).col || '#ccc', ch = (v.short || v.name).replace(/[«»]/g, '')[0];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="6" y="14" width="52" height="34" rx="9" fill="#1c2228" stroke="${col}" stroke-width="3"/><circle cx="18" cy="52" r="6" fill="#333" stroke="${col}" stroke-width="2"/><circle cx="46" cy="52" r="6" fill="#333" stroke="${col}" stroke-width="2"/><text x="32" y="39" font-family="sans-serif" font-size="22" font-weight="700" fill="${col}" text-anchor="middle">${ch}</text></svg>`;
+    return (imgCache[id] = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg));
+  }
+  // №157: портрет — у новых героев рисунка ещё нет: условный бюст по цветам из js/data/heroes.js
+  function portrait(cv, id, facing) {
+    const h = AB.HEROES && AB.HEROES[id];
+    if (!h || !h.look) { if (AB.IsoRender && AB.IsoRender.portrait) AB.IsoRender.portrait(cv, id, facing); return; }
+    const r = cv.getBoundingClientRect(), dp = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width * dp) || 64, hh = Math.round(r.height * dp) || 64;
+    cv.width = w; cv.height = hh; const c = cv.getContext('2d'); c.clearRect(0, 0, w, hh);
+    const col = (AB.HERO_ROLES[h.role] || {}).col || '#ccc', u = Math.min(w, hh) / 64;
+    c.fillStyle = h.look.body; c.beginPath(); c.ellipse(w / 2, hh + 6 * u, 26 * u, 24 * u, 0, Math.PI, 0); c.fill();
+    c.fillStyle = '#d8b090'; c.beginPath(); c.arc(w / 2, hh - 30 * u, 12 * u, 0, 7); c.fill();
+    c.fillStyle = h.look.hair; c.beginPath(); c.arc(w / 2, hh - 33 * u, 12.5 * u, Math.PI * 1.05, Math.PI * 1.95); c.fill();
+    c.fillStyle = '#1a1a1a'; c.fillRect(w / 2 - 6 * u, hh - 31 * u, 3 * u, 3 * u); c.fillRect(w / 2 + 3 * u, hh - 31 * u, 3 * u, 3 * u);
+    c.strokeStyle = col; c.lineWidth = 2 * u; c.beginPath(); c.moveTo(w / 2 - 14 * u, hh - 8 * u); c.lineTo(w / 2 + 14 * u, hh - 8 * u); c.stroke();
+  }
+  // способность героя работает только в технике своего класса; техники — всегда
+  const heroInfo = (id) => (AB.HEROES && AB.HEROES[id]) || null;
+  const roleName = (r) => (AB.HERO_ROLES && AB.HERO_ROLES[r] ? AB.HERO_ROLES[r].name : '');
+  const abilityLine = (a) => (a ? `<p class="un-ab"><b>${a.name}</b> — ${a.text}</p>` : '');
   function load() { try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (Array.isArray(s)) slots = s; } catch (e) { /* без хранилища */ } }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(slots)); } catch (e) { /* без хранилища */ } }
   function sync() {
@@ -27,7 +69,9 @@ AB.IsoRoster = (() => {
     const used = new Set();
     for (const s of slots) { if (s.hero && (!cr.includes(s.hero) || used.has(s.hero))) s.hero = undefined; if (s.hero) used.add(s.hero); }
     for (const s of slots) if (s.hero === undefined) {
-      const pref = DEFAULT[s.vehicle], h = pref && cr.includes(pref) && !used.has(pref) ? pref : null;
+      const pref = DEFAULT[s.vehicle], cls = (V(s.vehicle) || {}).class;
+      // №157: новая техника — свободный герой её класса
+      const h = pref && cr.includes(pref) && !used.has(pref) ? pref : (!pref && cls && cr.find((id) => !used.has(id) && AB.HEROES && AB.HEROES[id] && AB.HEROES[id].role === cls && !slots.some((q) => q.hero === id))) || null;
       s.hero = h; if (h) used.add(h);
     }
     return slots;
@@ -64,15 +108,15 @@ AB.IsoRoster = (() => {
       const v = V(s.vehicle), h = s.hero ? AB.ID.get(s.hero) : null, lk = locked(s);
       return `<div class="ro-slot ${lk ? 'locked' : ''}" data-i="${i}">
         <div class="ro-hero"><canvas data-pt="${s.hero || ''}"></canvas>
-          <div><small>Герой</small><b>${h ? h.name : '— пусто —'}</b>
+          <div><small>Герой${heroInfo(s.hero) ? ` · ${roleName(heroInfo(s.hero).role)}${heroInfo(s.hero).role === v.class ? ' ✓' : ''}` : ''}</small><b>${h ? h.name : '— пусто —'}</b>
           <div class="ro-sw"><button data-hero="-1" ${lk ? 'disabled' : ''}>◀</button><button data-hero="1" ${lk ? 'disabled' : ''}>▶</button></div></div></div>
-        <div class="ro-veh"><img src="${v.img}" alt="">
-          <div><small>Техника</small><b>${v.name}</b><p>${stat(v)}</p>
+        <div class="ro-veh"><img src="${vimg(s.vehicle)}" alt="">
+          <div><small>Техника · ${roleName(v.class)}</small><b>${v.name}</b><p>${stat(v)}</p>
           <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div></div></div>
         <em>${lk ? 'Снаружи — менять можно, когда вернётся в базу' : s.hero ? 'В базе' : 'Техника стоит в базе без экипажа'}</em>
       </div>`;
-    }).join('') + `<p class="ro-note">В экипаже: ${cr.map((id) => AB.ID.get(id).name).join(', ')}. Менять героя или технику можно только у того, кто в базе.</p>`;
-    for (const c of el.querySelectorAll('canvas[data-pt]')) if (c.dataset.pt && AB.IsoRender && AB.IsoRender.portrait) AB.IsoRender.portrait(c, c.dataset.pt, 1);
+    }).join('') + `<p class="ro-note">В экипаже: ${cr.map((id) => AB.ID.get(id).name).join(', ')}. Менять героя или технику можно только у того, кто в базе. Способность героя работает только в технике его класса (✓); способность техники — всегда.</p>`;
+    for (const c of el.querySelectorAll('canvas[data-pt]')) if (c.dataset.pt) portrait(c, c.dataset.pt, 1);
   }
   function open() {
     if (!el) {
@@ -102,15 +146,21 @@ AB.IsoRoster = (() => {
     return `<div class="un-detail"><canvas data-pt="${id}" class="big"></canvas><div><b>${d.name}</b><small>${d.role || ''}</small>
       <p>Здоровье <b>${hp}/${max}</b></p><p>В руках: <b>${wd ? wd.name : '—'}</b>${AB.Damage ? ` · урон: <b>${AB.Damage.name(AB.Damage.weaponType(w && w.item, wd && wd.weapon))}</b>` : ''}</p>
       ${AB.Damage ? `<p>Своя защита (без техники): <b>${AB.Damage.armorName(AB.DAMAGE.heroes[id])}</b></p>` : ''}${wd && wd.desc ? `<small>${wd.desc}</small>` : ''}
+      ${heroInfo(id) ? `<p>Класс: <b>${roleName(heroInfo(id).role)}</b> — способность работает только в технике этого класса</p>${abilityLine(heroInfo(id).ability)}` : ''}
       <p class="un-where">${where(id)}</p></div></div>`;
+  }
+  function lockCard(id) {
+    const d = AB.ID.get(id), h = heroInfo(id), q = (AB.SURFACE_A1_QUESTS || []).find((x) => x.id === h.unlock);
+    return `<div class="un-detail"><canvas data-pt="${id}" class="big"></canvas><div><b>${d.name} 🔒</b><small>${roleName(h.role)}</small><p>${d.bio || ''}</p>${abilityLine(h.ability)}
+      <p class="un-where">Откроется: задание «${q ? q.name : '?'}» (зона A1)</p></div></div>`;
   }
   function vehCard(vid) {
     if (vid === 'base') return `<div class="un-detail"><i class="cap big"></i><div><b>Капсула-батискаф</b><small>База отряда: ездит по карте, внутри — трюм с устройствами. Из неё выходят герои в технике.</small><p>Скорость <b>${AB.VEHICLES_BASE.speed}</b> кл/мин</p></div></div>`;
     const v = V(vid), s = sync().find((q) => q.vehicle === vid), h = s && s.hero ? AB.ID.get(s.hero).name : null;
-    return `<div class="un-detail"><img src="${v.img}" alt="" class="big"><div><b>${v.name}</b><small>${v.desc || ''}</small>
+    return `<div class="un-detail"><img src="${vimg(vid)}" alt="" class="big"><div><b>${v.name}</b><small>${v.desc || ''}</small>${v.class ? `<p>Класс: <b>${roleName(v.class)}</b></p>` : ''}${abilityLine(v.ability)}
       <p>Скорость <b>${v.speed}</b> кл/мин</p><p>Удар <b>${v.attack}</b> раз в ${v.rate} с · дальность ${v.reach}</p><p>Броня <b>${Math.round(v.armor * 100)}%</b></p>
       ${AB.Damage ? `<p>Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b></p>` : ''}
-      <p class="un-where">${h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
+      <p class="un-where">${!owned().includes(vid) ? 'Ещё не получена: награда за задание или трофей большого моба' : h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
   }
   function unitsRender() {
     for (const b of uel.querySelectorAll('[data-utab]')) b.classList.toggle('on', b.dataset.utab === tab);
@@ -125,16 +175,20 @@ AB.IsoRoster = (() => {
     }
     if (pick) {
       box.className = 'un-list one';
-      box.innerHTML = `<button class="un-back" data-un-back>◀ Назад</button>` + (tab === 'heroes' ? heroCard(pick) : vehCard(pick));
+      const lockedHero = tab === 'heroes' && !crew().includes(pick);
+      box.innerHTML = `<button class="un-back" data-un-back>◀ Назад</button>` + (lockedHero ? lockCard(pick) : tab === 'heroes' ? heroCard(pick) : vehCard(pick));
     } else {
       box.className = 'un-list grid';
+      const locked = (AB.HEROES ? Object.keys(AB.HEROES) : []).filter((id) => !crew().includes(id) && AB.ID.has(id));
       const tiles = tab === 'heroes'
-        ? crew().map((id) => `<button class="un-tile ${outFn(id) ? 'out' : ''}" data-un="${id}" title="${AB.ID.get(id).name}"><canvas data-pt="${id}"></canvas><span>${AB.ID.get(id).name}</span></button>`)
-        : [...owned().map((vid) => `<button class="un-tile ${(() => { const s = sync().find((q) => q.vehicle === vid); return s && s.hero && outFn(s.hero) ? 'out' : ''; })()}" data-un="${vid}" title="${V(vid).name}"><img src="${V(vid).img}" alt=""><span>${V(vid).short || V(vid).name}</span></button>`),
-          '<button class="un-tile" data-un="base" title="Капсула-батискаф"><i class="cap"></i><span>Капсула</span></button>'];
+        ? [...crew().map((id) => `<button class="un-tile ${outFn(id) ? 'out' : ''}" data-un="${id}" title="${AB.ID.get(id).name}"><canvas data-pt="${id}"></canvas><span>${AB.ID.get(id).name}</span></button>`),
+          ...locked.map((id) => `<button class="un-tile lock" data-un="${id}" title="Откроется заданием"><i>🔒</i><span>${AB.ID.get(id).name}</span></button>`)]
+        : [...owned().map((vid) => `<button class="un-tile ${(() => { const s = sync().find((q) => q.vehicle === vid); return s && s.hero && outFn(s.hero) ? 'out' : ''; })()}" data-un="${vid}" title="${V(vid).name}"><img src="${vimg(vid)}" alt=""><span>${V(vid).short || V(vid).name}</span></button>`),
+          '<button class="un-tile" data-un="base" title="Капсула-батискаф"><i class="cap"></i><span>Капсула</span></button>',
+          ...Object.keys(AB.VEHICLES).filter((v) => !owned().includes(v) && v !== 'EQUIP-018').map((vid) => `<button class="un-tile lock" data-un="${vid}" title="Откроется заданием или трофеем"><i>🔒</i><span>${V(vid).short || V(vid).name}</span></button>`)];
       box.innerHTML = tiles.join('') || '<p class="ro-note">Никого</p>';
     }
-    for (const c of box.querySelectorAll('canvas[data-pt]')) if (AB.IsoRender && AB.IsoRender.portrait) AB.IsoRender.portrait(c, c.dataset.pt, 1);
+    for (const c of box.querySelectorAll('canvas[data-pt]')) portrait(c, c.dataset.pt, 1);
   }
   function units(t) {
     if (!uel) {
@@ -151,5 +205,5 @@ AB.IsoRoster = (() => {
     if (t) tab = t;
     pick = null; uel.hidden = false; unitsRender();
   }
-  return { units, list, sync, set, vehicleOf, open, close: () => { if (el) el.hidden = true; }, isOpen: () => !!el && !el.hidden, setOutFn: (f) => { outFn = f || (() => false); }, V, owned };
+  return { unlock, unlocked: () => ({ heroes: [...U().heroes], vehicles: [...U().vehicles] }), vimg, portrait, crew, units, list, sync, set, vehicleOf, open, close: () => { if (el) el.hidden = true; }, isOpen: () => !!el && !el.hidden, setOutFn: (f) => { outFn = f || (() => false); }, V, owned };
 })();

@@ -56,7 +56,7 @@ AB.CHARACTERS.push({
 // CHAR-003 — медик (дополнение №6). Имя и внешность — предложение, ждут правки.
 AB.CHARACTERS.push({
   id: 'CHAR-003',
-  name: 'Доктор Хейл',          // судовой врач, женщина (docs/STORY.md §5); имя — ждёт утверждения
+  name: 'Профессор Хейл',          // судовой врач, женщина (docs/STORY.md §5); имя — ждёт утверждения
   role: 'Медик',
   specialization: 'medic',
   crew: true,
@@ -65,7 +65,7 @@ AB.CHARACTERS.push({
   appearances: ['ASSET-CHAR003-01'],
   look: { dark: '#2b2d2f', mid: '#6e7372', light: '#8f9493', hair: '#3a2e28', build: 0.94 },
   // разговор лечит Марка и спутницу (пока он в безопасной зоне)
-  npc: { action: 'Поговорить с доктором', heal: true },
+  npc: { action: 'Поговорить с профессором', heal: true },
   anims: {
     idle: 'ANIM-CHAR003-05',
     walk: 'ANIM-CHAR003-01',
