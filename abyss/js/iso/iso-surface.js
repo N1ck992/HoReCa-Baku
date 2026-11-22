@@ -12,7 +12,7 @@
 AB.IsoSurface = (() => {
   const D = () => AB.SURFACE_A1;
   const SQ3 = Math.sqrt(3), TILT = 0.776, S0 = 34, VIEW = 3;
-  const SAVE = 'abyss_a1';
+  const SAVE = 'abyss_a1_v2';            // №150: регион «Треугольник» (новая карта)
   let W = 0, H = 0, cells = [], built = false;
   let open_ = false, cv, g, dpr = 1, time = 0, last = 0;
   let bake = null, fogCv = null, fg = null, org = { x: 0, y: 0 };
@@ -55,6 +55,16 @@ AB.IsoSurface = (() => {
     gorge: { block: 'Ущелье — только по мостам', col: [10, 9, 9] },
     bridge: { cost: 1, col: [107, 74, 42], name: 'мост' },
     cliff: { block: 'Край зоны — обрыв', col: [92, 72, 52], lift: 0.55 },
+    // №150: регион «Треугольник»
+    meadow: { cost: 1.4, col: [104, 134, 74], name: 'луга' },
+    forest: { cost: 2.4, col: [50, 82, 52], name: 'лес' },
+    mountain: { block: 'Горы — только по перевалам', col: [112, 118, 128], lift: 0.62 },
+    thicket: { cost: 2.7, col: [78, 70, 78], name: 'заросли' },
+    mistwood: { cost: 2.4, col: [66, 92, 84], name: 'Туманный лес' },
+    salt: { cost: 1.3, col: [212, 210, 196], name: 'Солончаки' },
+    rustfoot: { cost: 2.0, col: [126, 94, 68], name: 'Ржавые предгорья' },
+    ruin: { cost: 2.2, col: [150, 132, 104], name: 'руины' },
+    plaza: { cost: 1.1, col: [150, 140, 118], name: 'Меновой Узел' },
   };
   const passable = (k) => !!k && !K[k.kind].block;
   const cost = (k) => (k.road ? (k.kind === 'ford' ? 1.3 : 1) : K[k.kind].cost || 99);
@@ -97,9 +107,10 @@ AB.IsoSurface = (() => {
   function build() {
     const d = D(); W = d.w; H = d.h;
     const rand = rng(d.seed), n1 = noise(rand, 4), n2 = noise(rand, 3), n3 = noise(rand, 2.2), nw = noise(rand, 5);
-    rc = Array.from({ length: H }, (_, r) => d.river.col + d.river.amp * Math.sin(r * 0.33 + 0.8) + (nw(3, r) - 0.5) * 1.6);
+    rc = !d.river ? [] : Array.from({ length: H }, (_, r) => d.river.col + d.river.amp * Math.sin(r * 0.33 + 0.8) + (nw(3, r) - 0.5) * 1.6);
     cells = [];
-    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    if (d.regions) buildRegions(d, rand, n1, n2, n3, nw);
+    else for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
       const dx = c + 0.5 * (r & 1) - rc[r], side = dx < 0 ? 'desert' : 'swamp';
       const a = n1(c, r), b = n2(c, r), e = n3(c, r);
       let kind;
@@ -111,7 +122,7 @@ AB.IsoSurface = (() => {
       else kind = b > 0.7 ? 'bog' : e > 0.76 ? 'growth' : a > 0.56 ? 'reeds' : 'marsh';
       cells.push({ c, r, kind, side, road: false, seen: false, site: null, v: rand() });
     }
-    const ground = (k) => (k.side === 'desert' ? 'sand' : 'marsh');
+    const ground = (k) => ({ desert: 'sand', east: 'meadow', organic: 'marsh', hub: 'plaza', swamp: 'marsh' }[k.side] || 'sand');
     const pave = (k) => {
       k.road = true;
       if (k.kind === 'river') k.kind = 'ford';
@@ -159,13 +170,34 @@ AB.IsoSurface = (() => {
       if (s.kind === 'bridge') { carve(cell(k.c, 2)); const top = cell(k.c, 0); top.kind = 'bridge'; top.road = true; k.kind = 'bridge'; k.road = true; }
       else if (s.kind === 'exit') { const edge = cell(s.dir < 0 ? 0 : W - 1, k.r); edge.kind = ground(k); edge.road = true; carve(k); }
       else carve(k);
-      if (s.kind === 'village' || s.kind === 'capital' || s.kind === 'shrine') for (const nb of nbrs(k)) if (K[nb.kind].block && nb.kind !== 'river' && nb.kind !== 'gorge' && nb.kind !== 'cliff') nb.kind = ground(nb);
+      if (s.kind === 'village' || s.kind === 'capital' || s.kind === 'shrine' || s.kind === 'hub') for (const nb of nbrs(k)) if (K[nb.kind].block && nb.kind !== 'river' && nb.kind !== 'gorge' && nb.kind !== 'cliff') nb.kind = ground(nb);
       const site = { ...s, c: k.c, r: k.r };
       k.site = site; sites.push(site);
-      if (s.kind === 'capital' || s.kind === 'shrine') k.seen = true;     // о цитадели и купели все слышали — видны сразу
+      if (s.kind === 'capital' || s.kind === 'shrine' || s.kind === 'hub') k.seen = true;     // столицы и Узел все знают — видны сразу
     }
     built = true;
     bakeMap();
+  }
+
+  // №150: земли треугольника — по ближайшей «столице» (расстояние с шумом и весом), на стыке двух
+  // земель — пограничный пояс; вокруг Узла — площадь; сверху — ущелье, по краям — обрыв
+  function buildRegions(d, rand, n1, n2, n3, nw) {
+    const R = d.regions, sides = ['east', 'organic', 'desert'];
+    const pos = (c, r) => upx(c, r), hub = pos(...R.hub.at);
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+      const p = pos(c, r), a = n1(c, r), b = n2(c, r), e = n3(c, r), wob = (nw(c, r) - 0.5) * 6;
+      const ds = sides.map((sd) => { const q = pos(...R[sd].at); return { sd, v: Math.hypot(p.x - q.x, p.y - q.y) / SQ3 / R[sd].w + wob * (sd === 'organic' ? 1 : -0.6) }; }).sort((x, y) => x.v - y.v);
+      let side = ds[0].sd, kind, belt = null;
+      const toHub = Math.hypot(p.x - hub.x, p.y - hub.y) / SQ3;
+      if (r <= 1) kind = 'gorge';
+      else if (r === H - 1 || c === 0 || c === W - 1) kind = 'cliff';
+      else if (toHub < R.hub.radius + (a - 0.5)) { side = 'hub'; kind = b > 0.75 ? 'scrub' : 'plaza'; }
+      else if (ds[1].v - ds[0].v < d.belts.width) { belt = [ds[0].sd, ds[1].sd].sort().join('_'); kind = d.belts[belt] || 'scrub'; }
+      else if (side === 'east') kind = b > 0.64 || e > 0.82 ? 'mountain' : a > 0.52 ? 'forest' : 'meadow';
+      else if (side === 'organic') kind = b > 0.7 ? 'bog' : e > 0.74 ? 'growth' : a > 0.6 ? 'thicket' : a > 0.48 ? 'reeds' : 'marsh';
+      else kind = b > 0.68 ? 'mesa' : e > 0.8 ? 'ruin' : a > 0.6 ? 'dune' : 'sand';
+      cells.push({ c, r, kind, side, belt, road: false, seen: false, site: null, v: rand() });
+    }
   }
 
   // ---------- рисунок карты (один раз — в запасной холст) ----------
@@ -187,7 +219,7 @@ AB.IsoSurface = (() => {
       deco(b, k, p, s, R);
     }
     // дороги: от центра к центру соседних дорожных клеток
-    const roadCol = (k) => (k.kind === 'bridge' ? '#7a5634' : k.kind === 'ford' ? '#8fb2b6' : k.side === 'desert' ? '#e2c88e' : '#5b4a30');
+    const roadCol = (k) => (k.kind === 'bridge' ? '#7a5634' : k.kind === 'ford' ? '#8fb2b6' : k.kind === 'salt' ? '#c8c2ae' : k.side === 'desert' ? '#e2c88e' : k.side === 'east' ? '#a89a7a' : k.side === 'hub' ? '#bba886' : '#5b4a30');
     for (const pass of [0, 1]) for (const k of cells) {
       if (!k.road) continue;
       const p = bpx(k.c, k.r);
@@ -218,6 +250,7 @@ AB.IsoSurface = (() => {
       if (k.kind === 'growth') {                  // пузыри органики
         for (let i = 0; i < 4; i++) { b.fillStyle = `rgba(${200 + R() * 55},${90 + R() * 60},${170 + R() * 60},.75)`; b.beginPath(); b.arc(p.x + (R() - 0.5) * s, p.y - h + (R() - 0.5) * s * 0.6, s * (0.08 + R() * 0.12), 0, 7); b.fill(); }
       }
+      if (k.kind === 'mountain') { b.fillStyle = 'rgba(240,244,250,.9)'; b.beginPath(); b.moveTo(p.x - s * 0.45, p.y - h - s * 0.05); b.lineTo(p.x, p.y - h - s * 0.42); b.lineTo(p.x + s * 0.45, p.y - h - s * 0.05); b.lineTo(p.x + s * 0.15, p.y - h + s * 0.06); b.lineTo(p.x - s * 0.1, p.y - h - s * 0.08); b.closePath(); b.fill(); }
       if (k.kind === 'mesa') { b.strokeStyle = 'rgba(60,30,18,.5)'; b.lineWidth = 1; for (let i = 0; i < 3; i++) { const y = p.y - h + s * 0.35 + i * h * 0.25; b.beginPath(); b.moveTo(p.x - s * 0.8, y + h * 0.1); b.lineTo(p.x + s * 0.8, y + h * 0.1); b.stroke(); } }
     }
     fogCv = document.createElement('canvas'); fogCv.width = bake.width; fogCv.height = bake.height;
@@ -234,6 +267,13 @@ AB.IsoSurface = (() => {
       case 'reeds': b.strokeStyle = 'rgba(150,170,80,.75)'; b.lineWidth = 1.5; for (let i = 0; i < 9; i++) { const x = p.x + (R() - 0.5) * s * 1.2, y = p.y + (R() - 0.3) * s * 0.6; b.beginPath(); b.moveTo(x, y); b.lineTo(x + (R() - 0.5) * 4, y - s * 0.35); b.stroke(); } break;
       case 'bog': b.strokeStyle = 'rgba(90,140,130,.35)'; b.lineWidth = 1; for (let i = 0; i < 2; i++) { b.beginPath(); b.ellipse(p.x + (R() - 0.5) * s * 0.5, p.y, s * (0.25 + i * 0.2), s * (0.1 + i * 0.08), 0, 0, 7); b.stroke(); } break;
       case 'river': b.strokeStyle = 'rgba(170,215,230,.3)'; b.lineWidth = 1.5; for (let i = 0; i < 2; i++) { const y = p.y + (R() - 0.5) * s * 0.6; b.beginPath(); b.moveTo(p.x - s * 0.4, y); b.quadraticCurveTo(p.x, y - 4, p.x + s * 0.4, y); b.stroke(); } break;
+      case 'meadow': b.strokeStyle = 'rgba(160,190,110,.55)'; b.lineWidth = 1.2; for (let i = 0; i < 6; i++) { const x = p.x + (R() - 0.5) * s * 1.2, y = p.y + (R() - 0.3) * s * 0.6; b.beginPath(); b.moveTo(x, y); b.lineTo(x + 1.5, y - s * 0.18); b.stroke(); } break;
+      case 'forest': case 'mistwood': for (let i = 0; i < 4; i++) { const x = p.x + (R() - 0.5) * s * 1.1, y = p.y + (R() - 0.4) * s * 0.6; b.fillStyle = 'rgba(20,40,22,.6)'; b.beginPath(); b.arc(x + 2, y + 3, s * 0.2, 0, 7); b.fill(); b.fillStyle = k.kind === 'forest' ? '#2f5a34' : '#3f6a5a'; b.beginPath(); b.arc(x, y, s * 0.2, 0, 7); b.fill(); if (k.kind === 'mistwood' && R() < 0.6) { b.fillStyle = 'rgba(240,140,210,.7)'; b.beginPath(); b.arc(x + 3, y - 3, 2.2, 0, 7); b.fill(); } } if (k.kind === 'mistwood') { b.fillStyle = 'rgba(220,235,235,.12)'; b.beginPath(); b.ellipse(p.x, p.y, s * 0.8, s * 0.4, 0, 0, 7); b.fill(); } break;
+      case 'thicket': b.strokeStyle = 'rgba(120,70,110,.7)'; b.lineWidth = 2; for (let i = 0; i < 4; i++) { const x = p.x + (R() - 0.5) * s; b.beginPath(); b.moveTo(x, p.y + s * 0.3); b.quadraticCurveTo(x + 6, p.y, x - 2, p.y - s * 0.3); b.stroke(); } b.fillStyle = 'rgba(220,120,200,.6)'; for (let i = 0; i < 3; i++) { b.beginPath(); b.arc(p.x + (R() - 0.5) * s, p.y + (R() - 0.5) * s * 0.5, 2.5, 0, 7); b.fill(); } break;
+      case 'salt': b.strokeStyle = 'rgba(150,145,130,.5)'; b.lineWidth = 1; for (let i = 0; i < 4; i++) { const x = p.x + (R() - 0.5) * s, y = p.y + (R() - 0.5) * s * 0.6; b.beginPath(); b.moveTo(x, y); b.lineTo(x + (R() - 0.5) * 12, y + (R() - 0.5) * 6); b.lineTo(x + (R() - 0.5) * 14, y + (R() - 0.5) * 8); b.stroke(); } break;
+      case 'rustfoot': for (let i = 0; i < 3; i++) { b.fillStyle = R() < 0.5 ? '#7a4a2a' : '#5a5f64'; b.save(); b.translate(p.x + (R() - 0.5) * s, p.y + (R() - 0.5) * s * 0.5); b.rotate(R() * 3); b.fillRect(-5, -2, 10, 4); b.restore(); } break;
+      case 'ruin': b.fillStyle = 'rgba(110,96,76,.9)'; for (let i = 0; i < 3; i++) { const x = p.x + (R() - 0.5) * s, y = p.y + (R() - 0.5) * s * 0.4; b.fillRect(x - 5, y - 8, 10, 8); b.fillStyle = 'rgba(80,70,56,.9)'; } break;
+      case 'plaza': b.strokeStyle = 'rgba(100,92,76,.4)'; b.lineWidth = 1; for (let i = -1; i <= 1; i++) { b.beginPath(); b.moveTo(p.x - s * 0.6, p.y + i * s * 0.25); b.lineTo(p.x + s * 0.6, p.y + i * s * 0.25); b.stroke(); } break;
       case 'gorge': b.fillStyle = 'rgba(40,30,24,.6)'; b.fillRect(p.x - s * 0.8, p.y + s * 0.3, s * 1.6, 2); break;
       default:
     }
@@ -514,17 +554,17 @@ AB.IsoSurface = (() => {
     g.save(); g.globalAlpha = a; g.translate(x + lunge, y);
     if (m.hp <= 0) g.rotate(1.2 * f);
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 2, 11, 4, 0, 0, 7); g.fill();
-    const K = m.kind;
+    const NKd = NK(m), K = NKd.look || m.kind, col = NKd.col || {};
     if (K === 'raider') {
       g.fillStyle = '#3a2c1c'; g.fillRect(-5, -8 - bob, 3, 8); g.fillRect(2, -8 - bob, 3, 8);
-      g.fillStyle = '#b88a50'; g.beginPath(); g.moveTo(-8, -6 - bob); g.lineTo(8, -6 - bob); g.lineTo(5, -24 - bob); g.lineTo(-5, -24 - bob); g.fill();
-      g.fillStyle = '#a3302a'; g.fillRect(-6, -14 - bob, 12, 3);
+      g.fillStyle = col.robe || '#b88a50'; g.beginPath(); g.moveTo(-8, -6 - bob); g.lineTo(8, -6 - bob); g.lineTo(5, -24 - bob); g.lineTo(-5, -24 - bob); g.fill();
+      g.fillStyle = col.sash || '#a3302a'; g.fillRect(-6, -14 - bob, 12, 3);
       g.fillStyle = '#c08a5a'; g.beginPath(); g.arc(0, -28 - bob, 5, 0, 7); g.fill();
-      g.fillStyle = '#e8dcc0'; g.beginPath(); g.ellipse(0, -31 - bob, 6, 3.5, 0, 0, 7); g.fill();
+      g.fillStyle = col.head || '#e8dcc0'; g.beginPath(); g.ellipse(0, -31 - bob, 6, 3.5, 0, 0, 7); g.fill();
       g.strokeStyle = '#d8dde0'; g.lineWidth = 2; g.beginPath(); g.moveTo(5 * f, -16 - bob); g.lineTo((m.atk ? 18 : 10) * f, (m.atk ? -22 : -30) - bob); g.stroke();
     } else if (K === 'shellback') {
-      g.fillStyle = '#5a4430'; for (const lx of [-9, -3, 3, 9]) g.fillRect(lx - 1.5, -6, 3, 7);
-      g.fillStyle = '#8a6a48'; g.beginPath(); g.ellipse(0, -11 - bob, 15, 10, 0, Math.PI, 0); g.fill();
+      g.fillStyle = col.legs || '#5a4430'; for (const lx of [-9, -3, 3, 9]) g.fillRect(lx - 1.5, -6, 3, 7);
+      g.fillStyle = col.shell || '#8a6a48'; g.beginPath(); g.ellipse(0, -11 - bob, 15, 10, 0, Math.PI, 0); g.fill();
       g.strokeStyle = '#5a4430'; g.lineWidth = 1.5; for (const lx of [-6, 0, 6]) { g.beginPath(); g.moveTo(lx, -20 - bob); g.lineTo(lx * 1.4, -11 - bob); g.stroke(); }
       g.fillStyle = '#6a5038'; g.beginPath(); g.ellipse(14 * f, -9 - bob, 5, 4, 0, 0, 7); g.fill();
     } else if (K === 'thrall') {
@@ -606,7 +646,7 @@ AB.IsoSurface = (() => {
   }
 
   // ---------- №145: цепочка «Дорога на север» (js/data/surface-a1-story.js) — открывает мосты в Б1 ----------
-  const STORY_KEY = 'abyss_a1_story';
+  const STORY_KEY = 'abyss_a1_story2';   // №150: новая цепочка (треугольник)
   const ST = () => AB.SURFACE_A1_STORY;
   let story = null;                                   // { stage, kills: { вид: n } }
   function storyLoad() { if (story) return; try { story = JSON.parse(localStorage.getItem(STORY_KEY) || 'null'); } catch (e) { story = null; } if (!story || typeof story.stage !== 'number') story = { stage: 0, kills: {} }; }
@@ -658,8 +698,82 @@ AB.IsoSurface = (() => {
     el.hidden = false;
   }
 
+  // ---------- №150: торговля треугольника (AB.SURFACE_A1.trade) ----------
+  // каждая сторона делает своё и отправляет караваном соседу по кругу; без ввоза её производство падает;
+  // события перекрывают дороги — и дефицит идёт по кругу. Сводка — в карточке Менового Узла.
+  const TR = () => D().trade;
+  const CIV_COL = { east: '#c0503a', desert: '#9aa4ab', organic: '#6aaa5a' };
+  let trade = null;
+  function tradeInit() {
+    if (trade || !TR()) return;
+    trade = { civ: {}, caravans: [], blocked: {}, evT: 150 + Math.random() * 120, acc: 0, last: null };
+    for (const k of Object.keys(TR().civs)) trade.civ[k] = { own: 20 + Math.random() * 10, imp: 25 + Math.random() * 10, dep: 0, infl: 10 };
+  }
+  function tradeTick(dt) {
+    if (!trade) return; const T = TR();
+    for (const r of Object.keys(trade.blocked)) { trade.blocked[r] -= dt; if (trade.blocked[r] <= 0) { delete trade.blocked[r]; say(`${D().routeNames[r]} снова открыт — караваны пошли`); } }
+    for (let i = trade.caravans.length - 1; i >= 0; i--) {
+      const cv = trade.caravans[i], path = lanes[cv.route];
+      if (trade.blocked[cv.route] || !path) continue;
+      const k = path[Math.min(path.length - 1, Math.floor(cv.pos))];
+      cv.pos += dt * (T.caravanSpeed / 60) / (k ? Math.max(1, cost(k) * 0.7) : 1);
+      if (cv.pos >= path.length - 1) {              // доехал: товар — покупателю, влияние — продавцу
+        const to = trade.civ[cv.to]; to.imp = Math.min(T.cap, to.imp + T.batch);
+        trade.civ[cv.from].infl += 2; trade.caravans.splice(i, 1);
+      }
+    }
+    trade.acc += dt; if (trade.acc < T.tick) return; trade.acc -= T.tick;
+    for (const [k, c] of Object.entries(T.civs)) {
+      const st = trade.civ[k], has = st.imp > 0.5;
+      st.own = Math.min(T.cap, st.own + T.make * (has ? 1 : T.starve));
+      st.imp = Math.max(0, st.imp - T.use);
+      st.dep = Math.round(100 * (1 - Math.min(1, st.imp / (T.cap * 0.5))));
+      if (st.own >= T.batch && !trade.blocked[c.route] && trade.caravans.filter((x) => x.from === k).length < (T.inFlight || 2)) {
+        st.own -= T.batch; trade.caravans.push({ from: k, to: c.to, route: c.route, good: c.makes, pos: 0 });
+      }
+    }
+    trade.evT -= T.tick;
+    if (trade.evT <= 0) {
+      trade.evT = 180 + Math.random() * 120;
+      const ev = T.events[Math.floor(Math.random() * T.events.length)];
+      trade.last = ev.text; say(ev.text);
+      if (ev.route) trade.blocked[ev.route] = ev.secs;
+    }
+  }
+  // караваны на дорогах: повозка цвета стороны и охранник; перекрытая дорога — красный знак
+  function drawCaravans() {
+    if (!trade) return;
+    for (const cv of trade.caravans) {
+      const path = lanes[cv.route]; if (!path) continue;
+      const i = Math.floor(cv.pos), a = path[i], b2 = path[Math.min(path.length - 1, i + 1)], t = cv.pos - i;
+      if (!a.seen) continue;
+      const pa = bpx(a.c, a.r), pb = bpx(b2.c, b2.r), x = pa.x + (pb.x - pa.x) * t, y = pa.y + (pb.y - pa.y) * t + S0 * 0.1;
+      const f = pb.x >= pa.x ? 1 : -1, stop = !!trade.blocked[cv.route];
+      g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x, y + 3, 12, 3.5, 0, 0, 7); g.fill();
+      g.fillStyle = '#4a3a28'; g.fillRect(x - 9, y - 9, 18, 8);
+      g.fillStyle = CIV_COL[cv.from]; g.beginPath(); g.ellipse(x, y - 10, 9, 6, 0, Math.PI, 0); g.fill();
+      g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(x - 6, y, 3, 0, 7); g.arc(x + 6, y, 3, 0, 7); g.fill();
+      g.fillStyle = CIV_COL[cv.from]; g.beginPath(); g.arc(x + 14 * f, y - 6, 3, 0, 7); g.fill(); g.fillRect(x + 14 * f - 2, y - 4, 4, 7);
+      if (stop) { g.fillStyle = '#ff5a4a'; g.font = '700 12px "Oswald", sans-serif'; g.textAlign = 'center'; g.fillText('✋', x, y - 18); }
+    }
+  }
+  function tradeHtml() {
+    if (!trade) return '';
+    const T = TR(), F = D().factions, tot = Object.values(trade.civ).reduce((a, c) => a + c.infl, 0) || 1;
+    const bar = (v, max, col) => `<span class="tr-bar"><i style="width:${Math.round(100 * Math.min(1, v / max))}%;background:${col}"></i></span>`;
+    const rows = Object.entries(T.civs).map(([k, c]) => {
+      const st = trade.civ[k], route = D().routeNames[c.route], blk = trade.blocked[c.route];
+      return `<div class="tr-civ"><b style="color:${CIV_COL[k]}">${F[k].name}</b>
+        <span>Делает: ${T.goods[c.makes]} ${bar(st.own, T.cap, CIV_COL[k])} ${Math.round(st.own)}</span>
+        <span>Ввоз: ${T.goods[c.needs]} ${bar(st.imp, T.cap, '#d9a23e')} ${Math.round(st.imp)}</span>
+        <span>Зависимость <b>${st.dep}%</b> · Влияние в Узле <b>${Math.round(100 * st.infl / tot)}%</b></span>
+        <span class="tr-route">${route} → ${F[c.to].name}: ${blk ? `<em>перекрыт (${Math.ceil(blk)} с)</em>` : 'открыт'} · в пути: ${trade.caravans.filter((x) => x.from === k).length}</span></div>`;
+    }).join('');
+    return `<span class="tr-head">Торговля треугольника</span>${rows}${trade.last ? `<span class="tr-ev">Последнее: ${trade.last}</span>` : ''}`;
+  }
+
   // ---------- карточка точки ----------
-  const ACT = { capital: 'Предстать перед Хранителем — скоро', village: 'Войти в деревню — скоро', ford: 'Зайти на брод — скоро', shrine: 'Подойти к купели — скоро' };
+  const ACT = { capital: 'Войти в город — скоро', village: 'Войти в поселение — скоро', ford: 'Зайти на брод — скоро', shrine: 'Подойти к Купели — скоро', hub: 'Торговать — скоро' };
   let popSite = null;
   function showSite(s) {
     popSite = s; storyCard = null;
@@ -673,6 +787,7 @@ AB.IsoSurface = (() => {
     const btn = el.querySelector('[data-sf-act]');
     const open = s.kind === 'bridge' && bridgesOpen();
     if (open) { el.querySelector('i').textContent = 'Мост открыт · зона Б1'; el.querySelector('small').textContent = 'За ущельем — «Железный Предел», земли синтетиков и киборгов. Сама зона — следующий этап.'; }
+    if (s.kind === 'hub' && trade) { el.querySelector('p').innerHTML = `${esc(s.text)}<br>${tradeHtml()}`; el.querySelector('small').textContent = 'Каждая сторона делает своё и везёт соседу по кругу. Перекроют дорогу — дефицит пойдёт дальше по кругу.'; }
     btn.textContent = f ? ACT[s.kind] : open ? 'Перейти в зону Б1 — скоро' : s.kind === 'bridge' ? 'Мост закрыт — нужна печать Кадзэ' : `Перейти в зону ${s.to} — закрыто`;
     btn.disabled = true;
     el.hidden = false;
@@ -724,6 +839,7 @@ AB.IsoSurface = (() => {
     { const u = selU(), p = posOf(u); g.strokeStyle = drive ? 'rgba(255,210,120,.95)' : 'rgba(94,230,255,.9)'; g.lineWidth = 2; g.beginPath(); g.ellipse(p.x, p.y + 4, S0 * (u === base ? 0.85 : 0.5), S0 * (u === base ? 0.36 : 0.22), 0, 0, 7); g.stroke(); }
     // база и отряды — сверху вниз, чтобы ближние перекрывали дальних
     [base, ...outSquads(), ...mobs].map((u) => ({ u, p: posOf(u) })).sort((a, b) => a.p.y - b.p.y).forEach(({ u, p }) => (u === base ? drawBase(p.x, p.y) : u.kind === 'squad' ? drawSquad(u, p.x, p.y) : drawMob(u)));
+    drawCaravans();
     if (vfx) vfx.draw(g, frameDt);
     drawFloats();
     if (cmd) { const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r); g.strokeStyle = cmd.m ? 'rgba(255,120,90,.95)' : 'rgba(255,226,140,.95)'; g.lineWidth = 2.5; hexPath(p.x, p.y, S0 * 0.82, g); g.stroke(); }
@@ -735,7 +851,7 @@ AB.IsoSurface = (() => {
       const p = bpx(s.c, s.r), y = s.kind === 'exit' ? p.y - S0 * 0.75 : p.y + S0 * 0.95;
       const t = s.kind === 'bridge' || s.kind === 'exit' ? `${s.name} → ${s.to}` : s.name;
       g.lineWidth = 3 * dpr / k; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(t, p.x, y);
-      g.fillStyle = s.side === 'desert' ? '#ffe2a8' : s.side === 'swamp' ? '#c6f0a8' : s.side === 'exit' ? '#9fe7ff' : '#e6e0d6'; g.fillText(t, p.x, y);
+      g.fillStyle = { desert: '#ffe2a8', east: '#f6c38a', organic: '#c6f0a8', swamp: '#c6f0a8', exit: '#9fe7ff' }[s.side] || '#e6e0d6'; g.fillText(t, p.x, y);
     }
   }
   // №140: батискаф-база — та же картинка, что на дне (assets/seabed/base-capsule*.webp)
@@ -776,16 +892,34 @@ AB.IsoSurface = (() => {
     };
     const glow = (gx, gy, r, col) => { const a = 0.5 + 0.3 * Math.sin(time * 2.2 + gx); const gr = g.createRadialGradient(gx, gy, 0, gx, gy, r); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.beginPath(); g.arc(gx, gy, r, 0, 7); g.fill(); };
     switch (s.kind) {
-      case 'capital': {
-        hexPath(x, y, u * 0.95, g); g.fillStyle = 'rgba(120,90,60,.5)'; g.fill(); g.strokeStyle = '#6a5038'; g.lineWidth = 4; g.stroke();
-        for (let i = 0; i < 3; i++) { const w = 26 - i * 7, yy = y - 4 - i * 11; g.fillStyle = '#d8c39a'; g.fillRect(x - w / 2 + 3, yy - 9, w - 6, 9); g.fillStyle = '#7a2a20'; g.beginPath(); g.moveTo(x - w / 2 - 3, yy - 8); g.lineTo(x, yy - 15); g.lineTo(x + w / 2 + 3, yy - 8); g.fill(); }
-        flag(x - 16, y + 4, '#b8342a'); flag(x + 16, y + 4, '#b8342a');
+      case 'capital':
+        if (s.side === 'desert') {                     // Железный Предел: купол над входом под землю, мачты связи
+          hexPath(x, y, u * 0.95, g); g.fillStyle = 'rgba(90,96,104,.5)'; g.fill(); g.strokeStyle = '#4a5058'; g.lineWidth = 4; g.stroke();
+          g.fillStyle = '#7a848e'; g.beginPath(); g.ellipse(x, y - 6, 18, 14, 0, Math.PI, 0); g.fill(); g.fillStyle = '#3a4048'; g.fillRect(x - 6, y - 6, 12, 7);
+          for (const sx of [-16, 16]) { g.strokeStyle = '#9aa4ab'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + sx, y + 2); g.lineTo(x + sx, y - 26); g.stroke(); g.fillStyle = `rgba(94,230,255,${0.5 + 0.4 * Math.sin(time * 3 + sx)})`; g.beginPath(); g.arc(x + sx, y - 27, 2.4, 0, 7); g.fill(); }
+        } else {                                       // Цитадель Кадзэ: стены и пагода
+          hexPath(x, y, u * 0.95, g); g.fillStyle = 'rgba(120,90,60,.5)'; g.fill(); g.strokeStyle = '#6a5038'; g.lineWidth = 4; g.stroke();
+          for (let i = 0; i < 3; i++) { const w = 26 - i * 7, yy = y - 4 - i * 11; g.fillStyle = '#d8c39a'; g.fillRect(x - w / 2 + 3, yy - 9, w - 6, 9); g.fillStyle = '#7a2a20'; g.beginPath(); g.moveTo(x - w / 2 - 3, yy - 8); g.lineTo(x, yy - 15); g.lineTo(x + w / 2 + 3, yy - 8); g.fill(); }
+          flag(x - 16, y + 4, '#b8342a'); flag(x + 16, y + 4, '#b8342a');
+        }
+        break;
+      case 'village':
+        if (s.side === 'desert') {                     // посёлок Наследников: металлические блоки, солнечная панель, антенна
+          box(x - 9, y + 2, 12, 9, '#a8b0b8', '#6a727a'); box(x + 6, y - 2, 14, 11, '#a8b0b8', '#626a72'); box(x - 1, y + 9, 10, 7, '#a8b0b8', '#5a6268');
+          g.fillStyle = '#2c4a6a'; g.beginPath(); g.moveTo(x - 14, y - 10); g.lineTo(x - 2, y - 14); g.lineTo(x + 2, y - 8); g.lineTo(x - 10, y - 4); g.fill();
+          g.fillStyle = `rgba(94,230,255,${0.5 + 0.4 * Math.sin(time * 2.5 + x)})`; g.beginPath(); g.arc(x + 13, y - 16, 2, 0, 7); g.fill();
+        } else if (s.side === 'east') {                // деревня кланов: домики под изогнутыми крышами, знамя
+          const house = (hx, hy, w) => { g.fillStyle = '#d8c39a'; g.fillRect(hx - w / 2, hy - 8, w, 8); g.fillStyle = '#5a2a22'; g.beginPath(); g.moveTo(hx - w / 2 - 4, hy - 7); g.quadraticCurveTo(hx, hy - 17, hx + w / 2 + 4, hy - 7); g.fill(); };
+          house(x - 9, y + 3, 12); house(x + 7, y - 1, 14); house(x, y + 11, 11); flag(x + 15, y + 6, '#b8342a');
+        } else { glow(x, y - 6, 18, 'rgba(150,255,140,A)'); hut(x - 8, y + 6); hut(x + 8, y + 2); hut(x, y + 12); }
+        break;
+      case 'hub': {                                    // Меновой Узел: стена, шатры трёх цветов
+        hexPath(x, y, u * 1.05, g); g.fillStyle = 'rgba(150,130,100,.45)'; g.fill(); g.strokeStyle = '#8a7a5a'; g.lineWidth = 3; g.stroke();
+        const tent = (tx, ty, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(tx - 8, ty); g.lineTo(tx, ty - 12); g.lineTo(tx + 8, ty); g.fill(); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(tx - 2, ty - 5, 4, 5); };
+        tent(x - 11, y + 4, '#b8342a'); tent(x + 10, y + 2, '#7a848e'); tent(x, y + 10, '#5a9a5a'); tent(x - 1, y - 4, '#d9a23e');
+        g.strokeStyle = '#d9a23e'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y - 4); g.lineTo(x, y - 26); g.stroke(); g.fillStyle = '#e6e0d6'; g.fillRect(x, y - 26, 10, 6);
         break;
       }
-      case 'village':
-        if (s.side === 'desert') { box(x - 9, y + 2, 12, 9, '#efd9ae', '#c8a878'); box(x + 6, y - 2, 14, 11, '#efd9ae', '#c0a070'); box(x - 1, y + 9, 10, 7, '#efd9ae', '#b8986a'); flag(x + 14, y + 6, '#b8342a'); }
-        else { glow(x, y - 6, 18, 'rgba(150,255,140,A)'); hut(x - 8, y + 6); hut(x + 8, y + 2); hut(x, y + 12); }
-        break;
       case 'ford':
         g.fillStyle = '#6b4a2a'; g.fillRect(x - 13, y - 3, 26, 9);
         g.fillStyle = '#d8b26a'; g.beginPath(); g.moveTo(x - 10, y - 2); g.lineTo(x - 4, y - 12); g.lineTo(x + 2, y - 2); g.fill();
@@ -818,6 +952,7 @@ AB.IsoSurface = (() => {
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt; frameDt = dt;
     stepUnit(base, dt); for (const s of outSquads()) stepUnit(s, dt);
     combatTick(dt);
+    tradeTick(dt);
     if (AB.IsoAudio && AB.IsoAudio.surfaceTick) AB.IsoAudio.surfaceTick(dt);
     barUi();
     if (follow) { const p = posOf(flyU || selU()); cam.x += (p.x - cam.x) * Math.min(1, dt * 5); cam.y += (p.y - cam.y) * Math.min(1, dt * 5); clampCam(); }
@@ -967,7 +1102,7 @@ AB.IsoSurface = (() => {
   // fresh — после всплытия: новая случайная точка, туман заново
   function enter(fresh = true) {
     init();
-    if (!built || fresh) { built = false; build(); }
+    if (!built || fresh) { built = false; build(); trade = null; }
     if (AB.IsoOverworld && AB.IsoOverworld.isOpen()) AB.IsoOverworld.close();
     for (const id of ['iso-act', 'iso-inv']) { const el = document.getElementById(id); if (el) el.hidden = true; }
     if (fresh || !load()) spawn();
@@ -983,6 +1118,7 @@ AB.IsoSurface = (() => {
     last = performance.now(); requestAnimationFrame(loop);
     if (AB.Flags) AB.Flags.add('zone-a1');
     storyEnter();
+    tradeInit();
     AB.Bus.emit('surface:enter', { zone: D().id });
     const hereSide = cell(base.c, base.r).side === 'desert' ? 'пустыня Домов Песка' : 'болота Детей Хора';
     if (fresh) say(`Капсулу вынесло на сушу — зона A1, вокруг ${hereSide}. Нажмите на клетку — герой выйдет в экзокостюме; «Вести базу» — ехать капсулой`);
@@ -996,14 +1132,14 @@ AB.IsoSurface = (() => {
     ambMix() {
       if (!built) return { desert: 1, swamp: 0 };
       const u = curCell(selU()); let d = 0, w = 0;
-      for (const k of cells) if (dist(k, u) <= 3) { if (k.side === 'desert') d++; else w++; }
+      for (const k of cells) if (dist(k, u) <= 3) { if (k.side === 'organic' || k.side === 'swamp' || k.belt === 'east_organic') w++; else d++; }
       const n = Math.max(1, d + w); return { desert: d / n, swamp: w / n };
     }, active: () => inZone, enterBase, deploy, recall,
     revealAll() { for (const k of cells) if (!k.seen) { k.seen = true; clearFog(k); } save(); },
     zoom: (z) => setZoom(z),
     // для проверок
     _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
-    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _mobs: () => mobs, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
+    _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _trade: () => trade, _tradeTick: (dt) => tradeTick(dt), _mobs: () => mobs, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
   };
 })();

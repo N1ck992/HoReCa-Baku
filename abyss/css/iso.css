@@ -860,3 +860,18 @@ body.map-fan-on .map-units { visibility: hidden; }
 .un-detail p { margin: 4px 0 0; font-size: 12px; color: #cfe6ee; }
 .un-detail p b { font: inherit; color: #ffe2a8; }
 .un-detail .un-where { color: #9fe7ff; }
+
+/* №150: стороны треугольника */
+#sf-legend .east, .sf-side.east { color: #f6c38a; border: 1px solid rgba(246, 195, 138, .45); }
+#sf-legend .organic, .sf-side.organic { color: #c6f0a8; border: 1px solid rgba(160, 230, 140, .4); }
+#sf-legend .neutral { color: #e6e0d6; border: 1px solid var(--line); }
+
+/* №150: торговля в карточке Менового Узла */
+#sf-pop .tr-head { display: block; margin-top: 8px; font: 600 12px var(--display); letter-spacing: 2px; text-transform: uppercase; color: #ffd27a; }
+#sf-pop .tr-civ { display: grid; gap: 1px; margin-top: 6px; padding: 5px 7px; border-radius: 6px; background: rgba(255, 255, 255, .04); font-size: 11px; line-height: 1.45; }
+#sf-pop .tr-civ b { font-weight: 600; }
+#sf-pop .tr-bar { display: inline-block; vertical-align: middle; width: 70px; height: 5px; margin: 0 4px; background: rgba(255, 255, 255, .12); border-radius: 3px; overflow: hidden; }
+#sf-pop .tr-bar i { display: block; height: 100%; }
+#sf-pop .tr-route { color: #9fb4bc; }
+#sf-pop .tr-route em { font-style: normal; color: #ff8a6a; }
+#sf-pop .tr-ev { display: block; margin-top: 6px; font-size: 11px; color: #ffb070; }
