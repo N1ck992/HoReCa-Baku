@@ -452,10 +452,11 @@ AB.IsoSurface = (() => {
   const fem = (id) => id === 'CHAR-002' || id === 'CHAR-003';
   function hurtSquad(s, dmg, m) {
     const c = AB.Chars.get(s.id), v = AB.VEHICLES[s.vehicle] || { armor: 0 };
-    const real = Math.max(1, Math.round(dmg * (1 - v.armor)));
+    const mul = AB.Damage ? AB.Damage.mult(NK(m).dtype, v.armorType) : 1;          // №152: тип урона × защита
+    const real = Math.max(1, Math.round(dmg * mul * (1 - v.armor)));
     AB.Bus.emit('surface:hit', { npc: false });
     if (c) c.hp = Math.max(0, c.hp - real);
-    s.flash = 0.25; floatText(posOf(s), `−${real}`, '#ff8a6a');
+    s.flash = 0.25; floatText(posOf(s), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ff5a3a' : mul <= 0.76 ? '#9fb4bc' : '#ff8a6a');
     if (s.mode === 'auto' && !s.target) s.target = m;          // автобой: ответный удар
     barSig = '';
     if (c && c.hp <= 0) squadDown(s);
@@ -471,9 +472,10 @@ AB.IsoSurface = (() => {
     say(`${herName(s.id)}: костюм разбит — очнул${fem(s.id) ? 'ась' : 'ся'} в батискафе`);
   }
   function hurtMob(m, dmg, s) {
-    const d = NK(m), real = Math.max(1, Math.round(dmg * (1 - d.armor)));
+    const d = NK(m), v = AB.VEHICLES[s.vehicle] || {}, mul = AB.Damage ? AB.Damage.mult(v.dtype, d.armorType) : 1;   // №152
+    const real = Math.max(1, Math.round(dmg * mul * (1 - d.armor)));
     AB.Bus.emit('surface:hit', { npc: true });
-    m.hp -= real; m.flash = 0.25; floatText(posOf(m), `−${real}`, '#ffe2a8');
+    m.hp -= real; m.flash = 0.25; floatText(posOf(m), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ffb040' : mul <= 0.76 ? '#9fb4bc' : '#ffe2a8');
     for (const o of alive()) if (o.grp === m.grp && !o.aggro) o.aggro = s;   // за своего вступается вся группа
     m.aggro = m.aggro || s;
     if (m.hp <= 0) mobDead(m);

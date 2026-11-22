@@ -252,6 +252,13 @@ AB.IsoEnemies = (() => {
       return true;
     }
     if (e.state === 'DORMANT') return false;
+    // №152: тип урона × защита цели («камень-ножницы-бумага», js/data/damage.js)
+    if (AB.Damage) {
+      const fid = typeof from === 'string' ? from : from && from.id;
+      const dt = opt.dtype || (kind === 'energy' ? 'energy' : !from && kind === 'ranged' ? AB.DAMAGE.sources.turret : fid && AB.Inventory && AB.Inventory.weapon && AB.Inventory.weapon(fid) ? AB.Damage.weaponType(AB.Inventory.weapon(fid).item) : AB.DAMAGE.melee);
+      const mul = AB.Damage.mult(dt, AB.Damage.enemy(id).armor); amount *= mul;
+      AB.Damage.last = { target: id, dtype: dt, mult: mul };
+    }
     if (e.vulnT > 0) amount *= e.vulnMult || 1;
     if (e.armorMul != null) amount *= e.armorMul;                          // №123: броня меняется в бою (гигант оглушён — открыт)
     if (e.minHp != null) amount = Math.min(amount, Math.max(0, e.hp - e.minHp));   // №123: не умирает раньше сцены   // №120: «биологическая уязвимость» — препарат Хейл

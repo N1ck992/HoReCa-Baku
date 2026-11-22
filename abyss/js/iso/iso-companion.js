@@ -102,7 +102,7 @@ AB.IsoCompanion = (() => {
     chain.forEach((e, i) => {
       zaps.push({ a: from, b: { x: e.x, y: e.y }, t: 0, seed: Math.random() * 99 });
       from = { x: e.x, y: e.y };
-      AB.IsoEnemies.damage(e.id, zapDmg, 'CHAR-001', 'ranged');
+      AB.IsoEnemies.damage(e.id, zapDmg, 'CHAR-001', 'ranged', { dtype: AB.DAMAGE ? AB.DAMAGE.sources.echo : null });   // №152: молния — энергия
       if (!AB.IsoEnemies.get(e.id) || AB.IsoEnemies.get(e.id).state === 'DEAD' || AB.IsoEnemies.get(e.id).hp <= 0) killed++;
     });
     zapReady = false; zapN = 0;

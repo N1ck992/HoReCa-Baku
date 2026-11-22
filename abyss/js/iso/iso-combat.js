@@ -72,7 +72,7 @@ AB.IsoCombat = (() => {
         hit = e; best = along;
       }
       if (hit && w.vuln) AB.IsoEnemies.vulnerable(hit.id, w.vuln);   // №120: инжектор Хейл — ткани цели уязвимее
-      if (hit) { landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged'); if (landed && AB.IsoFX) AB.IsoFX.impact(hit, { x: hit.x - (hit.x - m.x) * 0.01, y: hit.y - (hit.y - m.y) * 0.01 }, false, hit.state === 'DEAD'); }
+      if (hit) { landed = AB.IsoEnemies.damage(hit.id, w.damage * mod('rangedDamage'), m, 'ranged', { dtype: AB.Damage ? AB.Damage.weaponType(sw.w.id, w) : null }); if (landed && AB.IsoFX) AB.IsoFX.impact(hit, { x: hit.x - (hit.x - m.x) * 0.01, y: hit.y - (hit.y - m.y) * 0.01 }, false, hit.state === 'DEAD'); }
       const end = hit ? { x: hit.x, y: hit.y } : { x: m.x + dx * Math.min(range, 6), y: m.y + dy * Math.min(range, 6) };
       AB.Bus.emit('iso:shot', { from: { x: m.x, y: m.y }, to: end, landed, energy: !!w.energy, dart: !!w.dart, cut: !!w.cutter, weapon: sw.w.id });   // №130: weapon — для звука по реестру оружия
     } else {
@@ -82,7 +82,7 @@ AB.IsoCombat = (() => {
         const rx = e.x - m.x, ry = e.y - m.y, d = Math.hypot(rx, ry);
         if (d > reach || (d > 0.4 && (rx * m.hx + ry * m.hy) / (d * n) < 0.35)) continue;   // перед собой, ~70°
         const C = AB.IsoFX && AB.IsoFX.RULES.combo, k = sw.combo || 0, heavy = k === 2;
-        const hit = AB.IsoEnemies.damage(e.id, dmg * (C ? C.dmg[k] : 1), m, 'melee', { knock: C ? C.knock[k] : 1 });
+        const hit = AB.IsoEnemies.damage(e.id, dmg * (C ? C.dmg[k] : 1), m, 'melee', { knock: C ? C.knock[k] : 1, dtype: AB.Damage ? (w.ranged ? AB.DAMAGE.melee : AB.Damage.weaponType(sw.w.id, w)) : null });
         if (hit && AB.IsoFX) AB.IsoFX.impact(e, m, heavy, e.state === 'DEAD');
         landed = hit || landed;
       }
@@ -91,11 +91,17 @@ AB.IsoCombat = (() => {
   }
 
   // урон персонажу (от противника e)
-  function damageChar(id, amount, from) {
+  function damageChar(id, amount, from, opt = {}) {
     const c = charOf(id), m = member(id);
     if (!c || c.dead) return;
     if (AB.IsoFX && AB.IsoFX.invulnerable(m)) { AB.Bus.emit('iso:dodge', { id }); return; }   // №111: в рывке — удар мимо
     amount *= mod('damageTaken');
+    // №152: тип урона врага × защита героя (в экзокостюме — защита костюма)
+    if (AB.Damage) {
+      const dt = opt.dtype || (from && from.id ? AB.Damage.enemy(from.id).attack : AB.DAMAGE.melee);
+      const mul = AB.Damage.mult(dt, AB.Damage.heroArmor(id, !!(AB.IsoSuit && AB.IsoSuit.suited(m)))); amount *= mul;
+      AB.Damage.last = { target: id, dtype: dt, mult: mul };
+    }
     if (AB.IsoSuit && AB.IsoSuit.suited(m)) amount *= AB.IsoSuit.rig().armor;   // корпус костюма держит удар
     if (AB.IsoArmor) amount *= 1 - AB.IsoArmor.of(id);                          // №82: надетая броня
     c.hp = Math.max(0, c.hp - amount);

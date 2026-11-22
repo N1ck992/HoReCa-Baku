@@ -875,3 +875,11 @@ body.map-fan-on .map-units { visibility: hidden; }
 #sf-pop .tr-route { color: #9fb4bc; }
 #sf-pop .tr-route em { font-style: normal; color: #ff8a6a; }
 #sf-pop .tr-ev { display: block; margin-top: 6px; font-size: 11px; color: #ffb070; }
+
+/* №152: таблица типов урона */
+.dmg-tab { border-collapse: collapse; width: 100%; font-size: 13px; }
+.dmg-tab th, .dmg-tab td { padding: 7px 8px; border: 1px solid rgba(255, 255, 255, .1); text-align: center; }
+.dmg-tab th { font: 600 12px var(--display); letter-spacing: .5px; color: #cfe6ee; background: rgba(255, 255, 255, .04); }
+.dmg-tab td { color: #e6e0d6; }
+.dmg-tab td.hi { color: #ffb040; font-weight: 700; }
+.dmg-tab td.lo { color: #7f9aa4; }

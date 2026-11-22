@@ -79,23 +79,24 @@ AB.SURFACE_A1 = {
 
 // нейтральные NPC (№142, №150 — по землям треугольника): группами в случайных местах, сами не нападают;
 // ударили одного — вступается группа; за убийство — награда. look — чей рисунок, col — цвета.
+// №152: armorType — защита (кланы — кинетическая броня, Наследники — энергощиты, органика — без защиты), dtype — тип их удара.
 AB.SURFACE_A1.npcs = {
   groups: 9, perGroup: [1, 2], respawn: 90,
   kinds: {
-    raider: { name: 'Ржавый мародёр', side: 'desert', look: 'raider', hp: 60, attack: 5, rate: 1.6, speed: 26, armor: 0.15,
+    raider: { armorType: 'energy', dtype: 'energy', name: 'Ржавый мародёр', side: 'desert', look: 'raider', hp: 60, attack: 5, rate: 1.6, speed: 26, armor: 0.15,
       col: { robe: '#8a7a68', sash: '#c0602a', head: '#9aa4ab' },
       reward: [['ITEM-001', 2, 1], ['ITEM-002', 1, 0.5]], text: 'Отброс пустыни с самодельными имплантами: живёт тем, что снимет с караванов.' },
-    shellback: { name: 'Панцирник', side: 'desert', look: 'shellback', hp: 110, attack: 7, rate: 2.2, speed: 14, armor: 0.3,
+    shellback: { armorType: 'kinetic', dtype: 'kinetic', name: 'Панцирник', side: 'desert', look: 'shellback', hp: 110, attack: 7, rate: 2.2, speed: 14, armor: 0.3,
       reward: [['ITEM-007', 2, 1], ['ITEM-001', 1, 0.5]], text: 'Крупный пустынный зверь в костяном панцире. Мирный, пока его не трогают.' },
-    ronin: { name: 'Ронин', side: 'east', look: 'raider', hp: 70, attack: 6, rate: 1.4, speed: 28, armor: 0.2,
+    ronin: { armorType: 'kinetic', dtype: 'kinetic', name: 'Ронин', side: 'east', look: 'raider', hp: 70, attack: 6, rate: 1.4, speed: 28, armor: 0.2,
       col: { robe: '#3a3f48', sash: '#a3302a', head: '#2a2a2a' },
       reward: [['ITEM-002', 1, 1], ['ITEM-003', 1, 0.5]], text: 'Воин без клана: служит тому, кто платит, и не прощает обид.' },
-    rockhound: { name: 'Скальный пёс', side: 'east', look: 'shellback', hp: 80, attack: 6, rate: 1.6, speed: 22, armor: 0.15,
+    rockhound: { armorType: 'kinetic', dtype: 'kinetic', name: 'Скальный пёс', side: 'east', look: 'shellback', hp: 80, attack: 6, rate: 1.6, speed: 22, armor: 0.15,
       col: { shell: '#7a7f86', legs: '#4a4e54' },
       reward: [['ITEM-007', 1, 1], ['ITEM-001', 1, 0.4]], text: 'Горный хищник в каменной шкуре. Ходит стаями у перевалов.' },
-    thrall: { name: 'Одержимый Единого', side: 'organic', look: 'thrall', hp: 50, attack: 4, rate: 1.4, speed: 22, armor: 0,
+    thrall: { armorType: 'none', dtype: 'thermal', name: 'Одержимый Единого', side: 'organic', look: 'thrall', hp: 50, attack: 4, rate: 1.4, speed: 22, armor: 0,
       reward: [['ITEM-007', 1, 1], ['ITEM-005', 1, 0.35]], text: 'Человек, давно говорящий чужими словами. Бродит, слушая шёпот Единого.' },
-    bogcrawler: { name: 'Топляк', side: 'organic', look: 'bogcrawler', hp: 90, attack: 6, rate: 2.0, speed: 12, armor: 0.2,
+    bogcrawler: { armorType: 'none', dtype: 'kinetic', name: 'Топляк', side: 'organic', look: 'bogcrawler', hp: 90, attack: 6, rate: 2.0, speed: 12, armor: 0.2,
       reward: [['ITEM-007', 2, 1], ['ITEM-003', 1, 0.4]], text: 'Слизистая тварь из бездонных окон топи, обросшая грибницей.' },
   },
 };

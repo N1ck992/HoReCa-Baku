@@ -12,7 +12,7 @@
 AB.VEHICLES = {
   'EQUIP-005': {
     id: 'EQUIP-005', name: 'Экзокостюм', short: 'Экзокостюм',
-    speed: 30, attack: 22, rate: 1.1, reach: 2, armor: 0.2,
+    speed: 30, attack: 22, rate: 1.1, reach: 2, armor: 0.2, dtype: 'energy', armorType: 'kinetic',   // №152: энергоурон, кинетическая броня
     look: 'CHAR-001', img: 'assets/exosuit/v2/body.png',
     // №147: ручной энергомёт «Искра» — стреляет энергетическими сгустками (кадры автора, assets/fx/suit-orb)
     gun: 'Энергомёт «Искра»', gunImg: 'assets/weapons/iskra/iskra.webp', fx: 'suit-orb',
@@ -20,7 +20,7 @@ AB.VEHICLES = {
   },
   'EQUIP-018': {
     id: 'EQUIP-018', name: 'Экзокостюм доктора Хейл', short: 'Костюм №07',
-    speed: 24, attack: 15, rate: 1.0, reach: 1, armor: 0.3,
+    speed: 24, attack: 15, rate: 1.0, reach: 1, armor: 0.3, dtype: 'thermal', armorType: 'energy',   // №152: термальный (инжектор), энергощит
     look: 'CHAR-003', img: 'assets/exosuit/hale/body.png',
     desc: 'Тяжёлый костюм номер 07: ящик с препаратами на ранце, инжектор на предплечье. Медленнее, зато лучше бронирован.',
   },

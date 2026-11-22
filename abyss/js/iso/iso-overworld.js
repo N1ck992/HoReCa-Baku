@@ -655,8 +655,9 @@ AB.IsoOverworld = (() => {
             const v = m.victim, c = v && AB.Chars.get(v.id);
             if (v && c && v.state === 'out' && dist(at(v), m) <= 1 && !(AB.IsoDev && AB.IsoDev.god())) {
               v.flash = 0.3;
-              c.hp -= def.damage * SUIT().armor;
-              AB.Bus.emit('char:hit', { charId: v.id, amount: def.damage * SUIT().armor });
+              const V = AB.VEHICLES && AB.VEHICLES[v.vehicle], mul = AB.Damage ? AB.Damage.mult(AB.Damage.enemy(m.id).attack, V && V.armorType) : 1;   // №152
+              c.hp -= def.damage * SUIT().armor * mul;
+              AB.Bus.emit('char:hit', { charId: v.id, amount: def.damage * SUIT().armor * mul });
               if (c.hp <= 1) (mode === 'capsule' ? respawn(v) : retreat(v));   // №133: на дне в акте III — очнётся в батискафе
             }
           }
@@ -681,7 +682,8 @@ AB.IsoOverworld = (() => {
           s.atk.done = true;
           const m = s.atk.m;
           if (m.hp > 0 && canHit(m, here, sw.reachCells)) {
-            m.hp = Math.max(0, m.hp - sw.damage); m.flash = 1; m.hunt = true;
+            const V = AB.VEHICLES && AB.VEHICLES[s.vehicle], mul = AB.Damage ? AB.Damage.mult(V && V.dtype, AB.Damage.enemy(m.id).armor) : 1;   // №152
+            m.hp = Math.max(0, m.hp - sw.damage * mul); m.flash = 1; m.hunt = true;
             if (m.hp <= 0) mobDead(m, s);
           }
         }

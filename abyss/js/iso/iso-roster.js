@@ -56,7 +56,8 @@ AB.IsoRoster = (() => {
 
   // ---------- окно «Отряд» ----------
   let el = null;
-  const stat = (v) => `Скорость <b>${v.speed}</b> кл/мин · Удар <b>${v.attack}</b> / ${v.rate} с · Броня <b>${Math.round(v.armor * 100)}%</b>`;
+  const dmgLine = (v) => (AB.Damage ? ` · Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b>` : '');   // №152
+  const stat = (v) => `Скорость <b>${v.speed}</b> кл/мин · Удар <b>${v.attack}</b> / ${v.rate} с · Броня <b>${Math.round(v.armor * 100)}%</b>${dmgLine(v)}`;
   function render() {
     const cr = crew();
     el.querySelector('.ro-list').innerHTML = sync().map((s, i) => {
@@ -99,7 +100,8 @@ AB.IsoRoster = (() => {
     const d = AB.ID.get(id), c = AB.Chars.get(id), max = (d.stats || {}).maxHp || 100, hp = c ? Math.round(c.hp) : max;
     const w = AB.Inventory && AB.Inventory.weapon ? AB.Inventory.weapon(id) : null, wd = w && AB.ID.get(w.item);
     return `<div class="un-detail"><canvas data-pt="${id}" class="big"></canvas><div><b>${d.name}</b><small>${d.role || ''}</small>
-      <p>Здоровье <b>${hp}/${max}</b></p><p>В руках: <b>${wd ? wd.name : '—'}</b></p>${wd && wd.desc ? `<small>${wd.desc}</small>` : ''}
+      <p>Здоровье <b>${hp}/${max}</b></p><p>В руках: <b>${wd ? wd.name : '—'}</b>${AB.Damage ? ` · урон: <b>${AB.Damage.name(AB.Damage.weaponType(w && w.item, wd && wd.weapon))}</b>` : ''}</p>
+      ${AB.Damage ? `<p>Своя защита (без техники): <b>${AB.Damage.armorName(AB.DAMAGE.heroes[id])}</b></p>` : ''}${wd && wd.desc ? `<small>${wd.desc}</small>` : ''}
       <p class="un-where">${where(id)}</p></div></div>`;
   }
   function vehCard(vid) {
@@ -107,11 +109,20 @@ AB.IsoRoster = (() => {
     const v = V(vid), s = sync().find((q) => q.vehicle === vid), h = s && s.hero ? AB.ID.get(s.hero).name : null;
     return `<div class="un-detail"><img src="${v.img}" alt="" class="big"><div><b>${v.name}</b><small>${v.desc || ''}</small>
       <p>Скорость <b>${v.speed}</b> кл/мин</p><p>Удар <b>${v.attack}</b> раз в ${v.rate} с · дальность ${v.reach}</p><p>Броня <b>${Math.round(v.armor * 100)}%</b></p>
+      ${AB.Damage ? `<p>Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b></p>` : ''}
       <p class="un-where">${h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
   }
   function unitsRender() {
     for (const b of uel.querySelectorAll('[data-utab]')) b.classList.toggle('on', b.dataset.utab === tab);
     const box = uel.querySelector('.un-list');
+    if (tab === 'damage' && AB.DAMAGE) {         // №152: таблица «камень-ножницы-бумага»
+      const D = AB.DAMAGE, arm = Object.keys(D.armors);
+      const cell = (m) => `<td class="${m >= 1.24 ? 'hi' : m <= 0.76 ? 'lo' : ''}">×${String(m).replace('.', ',')}</td>`;
+      box.className = 'un-list one';
+      box.innerHTML = `<table class="dmg-tab"><tr><th>Урон \\ Защита</th>${arm.map((a) => `<th>${D.armors[a]}</th>`).join('')}</tr>${Object.keys(D.types).map((t) => `<tr><th>${D.types[t]}</th>${arm.map((a) => cell(D.mult[t][a])).join('')}</tr>`).join('')}</table>
+        <p class="ro-note">Кинетика пробивает щит и вязнет в броне. Энергия прожигает броню и гасится щитом. Термальный — против брони и живой плоти, слаб против щитов.<br>Экзокостюм: энергоурон, кинетическая броня. Костюм Хейл: термальный, энергощит. Кланы Стали — броня, Наследники — щиты, органика — без защиты.</p>`;
+      return;
+    }
     if (pick) {
       box.className = 'un-list one';
       box.innerHTML = `<button class="un-back" data-un-back>◀ Назад</button>` + (tab === 'heroes' ? heroCard(pick) : vehCard(pick));
