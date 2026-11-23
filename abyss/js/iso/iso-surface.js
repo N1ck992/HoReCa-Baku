@@ -621,11 +621,8 @@ AB.IsoSurface = (() => {
     if (m.stunT > 0) { m.stunT -= dt; return; }                     // №157: оглушён
     if (m.boss) { bossTick(m, dt); return; }                        // №157: большой моб стоит на месте
     if (m.aggro && m.aggro.ally && m.aggro.state !== 'out') m.aggro = null;
-    // №157: гарнизон лагеря нападает, если подойти; патрули чужих сторон враждебны союзнику их соперника
-    if (!m.aggro && (m.camp || m.raid || (m.patrol && Q && Q.ally && d.side !== Q.ally))) {
-      const foe = fieldSquads().find((q) => dist(curCell(q), curCell(m)) <= 2);
-      if (foe) for (const o of alive()) if (o.grp === m.grp && !o.aggro) o.aggro = foe;
-    }
+    // №169 (решение автора: «NPC первыми не атакуют отряд»): гарнизоны, набеги, патрули и большие мобы
+    // сами не нападают — только отвечают, если их ударили (hurtMob)
     if (m.raid && !m.aggro) { raidMove(m, dt); mobStep(m, dt); return; }   // №164: набег идёт к точке
     const home = cell(m.home.c, m.home.r), t = m.aggro, reach = d.reach || 1;
     if (m.patrol && !t) { patrolMove(m, dt); mobStep(m, dt); return; }   // №154: патруль идёт своим маршрутом
@@ -894,9 +891,9 @@ AB.IsoSurface = (() => {
     const d = m.d, me = curCell(m), A = d.ability;
     if (m.aggro && (m.aggro.state !== 'out' || m.aggro.hp <= 0 || dist(curCell(m.aggro), me) > d.aggro + 5)) m.aggro = null;
     const inReach = foesOf().filter((q) => dist(curCell(q), me) <= d.reach).sort((a, b) => dist(curCell(a), me) - dist(curCell(b), me));
-    if (!m.aggro) { const f = foesOf().filter((q) => dist(curCell(q), me) <= d.aggro)[0]; if (f) { m.aggro = f; say(`${d.name} (ур. ${d.lvl}) заметил отряд!`); repStart(`Бой: ${d.name} · ур. ${d.lvl}`, m); } }
+    if (m.aggro && !m.fought) { m.fought = true; repStart(`Бой: ${d.name} · ур. ${d.lvl}`, m); }   // №169: сам не нападает — бой, только если его ударили
     const t = m.aggro && dist(curCell(m.aggro), me) <= d.reach ? m.aggro : inReach[0];
-    if (!m.aggro && !t) { m.hp = Math.min(m.max, m.hp + m.max * 0.02 * dt); m.abT = 0; return; }   // в покое — заживает
+    if (!m.aggro) { m.fought = false; m.hp = Math.min(m.max, m.hp + m.max * 0.02 * dt); m.abT = 0; return; }   // в покое — заживает и не бьёт
     if ((m.abT += dt) >= A.every) {
       m.abT = 0;
       if (A.id === 'quake') { ring(m, A.radius, '217,162,62'); floatText(posOf(m), A.name, '#ffd27a'); for (const q of foesOf()) if (dist(curCell(q), me) <= A.radius) hurtSquad(q, d.attack * A.part, m); }
@@ -916,6 +913,7 @@ AB.IsoSurface = (() => {
     const veh = d.lvl === 3 && AB.IsoRoster && !AB.IsoRoster.owned().includes(d.vehicle) ? d.vehicle : null;
     dropLoot(m, items, veh);
     floatText(posOf(m), 'Добыча на земле', '#ffd27a');
+    mail('reward', `Трофей: ${d.name} · ур. ${d.lvl}`, `<p>Большой моб повержен. На земле:</p><ul>${items.map(([id, n]) => `<li>${esc(AB.ID.get(id).name)} ×${n}</li>`).join('')}${veh ? `<li><b>${esc(AB.VEHICLES[veh].name)}</b> — техника</li>` : ''}</ul><p>Поднять — за ⚡${E().pick} энергии отряда. Добыча лежит ${Math.round(E().lootLife / 60)} мин (техника — пока не поднимут).</p>`);
     say(`${d.name} (ур. ${d.lvl}) повержен! Добыча — на земле${veh ? `, и среди неё — ${AB.VEHICLES[veh].name}` : ''}. Поднять — ⚡${E().pick}`);
     AB.Bus.emit('surface:kill', { kind: `boss${d.lvl}`, boss: m.kind, reward: [] });
     if (rep && rep.boss === m) repEnd('Победа');
@@ -1010,12 +1008,14 @@ AB.IsoSurface = (() => {
     if (AB.VehMods) dropLoot(cp, AB.VehMods.roll(AB.PART_DROPS.point).map((id) => [id, 1]), null);
     const [item, n] = cp.d.income;
     say(`${cp.name} — ваша! Каждую минуту капсуле: ${AB.ID.get(item).name} ×${n}. ${D().factions[cp.d.side].name} попытаются её отбить`);
+    mail('event', `Территория взята: ${cp.name}`, `<p>${esc(cp.d.text)}</p><p>Доход: <b>${esc(AB.ID.get(item).name)} ×${n}</b> каждые ${PTS().income.every} с.</p><p>${esc(D().factions[cp.d.side].name)} пришлют набег — держите отряд рядом.</p>`);
     AB.Bus.emit('surface:point', { key: cp.key, own: true });
   }
   function pointLost(cp, raiders) {
     delete qs().own[cp.key]; qSave();
     for (const m of raiders) Object.assign(m, { raid: null, camp: cp.key, home: { c: curCell(m).c, r: curCell(m).r }, aggro: null });   // набег становится гарнизоном
     say(`${cp.name} потеряна: ${D().factions[cp.d.side].name} вернули её. Возьмите снова осадой`);
+    mail('event', `Территория потеряна: ${cp.name}`, `<p>${esc(D().factions[cp.d.side].name)} отбили точку — набег стал её гарнизоном. Возьмите снова осадой.</p>`);
     AB.Bus.emit('surface:point', { key: cp.key, own: false });
   }
   function startRaid(cp) {
@@ -1026,6 +1026,7 @@ AB.IsoSurface = (() => {
         aggro: null, atkT: 0, atk: null, path: [], anim: null, face: 1, stride: 0, flash: 0, wanderT: 0, repath: 0, deadT: 0 });
     qs().own[cp.key].hold = 0;
     say(`${dk.squad || 'Отряд стороны'} идёт отбивать: ${cp.name}!`);
+    mail('event', `Набег на «${cp.name}»`, `<p>${esc(dk.squad || 'Отряд стороны')} вышел из столицы и идёт к точке. Если простоит у неё ${PTS().raid.hold} с без вашего отряда рядом — точка потеряна.</p>`);
   }
   // набег идёт к точке; если стоит у неё без отряда игрока рядом — точка потеряна
   function raidMove(m, dt) {
@@ -1058,6 +1059,7 @@ AB.IsoSurface = (() => {
     const cp = camps.find((x) => x.key === key);
     if (cp && AB.VehMods) dropLoot(cp, AB.VehMods.roll(AB.PART_DROPS.camp).map((id) => [id, 1]), null);   // №161: в лагере — детали
     say(`${cp ? cp.name : 'Лагерь'} взят! Клетка с пленником — в лагере («Изучить»)`);
+    if (cp) mail('event', `Лагерь взят: ${cp.name}`, `<p>Гарнизон перебит. В клетке — ${esc(AB.ID.get(cp.d.prisoner).name)}: освободите по заданию («Изучить» на лагере). В лагере на земле — детали техники.</p>`);
     AB.Bus.emit('surface:camp', { key });
   }
   function drawPoint(cp) {
@@ -1203,6 +1205,7 @@ AB.IsoSurface = (() => {
     if (r.vehicle && AB.IsoRoster) { AB.IsoRoster.unlock({ vehicle: r.vehicle }); got.push(`${AB.VEHICLES[r.vehicle].name} — в капсуле`); }
     for (const [item, n] of r.items || []) { if (AB.IsoStash) AB.IsoStash.add(item, n); got.push(`${AB.ID.get(item).name} ×${n}`); }
     say(`Задание «${q.name}» выполнено. ${got.join('. ')}`);
+    mail('reward', `Задание выполнено: «${q.name}»`, `<p>Награда:</p><ul>${got.map((g) => `<li>${esc(g)}</li>`).join('')}</ul>`);
     AB.Bus.emit('quest:start', {});
     goalUi(); qNotify();
   }
@@ -1251,7 +1254,7 @@ AB.IsoSurface = (() => {
       el.querySelector('i').textContent = m.boss ? 'Большой моб · стоит на месте' : m.patrol ? (d.squad || 'Патруль') : m.camp ? 'Гарнизон лагеря' : 'Нейтральный';
       el.querySelector('i').className = `sf-side ${d.side || ''}`;
       el.querySelector('p').innerHTML = `${esc(d.text || '')}<br>Здоровье <b>${Math.ceil(m.hp)}/${m.max}</b> · удар <b>${d.attack}</b> раз в ${d.rate} с · дальность ${d.reach || 1}<br>Урон: <b>${Dm(d.dtype)}</b> · Защита: <b>${A(d.armorType)}</b>${ab ? `<br><b>${esc(ab.name)}</b> — ${esc(ab.text)}` : ''}`;
-      el.querySelector('small').textContent = m.boss ? `Добыча: ${AB.ID.get(d.trophy).name}${d.lvl === 3 ? ` и ${AB.VEHICLES[d.vehicle].name}` : ''}. Нападает, если подойти на ${d.aggro} кл. Совет: «Осада» со щитоносцем.` : 'Добыча падает на землю: поднять — за энергию отряда.';
+      el.querySelector('small').textContent = m.boss ? `Добыча: ${AB.ID.get(d.trophy).name}${d.lvl === 3 ? ` и ${AB.VEHICLES[d.vehicle].name}` : ''}. Сам не нападает — отвечает, если ударить. Совет: «Осада» со щитоносцем.` : 'Добыча падает на землю: поднять — за энергию отряда.';
     } else if (c.camp && c.camp.pt) {                                  // №164: шахта или укрепление
       const cp = c.camp, own = qs().own[cp.key], [item, n] = cp.d.income, P = PTS();
       el.querySelector('b').textContent = cp.name;
@@ -1272,6 +1275,8 @@ AB.IsoSurface = (() => {
     el.hidden = false;
   }
 
+  // №168: письмо в почту (js/iso/iso-mail.js)
+  const mail = (kind, title, html) => { if (AB.IsoMail) AB.IsoMail.add({ kind, title, html }); };
   // ---------- №162: отчёт о бое — после осады и боя с большим мобом ----------
   // кто сколько нанёс и получил, сколько погасил щит, сколько вылечили, кто пал, что выпало
   let rep = null;
@@ -1287,12 +1292,13 @@ AB.IsoSurface = (() => {
     const rows = Object.entries(R0.rows).sort((a, b) => b[1].dealt - a[1].dealt);
     const best = rows[0] && rows[0][1].dealt > 0 ? rows[0][0] : null;
     const loot = {}; for (const [id, n] of R0.loot) loot[id] = (loot[id] || 0) + n;
-    el.innerHTML = `<div class="rep-card"><div class="rep-head"><b>${esc(R0.title)}</b><span class="rep-res ${R0.result === 'Победа' ? 'ok' : 'bad'}">${R0.result}</span><button data-rep-x aria-label="Закрыть">✕</button></div>
-      <table class="rep-tab"><tr><th>Герой</th><th>Урон</th><th>Убито</th><th>Получил</th><th>Щит</th><th>Лечение</th></tr>
+    const body = `<table class="rep-tab"><tr><th>Герой</th><th>Урон</th><th>Убито</th><th>Получил</th><th>Щит</th><th>Лечение</th></tr>
       ${rows.map(([id, r]) => `<tr class="${R0.down.includes(id) ? 'down' : ''}"><td>${esc(name(id))}${id === best ? ' ★' : ''}${R0.down.includes(id) ? ' ✝' : ''}</td><td>${Math.round(r.dealt)}</td><td>${r.kills}</td><td>${Math.round(r.taken)}</td><td>${Math.round(r.shield)}</td><td>${Math.round(r.heal)}</td></tr>`).join('')}</table>
       <p>${R0.down.length ? `Пали: <b>${R0.down.map((id) => esc(name(id))).join(', ')}</b> — техника разбита, восстановить за ⚡${E().restore}. ` : 'Никто не пал. '}Бой шёл ${R0.secs} с.</p>
-      <p>${Object.keys(loot).length ? `Добыча на земле: <b>${Object.entries(loot).map(([id, n]) => `${esc(AB.ID.get(id).name)} ×${n}`).join(', ')}</b> — поднять за ⚡${E().pick}` : 'Добычи нет.'}</p>
+      <p>${Object.keys(loot).length ? `Добыча на земле: <b>${Object.entries(loot).map(([id, n]) => `${esc(AB.ID.get(id).name)} ×${n}`).join(', ')}</b> — поднять за ⚡${E().pick}` : 'Добычи нет.'}</p>`;
+    el.innerHTML = `<div class="rep-card"><div class="rep-head"><b>${esc(R0.title)}</b><span class="rep-res ${R0.result === 'Победа' ? 'ok' : 'bad'}">${R0.result}</span><button data-rep-x aria-label="Закрыть">✕</button></div>${body}
       <button class="rep-ok" data-rep-x>Понятно</button></div>`;
+    if (AB.IsoMail && !R0.mailed) { R0.mailed = true; AB.IsoMail.add({ kind: 'report', title: `${R0.title} — ${R0.result}`, html: `<div class="rep-card mail">${body}</div>` }); }   // №168: копия — в почту
     el.hidden = false;
   }
 
@@ -1418,6 +1424,7 @@ AB.IsoSurface = (() => {
   function storyAdvance() {
     const st = stageNow(); if (!st) return;
     for (const [item, n] of st.reward || []) if (AB.IsoStash) { AB.IsoStash.add(item, n); floatText(posOf(selU()), `+ ${AB.ID.get(item).name} ×${n}`, '#ffd27a'); }
+    if (st.goal) mail('story', `Сюжет: ${st.goal}`, `${(st.lines || []).map(([who, t]) => (who ? `<p><b>${esc(who)}:</b> ${esc(t)}</p>` : `<p><i>${esc(t)}</i></p>`)).join('')}${(st.reward || []).length ? `<p>Награда: ${st.reward.map(([i, n]) => `${esc(AB.ID.get(i).name)} ×${n}`).join(', ')}</p>` : ''}`);
     story.stage++; story.kills = {}; storySave();
     const nx = stageNow();
     if (nx && nx.say) say(nx.say);

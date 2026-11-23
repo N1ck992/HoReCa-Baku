@@ -1013,3 +1013,31 @@ body.map-fan-on .map-units { visibility: hidden; }
 /* №166: красная точка — что-то новое за этой кнопкой */
 .has-dot { position: relative; }
 .has-dot::after { content: ''; position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; background: #ff4a3a; box-shadow: 0 0 0 2px #0b1013, 0 0 6px rgba(255, 74, 58, .8); pointer-events: none; }
+/* №168: почта */
+.map-mail { margin-left: 6px; font-size: 19px; }
+[data-mail] { position: relative; }
+[data-mail][data-n]:not([data-n=""])::before { content: attr(data-n); position: absolute; bottom: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: #ff4a3a; color: #fff; font: 700 10px/16px var(--mono); text-align: center; box-shadow: 0 0 0 2px #0b1013; }
+#iso-mail { position: fixed; inset: 0; z-index: 22; display: grid; place-items: center; padding: 12px; background: rgba(0, 0, 0, .6); }
+#iso-mail[hidden] { display: none; }
+.ml-card { width: min(820px, 100%); height: min(560px, calc(100vh - 24px)); display: flex; flex-direction: column; }
+.ml-card .ro-head { gap: 8px; } .ml-card .ro-head h2 { flex: 1; }
+.ml-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.ml-tabs button { font: 600 12px var(--display); padding: 4px 10px; border-radius: 12px; cursor: pointer; color: #cfe6ee; background: #10181c; border: 1px solid rgba(94, 230, 255, .3); }
+.ml-tabs button.on { color: #ffe2a8; border-color: #ffd27a; }
+.ml-tabs i { font-style: normal; color: #fff; background: #ff4a3a; border-radius: 8px; padding: 0 5px; font-size: 10px; }
+.ml-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(200px, 1fr) 1.6fr; gap: 8px; }
+.ml-list { overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.ml-item { display: grid; grid-template-columns: 20px 1fr; grid-template-rows: auto auto; gap: 0 6px; text-align: left; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: #0e1519; border: 1px solid rgba(255, 255, 255, .08); color: #9fb4bc; }
+.ml-item span { grid-row: 1 / 3; font-size: 15px; color: #9fe7ff; }
+.ml-item b { font: 600 12px var(--display); color: #cfe6ee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-item small { font: 10px var(--mono); }
+.ml-item.new b { color: #fff; } .ml-item.new { border-color: rgba(255, 210, 120, .5); }
+.ml-item.new span::after { content: '●'; color: #ff4a3a; font-size: 9px; margin-left: 2px; vertical-align: top; }
+.ml-item.on { background: #16232a; border-color: #ffd27a; }
+.ml-view { overflow: auto; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 8px; background: #0a1013; color: #cfe6ee; font: 12px/1.45 var(--mono); }
+.ml-view h3 { margin: 0; font: 700 15px var(--display); color: #bfefff; } .ml-view > small { color: #9fb4bc; }
+.ml-text p { margin: 6px 0; } .ml-text b { color: #ffe2a8; } .ml-text ul { margin: 4px 0; padding-left: 18px; }
+.rep-card.mail { width: auto; max-height: none; border: 0; padding: 0; background: none; }
+.ml-del { margin-top: 10px; font: 11px var(--mono); padding: 4px 10px; border-radius: 5px; cursor: pointer; color: #ff9a8a; background: #1a1010; border: 1px solid rgba(255, 120, 90, .4); }
+.ml-empty { color: #9fb4bc; text-align: center; margin-top: 20px; }
+@media (max-width: 600px) { .ml-body { grid-template-columns: 1fr; } #iso-mail.reading .ml-list { display: none; } #iso-mail:not(.reading) .ml-view { display: none; } }

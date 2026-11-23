@@ -76,7 +76,7 @@ AB.TROPHIES = {
 };
 for (const [id, t] of Object.entries(AB.TROPHIES)) if (!AB.ID.has(id)) AB.ID.register(id, { id, name: t.name, short: t.name.slice(0, 3).toUpperCase(), category: 'trophy', stack: 5, desc: t.text, pending: true });
 
-// большие мобы: по 3 на территории (уровни 1–3), стоят на месте; aggro — сами нападают в этом радиусе
+// большие мобы: по 3 на территории (уровни 1–3), стоят на месте; aggro — радиус, в котором держат цель (№169: сами первыми не нападают)
 AB.SURFACE_A1.bosses = {
   kinds: {
     golem: { name: 'Каменный страж', side: 'east', look: 'golem', armorType: 'kinetic', dtype: 'kinetic', hp: 260, attack: 12, rate: 2.2, reach: 1, armor: 0.2, aggro: 2,
