@@ -983,10 +983,7 @@ AB.IsoOverworld = (() => {
       const recallBtn = on && mode !== 'suit' && s.state === 'out' ? '<button data-do="back" title="Отозвать на базу">↩</button>' : '';
       slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${s.state}" data-u="${s.id}" title="${d.name} · экзокостюм · ${st}"><canvas data-pt="${s.id}"></canvas><img src="${AB.IsoRoster ? AB.IsoRoster.vimg(s.vehicle) : 'assets/exosuit/v2/body.png'}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${recallBtn}</div>`);
     }
-    // ещё одна ячейка — когда появится второй транспорт; дальше — закрытые (черновик условия)
-    slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');
-    slots.push('<div class="ow-slot lock"><span>Условие:</span><em>модуль «Ангар»</em></div>');
-    slots.push('<div class="ow-slot lock"><i>🔒</i></div>');
+    // №171: только активный отряд (до 5); лишние ячейки убраны по решению автора
     const sig = slots.join('') + sel + selAll + mb.className;
     if (sig === squadsSig) return;
     squadsSig = sig;

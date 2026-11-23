@@ -1829,10 +1829,7 @@ AB.IsoSurface = (() => {
       const shb = `<button data-do="shield" class="sh ${shieldId === q.id ? 'on' : ''}" title="Щит отряда: в осаде эта техника бьёт первой">🛡</button>`;   // №157
       slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · ${(AB.VEHICLES[q.vehicle] || {}).name || 'экзокостюм'} · скорость ${(AB.VEHICLES[q.vehicle] || {}).speed || '?'} кл/мин · ${st}"><canvas data-pt="${q.id}"></canvas><img src="${AB.IsoRoster.vimg(q.vehicle)}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}${shb}</div>`);
     }
-    // как на дне: место под следующий транспорт и закрытые ячейки
-    slots.push('<div class="ow-slot add" title="Нужен ещё один транспорт (экзокостюм)">+</div>');
-    slots.push('<div class="ow-slot lock"><span>Условие:</span><em>модуль «Ангар»</em></div>');
-    slots.push('<div class="ow-slot lock"><i>🔒</i></div>');
+    // №171: только активный отряд (до 5); лишние ячейки («+», «Ангар», замок) убраны по решению автора
     const allB = document.querySelector('[data-sf-allsel]'); if (allB) allB.classList.toggle('on', selAll);
     const sig = slots.join('') + sel + drive + selAll;
     if (sig === barSig) return;

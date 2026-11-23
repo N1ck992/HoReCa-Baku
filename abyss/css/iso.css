@@ -1041,3 +1041,15 @@ body.map-fan-on .map-units { visibility: hidden; }
 .ml-del { margin-top: 10px; font: 11px var(--mono); padding: 4px 10px; border-radius: 5px; cursor: pointer; color: #ff9a8a; background: #1a1010; border: 1px solid rgba(255, 120, 90, .4); }
 .ml-empty { color: #9fb4bc; text-align: center; margin-top: 20px; }
 @media (max-width: 600px) { .ml-body { grid-template-columns: 1fr; } #iso-mail.reading .ml-list { display: none; } #iso-mail:not(.reading) .ml-view { display: none; } }
+/* №172: подробности в «Отряде» и страница техники в «Юнитах» */
+.ro-fig canvas, .ro-vfig img { cursor: pointer; }
+.ro-hint { color: #9fb4bc; font-size: 10px; }
+.ro-up { font-style: normal; color: #8cff9a; font-size: 10px; }
+.un-vpage { display: grid; grid-template-columns: minmax(160px, 1fr) 1.4fr; gap: 12px; align-items: start; }
+.un-vfig { display: grid; place-items: end center; min-height: 100%; padding: 8px; border-radius: 10px; background: radial-gradient(ellipse at 50% 85%, #1a2c33, #0a1013 70%); border: 1px solid rgba(255, 255, 255, .1); }
+.un-vfig img { width: 100%; height: clamp(160px, 52vh, 460px); object-fit: contain; filter: drop-shadow(0 6px 8px #000); }
+.un-vinfo { font-size: 12px; line-height: 1.45; color: #cfe6ee; min-width: 0; }
+.un-vinfo p { margin: 3px 0; } .un-vinfo p b { color: #ffe2a8; }
+.un-vh { margin-top: 8px !important; font: 600 11px var(--display); letter-spacing: 1px; text-transform: uppercase; color: #9fd8ff; }
+.un-picker { margin-top: 6px; padding: 6px 8px; border: 1px dashed rgba(255, 210, 120, .35); border-radius: 8px; }
+@media (max-width: 560px) { .un-vpage { grid-template-columns: 1fr; } .un-vfig img { height: 32vh; } }

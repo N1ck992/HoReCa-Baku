@@ -146,26 +146,46 @@ AB.IsoRoster = (() => {
       ${list.length ? list.map((p) => `<p class="ro-pl lv${p.lvl}"><button class="ro-pbtn" data-setpart="${p.id}">Поставить</button> <b>${p.name}</b> ×${p.n} — ${p.desc}</p>`).join('') : '<p class="ro-mods">В вещах нет деталей для этого слота. Детали выпадают с больших мобов, в лагерях и шахтах, изредка — с NPC.</p>'}
       <p><button class="ro-pbtn" data-part="${slot}">◀ Назад</button></p>`;
   }
+  // №172: подробности — по нажатию на героя или технику (в «Отряде» и на странице техники в «Юнитах»)
+  let infoMode = null;
+  function heroDetail(id) {
+    const d = AB.ID.get(id), h = heroInfo(id), c = AB.Chars && AB.Chars.get(id), max = (d.stats || {}).maxHp || 100, hp = c ? Math.round(c.hp) : max;
+    const w = AB.Inventory && AB.Inventory.weapon ? AB.Inventory.weapon(id) : null, wd = w && AB.ID.get(w.item), vid = vehicleOf(id), v = vid && V(vid);
+    return `<p><b>${d.name}</b> — ${h ? roleName(h.role) : d.role || ''}</p>${h && h.bio ? `<p>${h.bio}</p>` : d.role ? `<p>${d.role}</p>` : ''}
+      <p>Здоровье <b>${hp}/${max}</b>${wd ? ` · в руках: <b>${wd.name}</b>` : ''}${AB.Damage && AB.DAMAGE.heroes && AB.DAMAGE.heroes[id] ? ` · своя защита: <b>${AB.Damage.armorName(AB.DAMAGE.heroes[id])}</b>` : ''}</p>
+      ${h ? `${abilityLine(h.ability)}<p class="ro-mods">${v ? (v.class === h.role ? `Работает: техника «${v.short || v.name}» — его класса` : `Не работает: техника «${v.short || v.name}» — класс «${roleName(v.class)}», а нужна «${roleName(h.role)}»`) : 'Без техники'}</p>` : ''}
+      <p class="un-where">${where(id)}</p>`;
+  }
+  function vehDetail(vid) {
+    const v = V(vid), e = AB.VehMods ? AB.VehMods.eff(vid) : v, s = sync().find((q) => q.vehicle === vid), drv = s && s.hero ? AB.ID.get(s.hero).name : null;
+    const diff = (a, b, f = (x) => x) => (Math.abs(a - b) > 0.001 ? ` <i class="ro-up">(${f(b)} → ${f(a)})</i>` : '');
+    return `<p><b>${v.name}</b> — ${roleName(v.class)}</p><p>${v.desc || ''}</p>
+      <p>Скорость <b>${Math.round(e.speed)}</b> кл/мин${diff(e.speed, v.speed, Math.round)} · Удар <b>${e.attack}</b>${diff(e.attack, v.attack)} раз в ${e.rate} с${diff(e.rate, v.rate)} · дальность ${v.reach}</p>
+      <p>Броня <b>${Math.round(e.armor * 100)}%</b>${diff(e.armor, v.armor, (x) => `${Math.round(x * 100)}%`)}${e.hpK > 1 ? ` · прочность +${Math.round((e.hpK - 1) * 100)}%` : ''}${e.crit ? ` · крит ${Math.round(e.crit * 100)}%` : ''}${e.shield0 ? ` · щит ${e.shield0} в начале боя` : ''}</p>
+      ${AB.Damage ? `<p>Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b></p>` : ''}
+      ${v.gun ? `<p>Оружие: <b>${v.gun}</b></p>` : ''}${abilityLine(v.ability)}${modsLine(vid)}
+      <p class="un-where">${!owned().includes(vid) ? 'Ещё не получена' : !s ? 'В наличии · не в активном отряде' : drv ? `Ведёт: ${drv}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p>`;
+  }
   function render() {
     const sl = sync(); if (cur >= sl.length) cur = 0;
     const s = sl[cur], v = V(s.vehicle), h = s.hero ? AB.ID.get(s.hero) : null, lk = locked(s), hi = heroInfo(s.hero);
     const tabs = sl.map((q, i) => `<button class="ro-tab ${i === cur ? 'on' : ''}" data-cur="${i}">${q.hero ? AB.ID.get(q.hero).name : '— пусто —'}</button>`).join('');
     el.querySelector('.ro-list').innerHTML = `<div class="ro-tabs">${tabs}</div>
       <div class="ro-show ${lk ? 'locked' : ''}" data-i="${cur}">
-        <div class="ro-fig"><canvas data-full="${s.hero || ''}"></canvas>
+        <div class="ro-fig"><canvas data-full="${s.hero || ''}" data-info="hero" title="Подробнее о герое"></canvas>
           <small>Герой${hi ? ` · ${roleName(hi.role)}${hi.role === v.class ? ' ✓' : ''}` : ''}</small>
           <div class="ro-sw"><button data-hero="-1" ${lk ? 'disabled' : ''}>◀</button><b>${h ? h.name : '— пусто —'}</b><button data-hero="1" ${lk ? 'disabled' : ''}>▶</button></div></div>
-        <div class="ro-vfig"><img src="${vimg(s.vehicle)}" alt="">
+        <div class="ro-vfig"><img src="${vimg(s.vehicle)}" alt="" data-info="veh" title="Подробнее о технике">
           <small>Техника · ${roleName(v.class)}</small>
           <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><b>${v.short || v.name}</b><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div>
           ${partsRow(s.vehicle, lk)}</div>
-        <div class="ro-info">${partPick ? pickerHtml(s.vehicle, partPick) : `<p>${stat(AB.VehMods ? AB.VehMods.eff(s.vehicle) : v)}</p>${modsLine(s.vehicle)}${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}`}
+        <div class="ro-info">${partPick ? pickerHtml(s.vehicle, partPick) : infoMode === 'hero' && s.hero ? `${heroDetail(s.hero)}<p><button class="ro-pbtn" data-info="">◀ Назад</button></p>` : infoMode === 'veh' ? `${vehDetail(s.vehicle)}<p><button class="ro-pbtn" data-info="">◀ Назад</button></p>` : `<p class="ro-hint">Нажмите на героя или технику — подробности.</p><p>${stat(AB.VehMods ? AB.VehMods.eff(s.vehicle) : v)}</p>${modsLine(s.vehicle)}${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}`}
           <em>${lk ? 'Снаружи — менять можно, когда вернётся в базу' : s.hero ? 'В базе' : 'Техника стоит в базе без экипажа'}</em></div>
       </div>` + reserveHtml() + `<p class="ro-note">Активный отряд: ${sl.filter((q) => q.hero).length}/${MAX}. Ячейку выбирают вкладками сверху или нажатием на ячейку отряда внизу. ◀ ▶ — поставить героя или технику из наличия (или поменять местами с другой ячейкой). Способность героя работает только в технике его класса (✓); техники — всегда.</p>`;
     for (const c of el.querySelectorAll('canvas[data-full]')) fullFigure(c, c.dataset.full);
   }
   // показать в окне ячейку этого героя (нажатие на ячейку отряда внизу карты)
-  function focus(hero) { const i = sync().findIndex((q) => q.hero === hero); if (i >= 0) { cur = i; partPick = null; if (el && !el.hidden) render(); } }
+  function focus(hero) { const i = sync().findIndex((q) => q.hero === hero); if (i >= 0) { cur = i; partPick = null; infoMode = null; if (el && !el.hidden) render(); } }
   // №159: кто и что в наличии (не в активном отряде)
   function reserveHtml() {
     const sl = sync(), hs = crew().filter((id) => !sl.some((q) => q.hero === id)), vs = owned().filter((v) => !sl.some((q) => q.vehicle === v));
@@ -178,7 +198,8 @@ AB.IsoRoster = (() => {
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
       el.addEventListener('click', (e) => {
         if (e.target === el || e.target.closest('[data-ro-close]')) { el.hidden = true; return; }
-        const tb = e.target.closest('[data-cur]'); if (tb) { cur = +tb.dataset.cur; partPick = null; render(); return; }
+        const tb = e.target.closest('[data-cur]'); if (tb) { cur = +tb.dataset.cur; partPick = null; infoMode = null; render(); return; }
+        const inf = e.target.closest('[data-info]'); if (inf) { infoMode = inf.dataset.info && infoMode !== inf.dataset.info ? inf.dataset.info : null; partPick = null; render(); return; }
         // №161: детали техники
         const pb = e.target.closest('[data-part]'); if (pb) { partPick = partPick === pb.dataset.part ? null : pb.dataset.part; render(); return; }
         const sp = e.target.closest('[data-setpart],[data-unpart]');
@@ -216,13 +237,14 @@ AB.IsoRoster = (() => {
     return `<div class="un-detail"><canvas data-pt="${id}" class="big"></canvas><div><b>${d.name} 🔒</b><small>${roleName(h.role)}</small><p>${d.bio || ''}</p>${abilityLine(h.ability)}
       <p class="un-where">Откроется: задание «${q ? q.name : '?'}» (зона A1)</p></div></div>`;
   }
+  // №172: страница техники в «Юнитах»: техника во весь рост, полное описание, детали (поставить/снять)
   function vehCard(vid) {
     if (vid === 'base') return `<div class="un-detail"><i class="cap big"></i><div><b>Капсула-батискаф</b><small>База отряда: ездит по карте, внутри — трюм с устройствами. Из неё выходят герои в технике.</small><p>Скорость <b>${AB.VEHICLES_BASE.speed}</b> кл/мин</p></div></div>`;
-    const v = V(vid), s = sync().find((q) => q.vehicle === vid), h = s && s.hero ? AB.ID.get(s.hero).name : null;
-    return `<div class="un-detail"><img src="${vimg(vid)}" alt="" class="big"><div><b>${v.name}</b><small>${v.desc || ''}</small>${v.class ? `<p>Класс: <b>${roleName(v.class)}</b></p>` : ''}${abilityLine(v.ability)}
-      <p>Скорость <b>${v.speed}</b> кл/мин</p><p>Удар <b>${v.attack}</b> раз в ${v.rate} с · дальность ${v.reach}</p><p>Броня <b>${Math.round(v.armor * 100)}%</b></p>
-      ${AB.Damage ? `<p>Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b></p>` : ''}
-      <p class="un-where">${!owned().includes(vid) ? 'Ещё не получена: награда за задание или трофей большого моба' : !s ? 'В наличии · не в активном отряде' : h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
+    const s = sync().find((q) => q.vehicle === vid), lk = !!s && locked(s), have = owned().includes(vid);
+    return `<div class="un-vpage"><div class="un-vfig"><img src="${vimg(vid)}" alt=""></div>
+      <div class="un-vinfo">${vehDetail(vid)}
+        ${have ? `<p class="un-vh">Детали${lk ? ' — техника снаружи, менять можно в базе' : ''}</p>${partsRow(vid, lk)}${partPick ? `<div class="un-picker">${pickerHtml(vid, partPick)}</div>` : ''}` : ''}
+        ${have ? '<p><button class="ro-pbtn" data-un-edit>◎ В окно «Отряд» — сменить водителя</button></p>' : ''}</div></div>`;
   }
   function unitsRender() {
     for (const b of uel.querySelectorAll('[data-utab]')) b.classList.toggle('on', b.dataset.utab === tab);
@@ -259,9 +281,16 @@ AB.IsoRoster = (() => {
       uel.addEventListener('click', (e) => {
         if (e.target === uel || e.target.closest('[data-un-close]')) { uel.hidden = true; return; }
         const b = e.target.closest('[data-utab]'); if (b) { tab = b.dataset.utab; pick = null; unitsRender(); return; }
-        const t = e.target.closest('[data-un]'); if (t) { pick = t.dataset.un; unitsRender(); return; }
-        if (e.target.closest('[data-un-back]')) { pick = null; unitsRender(); return; }
-        if (e.target.closest('[data-un-edit]')) { uel.hidden = true; open(); }
+        const t = e.target.closest('[data-un]'); if (t) { pick = t.dataset.un; partPick = null; unitsRender(); return; }
+        // №172: детали техники на её странице
+        if (tab === 'vehicles' && pick && pick !== 'base') {
+          const pb = e.target.closest('[data-part]'); if (pb) { partPick = partPick === pb.dataset.part ? null : pb.dataset.part; unitsRender(); return; }
+          const sp = e.target.closest('[data-setpart],[data-unpart]');
+          if (sp) { const r = sp.dataset.setpart ? AB.VehMods.install(pick, sp.dataset.setpart) : AB.VehMods.remove(pick, sp.dataset.unpart);
+            AB.Bus.emit('iso:toast', { text: r.ok ? (sp.dataset.setpart ? 'Деталь поставлена' : 'Деталь снята — в вещах') : r.why, kind: r.ok ? 'good' : 'warn' }); if (r.ok) partPick = null; unitsRender(); return; }
+        }
+        if (e.target.closest('[data-un-back]')) { pick = null; partPick = null; unitsRender(); return; }
+        if (e.target.closest('[data-un-edit]')) { const i = sync().findIndex((q) => q.vehicle === pick); if (i >= 0) cur = i; infoMode = null; partPick = null; uel.hidden = true; AB.IsoRoster.open(); }
       });
     }
     if (t) tab = t;
