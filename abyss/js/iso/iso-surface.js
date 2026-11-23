@@ -203,6 +203,27 @@ AB.IsoSurface = (() => {
   // ---------- рисунок карты (один раз — в запасной холст) ----------
   const rgb = (c, m = 1, a = 1) => `rgba(${Math.round(c[0] * m)},${Math.round(c[1] * m)},${Math.round(c[2] * m)},${a})`;
   function hexPath(x, y, s, ctx) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); ctx.lineTo(x + s * Math.cos(a), y + s * Math.sin(a) * TILT); } ctx.closePath(); }
+  // №167: текстуры местности (assets/surface/tex — Poly Haven, CC0): клетка залита текстурой своего вида,
+  // сверху — тон цвета земли (texTint), чтобы стороны треугольника отличались; пока не загрузились — просто цвет
+  const TEX_KINDS = ['sand', 'dune', 'mesa', 'oasis', 'scrub', 'marsh', 'reeds', 'bog', 'growth', 'ford', 'meadow', 'forest', 'mountain', 'thicket', 'mistwood', 'salt', 'rustfoot', 'ruin', 'plaza', 'cliff'];
+  const texImg = {};
+  let texReady = false;
+  const texTint = 0.38;
+  (function loadTex() {
+    let left = TEX_KINDS.length;
+    for (const k of TEX_KINDS) {
+      const im = new Image();
+      im.onload = im.onerror = () => { if (im.naturalWidth) texImg[k] = im; if (--left === 0) { texReady = true; if (built && bake) { bakeMap(); } } };
+      im.src = `assets/surface/tex/${k}.webp`;
+    }
+  })();
+  function fillTex(b, k, p, r, pats) {
+    const t = K[k.kind], m = 0.9 + k.v * 0.2;
+    hexPath(p.x, p.y, r, b);
+    const pat = pats[k.kind];
+    if (pat) { b.fillStyle = pat; b.fill(); b.globalAlpha = texTint; b.fillStyle = rgb(t.col, m); b.fill(); b.globalAlpha = 1; }
+    else { b.fillStyle = rgb(t.col, m); b.fill(); }
+  }
   function bakeMap() {
     const s = S0;
     bake = document.createElement('canvas');
@@ -211,10 +232,13 @@ AB.IsoSurface = (() => {
     const b = bake.getContext('2d');
     b.fillStyle = '#07090b'; b.fillRect(0, 0, bake.width, bake.height);
     const R = rng(77);
+    // узоры текстур: одна текстура ~2,5 клетки, приплюснута как карта (TILT)
+    const pats = {};
+    if (texReady) for (const [kk, im] of Object.entries(texImg)) { const pt = b.createPattern(im, 'repeat'); const sc = (s * 2.5) / im.naturalWidth; if (pt.setTransform) pt.setTransform(new DOMMatrix([sc, 0, 0, sc * TILT, 0, 0])); pats[kk] = pt; }
     // плоские клетки
     for (const k of cells) {
-      const p = bpx(k.c, k.r), t = K[k.kind], m = 0.9 + k.v * 0.2;
-      hexPath(p.x, p.y, s * 1.02, b); b.fillStyle = rgb(t.col, m); b.fill();
+      const p = bpx(k.c, k.r), t = K[k.kind];
+      fillTex(b, k, p, s * 1.02, pats);
       b.strokeStyle = 'rgba(0,0,0,.08)'; b.lineWidth = 1; b.stroke();
       deco(b, k, p, s, R);
     }
@@ -245,7 +269,8 @@ AB.IsoSurface = (() => {
       for (let i = 0; i <= 3; i++) { const a = Math.PI / 180 * (60 * i - 30 + 0); const x = p.x + s * Math.cos(a), y = p.y + s * Math.sin(a) * TILT; if (i === 0) b.moveTo(x, y); else b.lineTo(x, y); }
       for (let i = 3; i >= 0; i--) { const a = Math.PI / 180 * (60 * i - 30); b.lineTo(p.x + s * Math.cos(a), p.y + s * Math.sin(a) * TILT - h); }
       b.closePath(); b.fill();
-      hexPath(p.x, p.y - h, s, b); b.fillStyle = rgb(t.col, 1.05 + k.v * 0.1); b.fill();
+      if (pats[k.kind]) { fillTex(b, k, { x: p.x, y: p.y - h }, s, pats); b.globalAlpha = 0.12; b.fillStyle = '#fff'; b.fill(); b.globalAlpha = 1; }   // №167: верх скалы — текстура, чуть светлее
+      else { hexPath(p.x, p.y - h, s, b); b.fillStyle = rgb(t.col, 1.05 + k.v * 0.1); b.fill(); }
       b.strokeStyle = rgb(t.col, 1.35, 0.5); b.lineWidth = 1.5; b.stroke();
       if (k.kind === 'growth') {                  // пузыри органики
         for (let i = 0; i < 4; i++) { b.fillStyle = `rgba(${200 + R() * 55},${90 + R() * 60},${170 + R() * 60},.75)`; b.beginPath(); b.arc(p.x + (R() - 0.5) * s, p.y - h + (R() - 0.5) * s * 0.6, s * (0.08 + R() * 0.12), 0, 7); b.fill(); }
