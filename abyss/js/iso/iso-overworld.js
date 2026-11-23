@@ -635,11 +635,13 @@ AB.IsoOverworld = (() => {
       const foes = squads.filter((s) => s.state === 'out' && !(AB.Chars.get(s.id) || {}).dead);
       const tgt = foes.sort((a, b) => dist(at(a), m) - dist(at(b), m))[0];
       const d = tgt ? dist(at(tgt), m) : 99;
-      if (!m.hunt && tgt && d <= w.aggro && !w.passive) {
-        m.hunt = true; m.anim = 'ALERT'; m.t = 0;
-        if (m.kind === 'story') say('Мира: «Оно двинулось к тебе! Бей, как только подойдёт на две клетки»');
-        else if (m.kind === 'giants') say('Исполин! Держитесь на расстоянии двух клеток');
+      // №170 (решение автора: «вне зданий никто не нападает первым»): тварь замечает отряд, но бой — только если её ударили (m.hunt — в ударе)
+      if (!m.hunt && tgt && d <= w.aggro && !m.seenFoe) {
+        m.seenFoe = true; m.anim = 'ALERT'; m.t = 0;
+        if (m.kind === 'story') say('Мира: «Вот оно. Само не бросается — ударь первым, когда подойдёшь на две клетки»');
+        else if (m.kind === 'giants') say('Исполин! Сам не нападает — но если ударить, держитесь на расстоянии двух клеток');
       }
+      if (!m.hunt && m.seenFoe && (!tgt || d > w.aggro + 2)) { m.seenFoe = false; m.anim = 'PATROL'; }
       if (m.hunt && (!tgt || dist(m, m.home) > w.leash + 1 || d > w.leash + 2)) { m.hunt = false; m.anim = 'PATROL'; }
       m.atkT = Math.max(0, m.atkT - dt);
       if (!m.hunt) {
@@ -1012,6 +1014,7 @@ AB.IsoOverworld = (() => {
     // админ-панель: убрать бродячих тварей (сюжетные не трогаем)
     clearWild() { let n = 0; for (const m of mobs) if (m.hp > 0 && m.kind !== 'story') { m.hp = 0; m.anim = 'DEAD'; m.fade = 0; n++; } return n; },
     lootAt: (q, r) => loot.get(key(q, r)) || null, time: () => time, _sq: () => squads,
+    _attack: (kind) => { const m = mobs.find((x) => x.hp > 0 && x.kind === kind); if (!m) return false; for (const q of squads) if (q.state === 'out') q.target = m; return true; },   // №170: для проверок — ударить первым
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
     moving: () => { const u = selU(); return !!u.anim || u.path.length > 0; }, route,
   };
