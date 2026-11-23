@@ -1710,6 +1710,7 @@ AB.IsoSurface = (() => {
       if (bk && sl) { recall(sl.dataset.u); return; }
       const sh = e.target.closest('[data-do="shield"]');
       if (sh && sl) { shieldId = shieldId === sl.dataset.u ? null : sl.dataset.u; qs(); qSave(); barSig = ''; say(shieldId ? `Щит отряда — ${herName(shieldId)}: в осаде бьёт первым` : 'Щит отряда снят'); return; }
+      if (sl && AB.IsoRoster.isOpen()) { AB.IsoRoster.focus(sl.dataset.u); return; }   // №160: открыт «Отряд» — показать этого героя
       if (sl) { const q = unit(sl.dataset.u); if (!q) return; drive = false; selAll = false; if (q.state === 'home') deploy(q.id); else { sel = q.id; flyU = q; follow = true; barSig = ''; } }
     });
     window.addEventListener('resize', () => { if (open_) fit(); });

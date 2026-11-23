@@ -154,7 +154,29 @@
   <div id="iso-help">Нажмите на пол — идти · на противника — атаковать · на дверь, предмет — подойти и сделать · E — действие · F — удар · I — вещи · нажмите на героя справа внизу — снаряжение · Q — следующий · колесо — масштаб</div>
 
   <!-- Ядро и данные — те же, что у основной игры -->
-  <script src="js/core/ids.js"></script>
+  <script>
+// №159: если игра не запустилась — показать причину на экране и дать сбросить сохранение
+(function () {
+  var shown = false;
+  function show(msg) {
+    if (shown) return; shown = true;
+    var d = document.createElement('div');
+    d.id = 'boot-err';
+    d.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;padding:10px 12px;background:rgba(40,8,8,.95);color:#ffd8d0;font:12px/1.4 monospace;border:1px solid #ff6a4a;border-radius:8px;white-space:pre-wrap;max-height:45vh;overflow:auto';
+    d.textContent = 'Ошибка игры: ' + msg + '\nСкопируйте этот текст и пришлите разработчику. ';
+    var b = document.createElement('button');
+    b.textContent = 'Сбросить сохранение и перезапустить';
+    b.style.cssText = 'margin-top:6px;padding:6px 10px;font:12px monospace;cursor:pointer';
+    b.onclick = function () { try { for (var k = localStorage.length - 1; k >= 0; k--) { var key = localStorage.key(k); if (/^abyss/.test(key)) localStorage.removeItem(key); } sessionStorage.clear(); } catch (e) {} location.reload(); };
+    var x = document.createElement('button'); x.textContent = 'Скрыть'; x.style.cssText = b.style.cssText + ';margin-left:6px'; x.onclick = function () { d.remove(); };
+    d.appendChild(document.createElement('br')); d.appendChild(b); d.appendChild(x);
+    (document.body || document.documentElement).appendChild(d);
+  }
+  window.addEventListener('error', function (e) { if (!e.message) return; show(e.message + (e.filename ? ' (' + String(e.filename).split('/').pop() + ':' + e.lineno + ')' : '') + (e.error && e.error.stack ? '\n' + String(e.error.stack).split('\n').slice(0, 3).join('\n') : '')); });
+  window.addEventListener('unhandledrejection', function (e) { show(String(e.reason && (e.reason.stack || e.reason.message) || e.reason)); });
+})();
+</script>
+<script src="js/core/ids.js"></script>
   <script src="js/data/assets.manifest.js"></script>
   <script src="js/data/animations.js"></script>
   <script src="js/data/characters.js"></script>

@@ -923,3 +923,34 @@ body.map-fan-on .map-units { visibility: hidden; }
 #sf-right, #ow-right { min-width: 0; flex: 0 1 auto; }
 #sf-slots, #ow-slots { max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 #ow-right { max-width: calc(100vw - 280px); }
+/* №159: в наличии — герои и техника вне активного отряда */
+.ro-reserve { margin: 8px 0 4px; padding: 8px 12px; border: 1px dashed rgba(94, 230, 255, .35); border-radius: 8px; color: #cfe6ee; font: 12px var(--mono); }
+.ro-reserve small { display: block; color: #9fb4bc; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.ro-reserve p { margin: 2px 0; }
+/* №160: «Отряд» — витрина: герой во весь рост и его техника в центре; ячейки отряда внизу карты остаются видны */
+#iso-roster.over-bar { bottom: calc(136px + env(safe-area-inset-bottom, 0px)); padding: 8px 12px; background: rgba(0, 0, 0, .5); }
+#iso-roster .ro-card { display: flex; flex-direction: column; position: relative; }
+#iso-roster.over-bar .ro-card { width: min(760px, 100%); height: 100%; max-height: 100%; padding: 8px 10px; }
+#iso-roster.over-bar .ro-head h2 { display: none; }
+#iso-roster.over-bar .ro-head { position: absolute; right: 8px; top: 6px; z-index: 1; }
+#iso-roster .ro-list { flex: 1; min-height: 0; overflow: auto; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+#iso-roster.over-bar .ro-list { margin-top: 0; }
+.ro-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding-right: 46px; }
+.ro-tab { font: 600 12px var(--display); padding: 4px 10px; border-radius: 12px; cursor: pointer; color: #cfe6ee; background: #10181c; border: 1px solid rgba(94, 230, 255, .3); }
+.ro-tab.on { color: #ffe2a8; border-color: #ffd27a; }
+.ro-show { --fig: clamp(150px, calc(100vh - 230px), 380px); display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 10px; align-items: end; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; background: radial-gradient(ellipse at 40% 85%, #1a2c33, #0a1013 70%); }
+#iso-roster.over-bar .ro-show { --fig: clamp(120px, calc(100vh - 136px - 132px), 380px); }
+.ro-show.locked { opacity: .7; }
+.ro-fig, .ro-vfig { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+.ro-fig canvas { width: 100%; height: var(--fig); }
+.ro-vfig img { height: calc(var(--fig) * .9); max-width: 100%; object-fit: contain; filter: drop-shadow(0 4px 6px #000); }
+.ro-fig > small, .ro-vfig > small { display: block; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.ro-show .ro-sw b { display: block; font: 600 13px var(--display); color: #fff; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ro-show .ro-sw { justify-content: center; align-items: center; gap: 6px; margin-top: 2px; max-width: 100%; }
+.ro-show .ro-sw button { flex: none; width: 28px; height: 26px; }
+.ro-info { align-self: center; font-size: 11px; line-height: 1.4; color: #cfe6ee; }
+.ro-info p { margin: 0 0 6px; }
+.ro-info p b { color: #ffe2a8; font-weight: 700; }
+.ro-info em { display: block; font-style: normal; color: #9fb4bc; margin-top: 4px; }
+.ro-show.locked .ro-info em { color: #ffb070; }
+@media (max-width: 560px) { .ro-show { grid-template-columns: 1fr 1fr; } .ro-info { grid-column: 1 / -1; } }

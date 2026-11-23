@@ -9,6 +9,7 @@
 
 AB.IsoRoster = (() => {
   const KEY = 'abyss_roster';
+  const MAX = 5;                          // №159: героев в активном отряде одновременно
   const DEFAULT = { 'EQUIP-005': 'CHAR-001', 'EQUIP-018': 'CHAR-003' };   // кто обычно в какой технике
   let slots = null;                       // [{ vehicle, hero }]
   let outFn = () => false;                // карта сообщает: этот герой снаружи (его менять нельзя)
@@ -64,14 +65,17 @@ AB.IsoRoster = (() => {
     if (!slots) load();
     if (!Array.isArray(slots)) slots = [];
     const vs = owned(), cr = crew();
-    slots = slots.filter((s) => vs.includes(s.vehicle));
-    for (const v of vs) if (!slots.some((s) => s.vehicle === v)) slots.push({ vehicle: v, hero: undefined });
+    slots = slots.filter((s, i) => vs.includes(s.vehicle) && slots.findIndex((q) => q.vehicle === s.vehicle) === i);
+    // №159: в активном отряде — не больше MAX ячеек (герой + техника); остальные герои и техника — в наличии
+    if (slots.length > MAX) slots = [...slots.filter(locked), ...slots.filter((s) => !locked(s))].slice(0, MAX);
+    for (const v of vs) if (slots.length < MAX && !slots.some((s) => s.vehicle === v)) slots.push({ vehicle: v, hero: undefined });
     const used = new Set();
     for (const s of slots) { if (s.hero && (!cr.includes(s.hero) || used.has(s.hero))) s.hero = undefined; if (s.hero) used.add(s.hero); }
     for (const s of slots) if (s.hero === undefined) {
       const pref = DEFAULT[s.vehicle], cls = (V(s.vehicle) || {}).class;
       // №157: новая техника — свободный герой её класса
-      const h = pref && cr.includes(pref) && !used.has(pref) ? pref : (!pref && cls && cr.find((id) => !used.has(id) && AB.HEROES && AB.HEROES[id] && AB.HEROES[id].role === cls && !slots.some((q) => q.hero === id))) || null;
+      const free = (id) => !used.has(id) && !slots.some((q) => q.hero === id);
+      const h = pref && cr.includes(pref) && !used.has(pref) ? pref : (!pref && cls && cr.find((id) => free(id) && AB.HEROES && AB.HEROES[id] && AB.HEROES[id].role === cls)) || (!pref && cr.find(free)) || null;
       s.hero = h; if (h) used.add(h);
     }
     return slots;
@@ -102,21 +106,55 @@ AB.IsoRoster = (() => {
   let el = null;
   const dmgLine = (v) => (AB.Damage ? ` · Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b>` : '');   // №152
   const stat = (v) => `Скорость <b>${v.speed}</b> кл/мин · Удар <b>${v.attack}</b> / ${v.rate} с · Броня <b>${Math.round(v.armor * 100)}%</b>${dmgLine(v)}`;
+  // №160: окно «Отряд» — витрина: в центре во весь рост герой выбранной ячейки и рядом его техника;
+  // переключать ячейки — кнопками в окне или нажатием на ячейку отряда внизу карты (она остаётся видна)
+  let cur = 0;
+  function fullFigure(cv, id) {
+    const r = cv.getBoundingClientRect(), dp = Math.min(2, window.devicePixelRatio || 1), W = Math.round(r.width * dp), H = Math.round(r.height * dp);
+    if (!W || !H) return;
+    cv.width = W; cv.height = H; const c = cv.getContext('2d'); c.clearRect(0, 0, W, H);
+    if (!id) return;
+    const h = AB.HEROES && AB.HEROES[id];
+    if (h && h.look) {                                  // новый герой без рисунка — условная фигура в полный рост
+      const u = H / 130, x = W / 2, col = (AB.HERO_ROLES[h.role] || {}).col || '#ccc';
+      c.fillStyle = 'rgba(0,0,0,.35)'; c.beginPath(); c.ellipse(x, H - 4 * u, 22 * u, 5 * u, 0, 0, 7); c.fill();
+      c.fillStyle = '#2a2a30'; c.fillRect(x - 11 * u, H - 58 * u, 9 * u, 54 * u); c.fillRect(x + 2 * u, H - 58 * u, 9 * u, 54 * u);
+      c.fillStyle = h.look.body; c.beginPath(); c.roundRect(x - 17 * u, H - 104 * u, 34 * u, 50 * u, 6 * u); c.fill();
+      c.fillRect(x - 25 * u, H - 100 * u, 8 * u, 40 * u); c.fillRect(x + 17 * u, H - 100 * u, 8 * u, 40 * u);
+      c.fillStyle = col; c.fillRect(x - 17 * u, H - 64 * u, 34 * u, 4 * u);
+      c.fillStyle = '#d8b090'; c.beginPath(); c.arc(x, H - 115 * u, 11 * u, 0, 7); c.fill();
+      c.fillStyle = h.look.hair; c.beginPath(); c.arc(x, H - 118 * u, 11.5 * u, Math.PI * 1.05, Math.PI * 1.95); c.fill();
+      return;
+    }
+    const m = AB.IsoParty && AB.IsoParty.find(id), fig = { ...(m || { id, x: 0, y: 0 }), facing: 1, hidden: false, down: false, path: null };
+    const k = (H / dp - 10) / 128;
+    c.setTransform(dp, 0, 0, dp, 0, 0);
+    try { AB.Render.drawFigure(c, fig, W / dp / 2, 4 + 126 * k, k); } catch (e) { /* фигуры нет */ }
+  }
   function render() {
-    const cr = crew();
-    el.querySelector('.ro-list').innerHTML = sync().map((s, i) => {
-      const v = V(s.vehicle), h = s.hero ? AB.ID.get(s.hero) : null, lk = locked(s);
-      return `<div class="ro-slot ${lk ? 'locked' : ''}" data-i="${i}">
-        <div class="ro-hero"><canvas data-pt="${s.hero || ''}"></canvas>
-          <div><small>Герой${heroInfo(s.hero) ? ` · ${roleName(heroInfo(s.hero).role)}${heroInfo(s.hero).role === v.class ? ' ✓' : ''}` : ''}</small><b>${h ? h.name : '— пусто —'}</b>
-          <div class="ro-sw"><button data-hero="-1" ${lk ? 'disabled' : ''}>◀</button><button data-hero="1" ${lk ? 'disabled' : ''}>▶</button></div></div></div>
-        <div class="ro-veh"><img src="${vimg(s.vehicle)}" alt="">
-          <div><small>Техника · ${roleName(v.class)}</small><b>${v.name}</b><p>${stat(v)}</p>
-          <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div></div></div>
-        <em>${lk ? 'Снаружи — менять можно, когда вернётся в базу' : s.hero ? 'В базе' : 'Техника стоит в базе без экипажа'}</em>
-      </div>`;
-    }).join('') + `<p class="ro-note">В экипаже: ${cr.map((id) => AB.ID.get(id).name).join(', ')}. Менять героя или технику можно только у того, кто в базе. Способность героя работает только в технике его класса (✓); способность техники — всегда.</p>`;
-    for (const c of el.querySelectorAll('canvas[data-pt]')) if (c.dataset.pt) portrait(c, c.dataset.pt, 1);
+    const sl = sync(); if (cur >= sl.length) cur = 0;
+    const s = sl[cur], v = V(s.vehicle), h = s.hero ? AB.ID.get(s.hero) : null, lk = locked(s), hi = heroInfo(s.hero);
+    const tabs = sl.map((q, i) => `<button class="ro-tab ${i === cur ? 'on' : ''}" data-cur="${i}">${q.hero ? AB.ID.get(q.hero).name : '— пусто —'}</button>`).join('');
+    el.querySelector('.ro-list').innerHTML = `<div class="ro-tabs">${tabs}</div>
+      <div class="ro-show ${lk ? 'locked' : ''}" data-i="${cur}">
+        <div class="ro-fig"><canvas data-full="${s.hero || ''}"></canvas>
+          <small>Герой${hi ? ` · ${roleName(hi.role)}${hi.role === v.class ? ' ✓' : ''}` : ''}</small>
+          <div class="ro-sw"><button data-hero="-1" ${lk ? 'disabled' : ''}>◀</button><b>${h ? h.name : '— пусто —'}</b><button data-hero="1" ${lk ? 'disabled' : ''}>▶</button></div></div>
+        <div class="ro-vfig"><img src="${vimg(s.vehicle)}" alt="">
+          <small>Техника · ${roleName(v.class)}</small>
+          <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><b>${v.short || v.name}</b><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div></div>
+        <div class="ro-info"><p>${stat(v)}</p>${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}
+          <em>${lk ? 'Снаружи — менять можно, когда вернётся в базу' : s.hero ? 'В базе' : 'Техника стоит в базе без экипажа'}</em></div>
+      </div>` + reserveHtml() + `<p class="ro-note">Активный отряд: ${sl.filter((q) => q.hero).length}/${MAX}. Ячейку выбирают вкладками сверху или нажатием на ячейку отряда внизу. ◀ ▶ — поставить героя или технику из наличия (или поменять местами с другой ячейкой). Способность героя работает только в технике его класса (✓); техники — всегда.</p>`;
+    for (const c of el.querySelectorAll('canvas[data-full]')) fullFigure(c, c.dataset.full);
+  }
+  // показать в окне ячейку этого героя (нажатие на ячейку отряда внизу карты)
+  function focus(hero) { const i = sync().findIndex((q) => q.hero === hero); if (i >= 0) { cur = i; if (el && !el.hidden) render(); } }
+  // №159: кто и что в наличии (не в активном отряде)
+  function reserveHtml() {
+    const sl = sync(), hs = crew().filter((id) => !sl.some((q) => q.hero === id)), vs = owned().filter((v) => !sl.some((q) => q.vehicle === v));
+    if (!hs.length && !vs.length) return '';
+    return `<div class="ro-reserve"><small>В наличии (не в отряде)</small>${hs.length ? `<p>Герои: <b>${hs.map((id) => AB.ID.get(id).name).join(', ')}</b></p>` : ''}${vs.length ? `<p>Техника: <b>${vs.map((v) => V(v).short || V(v).name).join(', ')}</b></p>` : ''}</div>`;
   }
   function open() {
     if (!el) {
@@ -124,6 +162,7 @@ AB.IsoRoster = (() => {
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
       el.addEventListener('click', (e) => {
         if (e.target === el || e.target.closest('[data-ro-close]')) { el.hidden = true; return; }
+        const tb = e.target.closest('[data-cur]'); if (tb) { cur = +tb.dataset.cur; render(); return; }
         const b = e.target.closest('[data-hero],[data-veh]'), sl = e.target.closest('[data-i]'); if (!b || !sl) return;
         const i = +sl.dataset.i, s = sync()[i], d = +(b.dataset.hero || b.dataset.veh);
         let r;
@@ -133,11 +172,13 @@ AB.IsoRoster = (() => {
         render();
       });
     }
+    // №160: на карте окно не закрывает ячейки отряда внизу — по ним переключают, кто стоит в центре
+    el.classList.toggle('over-bar', !!((AB.IsoSurface && AB.IsoSurface.isOpen()) || (AB.IsoOverworld && AB.IsoOverworld.isOpen())));
     el.hidden = false; render();          // сначала показать: портреты рисуются по размеру холста
   }
   // ---------- №144: окно «Юниты» — вкладки «Герои» и «Транспорт» (просмотр) ----------
   let uel = null, tab = 'heroes';
-  const where = (id) => { const s = sync().find((q) => q.hero === id); return !s ? 'без техники' : outFn(id) ? `снаружи · ${V(s.vehicle).name}` : `в базе · ${V(s.vehicle).name}`; };
+  const where = (id) => { const s = sync().find((q) => q.hero === id); return !s ? 'в наличии · не в активном отряде' : outFn(id) ? `снаружи · ${V(s.vehicle).name}` : `в базе · ${V(s.vehicle).name}`; };
   // №145: вкладка — сетка квадратных иконок; нажатие на иконку — карточка юнита (назад — к сетке)
   let pick = null;                                    // открытая карточка: ID героя или техники
   function heroCard(id) {
@@ -160,7 +201,7 @@ AB.IsoRoster = (() => {
     return `<div class="un-detail"><img src="${vimg(vid)}" alt="" class="big"><div><b>${v.name}</b><small>${v.desc || ''}</small>${v.class ? `<p>Класс: <b>${roleName(v.class)}</b></p>` : ''}${abilityLine(v.ability)}
       <p>Скорость <b>${v.speed}</b> кл/мин</p><p>Удар <b>${v.attack}</b> раз в ${v.rate} с · дальность ${v.reach}</p><p>Броня <b>${Math.round(v.armor * 100)}%</b></p>
       ${AB.Damage ? `<p>Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b></p>` : ''}
-      <p class="un-where">${!owned().includes(vid) ? 'Ещё не получена: награда за задание или трофей большого моба' : h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
+      <p class="un-where">${!owned().includes(vid) ? 'Ещё не получена: награда за задание или трофей большого моба' : !s ? 'В наличии · не в активном отряде' : h ? `Ведёт: ${h}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p></div></div>`;
   }
   function unitsRender() {
     for (const b of uel.querySelectorAll('[data-utab]')) b.classList.toggle('on', b.dataset.utab === tab);
@@ -205,5 +246,5 @@ AB.IsoRoster = (() => {
     if (t) tab = t;
     pick = null; uel.hidden = false; unitsRender();
   }
-  return { unlock, unlocked: () => ({ heroes: [...U().heroes], vehicles: [...U().vehicles] }), vimg, portrait, crew, units, list, sync, set, vehicleOf, open, close: () => { if (el) el.hidden = true; }, isOpen: () => !!el && !el.hidden, setOutFn: (f) => { outFn = f || (() => false); }, V, owned };
+  return { MAX, focus, unlock, unlocked: () => ({ heroes: [...U().heroes], vehicles: [...U().vehicles] }), vimg, portrait, crew, units, list, sync, set, vehicleOf, open, close: () => { if (el) el.hidden = true; }, isOpen: () => !!el && !el.hidden, setOutFn: (f) => { outFn = f || (() => false); }, V, owned };
 })();
