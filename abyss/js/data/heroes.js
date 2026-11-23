@@ -175,3 +175,26 @@ AB.SURFACE_A1.alliance = { units: 4, cooldown: 240, life: 90 };
 // №157: энергия отряда — запас капсулы на карте. Тратится на подбор добычи с земли и на восстановление
 // разбитой техники; капсула сама подзаряжается от реактора, когда стоит.
 AB.SURFACE_A1.energy = { max: 100, start: 60, regen: 0.5, pick: 2, restore: 30, lootLife: 180 };
+
+// №164: территории — шахты и укрепления. Взять осадой (гарнизон стороны), тогда каждые income.every с
+// капсуле идёт доход; сторона время от времени шлёт отряд отбить точку: если он простоит у точки
+// raid.hold с без отряда игрока рядом — точка потеряна и снова под гарнизоном. Цифры — черновик.
+AB.SURFACE_A1.points = {
+  income: { every: 60 },
+  raid: { first: [300, 480], next: [420, 660], n: 3, hold: 15 },
+  capital: { east: 'kadze', desert: 'predel', organic: 'kupel' },
+  list: [
+    { key: 'pt_mine_e', kind: 'mine', name: 'Медная шахта', side: 'east', at: [25, 11], garrison: [['samurai', 2], ['rockhound', 1]], income: ['ITEM-001', 3],
+      text: 'Штольня в скале: кланы добывают здесь медь для кузен Хаганэ.' },
+    { key: 'pt_fort_e', kind: 'fort', name: 'Сторожевая башня', side: 'east', at: [34, 3], garrison: [['samurai', 3]], income: ['ITEM-003', 2],
+      text: 'Каменная башня над перевалом. С неё видно всё ущелье — и склад проводов под ней.' },
+    { key: 'pt_mine_d', kind: 'mine', name: 'Солевая выработка', side: 'desert', at: [36, 27], garrison: [['cyborg', 2], ['shellback', 1]], income: ['ITEM-002', 2],
+      text: 'Автоматические буры Наследников, вгрызающиеся в солончак. Попутно — электроника.' },
+    { key: 'pt_fort_d', kind: 'fort', name: 'Ретранслятор', side: 'desert', at: [25, 24], garrison: [['cyborg', 3]], income: ['ITEM-006', 1],
+      text: 'Мачта связи «Перенесённых». Под ней — аварийный запас топлива.' },
+    { key: 'pt_mine_o', kind: 'mine', name: 'Грибная делянка', side: 'organic', at: [9, 16], garrison: [['warden', 2], ['thrall', 1]], income: ['ITEM-007', 3],
+      text: 'Грядки светящихся грибов, которые Единый растит для своих.' },
+    { key: 'pt_fort_o', kind: 'fort', name: 'Сторожевой корень', side: 'organic', at: [4, 21], garrison: [['warden', 3]], income: ['ITEM-005', 1],
+      text: 'Живая башня из корней. В её дуплах — целебная смола.' },
+  ],
+};

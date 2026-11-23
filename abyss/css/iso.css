@@ -939,7 +939,7 @@ body.map-fan-on .map-units { visibility: hidden; }
 .ro-tab { font: 600 12px var(--display); padding: 4px 10px; border-radius: 12px; cursor: pointer; color: #cfe6ee; background: #10181c; border: 1px solid rgba(94, 230, 255, .3); }
 .ro-tab.on { color: #ffe2a8; border-color: #ffd27a; }
 .ro-show { --fig: clamp(150px, calc(100vh - 230px), 380px); display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 10px; align-items: end; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; background: radial-gradient(ellipse at 40% 85%, #1a2c33, #0a1013 70%); }
-#iso-roster.over-bar .ro-show { --fig: clamp(120px, calc(100vh - 136px - 132px), 380px); }
+#iso-roster.over-bar .ro-show { --fig: clamp(96px, calc(100vh - 136px - 182px), 380px); }
 .ro-show.locked { opacity: .7; }
 .ro-fig, .ro-vfig { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
 .ro-fig canvas { width: 100%; height: var(--fig); }
@@ -954,3 +954,62 @@ body.map-fan-on .map-units { visibility: hidden; }
 .ro-info em { display: block; font-style: normal; color: #9fb4bc; margin-top: 4px; }
 .ro-show.locked .ro-info em { color: #ffb070; }
 @media (max-width: 560px) { .ro-show { grid-template-columns: 1fr 1fr; } .ro-info { grid-column: 1 / -1; } }
+/* №161: детали техники — слоты под техникой и выбор детали */
+.ro-parts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 4px; width: 100%; }
+.ro-part { display: flex; flex-direction: column; align-items: center; padding: 2px 2px 3px; min-width: 0; cursor: pointer; border-radius: 6px; color: #9fb4bc; background: #0e1519; border: 1px dashed rgba(94, 230, 255, .3); font: 9px var(--mono); }
+.ro-part i { font-style: normal; font-size: 14px; line-height: 1; }
+.ro-part span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ro-part.lv1 { border: 1px solid #9fb4bc; color: #e6e0d6; } .ro-part.lv2 { border: 1px solid #5ee6ff; color: #bff4ff; } .ro-part.lv3 { border: 1px solid #ffb040; color: #ffe2a8; }
+.ro-part.on { box-shadow: 0 0 8px rgba(255, 210, 120, .6); }
+.ro-part:disabled { opacity: .4; cursor: default; }
+.ro-mods { color: #9fe7ff; }
+.ro-pbtn { font: 11px var(--mono); padding: 2px 8px; border-radius: 5px; cursor: pointer; color: #ffe2a8; background: #141c20; border: 1px solid rgba(255, 210, 120, .5); }
+.ro-pl.lv2 b { color: #9fe7ff; } .ro-pl.lv3 b { color: #ffb040; }
+.ro-show .ro-info { align-self: stretch; max-height: calc(var(--fig) + 84px); overflow: auto; padding-right: 4px; }
+/* №162: отчёт о бое; №163: построение перед осадой */
+#sf-report, #sf-form { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; padding: 12px; background: rgba(0, 0, 0, .55); }
+#sf-report[hidden], #sf-form[hidden] { display: none; }
+.rep-card, .fm-card { width: min(560px, 100%); max-height: calc(100vh - 24px); overflow: auto; padding: 10px 14px; background: #0b1013; border: 1px solid rgba(94, 230, 255, .35); border-radius: 10px; color: #cfe6ee; font: 12px var(--mono); }
+.rep-head, .fm-head { display: flex; align-items: center; gap: 10px; }
+.rep-head b, .fm-head b { flex: 1; font: 700 15px var(--display); letter-spacing: 1px; color: #bfefff; }
+.rep-head button, .fm-head button { font: 14px var(--mono); padding: 2px 9px; border-radius: 5px; cursor: pointer; background: #10161a; color: var(--fg); border: 1px solid var(--line); }
+.rep-res { font: 700 13px var(--display); padding: 2px 8px; border-radius: 10px; }
+.rep-res.ok { color: #8cff9a; border: 1px solid #8cff9a; } .rep-res.bad { color: #ffb070; border: 1px solid #ffb070; }
+.rep-tab { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.rep-tab th, .rep-tab td { padding: 3px 6px; text-align: right; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.rep-tab th:first-child, .rep-tab td:first-child { text-align: left; }
+.rep-tab th { color: #9fb4bc; font-weight: 400; font-size: 11px; }
+.rep-tab tr.down td { color: #ff9a8a; }
+.rep-card p { margin: 4px 0; } .rep-card p b { color: #ffe2a8; }
+.rep-ok, .fm-go { margin-top: 6px; font: 600 13px var(--display); padding: 6px 16px; border-radius: 6px; cursor: pointer; color: #ffe2a8; background: #161e22; border: 1px solid rgba(255, 210, 120, .6); }
+.fm-note { margin: 6px 0; color: #9fb4bc; font-size: 11px; }
+.fm-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+.fm-n { flex: 1; min-width: 0; } .fm-n b { display: block; color: #fff; font: 600 13px var(--display); } .fm-n small { color: #9fb4bc; }
+.fm-pos { font: 12px var(--mono); padding: 4px 10px; border-radius: 6px; cursor: pointer; background: #10181c; border: 1px solid rgba(94, 230, 255, .4); color: #9fe7ff; min-width: 98px; }
+.fm-pos.front { color: #ffc8a8; border-color: rgba(255, 140, 100, .7); }
+.fm-sh { font-size: 15px; padding: 2px 8px; border-radius: 6px; cursor: pointer; background: #10181c; border: 1px solid rgba(140, 255, 160, .3); opacity: .45; }
+.fm-sh.on { opacity: 1; box-shadow: 0 0 6px rgba(140, 255, 160, .6); }
+.fm-foot { text-align: right; }
+/* №165: дерево исследований — граф */
+.bx-tree.tg-tree { display: block; }
+.tg-wrap { overflow: auto; max-height: min(46vh, 420px); border: 1px solid var(--line); border-radius: 8px; background: radial-gradient(circle at 30% 20%, #10202a, #080c0f); }
+.tg { position: relative; }
+.tg svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+.tg svg path { fill: none; stroke: rgba(160, 190, 200, .35); stroke-width: 2; }
+.tg svg path.ok { stroke: rgba(120, 230, 150, .75); }
+.tg-h { position: absolute; top: 6px; text-align: center; font: 600 11px var(--display); letter-spacing: 1px; text-transform: uppercase; color: #9fd8ff; }
+.tg-n { position: absolute; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 3px 6px; border-radius: 8px; cursor: pointer; background: #10151a; border: 1px solid var(--line); color: #e8f0f6; overflow: hidden; }
+.tg-n b { font: 600 11px var(--display); line-height: 1.15; text-align: center; }
+.tg-n i { font-style: normal; font-size: 10px; color: #9fb4bc; }
+.tg-n.open { border-color: rgba(94, 230, 255, .7); box-shadow: 0 0 6px rgba(94, 230, 255, .25); }
+.tg-n.done { border-color: rgba(120, 230, 150, .6); background: #0f1c16; } .tg-n.done i { color: #8cff9a; }
+.tg-n.cur { border-color: rgba(255, 210, 120, .8); } .tg-n.cur i { color: #ffd27a; }
+.tg-n.locked { opacity: .5; }
+.tg-n.sel { outline: 2px solid #ffd27a; }
+.tg-d { margin-top: 8px; }
+.tg-tree { min-width: 0; max-width: 100%; }
+.tg-wrap { max-width: 100%; }
+#bx-card:has(.tg-tree) { overflow-x: hidden; }
+/* №166: красная точка — что-то новое за этой кнопкой */
+.has-dot { position: relative; }
+.has-dot::after { content: ''; position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; background: #ff4a3a; box-shadow: 0 0 0 2px #0b1013, 0 0 6px rgba(255, 74, 58, .8); pointer-events: none; }

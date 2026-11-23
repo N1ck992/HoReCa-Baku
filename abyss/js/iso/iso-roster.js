@@ -22,7 +22,7 @@ AB.IsoRoster = (() => {
     if (hero && !u.heroes.includes(hero)) { u.heroes.push(hero); got = true; ensureChar(hero); }
     if (vehicle && !u.vehicles.includes(vehicle)) { u.vehicles.push(vehicle); got = true; }
     try { localStorage.setItem(UKEY, JSON.stringify(u)); } catch (e) { /* без хранилища */ }
-    if (got) AB.Bus.emit('roster:changed', {});
+    if (got) { AB.Bus.emit('roster:changed', {}); AB.Bus.emit('roster:unlock', { hero, vehicle }); }
     return got;
   }
   // у нового героя — своё состояние (здоровье), как у экипажа; в мире корабля он не появляется
@@ -105,7 +105,7 @@ AB.IsoRoster = (() => {
   // ---------- окно «Отряд» ----------
   let el = null;
   const dmgLine = (v) => (AB.Damage ? ` · Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b>` : '');   // №152
-  const stat = (v) => `Скорость <b>${v.speed}</b> кл/мин · Удар <b>${v.attack}</b> / ${v.rate} с · Броня <b>${Math.round(v.armor * 100)}%</b>${dmgLine(v)}`;
+  const stat = (v) => `Скорость <b>${Math.round(v.speed)}</b> кл/мин · Удар <b>${v.attack}</b> / ${v.rate} с · Броня <b>${Math.round(v.armor * 100)}%</b>${dmgLine(v)}`;
   // №160: окно «Отряд» — витрина: в центре во весь рост герой выбранной ячейки и рядом его техника;
   // переключать ячейки — кнопками в окне или нажатием на ячейку отряда внизу карты (она остаётся видна)
   let cur = 0;
@@ -131,6 +131,21 @@ AB.IsoRoster = (() => {
     c.setTransform(dp, 0, 0, dp, 0, 0);
     try { AB.Render.drawFigure(c, fig, W / dp / 2, 4 + 126 * k, k); } catch (e) { /* фигуры нет */ }
   }
+  // №161: детали техники — 4 слота под техникой; нажатие — выбор детали из вещей отряда
+  let partPick = null;
+  function partsRow(vid, lk) {
+    if (!AB.VehMods || !AB.PART_SLOTS) return '';
+    const cur = AB.VehMods.parts(vid);
+    return `<div class="ro-parts">${Object.entries(AB.PART_SLOTS).map(([k, sl]) => { const p = cur[k] && AB.VehMods.part(cur[k]);
+      return `<button class="ro-part ${p ? `lv${p.lvl}` : ''} ${partPick === k ? 'on' : ''}" data-part="${k}" ${lk ? 'disabled' : ''} title="${sl.name}${p ? `: ${p.name}` : ' — пусто'}"><i>${sl.icon}</i><span>${p ? p.name : sl.name}</span></button>`; }).join('')}</div>`;
+  }
+  function modsLine(vid) { const t = AB.VehMods ? AB.VehMods.bonusText(AB.VehMods.bonus(vid)) : ''; return t ? `<p class="ro-mods">Детали: ${t}</p>` : ''; }
+  function pickerHtml(vid, slot) {
+    const cur = AB.VehMods.parts(vid)[slot], cp = cur && AB.VehMods.part(cur), list = AB.VehMods.available(slot);
+    return `<p><b>${AB.PART_SLOTS[slot].name}</b>${cp ? ` — стоит: «${cp.name}» (${cp.desc}) <button class="ro-pbtn" data-unpart="${slot}">Снять</button>` : ' — пусто'}</p>
+      ${list.length ? list.map((p) => `<p class="ro-pl lv${p.lvl}"><button class="ro-pbtn" data-setpart="${p.id}">Поставить</button> <b>${p.name}</b> ×${p.n} — ${p.desc}</p>`).join('') : '<p class="ro-mods">В вещах нет деталей для этого слота. Детали выпадают с больших мобов, в лагерях и шахтах, изредка — с NPC.</p>'}
+      <p><button class="ro-pbtn" data-part="${slot}">◀ Назад</button></p>`;
+  }
   function render() {
     const sl = sync(); if (cur >= sl.length) cur = 0;
     const s = sl[cur], v = V(s.vehicle), h = s.hero ? AB.ID.get(s.hero) : null, lk = locked(s), hi = heroInfo(s.hero);
@@ -142,14 +157,15 @@ AB.IsoRoster = (() => {
           <div class="ro-sw"><button data-hero="-1" ${lk ? 'disabled' : ''}>◀</button><b>${h ? h.name : '— пусто —'}</b><button data-hero="1" ${lk ? 'disabled' : ''}>▶</button></div></div>
         <div class="ro-vfig"><img src="${vimg(s.vehicle)}" alt="">
           <small>Техника · ${roleName(v.class)}</small>
-          <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><b>${v.short || v.name}</b><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div></div>
-        <div class="ro-info"><p>${stat(v)}</p>${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}
+          <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><b>${v.short || v.name}</b><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div>
+          ${partsRow(s.vehicle, lk)}</div>
+        <div class="ro-info">${partPick ? pickerHtml(s.vehicle, partPick) : `<p>${stat(AB.VehMods ? AB.VehMods.eff(s.vehicle) : v)}</p>${modsLine(s.vehicle)}${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}`}
           <em>${lk ? 'Снаружи — менять можно, когда вернётся в базу' : s.hero ? 'В базе' : 'Техника стоит в базе без экипажа'}</em></div>
       </div>` + reserveHtml() + `<p class="ro-note">Активный отряд: ${sl.filter((q) => q.hero).length}/${MAX}. Ячейку выбирают вкладками сверху или нажатием на ячейку отряда внизу. ◀ ▶ — поставить героя или технику из наличия (или поменять местами с другой ячейкой). Способность героя работает только в технике его класса (✓); техники — всегда.</p>`;
     for (const c of el.querySelectorAll('canvas[data-full]')) fullFigure(c, c.dataset.full);
   }
   // показать в окне ячейку этого героя (нажатие на ячейку отряда внизу карты)
-  function focus(hero) { const i = sync().findIndex((q) => q.hero === hero); if (i >= 0) { cur = i; if (el && !el.hidden) render(); } }
+  function focus(hero) { const i = sync().findIndex((q) => q.hero === hero); if (i >= 0) { cur = i; partPick = null; if (el && !el.hidden) render(); } }
   // №159: кто и что в наличии (не в активном отряде)
   function reserveHtml() {
     const sl = sync(), hs = crew().filter((id) => !sl.some((q) => q.hero === id)), vs = owned().filter((v) => !sl.some((q) => q.vehicle === v));
@@ -162,7 +178,12 @@ AB.IsoRoster = (() => {
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
       el.addEventListener('click', (e) => {
         if (e.target === el || e.target.closest('[data-ro-close]')) { el.hidden = true; return; }
-        const tb = e.target.closest('[data-cur]'); if (tb) { cur = +tb.dataset.cur; render(); return; }
+        const tb = e.target.closest('[data-cur]'); if (tb) { cur = +tb.dataset.cur; partPick = null; render(); return; }
+        // №161: детали техники
+        const pb = e.target.closest('[data-part]'); if (pb) { partPick = partPick === pb.dataset.part ? null : pb.dataset.part; render(); return; }
+        const sp = e.target.closest('[data-setpart],[data-unpart]');
+        if (sp) { const vid = sync()[cur].vehicle, r = sp.dataset.setpart ? AB.VehMods.install(vid, sp.dataset.setpart) : AB.VehMods.remove(vid, sp.dataset.unpart);
+          AB.Bus.emit('iso:toast', { text: r.ok ? (sp.dataset.setpart ? 'Деталь поставлена' : 'Деталь снята — в вещах') : r.why, kind: r.ok ? 'good' : 'warn' }); if (r.ok) partPick = null; render(); return; }
         const b = e.target.closest('[data-hero],[data-veh]'), sl = e.target.closest('[data-i]'); if (!b || !sl) return;
         const i = +sl.dataset.i, s = sync()[i], d = +(b.dataset.hero || b.dataset.veh);
         let r;

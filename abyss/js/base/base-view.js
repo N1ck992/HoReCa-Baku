@@ -145,17 +145,19 @@ AB.BaseView = (() => {
     const pw = powerState(d);
     if (pw && pw.c === 'bad') return pw;
     const ws = sim().workers(d.uid);
-    if (!ws.length) return { t: 'Нет работника — назначьте героя', c: 'bad' };
-    if (!ws.some((id) => sim().state().present.includes(id))) return { t: 'Работник не на базе', c: 'bad' };
-    if (d.block === 'full') return { t: 'Выход полон — отнесите на склад', c: 'bad' };
-    if (d.block === 'nopower') return { t: 'Нет энергии', c: 'bad' };
-    if (d.block === 'nodeposit') return { t: 'Капсула не у россыпи реголита — подведите её на карте дна', c: 'bad' };
-    if (d.block === 'noinput') return { t: `Нет сырья: ${nm(d.blockItem || (sim().insOf(r)[0] || [])[0]).toLowerCase()} — ни на стеллажах, ни в шкафчиках`, c: 'bad' };
+    if (!ws.length) return { t: 'Нет работника — назначьте героя', c: 'bad', k: 'noworker' };
+    if (!ws.some((id) => sim().state().present.includes(id))) return { t: 'Работник не на базе', c: 'bad', k: 'away' };
+    if (d.block === 'full') return { t: 'Выход полон — отнесите на склад', c: 'bad', k: 'full' };
+    if (d.block === 'nopower') return { t: 'Нет энергии', c: 'bad', k: 'dry' };
+    if (d.block === 'nodeposit') return { t: 'Капсула не у россыпи реголита — подведите её на карте дна', c: 'bad', k: 'deposit' };
+    if (d.block === 'noinput') return { t: `Нет сырья: ${nm(d.blockItem || (sim().insOf(r)[0] || [])[0]).toLowerCase()} — ни на стеллажах, ни в шкафчиках`, c: 'bad', k: 'noinput' };
     if (d.crafter) return { t: 'Работает', c: 'ok' };
     return { t: 'Ждёт работника', c: 'wait' };
   }
 
   // ---------- рисование поверх сцены ----------
+  // №166: причина простоя: нет сети/энергии, нет работника, работник ушёл, нет сырья, выход полон, нет россыпи
+  const IDLE_ICON = { none: '⚡✕', dry: '⚡✕', short: '⚡', noworker: '👤', away: '🚶', noinput: '📦', full: '⇪', deposit: '⛏' };
   const COL = { ok: '120,255,170', bad: '255,120,90', wait: '255,210,120', info: '94,230,255' };
   function poly(ctx, toScreen, pts) { ctx.beginPath(); pts.forEach(([x, y], i) => { const p = toScreen(x, y); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }); ctx.closePath(); }
   const rectPts = (r) => [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]];
@@ -232,7 +234,12 @@ AB.BaseView = (() => {
         const ins = sim().insOf(r).map(([i]) => `${short(i)} ${(d.in || {})[i] || 0}`).join(' ');
         label(ctx, c.x, top, `${ins ? `${ins} → ` : ''}${short(r.out)} ${(d.out || {})[r.out] || 0}/${r.outCap}${lv}`, st.c === 'ok' ? COL.ok : st.c === 'bad' ? COL.bad : COL.wait);
         if (d.crafter) bar(ctx, c.x, top + 6, 50, (d.prog || 0) / r.time, COL.ok);
-        if (st.c === 'bad') { const a = 0.6 + Math.sin(time * 5) * 0.35; ctx.fillStyle = `rgba(255,120,90,${a})`; ctx.font = 'bold 16px "Oswald", sans-serif'; ctx.fillText(pw && pw.c === 'bad' ? '⚡✕' : '!', c.x, top - 16); }
+        if (st.c === 'bad') {                                          // №166: значок причины простоя — сразу видно, почему стоит
+          const a = 0.6 + Math.sin(time * 5) * 0.35, ic = IDLE_ICON[st.k] || '!';
+          ctx.fillStyle = 'rgba(20,10,8,.8)'; ctx.beginPath(); ctx.arc(c.x, top - 21, 12, 0, 7); ctx.fill();
+          ctx.strokeStyle = `rgba(255,120,90,${a})`; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = `rgba(255,140,110,${a + 0.1})`; ctx.font = 'bold 13px "Oswald", sans-serif'; ctx.fillText(ic, c.x, top - 16);
+        }
         else if (d.crafter && d.powered) { ctx.fillStyle = 'rgba(255,210,120,.85)'; ctx.font = '12px "Oswald", sans-serif'; ctx.fillText(`⚡${p.draw}`, c.x + 34, top - 2); }
       }
     }
@@ -395,21 +402,38 @@ AB.BaseView = (() => {
   function scienceCard() {
     const T = sim().state().tech, cur = T.cur;
     const term = sim().state().devs.find((d) => d.built && sim().bp(d.bp).research);
-    const branches = AB.BASE_TECH_BRANCHES.map((br) => {
-      const items = AB.BASE_TECH.filter((t) => t.branch === br.id).map((t) => {
-        const st = sim().techState(t.id), c = sim().techCost(t.id);
-        const cost = c.cost.map(([i, n]) => [i, n, sim().stockOf(i)]);
-        const btn = st.s === 'open' && !cur ? chips([[`res|${t.id}`, 'Изучать']]) : '';
-        const tag = st.s === 'done' ? '<span class="bx-tag ok">изучено</span>' : st.s === 'cur' ? `<span class="bx-tag wait">идёт · ${Math.round(100 - (cur.left / cur.total) * 100)}%</span>` : st.s === 'locked' ? `<span class="bx-tag">${esc(st.why)}</span>` : '';
-        return `<div class="bx-tech ${st.s}"><div class="bx-line"><b>${esc(t.name)}</b>${tag}</div><div class="muted">${esc(t.desc)}</div>
-          ${st.s === 'open' ? `<div class="bx-line"><span class="muted">${matLine(cost)} · ${c.work} с работы</span>${btn}</div>` : ''}</div>`;
-      }).join('');
-      return `<div class="bx-branch"><div class="bx-branch-h">${esc(br.name)}</div>${items}</div>`;
-    }).join('');
+    // №165: дерево — граф: колонка на ветку, ряд — сколько исследований до узла; линии — что нужно раньше
+    const tOf = (id) => AB.BASE_TECH.find((t) => t.id === id), depth = {};
+    const dep = (t) => (depth[t.id] != null ? depth[t.id] : (depth[t.id] = (t.req || []).length ? 1 + Math.max(...t.req.map((r) => dep(tOf(r)))) : 0));
+    const RH = 74, NW = 112, GAP = 6, NH = 50, pos = {}, bx = [];
+    let X = 8;
+    AB.BASE_TECH_BRANCHES.forEach((br) => {
+      const items = AB.BASE_TECH.filter((t) => t.branch === br.id), rows = {};
+      for (const t of items) (rows[dep(t)] = rows[dep(t)] || []).push(t);
+      const n = Math.max(1, ...Object.values(rows).map((l) => l.length)), bw = n * NW + (n - 1) * GAP;
+      for (const [r, list] of Object.entries(rows)) { const off = (bw - (list.length * NW + (list.length - 1) * GAP)) / 2; list.forEach((t, i) => { pos[t.id] = { x: X + off + i * (NW + GAP), y: 30 + +r * RH, w: NW }; }); }
+      bx.push({ x: X, w: bw }); X += bw + 22;
+    });
+    const maxR = Math.max(...AB.BASE_TECH.map(dep)), W = X, H = 30 + (maxR + 1) * RH;
+    const lines = AB.BASE_TECH.flatMap((t) => (t.req || []).map((r) => { const a2 = pos[r], b2 = pos[t.id], done = sim().techState(r).s === 'done';
+      return `<path d="M${a2.x + a2.w / 2},${a2.y + NH} C${a2.x + a2.w / 2},${a2.y + NH + 18} ${b2.x + b2.w / 2},${b2.y - 18} ${b2.x + b2.w / 2},${b2.y}" class="${done ? 'ok' : ''}"/>`; })).join('');
+    const heads = AB.BASE_TECH_BRANCHES.map((br, bi) => `<div class="tg-h" style="left:${bx[bi].x}px;width:${bx[bi].w}px">${esc(br.name)}</div>`).join('');
+    const nodes = AB.BASE_TECH.map((t) => { const st = sim().techState(t.id), p = pos[t.id];
+      const tag = st.s === 'done' ? '✓' : st.s === 'cur' ? `${Math.round(100 - (cur.left / cur.total) * 100)}%` : st.s === 'locked' ? '🔒' : '';
+      return `<button class="tg-n ${st.s} ${card.sel === t.id ? 'sel' : ''}" data-act="tsel|${t.id}" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${NH}px"><b>${esc(t.name)}</b><i>${tag}</i></button>`; }).join('');
+    const sel = card.sel && tOf(card.sel);
+    let detail = '<div class="muted tg-d">Нажмите на исследование — что оно даёт и сколько стоит.</div>';
+    if (sel) {
+      const st = sim().techState(sel.id), c = sim().techCost(sel.id), cost = c.cost.map(([i, n]) => [i, n, sim().stockOf(i)]);
+      const tag = st.s === 'done' ? '<span class="bx-tag ok">изучено</span>' : st.s === 'cur' ? `<span class="bx-tag wait">идёт · ${Math.round(100 - (cur.left / cur.total) * 100)}%</span>` : st.s === 'locked' ? `<span class="bx-tag">${esc(st.why)}</span>` : '';
+      detail = `<div class="bx-tech tg-d ${st.s}"><div class="bx-line"><b>${esc(sel.name)}</b>${tag}</div><div class="muted">${esc(sel.desc)}</div>
+        ${st.s === 'open' ? `<div class="bx-line"><span class="muted">${matLine(cost)} · ${c.work} с работы</span>${!cur ? chips([[`res|${sel.id}`, 'Изучать']]) : ''}</div>` : ''}</div>`;
+    }
+    const branches = `<div class="tg-wrap"><div class="tg" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}">${lines}</svg>${heads}${nodes}</div></div>${detail}`;
     return `<div class="bx-head"><b>Наука</b><button class="bx-x" data-act="close" aria-label="Закрыть">✕</button></div>
       <div class="${term ? 'muted' : 'bad'}">${term ? `Исследования ведёт работник у научного терминала, пока есть энергия. Каждое изученное делает следующие на ${Math.round(AB.BASE_DATA.techEscalation * 100)}% дороже — всё не изучить, выбирайте направление.` : 'Нет научного терминала: постройте его («Стройка» → «Научный терминал») и назначьте героя.'}</div>
       ${cur ? `<div class="bx-st ok">Сейчас: ${esc(sim().techName(cur.id))} — ${Math.round(100 - (cur.left / cur.total) * 100)}%</div>` : ''}
-      <div class="bx-tree">${branches}</div>`;
+      <div class="bx-tree tg-tree">${branches}</div>`;
   }
   const JOB_NAME = { build: 'Стройка', haul: 'Переноска' };
   const jobName = (j) => JOB_NAME[j] || title(sim().dev(j)) || j;
@@ -435,6 +459,7 @@ AB.BaseView = (() => {
     if (a === 'close') { close(); return; }
     if (a === 'build') { close(); AB.BaseBuild.toggle(true); return; }
     if (a === 'science') { openScience(); return; }
+    if (a === 'tsel') card.sel = card.sel === x ? null : x;          // №165: выбрать узел дерева
     if (a === 'res') { const r = sim().research(x); toast(r.ok ? `Исследование начато: ${sim().techName(x)}` : r.why, r.ok ? 'good' : 'info'); if (r.ok && !sim().state().devs.some((d) => d.built && sim().bp(d.bp).research)) setTimeout(() => toast('Нужен научный терминал: «Стройка» → «Научный терминал», и назначьте на него героя', 'info'), 1800); }
     if (a === 'auto' && o) sim().setRack(o.uid, { auto: !o.auto });
     if (a === 'prio' && o) sim().setPrio(o.uid, +x);

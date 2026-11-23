@@ -292,7 +292,15 @@ AB.IsoSurface = (() => {
   // герои выходят из неё в своих экзокостюмах, ходят, возвращаются и стыкуются рядом
   // №142: скорость — у техники (js/data/vehicles.js, клеток в минуту по дороге); бездорожье — дольше по цене клетки
   const devFast = () => (AB.IsoDev && AB.IsoDev.speed ? AB.IsoDev.speed() : 1);      // DEV: «Скорость ×5»
-  const STEP_OF = (u) => 60 / (u.kind === 'base' ? AB.VEHICLES_BASE.speed : (AB.VEHICLES[u.vehicle] || { speed: 30 }).speed) / devFast();
+  const STEP_OF = (u) => 60 / (u.kind === 'base' ? AB.VEHICLES_BASE.speed : (VEFF(u.vehicle) || { speed: 30 }).speed) / devFast();
+  // №161: техника с деталями (js/iso/iso-mods.js) — скорость, урон, темп, броня, прочность, крит
+  // №165: и исследования ветки «Бой» (AB.BaseSim.fx) — урон и броня всей техники отряда
+  const TFX = (key) => (AB.BaseSim && AB.BaseSim.fx ? AB.BaseSim.fx(key) : 0);
+  const VEFF = (vid) => {
+    const v = (AB.VehMods ? AB.VehMods.eff(vid) : AB.VEHICLES[vid]) || null; if (!v) return null;
+    const a = TFX('sqAtk'), ar = TFX('sqArmor');
+    return a || ar ? { ...v, attack: Math.round(v.attack * (1 + a)), armor: Math.min(0.8, v.armor + ar) } : v;
+  };
   const base = { id: 'base', kind: 'base', c: 0, r: 0, path: [], anim: null, face: 1, stride: 0 };
   const squads = [];                                 // { id, kind: 'squad', vehicle, state: 'home'|'out'|'retreat', c, r, path, anim, face, stride }
   let sel = 'base', drive = false, selAll = false, pendSite = null, follow = true, flyU = null;
@@ -454,14 +462,15 @@ AB.IsoSurface = (() => {
   const herName = (id) => AB.ID.get(id).name;
   const fem = (id) => id === 'CHAR-002' || id === 'CHAR-003';
   function hurtSquad(s, dmg, m, opt = {}) {
-    if (s.ally) { const r = Math.max(1, Math.round(dmg * (1 - (s.d.armor || 0)))); s.hp -= r; s.flash = 0.25; floatText(posOf(s), `−${r}`, '#ff8a6a'); if (s.hp <= 0) { s.hp = 0; s.state = 'home'; } return; }   // №157: союзник
-    const c = AB.Chars.get(s.id), v = AB.VEHICLES[s.vehicle] || { armor: 0 }, d = NK(m);
+    if (s.ally) { const r = Math.max(1, Math.round(dmg * (1 - (s.d.armor || 0)))); s.hp -= r; if (repOn()) repRow(s).taken += r; s.flash = 0.25; floatText(posOf(s), `−${r}`, '#ff8a6a'); if (s.hp <= 0) { s.hp = 0; s.state = 'home'; } return; }   // №157: союзник
+    const c = AB.Chars.get(s.id), v = VEFF(s.vehicle) || { armor: 0 }, d = NK(m);
     const mul = AB.Damage ? AB.Damage.mult(d.dtype, v.armorType) : 1;          // №152: тип урона × защита
     let a, k = 1;
     if ((a = hasAb(s, 'plates')) && (d.reach || 1) > 1) k *= a.mult;            // №157: бронелисты — меньше урона издалека
-    let real = Math.max(1, Math.round(dmg * mul * k * (1 - v.armor)));
-    if (s.shield > 0) { const take = Math.min(s.shield, real); s.shield -= take; real -= take; floatText(posOf(s), `🛡−${take}`, '#8cff9a'); if (!real) { s.flash = 0.1; return; } }   // №157: щит гасит урон
+    let real = Math.max(1, Math.round(dmg * mul * k * (1 - v.armor) / (v.hpK || 1)));   // №161: прочность деталей
+    if (s.shield > 0) { const take = Math.min(s.shield, real); s.shield -= take; real -= take; if (repOn()) repRow(s).shield += take; floatText(posOf(s), `🛡−${take}`, '#8cff9a'); if (!real) { s.flash = 0.1; return; } }   // №157: щит гасит урон
     AB.Bus.emit('surface:hit', { npc: false });
+    if (repOn()) repRow(s).taken += real;
     if (c) c.hp = Math.max(0, c.hp - real);
     s.flash = 0.25; floatText(posOf(s), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ff5a3a' : mul <= 0.76 ? '#9fb4bc' : '#ff8a6a');
     if (!opt.dot && m.hp > 0 && (d.reach || 1) <= 1 && (a = hasAb(s, 'hotarmor'))) hurtMob(m, dmg * a.part, s, { reflect: true });        // раскалённая броня
@@ -477,6 +486,7 @@ AB.IsoSurface = (() => {
     for (const m of mobs) if (m.aggro === s) m.aggro = null;
     Object.assign(s, { state: 'home', path: [], anim: null, target: null, zone: null, siege: null, pick: null, shield: 0, poison: null, c: base.c, r: base.r });
     if (sel === s.id) sel = 'base';
+    if (repOn()) { repRow(s); rep.down.push(s.id); }
     broken[s.vehicle] = true;                                   // №157: технику восстанавливают за энергию отряда
     barSig = ''; save();
     say(`${herName(s.id)}: ${(AB.VEHICLES[s.vehicle] || {}).name || 'костюм'} разбит — очнул${fem(s.id) ? 'ась' : 'ся'} в батискафе. Восстановить — ⚡${E().restore}`);
@@ -488,6 +498,7 @@ AB.IsoSurface = (() => {
     let real = Math.max(1, Math.round(dmg * mul * (1 - (pierce ? 0 : d.armor || 0))));
     if (m.shield > 0) { const take = Math.min(m.shield, real); m.shield -= take; real -= take; if (!real) { floatText(posOf(m), '🛡', '#5ee6ff'); m.aggro = m.aggro || s; return; } }   // щит Архива
     AB.Bus.emit('surface:hit', { npc: true });
+    if (repOn()) { const r = repRow(s); r.dealt += Math.min(real, m.hp); if (m.hp - real <= 0) r.kills++; }   // №162
     m.hp -= real; m.flash = 0.25; floatText(posOf(m), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ffb040' : mul <= 0.76 ? '#9fb4bc' : '#ffe2a8');
     for (const o of alive()) if (o.grp === m.grp && !o.aggro && !o.boss) { o.aggro = s; if (o.patrol) o.home = { c: curCell(o).c, r: curCell(o).r }; }   // за своего вступается вся группа
     m.aggro = m.aggro || s;
@@ -500,11 +511,13 @@ AB.IsoSurface = (() => {
     const d = NK(m), got = [], items = [];
     // №157: добыча падает на землю — поднять за энергию отряда
     for (const [item, n, ch] of d.reward) if (Math.random() < ch) { items.push([item, n]); got.push(`${AB.ID.get(item).name} ×${n}`); }
+    if (AB.VehMods) for (const id of AB.VehMods.roll(AB.PART_DROPS.npc)) { items.push([id, 1]); got.push(AB.ID.get(id).name); }   // №161: изредка — деталь
     dropLoot(m, items, null);
     floatText(posOf(m), got.length ? 'добыча на земле' : d.name, '#ffd27a');
     say(`${d.name} повержен. ${got.length ? `На земле: ${got.join(', ')} — поднять за ⚡${E().pick}` : 'Ничего не выпало'}`);
     AB.Bus.emit('surface:kill', { kind: m.kind, reward: got });
     if (m.camp) { if (!campLeft(m.camp)) campCleared(m.camp); return; }
+    if (m.raid) return;                                             // №164: набег — без возрождения
     if (m.patrol) { if (!alive().some((o) => o.grp === m.grp)) patrolT.push({ gi: m.patrol.gi, t: PAT().respawn }); }
     else if (!alive().some((o) => o.grp === m.grp)) respawnT.push(NPC().respawn);
   }
@@ -584,10 +597,11 @@ AB.IsoSurface = (() => {
     if (m.boss) { bossTick(m, dt); return; }                        // №157: большой моб стоит на месте
     if (m.aggro && m.aggro.ally && m.aggro.state !== 'out') m.aggro = null;
     // №157: гарнизон лагеря нападает, если подойти; патрули чужих сторон враждебны союзнику их соперника
-    if (!m.aggro && (m.camp || (m.patrol && Q && Q.ally && d.side !== Q.ally))) {
+    if (!m.aggro && (m.camp || m.raid || (m.patrol && Q && Q.ally && d.side !== Q.ally))) {
       const foe = fieldSquads().find((q) => dist(curCell(q), curCell(m)) <= 2);
       if (foe) for (const o of alive()) if (o.grp === m.grp && !o.aggro) o.aggro = foe;
     }
+    if (m.raid && !m.aggro) { raidMove(m, dt); mobStep(m, dt); return; }   // №164: набег идёт к точке
     const home = cell(m.home.c, m.home.r), t = m.aggro, reach = d.reach || 1;
     if (m.patrol && !t) { patrolMove(m, dt); mobStep(m, dt); return; }   // №154: патруль идёт своим маршрутом
     if (m.patrol && t && (t.state === 'home' || dist(curCell(m), home) > 8)) { m.aggro = null; m.path = []; mobStep(m, dt); return; }
@@ -625,8 +639,10 @@ AB.IsoSurface = (() => {
       if (foe) { s.target = foe; if (s.zone) s.resume = true; }
     }
     const m = s.target;
+    if (!m && !inFight(s)) s.inFightNow = false;
     if (!m) { if (s.resume && !s.anim) { s.resume = false; if (s.zone && curCell(s) !== s.zone) goTo(s, s.zone, true); } return; }
-    const v = AB.VEHICLES[s.vehicle] || { attack: 10, rate: 1.2, reach: 1 };
+    const v = VEFF(s.vehicle) || { attack: 10, rate: 1.2, reach: 1 };
+    if (!s.inFightNow) { s.inFightNow = true; if (v.shield0) { giveShield(s, v.shield0); floatText(posOf(s), `🛡 +${v.shield0}`, '#8cff9a'); } }   // №161: чип щита — в начале боя
     if (dist(curCell(s), curCell(m)) <= v.reach) {
       // №146: вне базы в движении не атакуют — сначала остановка, удар только стоя
       if (s.anim) return;
@@ -647,7 +663,8 @@ AB.IsoSurface = (() => {
     for (let i = mobs.length - 1; i >= 0; i--) if (mobs[i].hp <= 0 && mobs[i].deadT <= 0) mobs.splice(i, 1);
     for (const s of squads) squadTick(s, dt);
     // №157: способности, союзники, большие мобы, добыча, осады
-    abilityTick(dt); lootTick(dt);
+    abilityTick(dt); lootTick(dt); pointsTick(dt);
+    if (repOn() && time - rep.t0 > 2 && !fieldSquads().length) repEnd('Отступление');   // №162: все в капсуле или пали
     for (const a of allies) if (a.state === 'out') { a.life -= dt; if (a.life <= 0) a.state = 'home'; else allyTick(a, dt); }
     for (let i = allies.length - 1; i >= 0; i--) if (allies[i].state !== 'out') allies.splice(i, 1);
     allyCd = Math.max(0, allyCd - dt);
@@ -769,13 +786,13 @@ AB.IsoSurface = (() => {
   // ---------- №157: способности героев и техники ----------
   // способность героя — только в технике его класса (энергетик — в энергетической); способность техники — всегда
   const HEROD = (id) => (AB.HEROES && AB.HEROES[id]) || null;
-  const VD = (s) => AB.VEHICLES[s.vehicle] || {};
+  const VD = (s) => VEFF(s.vehicle) || {};
   const heroAb = (s) => { const h = HEROD(s.id); return h && h.ability && VD(s).class === h.role ? h.ability : null; };
   const hasAb = (s, id) => { if (!s || s.ally) return null; const a = heroAb(s); if (a && a.id === id) return a; const b = VD(s).ability; return b && b.id === id ? b : null; };
   const fieldSquads = () => squads.filter((q) => q.state === 'out');
   const nearSq = (u, r) => fieldSquads().filter((q) => dist(curCell(q), curCell(u)) <= r);
   const maxOf = (s) => (AB.ID.get(s.id).stats || {}).maxHp || 100;
-  function healSq(q, n) { const c = AB.Chars.get(q.id); if (!c || n <= 0) return 0; const was = c.hp; c.hp = Math.min(maxOf(q), c.hp + n); return c.hp - was; }
+  function healSq(q, n) { const c = AB.Chars.get(q.id); if (!c || n <= 0) return 0; const was = c.hp; c.hp = Math.min(maxOf(q), c.hp + n); if (repOn() && c.hp > was) repRow(q).heal += c.hp - was; return c.hp - was; }
   function giveShield(q, n) { q.shield = Math.max(q.shield || 0, n); q.shieldT = 15; }
   const inFight = (q) => !!q.target || alive().some((m) => m.aggro === q && m.hp > 0);
   const rings = [];                                 // круги эффектов: купол, обвал, облако
@@ -789,7 +806,9 @@ AB.IsoSurface = (() => {
     if ((a = hasAb(s, 'charge')) && s.moved) dmg *= a.mult;
     if ((a = hasAb(s, 'purge')) && (NK(m).armorType || 'none') === 'none') dmg *= a.mult;
     s.moved = false; s.lastT = m;
-    return { dmg, pierce: !!hasAb(s, 'thermite') };
+    const crit = v.crit && Math.random() < v.crit;                   // №161: чип прицела — крит ×1,5
+    if (crit) { dmg *= 1.5; floatText(posOf(s), 'крит!', '#ffd27a'); }
+    return { dmg, crit, pierce: !!hasAb(s, 'thermite') };
   }
   // после удара — счётчики «каждый n-й»
   function afterHit(s, m) {
@@ -850,7 +869,7 @@ AB.IsoSurface = (() => {
     const d = m.d, me = curCell(m), A = d.ability;
     if (m.aggro && (m.aggro.state !== 'out' || m.aggro.hp <= 0 || dist(curCell(m.aggro), me) > d.aggro + 5)) m.aggro = null;
     const inReach = foesOf().filter((q) => dist(curCell(q), me) <= d.reach).sort((a, b) => dist(curCell(a), me) - dist(curCell(b), me));
-    if (!m.aggro) { const f = foesOf().filter((q) => dist(curCell(q), me) <= d.aggro)[0]; if (f) { m.aggro = f; say(`${d.name} (ур. ${d.lvl}) заметил отряд!`); } }
+    if (!m.aggro) { const f = foesOf().filter((q) => dist(curCell(q), me) <= d.aggro)[0]; if (f) { m.aggro = f; say(`${d.name} (ур. ${d.lvl}) заметил отряд!`); repStart(`Бой: ${d.name} · ур. ${d.lvl}`, m); } }
     const t = m.aggro && dist(curCell(m.aggro), me) <= d.reach ? m.aggro : inReach[0];
     if (!m.aggro && !t) { m.hp = Math.min(m.max, m.hp + m.max * 0.02 * dt); m.abT = 0; return; }   // в покое — заживает
     if ((m.abT += dt) >= A.every) {
@@ -868,16 +887,19 @@ AB.IsoSurface = (() => {
     const d = m.d, items = [];
     for (const [item, n, ch] of d.reward) if (Math.random() < ch) items.push([item, n]);
     items.push([d.trophy, 1]);
+    if (AB.VehMods) for (const id of AB.VehMods.roll(AB.PART_DROPS.boss[d.lvl])) items.push([id, 1]);   // №161: детали техники
     const veh = d.lvl === 3 && AB.IsoRoster && !AB.IsoRoster.owned().includes(d.vehicle) ? d.vehicle : null;
     dropLoot(m, items, veh);
     floatText(posOf(m), 'Добыча на земле', '#ffd27a');
     say(`${d.name} (ур. ${d.lvl}) повержен! Добыча — на земле${veh ? `, и среди неё — ${AB.VEHICLES[veh].name}` : ''}. Поднять — ⚡${E().pick}`);
     AB.Bus.emit('surface:kill', { kind: `boss${d.lvl}`, boss: m.kind, reward: [] });
+    if (rep && rep.boss === m) repEnd('Победа');
     bossT.push({ spot: m.spot, t: 480 });
   }
 
   // ---------- №157: добыча на земле и энергия отряда ----------
-  const E = () => D().energy || { max: 100, start: 60, regen: 0.5, pick: 2, restore: 30, lootLife: 180 };
+  const E0 = () => D().energy || { max: 100, start: 60, regen: 0.5, pick: 2, restore: 30, lootLife: 180 };
+  const E = () => { const e = E0(); return { ...e, max: e.max + TFX('energyMax'), regen: e.regen + TFX('energyRegen'), pick: Math.max(0, e.pick + TFX('pickCost')) }; };   // №165
   let energy = null;
   const broken = {};                                  // разбитая техника: восстановить — за энергию
   const loot = [];                                    // { c, r, items: [[id, n]], veh, t }
@@ -887,6 +909,7 @@ AB.IsoSurface = (() => {
     const k = curCell(m); let L = lootAt(k);
     if (!L) { L = { c: k.c, r: k.r, items: [], t: 0 }; loot.push(L); }
     for (const [id, n] of items) { const e = L.items.find((x) => x[0] === id); if (e) e[1] += n; else L.items.push([id, n]); }
+    if (repOn()) rep.loot.push(...items);
     if (veh) L.veh = veh; L.t = 0;
   }
   function pickLoot(s, L) {
@@ -930,14 +953,22 @@ AB.IsoSurface = (() => {
   const camps = [];                                   // { key, name, c, r, d }
   function spawnCamps() {
     camps.length = 0; for (const k of cells) k.camp = null;
-    for (const d of D().camps || []) {
-      const k = freeNear(d.at, (x) => dist(x, curCell(base)) >= 3 && nbrs(x).filter(passable).length >= 4); if (!k) continue;
-      const cp = { key: d.key, name: d.name, c: k.c, r: k.r, d }; camps.push(cp); k.camp = cp;
-      if (qs().camps[d.key]) continue;
+    const PT = D().points ? D().points.list : [];
+    for (const d of [...(D().camps || []), ...PT]) {
+      const pt = PT.includes(d);                                    // №164: шахта или укрепление
+      const k = freeNear(d.at, (x) => dist(x, curCell(base)) >= 3 && nbrs(x).filter(passable).length >= 4 && camps.every((o) => dist(cell(o.c, o.r), x) >= 3)); if (!k) continue;
+      const cp = { key: d.key, name: d.name, c: k.c, r: k.r, d, pt }; camps.push(cp); k.camp = cp;
+      if (pt ? qs().own[d.key] : qs().camps[d.key]) continue;
+      garrison(cp);
+    }
+  }
+  function garrison(cp) {
+    const d = cp.d, k = cell(cp.c, cp.r);
+    {
       const grp = ++mobSeq, spots = nbrs(k).filter((x) => passable(x) && !x.site && !mobAt(x));
       let i = 0;
       for (const [kind, n] of d.garrison) for (let j = 0; j < n && i < spots.length; j++, i++) {
-        const dd = NPC().kinds[kind];
+        const dd = NPC().kinds[kind] || PAT().kinds[kind];
         mobs.push({ id: `camp${++mobSeq}`, kind, camp: d.key, grp, c: spots[i].c, r: spots[i].r, home: { c: spots[i].c, r: spots[i].r }, hp: dd.hp, max: dd.hp,
           aggro: null, atkT: 0, atk: null, path: [], anim: null, face: 1, stride: 0, flash: 0, wanderT: 3 + Math.random() * 5, repath: 0, deadT: 0 });
       }
@@ -945,13 +976,83 @@ AB.IsoSurface = (() => {
   }
   const campAt = (k) => camps.find((cp) => dist(cell(cp.c, cp.r), k) <= 0) || null;
   const campLeft = (key) => alive().filter((m) => m.camp === key).length;
+  // ---------- №164: территории — взять осадой, доход капсуле, набеги стороны ----------
+  const PTS = () => D().points;
+  const rnd = ([a, b]) => a + Math.random() * (b - a);
+  function pointTaken(cp) {
+    if (qs().own[cp.key]) return;
+    qs().own[cp.key] = { acc: 0, raidT: rnd(PTS().raid.first) }; qSave();
+    if (AB.VehMods) dropLoot(cp, AB.VehMods.roll(AB.PART_DROPS.point).map((id) => [id, 1]), null);
+    const [item, n] = cp.d.income;
+    say(`${cp.name} — ваша! Каждую минуту капсуле: ${AB.ID.get(item).name} ×${n}. ${D().factions[cp.d.side].name} попытаются её отбить`);
+    AB.Bus.emit('surface:point', { key: cp.key, own: true });
+  }
+  function pointLost(cp, raiders) {
+    delete qs().own[cp.key]; qSave();
+    for (const m of raiders) Object.assign(m, { raid: null, camp: cp.key, home: { c: curCell(m).c, r: curCell(m).r }, aggro: null });   // набег становится гарнизоном
+    say(`${cp.name} потеряна: ${D().factions[cp.d.side].name} вернули её. Возьмите снова осадой`);
+    AB.Bus.emit('surface:point', { key: cp.key, own: false });
+  }
+  function startRaid(cp) {
+    const P = PTS(), from = siteCell(P.capital[cp.d.side]), kind = ALLY_KIND[cp.d.side], dk = PAT().kinds[kind]; if (!from) return;
+    const grp = ++mobSeq, spots = [from, ...nbrs(from).filter((x) => passable(x) && !mobAt(x))];
+    for (let i = 0; i < P.raid.n && i < spots.length; i++)
+      mobs.push({ id: `raid${++mobSeq}`, kind, raid: cp.key, grp, c: spots[i].c, r: spots[i].r, home: { c: cp.c, r: cp.r }, hp: dk.hp, max: dk.hp,
+        aggro: null, atkT: 0, atk: null, path: [], anim: null, face: 1, stride: 0, flash: 0, wanderT: 0, repath: 0, deadT: 0 });
+    qs().own[cp.key].hold = 0;
+    say(`${dk.squad || 'Отряд стороны'} идёт отбивать: ${cp.name}!`);
+  }
+  // набег идёт к точке; если стоит у неё без отряда игрока рядом — точка потеряна
+  function raidMove(m, dt) {
+    const P = cell(m.home.c, m.home.r);
+    if (m.anim || m.path.length) return;
+    if (dist(curCell(m), P) > 1 && (m.repath -= dt) <= 0) { m.repath = 2; m.path = pathTo(curCell(m), (x) => dist(x, P) <= 1) || []; }
+  }
+  function pointsTick(dt) {
+    const P = PTS(); if (!P) return;
+    for (const cp of camps) {
+      const own = cp.pt && qs().own[cp.key]; if (!own) continue;
+      if ((own.acc += dt) >= P.income.every) {
+        own.acc = 0; const [item, n] = cp.d.income;
+        if (AB.IsoStash) AB.IsoStash.add(item, n);
+        if (cell(cp.c, cp.r).seen) floatText(bpx(cp.c, cp.r), `+ ${AB.ID.get(item).name} ×${n}`, '#9fe7ff');
+      }
+      const raiders = alive().filter((m) => m.raid === cp.key);
+      if (!raiders.length) {
+        if (own.hold != null) { own.hold = null; own.raidT = rnd(P.raid.next); say(`Набег на «${cp.name}» отбит`); }
+        else if ((own.raidT -= dt) <= 0) startRaid(cp);
+        continue;
+      }
+      const C = cell(cp.c, cp.r), at = raiders.some((m) => dist(curCell(m), C) <= 1), guard = fieldSquads().some((q) => dist(curCell(q), C) <= 3);
+      if (at && !guard) { own.hold = (own.hold || 0) + dt; if (own.hold >= P.raid.hold) pointLost(cp, raiders); }
+    }
+  }
   function campCleared(key) {
+    { const cp0 = camps.find((x) => x.key === key); if (cp0 && cp0.pt) { pointTaken(cp0); return; } }
     if (qs().camps[key]) return; qs().camps[key] = true; qSave();
     const cp = camps.find((x) => x.key === key);
+    if (cp && AB.VehMods) dropLoot(cp, AB.VehMods.roll(AB.PART_DROPS.camp).map((id) => [id, 1]), null);   // №161: в лагере — детали
     say(`${cp ? cp.name : 'Лагерь'} взят! Клетка с пленником — в лагере («Изучить»)`);
     AB.Bus.emit('surface:camp', { key });
   }
+  function drawPoint(cp) {
+    const p = bpx(cp.c, cp.r), x = p.x, y = p.y, own = !!qs().own[cp.key], col = own ? '#5ee6ff' : CIV_COL[cp.d.side];
+    if (cp.d.kind === 'mine') {                                      // шахта: вход в штольню, вагонетка, копёр
+      g.fillStyle = '#3a2e24'; g.beginPath(); g.arc(x, y + 2, 11, Math.PI, 0); g.fill(); g.fillStyle = '#120c08'; g.beginPath(); g.arc(x, y + 2, 7, Math.PI, 0); g.fill();
+      g.strokeStyle = '#6a5038'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 9, y - 6); g.lineTo(x, y - 22); g.lineTo(x + 9, y - 6); g.stroke();
+      g.fillStyle = '#5a4a3a'; g.fillRect(x + 10, y - 2, 9, 6); g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(x + 12, y + 5, 2, 0, 7); g.arc(x + 17, y + 5, 2, 0, 7); g.fill();
+    } else {                                                          // укрепление: башня
+      g.fillStyle = '#5a5450'; g.fillRect(x - 6, y - 24, 12, 26); g.fillStyle = '#6a6460'; g.fillRect(x - 8, y - 28, 16, 5);
+      g.fillStyle = '#1a1a1a'; g.fillRect(x - 2, y - 18, 4, 5);
+    }
+    g.strokeStyle = '#2a2a2a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x - 12, y - 4); g.lineTo(x - 12, y - 30); g.stroke();
+    g.fillStyle = col; g.beginPath(); g.moveTo(x - 12, y - 30); g.lineTo(x - 1 + Math.sin(time * 4) * 1.5, y - 26); g.lineTo(x - 12, y - 22); g.fill();
+    if (own && alive().some((m) => m.raid === cp.key)) { g.fillStyle = `rgba(255,90,74,${0.6 + 0.4 * Math.sin(time * 6)})`; g.font = '700 13px "Oswald", sans-serif'; g.textAlign = 'center'; g.fillText('⚠', x + 10, y - 26); }
+    const fs = 10 * dpr / kScale(); g.font = `600 ${fs}px "Share Tech Mono", monospace`; g.textAlign = 'center'; g.lineWidth = 3 * dpr / kScale(); g.strokeStyle = 'rgba(0,0,0,.85)';
+    g.strokeText(cp.name, x, y + S0 * 0.75); g.fillStyle = own ? '#9fe7ff' : '#e6e0d6'; g.fillText(cp.name, x, y + S0 * 0.75);
+  }
   function drawCamp(cp) {
+    if (cp.pt) { drawPoint(cp); return; }
     const p = bpx(cp.c, cp.r), x = p.x, y = p.y, done = !!qs().camps[cp.key];
     const tent = (tx, ty, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(tx - 9, ty); g.lineTo(tx, ty - 13); g.lineTo(tx + 9, ty); g.fill(); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(tx - 2, ty - 5, 4, 5); };
     tent(x - 12, y + 2, '#6a5038'); tent(x + 12, y + 4, '#5a4a38');
@@ -977,21 +1078,24 @@ AB.IsoSurface = (() => {
     const sg = { T, bearer, phase: 'gather', t: 0, hit: false, members: order };
     const used = new Set();
     for (const s of order) {
-      const R = Math.max(1, Math.min(3, VD(s).reach || 1));
+      const fr = ((qs().form || {})[s.id] || ((VD(s).reach || 1) <= 1 ? 'front' : 'back')) === 'front';   // №163: построение
+      const R = fr ? 1 : Math.max(2, Math.min(3, VD(s).reach || 1));
       const free = (x) => passable(x) && x !== curCell(base) && !mobAt(x) && !used.has(x) && !outSquads().some((q) => q !== s && curCell(q) === x);
       const spot = cells.filter((x) => free(x) && dist(x, C) === R).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0]
         || cells.filter((x) => free(x) && dist(x, C) <= R + 1 && dist(x, C) >= 1).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0];
       if (spot) used.add(spot);
       Object.assign(s, { siege: sg, spot, mode: 'auto', target: null, zone: null, pick: null });
+      if (TFX('siegeShield')) giveShield(s, TFX('siegeShield'));      // №165: тактика осады
       if (s.state === 'retreat') s.state = 'out';
       if (spot && spot !== curCell(s)) goTo(s, spot, true); else s.path = [];
     }
     say(`Осада: ${T.isCamp ? T.name : NK(T).name} — отряд окружает цель${bearer ? `, первым бьёт ${herName(bearer)} (щит)` : ''}`);
+    repStart(`Осада: ${T.isCamp ? T.name : NK(T).name}${T.boss ? ` · ур. ${NK(T).lvl}` : ''}`, T.boss ? T : null);   // №162
   }
   // true — отряд в осаде ещё не бьёт (стоит/идёт на место)
   function siegeStep(s, dt) {
     const sg = s.siege;
-    if (sgDone(sg)) { for (const q of sg.members) if (q.siege === sg) { q.siege = null; q.target = null; } say('Осада окончена: цель повержена'); return false; }
+    if (sgDone(sg)) { for (const q of sg.members) if (q.siege === sg) { q.siege = null; q.target = null; } say('Осада окончена: цель повержена'); repEnd('Победа'); return false; }
     if (sg.phase === 'gather') {
       const here = (q) => q.state !== 'out' || (!q.anim && !q.path.length);
       if (!s.anim && !s.path.length && s.spot && curCell(s) !== s.spot && (s.repath = (s.repath || 0) - dt) <= 0) { s.repath = 1.5; if (!goTo(s, s.spot, true)) s.spot = null; }
@@ -1046,7 +1150,7 @@ AB.IsoSurface = (() => {
   const QS = () => AB.SURFACE_A1_QUESTS || [];
   let Q = null;                                       // { done, st: { id: { stage, kills } }, camps, ally, shield, told }
   function qs() {
-    if (!Q) { try { Q = JSON.parse(localStorage.getItem(QKEY) || 'null'); } catch (e) { Q = null; } if (!Q || !Array.isArray(Q.done)) Q = { done: [], st: {}, camps: {}, ally: null, shield: null, told: [] }; shieldId = Q.shield || null; }
+    if (!Q) { try { Q = JSON.parse(localStorage.getItem(QKEY) || 'null'); } catch (e) { Q = null; } if (!Q || !Array.isArray(Q.done)) Q = { done: [], st: {}, camps: {}, ally: null, shield: null, told: [] }; Q.own = Q.own || {}; Q.form = Q.form || {}; shieldId = Q.shield || null; }
     return Q;
   }
   function qSave() { Q.shield = shieldId; try { localStorage.setItem(QKEY, JSON.stringify(Q)); } catch (e) { /* без хранилища */ } }
@@ -1123,6 +1227,14 @@ AB.IsoSurface = (() => {
       el.querySelector('i').className = `sf-side ${d.side || ''}`;
       el.querySelector('p').innerHTML = `${esc(d.text || '')}<br>Здоровье <b>${Math.ceil(m.hp)}/${m.max}</b> · удар <b>${d.attack}</b> раз в ${d.rate} с · дальность ${d.reach || 1}<br>Урон: <b>${Dm(d.dtype)}</b> · Защита: <b>${A(d.armorType)}</b>${ab ? `<br><b>${esc(ab.name)}</b> — ${esc(ab.text)}` : ''}`;
       el.querySelector('small').textContent = m.boss ? `Добыча: ${AB.ID.get(d.trophy).name}${d.lvl === 3 ? ` и ${AB.VEHICLES[d.vehicle].name}` : ''}. Нападает, если подойти на ${d.aggro} кл. Совет: «Осада» со щитоносцем.` : 'Добыча падает на землю: поднять — за энергию отряда.';
+    } else if (c.camp && c.camp.pt) {                                  // №164: шахта или укрепление
+      const cp = c.camp, own = qs().own[cp.key], [item, n] = cp.d.income, P = PTS();
+      el.querySelector('b').textContent = cp.name;
+      el.querySelector('i').textContent = own ? 'Ваша территория' : `${cp.d.kind === 'mine' ? 'Шахта' : 'Укрепление'} · ${D().factions[cp.d.side].name} · гарнизон: ${campLeft(cp.key)}`;
+      el.querySelector('i').className = `sf-side ${cp.d.side}`;
+      el.querySelector('p').textContent = cp.d.text;
+      el.querySelector('small').textContent = own ? `Доход: ${AB.ID.get(item).name} ×${n} каждые ${P.income.every} с. ${alive().some((m) => m.raid === cp.key) ? 'Идёт набег — защитите точку!' : `Набег стороны — примерно через ${Math.max(1, Math.round(own.raidT / 60))} мин.`} Если отряд стороны простоит у точки ${P.raid.hold} с без вас — точка потеряна.`
+        : `Возьмите осадой — и каждые ${P.income.every} с капсуле: ${AB.ID.get(item).name} ×${n}.`;
     } else if (c.camp) {
       const cp = c.camp, done = !!qs().camps[cp.key], q = qAt(cp.key)[0];
       if (done && q) { showQuest(cp, q); return; }
@@ -1135,6 +1247,63 @@ AB.IsoSurface = (() => {
     el.hidden = false;
   }
 
+  // ---------- №162: отчёт о бое — после осады и боя с большим мобом ----------
+  // кто сколько нанёс и получил, сколько погасил щит, сколько вылечили, кто пал, что выпало
+  let rep = null;
+  function repStart(title, boss) { if (rep && !rep.done) return; rep = { title, boss: boss || null, t0: time, rows: {}, loot: [], down: [], done: false }; }
+  const repRow = (u) => { const id = u.ally ? 'ally' : u.id; return rep.rows[id] || (rep.rows[id] = { dealt: 0, kills: 0, taken: 0, shield: 0, heal: 0 }); };
+  const repOn = () => rep && !rep.done;
+  function repEnd(result) { if (!repOn()) return; rep.done = true; rep.result = result; rep.secs = Math.round(time - rep.t0); setTimeout(showReport, 1300); }
+  function showReport() {
+    const R0 = rep; if (!R0) return;
+    let el = document.getElementById('sf-report');
+    if (!el) { el = document.createElement('div'); el.id = 'sf-report'; document.getElementById('sf').appendChild(el); el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('[data-rep-x]')) el.hidden = true; }); el.addEventListener('pointerdown', (e) => e.stopPropagation()); }
+    const name = (id) => (id === 'ally' ? 'Армия союзника' : herName(id));
+    const rows = Object.entries(R0.rows).sort((a, b) => b[1].dealt - a[1].dealt);
+    const best = rows[0] && rows[0][1].dealt > 0 ? rows[0][0] : null;
+    const loot = {}; for (const [id, n] of R0.loot) loot[id] = (loot[id] || 0) + n;
+    el.innerHTML = `<div class="rep-card"><div class="rep-head"><b>${esc(R0.title)}</b><span class="rep-res ${R0.result === 'Победа' ? 'ok' : 'bad'}">${R0.result}</span><button data-rep-x aria-label="Закрыть">✕</button></div>
+      <table class="rep-tab"><tr><th>Герой</th><th>Урон</th><th>Убито</th><th>Получил</th><th>Щит</th><th>Лечение</th></tr>
+      ${rows.map(([id, r]) => `<tr class="${R0.down.includes(id) ? 'down' : ''}"><td>${esc(name(id))}${id === best ? ' ★' : ''}${R0.down.includes(id) ? ' ✝' : ''}</td><td>${Math.round(r.dealt)}</td><td>${r.kills}</td><td>${Math.round(r.taken)}</td><td>${Math.round(r.shield)}</td><td>${Math.round(r.heal)}</td></tr>`).join('')}</table>
+      <p>${R0.down.length ? `Пали: <b>${R0.down.map((id) => esc(name(id))).join(', ')}</b> — техника разбита, восстановить за ⚡${E().restore}. ` : 'Никто не пал. '}Бой шёл ${R0.secs} с.</p>
+      <p>${Object.keys(loot).length ? `Добыча на земле: <b>${Object.entries(loot).map(([id, n]) => `${esc(AB.ID.get(id).name)} ×${n}`).join(', ')}</b> — поднять за ⚡${E().pick}` : 'Добычи нет.'}</p>
+      <button class="rep-ok" data-rep-x>Понятно</button></div>`;
+    el.hidden = false;
+  }
+
+  // ---------- №163: построение перед осадой — кто впереди (кольцо вплотную), кто сзади, кто несёт щит ----------
+  let formT = null, formUs = [];
+  function openForm(us, T) {
+    formT = T; formUs = us;
+    const F = qs().form || (qs().form = {});
+    for (const s of us) if (!F[s.id]) F[s.id] = (VD(s).reach || 1) <= 1 ? 'front' : 'back';
+    let el = document.getElementById('sf-form');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'sf-form'; document.getElementById('sf').appendChild(el);
+      el.addEventListener('pointerdown', (e) => e.stopPropagation());
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-fm]'); if (!b) { if (e.target === el) el.hidden = true; return; }
+        const [a, id] = b.dataset.fm.split('|'), F2 = qs().form;
+        if (a === 'pos') F2[id] = F2[id] === 'front' ? 'back' : 'front';
+        if (a === 'sh') shieldId = shieldId === id ? null : id;
+        if (a === 'x') { el.hidden = true; return; }
+        if (a === 'go') { el.hidden = true; qSave(); barSig = ''; startSiege(formUs, formT); flyU = formUs[0]; follow = true; return; }
+        qSave(); renderForm();
+      });
+    }
+    renderForm(); el.hidden = false;
+  }
+  function renderForm() {
+    const el = document.getElementById('sf-form'), F = qs().form, nm2 = formT.isCamp ? formT.name : NK(formT).name;
+    el.innerHTML = `<div class="fm-card"><div class="fm-head"><b>Построение · осада: ${esc(nm2)}</b><button data-fm="x" aria-label="Закрыть">✕</button></div>
+      <p class="fm-note">Впереди — встают вплотную к цели и принимают удар; сзади — на дальности своего оружия. 🛡 — первым бьёт и держит внимание врага.</p>
+      ${formUs.map((s) => { const v = VD(s), fr = F[s.id] === 'front';
+        return `<div class="fm-row"><span class="fm-n"><b>${esc(herName(s.id))}</b><small>${esc(v.short || v.name)} · дальность ${v.reach || 1}</small></span>
+          <button class="fm-pos ${fr ? 'front' : 'back'}" data-fm="pos|${s.id}">${fr ? '▲ Впереди' : '▼ Сзади'}</button>
+          <button class="fm-sh ${shieldId === s.id ? 'on' : ''}" data-fm="sh|${s.id}" title="Щитоносец">🛡</button></div>`; }).join('')}
+      <div class="fm-foot"><button class="fm-go" data-fm="go">⛬ Начать осаду</button></div></div>`;
+  }
+
   // ---------- №142: приказ по нажатию — «Автобой», «Следовать» (на NPC — «Атаковать») ----------
   let cmd = null;                      // { k, m }
   function hideCmd() { cmd = null; const el = document.getElementById('sf-cmd'); if (el) el.hidden = true; }
@@ -1142,9 +1311,9 @@ AB.IsoSurface = (() => {
   // на лагере — «Осада», «Изучить»; на поселении — «Следовать», «Изучить»; на добыче — «Поднять»; на пустой клетке — «Автобой», «Следовать»
   function showCmd(cx, cy, k, m, camp) {
     cmd = { k, m, camp: camp || null };
-    const el = document.getElementById('sf-cmd'), L = !m && !camp && lootAt(k), target = !!(m || camp);
-    el.dataset.ctx = m ? 'mob' : camp ? 'camp' : L ? 'loot' : k.site ? 'site' : 'cell';
-    const show = { auto: !target && !k.site && !L, follow: !target, attack: !!m, siege: target, study: target || !!k.site, army: target && !!qs().ally, pick: !!L };
+    const el = document.getElementById('sf-cmd'), L = !m && !camp && lootAt(k), target = !!(m || (camp && campLeft(camp.key) > 0));   // №164: взятая точка — «Следовать», «Изучить»
+    el.dataset.ctx = m ? 'mob' : camp ? (target ? 'camp' : 'site') : L ? 'loot' : k.site ? 'site' : 'cell';
+    const show = { auto: !target && !k.site && !L && !camp, follow: !target, attack: !!m, siege: target, study: target || !!k.site || !!camp, army: target && !!qs().ally, pick: !!L };
     for (const [key, on] of Object.entries(show)) { const b = el.querySelector(`[data-cmd="${key}"]`); if (b) b.hidden = !on; }
     const pb = el.querySelector('[data-cmd="pick"] span'); if (pb) pb.textContent = `Поднять ⚡${E().pick}`;
     const ab = el.querySelector('[data-cmd="army"] span'); if (ab) ab.textContent = allyCd > 0 ? `Армия ${Math.ceil(allyCd)}с` : 'Армия';
@@ -1175,7 +1344,7 @@ AB.IsoSurface = (() => {
     const T = m || (camp ? { ...camp, isCamp: true } : null);
     if (kind === 'army') { if (T) callArmy(T); return; }
     const us = movers(); if (!us.length) { say('Некому идти — выпустите героя из капсулы'); return; }
-    if (kind === 'siege') { if (T && (camp ? campLeft(camp.key) : m.hp > 0)) { startSiege(us, T); flyU = us[0]; follow = true; barSig = ''; } else say('Здесь уже некого брать в осаду'); return; }
+    if (kind === 'siege') { if (T && (camp ? campLeft(camp.key) : m.hp > 0)) openForm(us, T); else say('Здесь уже некого брать в осаду'); return; }   // №163: сперва построение
     if (kind === 'pick') {                                                   // поднять добычу: идёт ближайший
       const L = lootAt(k); if (!L) return;
       const s0 = [...us].sort((a, b) => dist(curCell(a), k) - dist(curCell(b), k))[0];
@@ -1777,8 +1946,9 @@ AB.IsoSurface = (() => {
     // для проверок
     _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
     _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _trade: () => trade, _tradeTick: (dt) => tradeTick(dt), _mobs: () => mobs, _shots: () => shots, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
+    _siegeGo: () => { const b = document.querySelector('#sf-form [data-fm="go"]'); if (b) b.click(); }, _rep: () => rep, _formSet: (id, pos) => { qs().form = qs().form || {}; qs().form[id] = pos; },
     _camps: () => camps, _loot: () => loot, _allies: () => allies, _energy: (v) => { if (typeof v === 'number') energy = v; return energy; }, _broken: () => broken,
-    _quests: () => qs(), _qAdvance: (id) => qAdvance(QS().find((q) => q.id === id)), _shield: (id) => { shieldId = id; }, _tapCamp: (key) => { const cp = camps.find((x) => x.key === key); tap(cell(cp.c, cp.r), 400, 200); },
+    _quests: () => qs(), _qAdvance: (id) => qAdvance(QS().find((q) => q.id === id)), _shield: (id) => { shieldId = id; }, _points: () => camps.filter((c) => c.pt), _own: () => qs().own, _raid: (key) => startRaid(camps.find((c) => c.key === key)), _tapCamp: (key) => { const cp = camps.find((x) => x.key === key); tap(cell(cp.c, cp.r), 400, 200); },
     _study: () => document.querySelector('#sf-pop p').textContent, _choose: (side) => chooseAlly(side),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
   };

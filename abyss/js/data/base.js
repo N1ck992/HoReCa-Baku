@@ -144,6 +144,7 @@ AB.BASE_DATA.blueprints.forEach((b) => AB.ID.register(b.id, { ...b, pending: tru
 AB.BASE_TECH_BRANCHES = [
   { id: 'ind', name: 'Промышленность' }, { id: 'sci', name: 'Наука' },
   { id: 'life', name: 'Жизнеобеспечение' }, { id: 'pow', name: 'Энергетика' },
+  { id: 'war', name: 'Бой' },                                     // №165: усиливает отряд на картах
 ];
 AB.BASE_TECH = [
   { id: 'TECH-101', branch: 'ind', name: 'Бур', work: 60, cost: [['ITEM-017', 10], ['ITEM-002', 2]], unlock: { bp: ['BLD-109'] },
@@ -174,5 +175,18 @@ AB.BASE_TECH = [
     desc: 'Открывает 2-й и 3-й уровни батарей (300 и 600).' },
   { id: 'TECH-403', branch: 'pow', name: 'Разгон реактора', req: ['TECH-401'], work: 150, cost: [['ITEM-015', 2], ['ITEM-002', 3]], fx: { reactor: 4 },
     desc: 'Реактор капсулы даёт 12 энергии в секунду вместо 8.' },
+  // №165: ветка «Бой» — усиливает отряд на карте поверхности (sqAtk — урон техники, sqArmor — + к броне,
+  // energyMax / energyRegen — запас и подзарядка энергии отряда, pickCost — подбор добычи дешевле,
+  // siegeShield — щит всем в начале осады). Черновик баланса.
+  { id: 'TECH-501', branch: 'war', name: 'Боевые протоколы', work: 60, cost: [['ITEM-002', 3], ['ITEM-001', 4]], fx: { sqAtk: 0.1 },
+    desc: 'Техника отряда бьёт на 10% сильнее.' },
+  { id: 'TECH-502', branch: 'war', name: 'Полевое бронирование', req: ['TECH-501'], work: 90, cost: [['ITEM-001', 10], ['ITEM-003', 2]], fx: { sqArmor: 0.05 },
+    desc: 'Броня всей техники отряда +5%.' },
+  { id: 'TECH-503', branch: 'war', name: 'Накопители отряда', work: 75, cost: [['ITEM-002', 4], ['ITEM-003', 2]], fx: { energyMax: 50, energyRegen: 0.25 },
+    desc: 'Энергия отряда: запас +50, подзарядка быстрее на 0,25 в секунду.' },
+  { id: 'TECH-504', branch: 'war', name: 'Сборщики добычи', req: ['TECH-503'], work: 90, cost: [['ITEM-002', 3], ['ITEM-001', 6]], fx: { pickCost: -1 },
+    desc: 'Поднять добычу — на 1 энергии дешевле.' },
+  { id: 'TECH-505', branch: 'war', name: 'Тактика осады', req: ['TECH-502', 'TECH-503'], work: 120, cost: [['ITEM-002', 5], ['ITEM-015', 1]], fx: { siegeShield: 15 },
+    desc: 'В начале осады вся техника отряда получает щит на 15 урона.' },
 ];
 AB.BASE_TECH.forEach((t) => AB.ID.register(t.id, { ...t, pending: true }));
