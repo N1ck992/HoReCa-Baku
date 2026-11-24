@@ -388,7 +388,8 @@ AB.IsoOverworld = (() => {
       if (s.state !== 'out' || s.mode !== 'auto') continue;
       if (s.target && s.target.hp <= 0) s.target = null;
       if (!s.target) {
-        const foe = mobs.filter((m) => m.hp > 0 && m.hunt && dist(m, at(s)) <= 3).sort((a, b) => dist(a, at(s)) - dist(b, at(s)))[0];
+        // №184: только тех, кто напал на этого героя (а не на всех, кто вокруг злой)
+        const foe = mobs.filter((m) => m.hp > 0 && m.hunt && m.victim === s && dist(m, at(s)) <= 3).sort((a, b) => dist(a, at(s)) - dist(b, at(s)))[0];
         if (foe) { s.target = foe; s.path = []; s.resume = !!s.zone; }
         else if (s.resume && !s.anim && !s.path.length && s.zone) { s.resume = false; const p = route(at(s), s.zone, s); if (p) s.path = p; }
       }
@@ -699,7 +700,7 @@ AB.IsoOverworld = (() => {
       } else if (s.atkT <= 0 && !s.anim) {   // №146: в движении не атакуют — бьют только стоя (цель рядом — сначала остановка)
         if (s.path.length) { if (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) s.path = []; continue; }
         const foe = (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) ? s.target
-          : mobs.filter((m) => m.hp > 0 && (m.hunt || s.target === m) && canHit(m, here, sw.reachCells)).sort((a, b) => dist(a, here) - dist(b, here))[0];
+          : mobs.filter((m) => m.hp > 0 && (m.victim === s || s.target === m) && canHit(m, here, sw.reachCells)).sort((a, b) => dist(a, here) - dist(b, here))[0];   // №184: бьёт свою цель или того, кто бьёт его
         if (foe) {
           s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1;
           // №147: экзокостюм — выстрел энергосгустком (только картинка; урон — как раньше, в момент удара)

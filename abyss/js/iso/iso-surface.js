@@ -72,6 +72,18 @@ AB.IsoSurface = (() => {
   const BUILD = new Set(['capital', 'village', 'hub', 'shrine']);
   const blockSite = (k) => !!k && ((k.site && BUILD.has(k.site.kind)) || !!k.camp);
   const walk = (k) => passable(k) && !blockSite(k);
+  // №185: прямая видимость — горы, столовые скалы, обрывы и стены органики закрывают выстрел
+  function los(a, b) {
+    if (dist(a, b) <= 1) return true;
+    const pa = bpx(a.c, a.r), pb = bpx(b.c, b.r), n = dist(a, b) * 4;
+    for (let i = 1; i < n; i++) {
+      const t = i / n, u = unitCell((pa.x + (pb.x - pa.x) * t - org.x) / S0, (pa.y + (pb.y - pa.y) * t - org.y) / S0), k = cell(u.c, u.r);
+      if (!k || k === a || k === b) continue;
+      const kk = K[k.kind]; if (kk.block && kk.lift) return false;
+    }
+    return true;
+  }
+  const canShoot = (from, to, reach) => dist(from, to) <= reach && (reach <= 1 || los(from, to));
 
   // ---------- случайность (с зерном — карта всегда одна и та же) ----------
   function rng(seed) {
@@ -524,6 +536,7 @@ AB.IsoSurface = (() => {
     if (s.shield > 0) { const take = Math.min(s.shield, real); s.shield -= take; real -= take; if (repOn()) repRow(s).shield += take; floatText(posOf(s), `🛡−${take}`, '#8cff9a'); if (!real) { s.flash = 0.1; return; } }   // №157: щит гасит урон
     AB.Bus.emit('surface:hit', { npc: false });
     if (repOn()) repRow(s).taken += real;
+    m.hitSq = s; m.hitAt = time;                                      // №184: кто бил этого героя — ему можно ответить
     if (c) c.hp = Math.max(0, c.hp - real);
     s.flash = 0.25; floatText(posOf(s), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ff5a3a' : mul <= 0.76 ? '#9fb4bc' : '#ff8a6a');
     if (!opt.dot && m.hp > 0 && (d.reach || 1) <= 1 && (a = hasAb(s, 'hotarmor'))) hurtMob(m, dmg * a.part, s, { reflect: true });        // раскалённая броня
@@ -667,14 +680,14 @@ AB.IsoSurface = (() => {
     if (t && !m.patrol && (t.state === 'home' || dist(curCell(m), home) > 7)) {      // ушёл в базу или увёл далеко — назад, домой
       m.aggro = null; m.path = curCell(m) === home ? [] : pathTo(curCell(m), (x) => x === home) || [];
     } else if (t) {
-      if (dist(curCell(m), curCell(t)) <= reach) {
+      if (canShoot(curCell(m), curCell(t), reach)) {
         if (!m.anim && m.path.length) m.path = [];
         else if (!m.anim && m.atkT <= 0 && (reach > 1 || !t.anim)) {
           m.atkT = d.rate * (m.slowT > 0 ? 1.3 : 1); m.atk = { t: 0 }; m.face = posOf(t).x >= posOf(m).x ? 1 : -1;
           if (d.shot) patrolShot(m, t); else hurtSquad(t, d.attack, m);   // №154: дальний — снаряд, урон по прилёте
         }
       } else if (!m.anim && ((m.repath -= dt) <= 0 || !m.path.length)) {
-        m.repath = 0.6; m.path = pathTo(curCell(m), (x) => dist(x, curCell(t)) <= reach) || [];
+        m.repath = 0.6; m.path = pathTo(curCell(m), (x) => canShoot(x, curCell(t), reach)) || [];
       }
     } else if (!m.anim && !m.path.length && (m.wanderT -= dt) <= 0) {      // бродит возле своего места
       m.wanderT = 4 + Math.random() * 8;
@@ -691,9 +704,9 @@ AB.IsoSurface = (() => {
     if (s.pick) { const L = s.pick, k = cell(L.c, L.r); if (!loot.includes(L)) s.pick = null; else if (!s.anim && !s.path.length && dist(curCell(s), k) <= 1) pickLoot(s, L); }
     if (s.siege && siegeStep(s, dt)) return;                         // №157: осада — сперва встать кольцом
     if (s.target && s.target.hp <= 0) { s.target = null; if (s.mode === 'auto' && s.zone && curCell(s) !== s.zone) s.resume = true; }
-    // автобой: бьёт тех, кто нападает на него или на союзников рядом
+    // №184: после цели — никого сам не трогает; в ответ бьёт только тех, кто напал на него самого
     if (!s.target && s.mode === 'auto') {
-      const foe = alive().filter((m) => m.aggro && m.aggro.kind === 'squad' && dist(curCell(m), curCell(s)) <= 3)
+      const foe = alive().filter((m) => m.hitSq === s && time - (m.hitAt || 0) < 8 && dist(curCell(m), curCell(s)) <= 3)
         .sort((a, b) => dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s)))[0];
       if (foe) { s.target = foe; if (s.zone) s.resume = true; }
     }
@@ -702,7 +715,7 @@ AB.IsoSurface = (() => {
     if (!m) { if (s.resume && !s.anim) { s.resume = false; if (s.zone && curCell(s) !== s.zone) goTo(s, s.zone, true); } return; }
     const v = VEFF(s.vehicle) || { attack: 10, rate: 1.2, reach: 1 };
     if (!s.inFightNow) { s.inFightNow = true; if (v.shield0) { giveShield(s, v.shield0); floatText(posOf(s), `🛡 +${v.shield0}`, '#8cff9a'); } }   // №161: чип щита — в начале боя
-    if (dist(curCell(s), curCell(m)) <= v.reach) {
+    if (canShoot(curCell(s), curCell(m), v.reach)) {
       // №146: вне базы в движении не атакуют — сначала остановка, удар только стоя
       if (s.anim) return;
       if (s.path.length) { s.path = []; return; }
@@ -717,7 +730,7 @@ AB.IsoSurface = (() => {
         else { if (v.reach > 1) vehShot(s, m); hurtMob(m, hit.dmg, s); afterHit(s, m); }
       }
     } else if (!s.anim && ((s.repath = (s.repath || 0) - dt) <= 0 || !s.path.length)) {
-      s.repath = 0.6; s.path = pathTo(curCell(s), (x) => dist(x, curCell(m)) <= v.reach) || [];
+      s.repath = 0.6; s.path = pathTo(curCell(s), (x) => canShoot(x, curCell(m), v.reach)) || [];   // №185: подойти туда, откуда видно
     }
   }
   function combatTick(dt) {
@@ -930,9 +943,9 @@ AB.IsoSurface = (() => {
   function bossTick(m, dt) {
     const d = m.d, me = curCell(m), A = d.ability;
     if (m.aggro && (m.aggro.state !== 'out' || m.aggro.hp <= 0 || dist(curCell(m.aggro), me) > d.aggro + 5)) m.aggro = null;
-    const inReach = foesOf().filter((q) => dist(curCell(q), me) <= d.reach).sort((a, b) => dist(curCell(a), me) - dist(curCell(b), me));
+    const inReach = foesOf().filter((q) => canShoot(me, curCell(q), d.reach)).sort((a, b) => dist(curCell(a), me) - dist(curCell(b), me));
     if (m.aggro && !m.fought) { m.fought = true; repStart(`Бой: ${d.name} · ур. ${d.lvl}`, m); }   // №169: сам не нападает — бой, только если его ударили
-    const t = m.aggro && dist(curCell(m.aggro), me) <= d.reach ? m.aggro : inReach[0];
+    const t = m.aggro && canShoot(me, curCell(m.aggro), d.reach) ? m.aggro : inReach[0];
     if (!m.aggro) { m.fought = false; m.hp = Math.min(m.max, m.hp + m.max * 0.02 * dt); m.abT = 0; return; }   // в покое — заживает и не бьёт
     if ((m.abT += dt) >= A.every) {
       m.abT = 0;
@@ -1201,14 +1214,14 @@ AB.IsoSurface = (() => {
     if (!t) t = alive().filter((m) => m.aggro && (m.aggro.kind === 'squad' || m.aggro.ally) && dist(curCell(m), C) <= 6)[0] || null;
     if (!t) { a.life = Math.min(a.life, 3); mobStep(a, dt); return; }
     const reach = a.d.reach || 1;
-    if (dist(curCell(a), curCell(t)) <= reach) {
+    if (canShoot(curCell(a), curCell(t), reach)) {
       if (!a.anim && a.path.length) a.path = [];
       else if (!a.anim && a.atkT <= 0) {
         a.atkT = a.d.rate; a.atk = { t: 0 }; a.face = posOf(t).x >= posOf(a).x ? 1 : -1;
         const p = posOf(a), tt = t;
         shots.push({ kind: a.d.shot, from: { x: p.x, y: p.y - S0 * 0.55 }, to: () => { const q = posOf(tt); return { x: q.x, y: q.y - S0 * 0.4 }; }, t: 0, dur: 0.15, hit: () => { if (tt.hp > 0 && a.hp > 0) hurtMob(tt, a.d.attack, a); } });
       }
-    } else if (!a.anim && ((a.repath -= dt) <= 0 || !a.path.length)) { a.repath = 0.8; a.path = pathTo(curCell(a), (x) => dist(x, curCell(t)) <= reach) || []; }
+    } else if (!a.anim && ((a.repath -= dt) <= 0 || !a.path.length)) { a.repath = 0.8; a.path = pathTo(curCell(a), (x) => canShoot(x, curCell(t), reach)) || []; }
     mobStep(a, dt);
   }
 
