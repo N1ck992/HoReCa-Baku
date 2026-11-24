@@ -1816,6 +1816,8 @@ AB.IsoSurface = (() => {
     };
     // нодати (до картинки автора): рукоять с обмоткой, латунная цуба, длинный изогнутый клинок с бликом лезвия
     function drawSword() {
+      const img = P('sword');                                         // №187: меч автора (hammer-rig/sword.webp); пока грузится — нарисованный кодом
+      if (img) { g.save(); g.translate(-30, 115); g.rotate(-0.55 + Math.PI / 2); g.scale(1.4, 1.4); g.drawImage(img, -130, -55); g.restore(); return; }
       g.save(); g.translate(-30, 115); g.rotate(-0.55);
       g.fillStyle = '#2a1c18'; g.fillRect(-26, -170, 52, 230);                                   // рукоять
       g.strokeStyle = '#8a1e1e'; g.lineWidth = 9; for (let i = -150; i < 50; i += 36) { g.beginPath(); g.moveTo(-26, i); g.lineTo(26, i + 18); g.stroke(); }
