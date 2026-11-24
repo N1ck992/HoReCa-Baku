@@ -1676,7 +1676,8 @@ AB.IsoSurface = (() => {
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
     g.scale(f * k, k); g.translate(-R.hip[0], -full - bob);
     const leg = (hip, thImg, shImg, p) => {
-      const a = mv ? Math.sin(p) * 0.42 : 0.04, b = mv ? 0.12 + Math.max(0, Math.sin(p + 1.3)) * 0.65 : 0.08;
+      // бедро: sin — нога уходит назад (опора), потом выносится вперёд; колено сгибается, только когда нога идёт вперёд (cos < 0)
+      const a = mv ? Math.sin(p) * 0.4 : 0.04, b = mv ? 0.08 + Math.max(0, -Math.cos(p)) * 0.75 : 0.08;
       g.save(); g.translate(hip[0], hip[1]); g.rotate(a);
       g.drawImage(thImg, -R.thigh.top[0], -R.thigh.top[1]);
       g.translate(R.thigh.knee[0] - R.thigh.top[0], R.thigh.knee[1] - R.thigh.top[1]); g.rotate(b - a * 0.3);
@@ -1684,7 +1685,10 @@ AB.IsoSurface = (() => {
       g.restore();
     };
     leg(R.hipFar || R.hip, thF, shF, ph + Math.PI);                   // дальняя нога — за корпусом
-    g.drawImage(body, 0, 0);
+    // корпус: на ходу наклонён вперёд и раскачивается с шагом (вокруг таза), стоя — чуть дышит
+    const lean = mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01, roll = mv ? Math.sin(ph) * 6 : 0;
+    g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]);
+    g.drawImage(body, 0, 0); g.restore();
     leg(R.hip, th, sh, ph);                                           // ближняя — перед ним
     if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(R.hip[0], R.hip[1] - 150, 320, 380, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
     g.restore(); return true;
