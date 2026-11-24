@@ -64,7 +64,7 @@ Object.assign(AB.VEHICLES, {
     ability: { id: 'ignite', name: 'Поджог', text: 'Цель горит: 3 урона в секунду 4 с.', dps: 3, time: 4 }, desc: 'Шестиногий краулер с огнемётом, выращенный… или собранный? Трофей Цветка-пожирателя.' },
   'EQUIP-105': { id: 'EQUIP-105', name: 'Кузня «Кузнец»', short: 'Кузнец', class: 'thermal', shape: 'forge', img: 'assets/vehicles/forge.webp' /* №173 */, speed: 18, attack: 20, rate: 1.3, reach: 1, armor: 0.3, dtype: 'thermal', armorType: 'energy',
     ability: { id: 'hotarmor', name: 'Раскалённая броня', text: 'Кто бьёт его вплотную, получает 25% своего урона обратно.', part: 0.25 }, desc: 'Ходячая плавильня с раскалёнными плитами брони.' },
-  'EQUIP-106': { id: 'EQUIP-106', name: 'Носитель «Улей»', short: 'Улей', class: 'support', shape: 'drone', speed: 22, attack: 8, rate: 1.0, reach: 3, armor: 0.1, dtype: 'kinetic', armorType: 'energy',
+  'EQUIP-106': { id: 'EQUIP-106', name: 'Носитель «Улей»', short: 'Улей', class: 'support', shape: 'drone', img: 'assets/vehicles/hive.webp' /* №173 */, speed: 22, attack: 8, rate: 1.0, reach: 3, armor: 0.1, dtype: 'kinetic', armorType: 'energy',
     ability: { id: 'repair', name: 'Ремонтные дроны', text: 'Каждые 2 с чинит отряд в 3 клетках: +3 здоровья.', every: 2, radius: 3, amount: 3 }, desc: 'Парящий носитель с роем ремонтных дронов.' },
 });
 

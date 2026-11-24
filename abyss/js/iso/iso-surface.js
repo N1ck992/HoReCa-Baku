@@ -1671,6 +1671,7 @@ AB.IsoSurface = (() => {
       if (w > S0 * 1.9) { w = S0 * 1.9; h = pic.naturalHeight * w / pic.naturalWidth; }   // широкая техника (броневик) — по ширине
       g.save(); g.translate(x + lunge, y + S0 * 0.22 - bob);
       g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, -2, w * 0.32, 5, 0, 0, 7); g.fill();
+      if (v.shape === 'drone') g.translate(0, -(S0 * 0.18 + Math.sin(time * 2.2) * 3));   // парящий носитель — над тенью, покачивается
       g.scale(f, 1); g.drawImage(pic, -w / 2, -h, w, h);
       if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(0, -h * 0.45, w * 0.35, h * 0.4, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
       g.restore(); return;
