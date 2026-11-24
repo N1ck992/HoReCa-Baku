@@ -333,7 +333,8 @@ AB.IsoSurface = (() => {
   // герои выходят из неё в своих экзокостюмах, ходят, возвращаются и стыкуются рядом
   // №142: скорость — у техники (js/data/vehicles.js, клеток в минуту по дороге); бездорожье — дольше по цене клетки
   const devFast = () => (AB.IsoDev && AB.IsoDev.speed ? AB.IsoDev.speed() : 1);      // DEV: «Скорость ×5»
-  const STEP_OF = (u) => 60 / (u.kind === 'base' ? AB.VEHICLES_BASE.speed : (VEFF(u.vehicle) || { speed: 30 }).speed) / devFast();
+  // №193: «Следовать» — отряд идёт вместе, со скоростью самого медленного (u.capSpeed)
+  const STEP_OF = (u) => 60 / (u.kind === 'base' ? AB.VEHICLES_BASE.speed : Math.min((VEFF(u.vehicle) || { speed: 30 }).speed, u.capSpeed || Infinity)) / devFast();
   // №161: техника с деталями (js/iso/iso-mods.js) — скорость, урон, темп, броня, прочность, крит
   // №165: и исследования ветки «Бой» (AB.BaseSim.fx) — урон и броня всей техники отряда
   const TFX = (key) => (AB.BaseSim && AB.BaseSim.fx ? AB.BaseSim.fx(key) : 0);
@@ -454,6 +455,7 @@ AB.IsoSurface = (() => {
     if (u === base) for (const s of squads) if (s.state === 'home') { s.c = base.c; s.r = base.r; }
     reveal();
     if (u.path.length) return;
+    u.capSpeed = null;
     barSig = ''; save();
     if (u.state === 'retreat' && dist(curCell(u), curCell(base)) <= 1) { dock(u); say(`${AB.ID.get(u.id).name} — в капсуле`); return; }
     if (pendSite && pendSite.u === u && dist(cell(pendSite.s.c, pendSite.s.r), curCell(u)) <= (blockSite(cell(pendSite.s.c, pendSite.s.r)) ? 1 : 0)) { showSite(pendSite.s); pendSite = null; }
@@ -733,7 +735,10 @@ AB.IsoSurface = (() => {
     const idle = !s.anim && !s.path.length;
     if (!s.target && (s.mode === 'auto' || idle)) {
       const myReach = (VD(s).reach || 1);
-      const foe = alive().filter((m) => m.hitSq && time - (m.hitAt || 0) < 8 && (m.hitSq === s ? dist(curCell(m), curCell(s)) <= 3 : canShoot(curCell(s), curCell(m), myReach)))
+      // №192: «Автобой» в точку — по пути бьёт всех враждебных (злых на отряд или союзников, красный «!») в своей зоне поражения; нейтральных не трогает
+      const hostile = (m) => m.aggro && (m.aggro.kind === 'squad' || m.aggro.ally);
+      const foe = alive().filter((m) => (m.hitSq && time - (m.hitAt || 0) < 8 && (m.hitSq === s ? dist(curCell(m), curCell(s)) <= 3 : canShoot(curCell(s), curCell(m), myReach)))
+        || (s.mode === 'auto' && s.zone && hostile(m) && canShoot(curCell(s), curCell(m), Math.max(myReach, 2))))
         .sort((a, b) => (a.hitSq === s ? 0 : 1) - (b.hitSq === s ? 0 : 1) || dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s)))[0];
       if (foe) { s.target = foe; if (s.zone) s.resume = true; }
     }
@@ -1197,13 +1202,13 @@ AB.IsoSurface = (() => {
     const sg = { T, bearer, phase: 'gather', t: 0, hit: false, members: order };
     const used = new Set();
     for (const s of order) {
-      const fr = ((qs().form || {})[s.id] || ((VD(s).reach || 1) <= 1 ? 'front' : 'back')) === 'front';   // №163: построение
-      const R = fr ? 1 : Math.max(2, Math.min(3, VD(s).reach || 1));
+      const fr = (qs().form || {})[s.id] === 'front';                 // №191: по умолчанию — на максимальной дальности атаки; «вплотную» — только если задано в «Отряде»
+      const R = fr ? 1 : Math.max(1, Math.min(4, VD(s).reach || 1));
       const free = (x) => walk(x) && !occupiedBy(x, s) && !used.has(x);
       const spot = cells.filter((x) => free(x) && dist(x, C) === R).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0]
         || cells.filter((x) => free(x) && dist(x, C) <= R + 1 && dist(x, C) >= 1).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0];
       if (spot) used.add(spot);
-      Object.assign(s, { siege: sg, spot, mode: 'auto', target: null, zone: null, pick: null });
+      Object.assign(s, { siege: sg, spot, mode: 'auto', target: null, zone: null, pick: null, capSpeed: null });
       if (TFX('siegeShield')) giveShield(s, TFX('siegeShield'));      // №165: тактика осады
       if (s.state === 'retreat') s.state = 'out';
       if (spot && spot !== curCell(s)) goTo(s, spot, true); else s.path = [];
@@ -1378,8 +1383,7 @@ AB.IsoSurface = (() => {
   function repEnd(result) { if (!repOn()) return; rep.done = true; rep.result = result; rep.secs = Math.round(time - rep.t0); setTimeout(showReport, 1300); }
   function showReport() {
     const R0 = rep; if (!R0) return;
-    let el = document.getElementById('sf-report');
-    if (!el) { el = document.createElement('div'); el.id = 'sf-report'; document.getElementById('sf').appendChild(el); el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('[data-rep-x]')) el.hidden = true; }); el.addEventListener('pointerdown', (e) => e.stopPropagation()); }
+    // №191: отчёт — только письмом в почту, поверх окон не всплывает
     const name = (id) => (id === 'ally' ? 'Армия союзника' : herName(id));
     const rows = Object.entries(R0.rows).sort((a, b) => b[1].dealt - a[1].dealt);
     const best = rows[0] && rows[0][1].dealt > 0 ? rows[0][0] : null;
@@ -1388,10 +1392,7 @@ AB.IsoSurface = (() => {
       ${rows.map(([id, r]) => `<tr class="${R0.down.includes(id) ? 'down' : ''}"><td>${esc(name(id))}${id === best ? ' ★' : ''}${R0.down.includes(id) ? ' ✝' : ''}</td><td>${Math.round(r.dealt)}</td><td>${r.kills}</td><td>${Math.round(r.taken)}</td><td>${Math.round(r.shield)}</td><td>${Math.round(r.heal)}</td></tr>`).join('')}</table>
       <p>${R0.down.length ? `Пали: <b>${R0.down.map((id) => esc(name(id))).join(', ')}</b> — техника разбита, восстановить за ⚡${E().restore}. ` : 'Никто не пал. '}Бой шёл ${R0.secs} с.</p>
       <p>${Object.keys(loot).length ? `Добыча на земле: <b>${Object.entries(loot).map(([id, n]) => `${esc(AB.ID.get(id).name)} ×${n}`).join(', ')}</b> — поднять за ⚡${E().pick}` : 'Добычи нет.'}</p>`;
-    el.innerHTML = `<div class="rep-card"><div class="rep-head"><b>${esc(R0.title)}</b><span class="rep-res ${R0.result === 'Победа' ? 'ok' : 'bad'}">${R0.result}</span><button data-rep-x aria-label="Закрыть">✕</button></div>${body}
-      <button class="rep-ok" data-rep-x>Понятно</button></div>`;
-    if (AB.IsoMail && !R0.mailed) { R0.mailed = true; AB.IsoMail.add({ kind: 'report', title: `${R0.title} — ${R0.result}`, html: `<div class="rep-card mail">${body}</div>` }); }   // №168: копия — в почту
-    el.hidden = false;
+    if (AB.IsoMail && !R0.sent) { R0.sent = true; AB.IsoMail.add({ kind: 'report', title: `${R0.title} — ${R0.result}`, html: `<div class="rep-card mail">${body}</div>` }); say(`Отчёт о бое — в почте ✉`); }
   }
 
   // ---------- №163: построение перед осадой — кто впереди (кольцо вплотную), кто сзади, кто несёт щит ----------
@@ -1436,7 +1437,7 @@ AB.IsoSurface = (() => {
     cmd = { k, m, camp: camp || null };
     const el = document.getElementById('sf-cmd'), L = !m && !camp && lootAt(k), target = !!(m || (camp && campLeft(camp.key) > 0));   // №164: взятая точка — «Следовать», «Изучить»
     el.dataset.ctx = m ? 'mob' : camp ? (target ? 'camp' : 'site') : L ? 'loot' : k.site ? 'site' : 'cell';
-    const show = { auto: !target && !k.site && !L && !camp, follow: !target, attack: !!m, siege: target, study: target || !!k.site || !!camp, army: target && !!qs().ally, pick: !!L };
+    const show = { auto: !target && !k.site && !L && !camp, follow: !target && !L, go: !target, attack: !!m, siege: target, study: target || !!k.site || !!camp, army: target && !!qs().ally, pick: !!L };
     for (const [key, on] of Object.entries(show)) { const b = el.querySelector(`[data-cmd="${key}"]`); if (b) b.hidden = !on; }
     const pb = el.querySelector('[data-cmd="pick"] span'); if (pb) pb.textContent = `Поднять ⚡${E().pick}`;
     const ab = el.querySelector('[data-cmd="army"] span'); if (ab) ab.textContent = allyCd > 0 ? `Армия ${Math.ceil(allyCd)}с` : 'Армия';
@@ -1467,28 +1468,29 @@ AB.IsoSurface = (() => {
     const T = m || (camp ? { ...camp, isCamp: true } : null);
     if (kind === 'army') { if (T) callArmy(T); return; }
     const us = movers(); if (!us.length) { say('Некому идти — выпустите героя из капсулы'); return; }
-    if (kind === 'siege') { if (T && (camp ? campLeft(camp.key) : m.hp > 0)) openForm(us, T); else say('Здесь уже некого брать в осаду'); return; }   // №163: сперва построение
+    if (kind === 'siege') { if (T && (camp ? campLeft(camp.key) : m.hp > 0)) { startSiege(us, T); flyU = us[0]; follow = true; barSig = ''; } else say('Здесь уже некого брать в осаду'); return; }   // №191: сразу, без окна — построение в окне «Отряд»
     if (kind === 'pick') {                                                   // поднять добычу: идёт ближайший
       const L = lootAt(k); if (!L) return;
       const s0 = [...us].sort((a, b) => dist(curCell(a), k) - dist(curCell(b), k))[0];
-      Object.assign(s0, { pick: L, target: null, siege: null, mode: 'follow', zone: k });
+      Object.assign(s0, { pick: L, target: null, siege: null, mode: 'follow', zone: k, capSpeed: null });
       if (dist(curCell(s0), k) <= 1 && !s0.anim) pickLoot(s0, L); else goTo(s0, k, true);
       flyU = s0; follow = true; barSig = ''; return;
     }
-    for (const s of us) s.siege = null;
+    for (const s of us) { s.siege = null; s.capSpeed = null; }
+    if (kind === 'follow' && us.length > 1) { const slow = Math.min(...us.map((q) => (VEFF(q.vehicle) || { speed: 30 }).speed)); for (const q of us) q.capSpeed = slow; }   // №193
     if (kind === 'attack') {
       if (!m || m.hp <= 0) return;
-      for (const s of us) { s.mode = 'auto'; s.target = m; s.zone = null; s.path = []; s.repath = 0; s.pick = null; if (s.state === 'retreat') s.state = 'out'; }
+      for (const s of us) { s.mode = 'auto'; s.target = m; s.zone = null; s.path = []; s.repath = 0; s.pick = null; s.capSpeed = null; if (s.state === 'retreat') s.state = 'out'; }
       flyU = us[0]; follow = true; barSig = '';
       say(`${us.length > 1 ? 'Отряд' : herName(us[0].id)}: атака — ${NK(m).name}`);
       return;
     }
     const near0 = cells.filter((x) => walk(x) && dist(x, k) <= 2 && !occupiedBy(x, null)).sort((a, b) => dist(a, k) - dist(b, k));   // №182: здание и занятые — мимо
     const spots = near0.length ? near0 : [k];
-    us.forEach((s, i) => { s.mode = kind === 'auto' ? 'auto' : 'follow'; s.target = null; s.zone = spots[i % spots.length]; goTo(s, s.zone, true); });
+    us.forEach((s, i) => { s.mode = kind === 'auto' ? 'auto' : 'follow'; s.target = null; s.zone = spots[i % spots.length]; goTo(s, s.zone, true); });   // «Идти» и «Следовать» — без боя
     pendSite = k.site ? { s: k.site, u: us[0] } : null;
     flyU = us[0]; follow = true; barSig = '';
-    say(kind === 'auto' ? 'Автобой: идут туда и отвечают всем, кто нападёт на отряд' : 'Следовать: идут, не ввязываясь в бой');
+    say(kind === 'auto' ? 'Автобой: идут туда и бьют враждебных по пути' : kind === 'follow' ? (us.length > 1 ? 'Следовать: отряд идёт вместе — со скоростью самого медленного' : 'Следовать: идёт, не ввязываясь в бой') : 'Идти: каждый своим ходом, не ввязываясь в бой');
   }
 
   // ---------- №145: цепочка «Дорога на север» (js/data/surface-a1-story.js) — открывает мосты в Б1 ----------
@@ -2222,6 +2224,10 @@ AB.IsoSurface = (() => {
     // для проверок
     _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
     _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _trade: () => trade, _tradeTick: (dt) => tradeTick(dt), _mobs: () => mobs, _shots: () => shots, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
+    // №191: настройки осады — из окна «Отряд»: щитоносец и «вплотную» (по умолчанию — на максимальной дальности)
+    siegeCfg: () => ({ shield: shieldId, form: { ...(qs().form || {}) } }),
+    setShield: (id) => { shieldId = shieldId === id ? null : id; qs(); qSave(); barSig = ''; },
+    setForm: (id, pos) => { qs().form = qs().form || {}; if (pos === 'front') qs().form[id] = 'front'; else delete qs().form[id]; qSave(); },
     _siegeGo: () => { const b = document.querySelector('#sf-form [data-fm="go"]'); if (b) b.click(); }, _rep: () => rep, _formSet: (id, pos) => { qs().form = qs().form || {}; qs().form[id] = pos; },
     _camps: () => camps, _loot: () => loot, _allies: () => allies, _energy: (v) => { if (typeof v === 'number') energy = v; return energy; }, _broken: () => broken,
     _quests: () => qs(), _qAdvance: (id) => qAdvance(QS().find((q) => q.id === id)), _shield: (id) => { shieldId = id; }, _points: () => camps.filter((c) => c.pt), _own: () => qs().own, _raid: (key) => startRaid(camps.find((c) => c.key === key)), _tapCamp: (key) => { const cp = camps.find((x) => x.key === key); tap(cell(cp.c, cp.r), 400, 200); },

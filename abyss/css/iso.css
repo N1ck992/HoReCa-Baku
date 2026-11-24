@@ -1053,3 +1053,22 @@ body.map-fan-on .map-units { visibility: hidden; }
 .un-vh { margin-top: 8px !important; font: 600 11px var(--display); letter-spacing: 1px; text-transform: uppercase; color: #9fd8ff; }
 .un-picker { margin-top: 6px; padding: 6px 8px; border: 1px dashed rgba(255, 210, 120, .35); border-radius: 8px; }
 @media (max-width: 560px) { .un-vpage { grid-template-columns: 1fr; } .un-vfig img { height: 32vh; } }
+/* №191: «Осада — построение» в окне «Отряд» */
+.ro-siege { margin: 6px 0; padding: 8px 12px; border: 1px solid rgba(255, 140, 100, .35); border-radius: 8px; }
+.ro-siege > small { display: block; color: #ffc8a8; letter-spacing: 1px; text-transform: uppercase; font-size: 10px; margin-bottom: 4px; }
+.ro-sg { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.ro-sg b { font: 600 13px var(--display); color: #fff; min-width: 110px; } .ro-sg small { flex: 1; color: #9fb4bc; font-size: 11px; }
+.ro-sgpos { font: 11px var(--mono); padding: 3px 9px; border-radius: 6px; cursor: pointer; background: #10181c; border: 1px solid rgba(94, 230, 255, .4); color: #9fe7ff; }
+.ro-sgpos.front { color: #ffc8a8; border-color: rgba(255, 140, 100, .7); }
+.ro-sgsh { font-size: 14px; padding: 1px 7px; border-radius: 6px; cursor: pointer; background: #10181c; border: 1px solid rgba(140, 255, 160, .3); opacity: .45; }
+.ro-sgsh.on { opacity: 1; box-shadow: 0 0 6px rgba(140, 255, 160, .6); }
+/* №193: «Идти» — третья кнопка веера; раскладка на пустой клетке и на поселении */
+.map-cmd [data-cmd="go"] { border-color: rgba(255, 226, 140, .7); color: #ffe2a8; }
+.map-cmd[data-ctx="cell"] [data-cmd="auto"] { left: -62px; top: -38px; }
+.map-cmd[data-ctx="cell"] [data-cmd="follow"] { left: 0; top: -64px; }
+.map-cmd[data-ctx="cell"] [data-cmd="go"] { left: 62px; top: -38px; }
+.map-cmd[data-ctx="site"] [data-cmd="go"] { left: -62px; top: -38px; }
+.map-cmd[data-ctx="site"] [data-cmd="follow"] { left: 0; top: -64px; }
+.map-cmd[data-ctx="site"] [data-cmd="study"] { left: 62px; top: -38px; }
+.map-cmd[data-ctx="loot"] [data-cmd="go"] { left: -40px; top: -46px; }
+#ow-cmd [data-cmd="auto"] { left: -62px; top: -38px; } #ow-cmd [data-cmd="follow"] { left: 0; top: -64px; } #ow-cmd [data-cmd="go"] { left: 62px; top: -38px; }

@@ -181,11 +181,21 @@ AB.IsoRoster = (() => {
           ${partsRow(s.vehicle, lk)}</div>
         <div class="ro-info">${partPick ? pickerHtml(s.vehicle, partPick) : infoMode === 'hero' && s.hero ? `${heroDetail(s.hero)}<p><button class="ro-pbtn" data-info="">◀ Назад</button></p>` : infoMode === 'veh' ? `${vehDetail(s.vehicle)}<p><button class="ro-pbtn" data-info="">◀ Назад</button></p>` : `<p class="ro-hint">Нажмите на героя или технику — подробности.</p><p>${stat(AB.VehMods ? AB.VehMods.eff(s.vehicle) : v)}</p>${modsLine(s.vehicle)}${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}`}
           <em>${lk ? 'Снаружи — менять можно, когда вернётся в базу' : s.hero ? 'В базе' : 'Техника стоит в базе без экипажа'}</em></div>
-      </div>` + reserveHtml() + `<p class="ro-note">Активный отряд: ${sl.filter((q) => q.hero).length}/${MAX}. Ячейку выбирают вкладками сверху или нажатием на ячейку отряда внизу. ◀ ▶ — поставить героя или технику из наличия (или поменять местами с другой ячейкой). Способность героя работает только в технике его класса (✓); техники — всегда.</p>`;
+      </div>` + siegeHtml(sl) + reserveHtml() + `<p class="ro-note">Активный отряд: ${sl.filter((q) => q.hero).length}/${MAX}. Ячейку выбирают вкладками сверху или нажатием на ячейку отряда внизу. ◀ ▶ — поставить героя или технику из наличия (или поменять местами с другой ячейкой). Способность героя работает только в технике его класса (✓); техники — всегда.</p>`;
     for (const c of el.querySelectorAll('canvas[data-full]')) fullFigure(c, c.dataset.full);
   }
   // показать в окне ячейку этого героя (нажатие на ячейку отряда внизу карты)
   function focus(hero) { const i = sync().findIndex((q) => q.hero === hero); if (i >= 0) { cur = i; partPick = null; infoMode = null; if (el && !el.hidden) render(); } }
+  // №191: настройки осады — щитоносец (бьёт первым) и место в кольце: на максимальной дальности (по умолчанию) или вплотную
+  function siegeHtml(sl) {
+    const S2 = AB.IsoSurface; if (!S2 || !S2.siegeCfg) return '';
+    const cfg = S2.siegeCfg();
+    const rows = sl.filter((q) => q.hero).map((q) => { const v = V(q.vehicle), fr = cfg.form[q.hero] === 'front';
+      return `<div class="ro-sg"><b>${AB.ID.get(q.hero).name}</b><small>${v.short || v.name} · дальность ${v.reach || 1}</small>
+        <button class="ro-sgpos ${fr ? 'front' : ''}" data-fpos="${q.hero}">${fr ? '▲ Вплотную' : `◎ На дальности ${v.reach || 1}`}</button>
+        <button class="ro-sgsh ${cfg.shield === q.hero ? 'on' : ''}" data-sgsh="${q.hero}" title="Щитоносец: в осаде бьёт первым">🛡</button></div>`; }).join('');
+    return `<div class="ro-siege"><small>Осада — построение</small>${rows}<p class="ro-note">«Осада» на цели — техника встаёт кольцом на своей дальности (или вплотную), первым бьёт 🛡.</p></div>`;
+  }
   // №159: кто и что в наличии (не в активном отряде)
   function reserveHtml() {
     const sl = sync(), hs = crew().filter((id) => !sl.some((q) => q.hero === id)), vs = owned().filter((v) => !sl.some((q) => q.vehicle === v));
@@ -199,6 +209,8 @@ AB.IsoRoster = (() => {
       el.addEventListener('click', (e) => {
         if (e.target === el || e.target.closest('[data-ro-close]')) { el.hidden = true; return; }
         const tb = e.target.closest('[data-cur]'); if (tb) { cur = +tb.dataset.cur; partPick = null; infoMode = null; render(); return; }
+        const fp = e.target.closest('[data-fpos]'); if (fp && AB.IsoSurface) { const id = fp.dataset.fpos; AB.IsoSurface.setForm(id, AB.IsoSurface.siegeCfg().form[id] === 'front' ? 'range' : 'front'); render(); return; }
+        const sg = e.target.closest('[data-sgsh]'); if (sg && AB.IsoSurface) { AB.IsoSurface.setShield(sg.dataset.sgsh); render(); return; }
         const inf = e.target.closest('[data-info]'); if (inf) { infoMode = inf.dataset.info && infoMode !== inf.dataset.info ? inf.dataset.info : null; partPick = null; render(); return; }
         // №161: детали техники
         const pb = e.target.closest('[data-part]'); if (pb) { partPick = partPick === pb.dataset.part ? null : pb.dataset.part; render(); return; }

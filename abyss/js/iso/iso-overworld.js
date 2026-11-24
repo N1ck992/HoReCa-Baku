@@ -348,6 +348,7 @@ AB.IsoOverworld = (() => {
     const el = document.getElementById('ow-cmd');
     el.querySelector('[data-cmd="auto"]').hidden = !!cmd.mb;
     el.querySelector('[data-cmd="follow"]').hidden = !!cmd.mb;
+    el.querySelector('[data-cmd="go"]').hidden = !!cmd.mb;   // №193
     el.querySelector('[data-cmd="attack"]').hidden = !cmd.mb;
     el.hidden = false; placeCmd();
   }
