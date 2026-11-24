@@ -535,6 +535,8 @@ AB.IsoSurface = (() => {
     let a, k = 1;
     if ((a = hasAb(s, 'plates')) && (d.reach || 1) > 1) k *= a.mult;            // №157: бронелисты — меньше урона издалека
     let real = Math.max(1, Math.round(dmg * mul * k * (1 - v.armor) / (v.hpK || 1)));   // №161: прочность деталей
+    m.hitSq = s; m.hitAt = time;                                      // №196: кто бил — запомнить сразу (даже если всё погасил щит)
+    if (!s.target && !s.siege && s.state === 'out' && (s.mode === 'auto' || (!s.anim && !s.path.length))) s.target = m;   // №196: стоит или в автобое — сразу в ответ
     if (s.shield > 0) { const take = Math.min(s.shield, real); s.shield -= take; real -= take; if (repOn()) repRow(s).shield += take; floatText(posOf(s), `🛡−${take}`, '#8cff9a'); if (!real) { s.flash = 0.1; return; } }   // №157: щит гасит урон
     AB.Bus.emit('surface:hit', { npc: false });
     if (repOn()) repRow(s).taken += real;
@@ -737,7 +739,7 @@ AB.IsoSurface = (() => {
       const myReach = (VD(s).reach || 1);
       // №192: «Автобой» в точку — по пути бьёт всех враждебных (злых на отряд или союзников, красный «!») в своей зоне поражения; нейтральных не трогает
       const hostile = (m) => m.aggro && (m.aggro.kind === 'squad' || m.aggro.ally);
-      const foe = alive().filter((m) => (m.hitSq && time - (m.hitAt || 0) < 8 && (m.hitSq === s ? dist(curCell(m), curCell(s)) <= 3 : canShoot(curCell(s), curCell(m), myReach)))
+      const foe = alive().filter((m) => (m.hitSq && time - (m.hitAt || 0) < 8 && (m.hitSq === s ? dist(curCell(m), curCell(s)) <= Math.max(3, (NK(m).reach || 1) + 1) : canShoot(curCell(s), curCell(m), myReach)))
         || (s.mode === 'auto' && s.zone && hostile(m) && canShoot(curCell(s), curCell(m), Math.max(myReach, 2))))
         .sort((a, b) => (a.hitSq === s ? 0 : 1) - (b.hitSq === s ? 0 : 1) || dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s)))[0];
       if (foe) { s.target = foe; if (s.zone) s.resume = true; }
