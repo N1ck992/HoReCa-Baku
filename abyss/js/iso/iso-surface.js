@@ -1665,14 +1665,35 @@ AB.IsoSurface = (() => {
   function drawVeh(s, x, y) {
     const v = VD(s), col = (AB.HERO_ROLES[v.class] || {}).col || '#ccc', f = s.face || 1;
     const bob = s.anim ? Math.abs(Math.sin(s.stride / 10)) * 2 : 0, lunge = s.atk ? Math.sin(Math.min(1, s.atk.t / 0.8) * Math.PI) * 4 * f : 0;
-    const pic = v.img && vehPic(v.img);
+    // №174: анимация техники с картинкой: шагоход — шаг (покачивание, пружинит), колёса крутятся, носитель парит, дроны летают вокруг
+    const A = v.anim || {}, pic = v.img && vehPic(A.body || v.img);
     if (pic) {
       let h = S0 * 1.45, w = pic.naturalWidth * h / pic.naturalHeight;
       if (w > S0 * 1.9) { w = S0 * 1.9; h = pic.naturalHeight * w / pic.naturalWidth; }   // широкая техника (броневик) — по ширине
-      g.save(); g.translate(x + lunge, y + S0 * 0.22 - bob);
+      const k = w / pic.naturalWidth, mv = !!s.anim, ph = s.stride / (A.heavy ? 18 : 13);
+      let dy = 0, rot = 0, sx = 1;
+      if (A.kind === 'walk') { if (mv) { dy = -Math.abs(Math.sin(ph)) * S0 * (A.heavy ? 0.05 : 0.07); rot = Math.sin(ph) * (A.heavy ? 0.025 : 0.04); sx = 1 + Math.sin(ph * 2) * 0.015; } else dy = Math.sin(time * 1.8) * 0.8; }
+      if (A.kind === 'wheels' && mv) dy = Math.sin(s.stride * 0.7) * 1.2;   // подвеска на неровностях
+      g.save(); g.translate(x + lunge, y + S0 * 0.22);
       g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, -2, w * 0.32, 5, 0, 0, 7); g.fill();
-      if (v.shape === 'drone') g.translate(0, -(S0 * 0.18 + Math.sin(time * 2.2) * 3));   // парящий носитель — над тенью, покачивается
-      g.scale(f, 1); g.drawImage(pic, -w / 2, -h, w, h);
+      if (A.kind === 'wheels' && mv) for (let i = 0; i < 4; i++) {                                    // пыль из-под колёс
+        const t = (time * 2.2 + i / 4) % 1; g.fillStyle = `rgba(190,170,130,${0.35 * (1 - t)})`;
+        g.beginPath(); g.arc(-f * (w * 0.42 + t * S0 * 0.5), -4 - t * 10, 3 + t * 7, 0, 7); g.fill();
+      }
+      const hov = A.kind === 'hover' || v.shape === 'drone' ? S0 * 0.18 + Math.sin(time * 2.2) * 3 : 0;
+      g.translate(0, dy - hov); g.scale(f * sx, 1); g.rotate(rot);
+      const drone = A.drone && vehPic(A.drone), drones = [];
+      if (drone) for (let i = 0; i < (A.drones || 3); i++) { const an = time * 0.9 + i * Math.PI * 2 / (A.drones || 3); drones.push({ x: Math.cos(an) * w * 0.58, y: -h * 0.62 + Math.sin(an) * h * 0.22 + Math.sin(time * 3 + i) * 3, z: Math.sin(an) }); }
+      const drawDrone = (d) => { const dh = h * 0.26, dw = drone.naturalWidth * dh / drone.naturalHeight; g.drawImage(drone, d.x - dw / 2, d.y - dh / 2, dw, dh); };
+      for (const d of drones) if (d.z < 0) drawDrone(d);                                                // дроны за корпусом
+      g.drawImage(pic, -w / 2, -h, w, h);
+      if (A.kind === 'wheels') for (const [cx, cy, rx, ry, hx, hy] of A.wheels) {                     // колёса крутятся вокруг ступицы
+        const ex = -w / 2 + cx * k, ey = -h + cy * k, px = -w / 2 + hx * k, py = -h + hy * k, R2 = Math.max(rx, ry) * k * 1.15;
+        g.save(); g.beginPath(); g.ellipse(ex, ey, rx * k, ry * k, 0, 0, 7); g.clip();
+        g.translate(px, py); g.rotate(s.stride * 0.09);
+        g.drawImage(pic, hx - R2 / k, hy - R2 / k, R2 * 2 / k, R2 * 2 / k, -R2, -R2, R2 * 2, R2 * 2); g.restore();
+      }
+      for (const d of drones) if (d.z >= 0) drawDrone(d);                                               // дроны перед корпусом
       if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(0, -h * 0.45, w * 0.35, h * 0.4, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
       g.restore(); return;
     }
