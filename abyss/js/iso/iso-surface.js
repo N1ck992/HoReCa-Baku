@@ -68,6 +68,10 @@ AB.IsoSurface = (() => {
   };
   const passable = (k) => !!k && !K[k.kind].block;
   const cost = (k) => (k.road ? (k.kind === 'ford' ? 1.3 : 1) : K[k.kind].cost || 99);
+  // №182: на здания (город, посёлок, Узел, Купель, лагерь, шахта/укрепление) не наступает никто — к ним подходят вплотную
+  const BUILD = new Set(['capital', 'village', 'hub', 'shrine']);
+  const blockSite = (k) => !!k && ((k.site && BUILD.has(k.site.kind)) || !!k.camp);
+  const walk = (k) => passable(k) && !blockSite(k);
 
   // ---------- случайность (с зерном — карта всегда одна и та же) ----------
   function rng(seed) {
@@ -347,8 +351,8 @@ AB.IsoSurface = (() => {
     for (const s of squads) if (s.state === 'home') { s.c = base.c; s.r = base.r; }
   }
   AB.Bus.on('roster:changed', () => { if (built) { syncSquads(); barSig = ''; } });
-  const taken = (k, self) => (k.c === base.c && k.r === base.r) || outSquads().some((s) => s !== self && curCell(s) === k);
-  const besideBase = (self) => nbrs(curCell(base)).find((k) => passable(k) && !taken(k, self)) || null;
+  const taken = (k, self) => (k.c === base.c && k.r === base.r) || outSquads().some((s) => s !== self && curCell(s) === k) || alive().some((m) => curCell(m) === k);
+  const besideBase = (self) => nbrs(curCell(base)).find((k) => walk(k) && !taken(k, self)) || null;
   function deploy(id) {
     const s = unit(id); if (!s || s.state !== 'home') return false;
     if (broken[s.vehicle]) { restore(id); return false; }          // №157: разбитая техника — сперва восстановить за энергию
@@ -394,14 +398,38 @@ AB.IsoSurface = (() => {
     if (!passable(k)) { say(K[k.kind].block); return false; }
     if (!keep && u.kind === 'squad') { u.mode = 'follow'; u.target = null; u.zone = k; }
     const from = curCell(u);
+    // здание — встать рядом с ним (ближайшая свободная клетка)
+    if (blockSite(k)) {
+      if (dist(from, k) <= 1 && !u.anim) { u.path = []; if (k.site) showSite(k.site); return true; }
+      const p2 = search(from, (m) => dist(m, k) === 1 && walk(m) && !occupiedBy(m, u), (m) => (walk(m) ? cost(m) + (occupiedBy(m, u) ? 6 : 0) : Infinity));
+      if (!p2) { say('Туда не подойти'); return false; }
+      if (u.state === 'retreat') u.state = 'out';
+      u.path = p2; flyU = u; follow = true; barSig = ''; return true;
+    }
     if (from === k) { u.path = []; if (k.site) showSite(k.site); return true; }
-    const p = search(from, (m) => m === k, (m) => (passable(m) ? cost(m) : Infinity));
+    const p = search(from, (m) => m === k, (m) => (walk(m) ? cost(m) + (occupiedBy(m, u) ? 6 : 0) : Infinity));
     if (!p) { say('Туда не дойти'); return false; }
     if (u.state === 'retreat') u.state = 'out';
     u.path = p; flyU = u; follow = true; barSig = '';
     return true;
   }
+  // №182: в клетке — один юнит (капсула, отряд, NPC, патруль, союзник); занято — подождать и обойти
+  function occupiedBy(k, self) {
+    if (self !== base && curCell(base) === k) return true;
+    if (outSquads().some((q) => q !== self && curCell(q) === k)) return true;
+    if (alive().some((m) => m !== self && curCell(m) === k)) return true;
+    return allies.some((a) => a !== self && a.state === 'out' && curCell(a) === k);
+  }
   function stepUnit(u, dt) {
+    if (!u.anim && u.path.length && (occupiedBy(u.path[0], u) || blockSite(u.path[0]))) {
+      u.waitT = (u.waitT || 0) + dt;
+      if (u.waitT < 0.5) return;                                       // подождать — может, уйдёт
+      u.waitT = 0; const goal = u.path[u.path.length - 1];
+      const p = goal && search(curCell(u), (m) => (occupiedBy(goal, u) || blockSite(goal) ? dist(m, goal) <= 1 && walk(m) && !occupiedBy(m, u) : m === goal), (m) => (walk(m) && !occupiedBy(m, u) ? cost(m) : Infinity));
+      if (p && p.length) u.path = p; else { u.path = []; if (u === base) say('Путь занят — капсула остановилась'); }
+      return;
+    }
+    u.waitT = 0;
     if (!u.anim && u.path.length) {
       const nx = u.path.shift();
       u.face = upx(nx.c, nx.r).x >= upx(u.c, u.r).x ? 1 : -1;
@@ -416,7 +444,7 @@ AB.IsoSurface = (() => {
     if (u.path.length) return;
     barSig = ''; save();
     if (u.state === 'retreat' && dist(curCell(u), curCell(base)) <= 1) { dock(u); say(`${AB.ID.get(u.id).name} — в капсуле`); return; }
-    if (pendSite && pendSite.u === u && pendSite.s.c === u.c && pendSite.s.r === u.r) { showSite(pendSite.s); pendSite = null; }
+    if (pendSite && pendSite.u === u && dist(cell(pendSite.s.c, pendSite.s.r), curCell(u)) <= (blockSite(cell(pendSite.s.c, pendSite.s.r)) ? 1 : 0)) { showSite(pendSite.s); pendSite = null; }
   }
   const posOf = (u) => {
     const a = bpx(u.c, u.r);
@@ -453,7 +481,7 @@ AB.IsoSurface = (() => {
   const mobAt = (k) => alive().find((m) => curCell(m) === k) || null;
   const eyesNear = (k) => [base, ...outSquads()].some((u) => dist(k, curCell(u)) <= VIEW + 1);
   const visibleMob = (m) => { const k = curCell(m); return k.seen && eyesNear(k); };
-  const pathTo = (from, goal) => search(from, goal, (x) => (passable(x) && x !== curCell(base) && !(mobAt(x) && !goal(x)) ? cost(x) : Infinity));
+  const pathTo = (from, goal) => search(from, goal, (x) => (walk(x) && x !== curCell(base) && !(mobAt(x) && !goal(x)) ? cost(x) + (outSquads().some((q) => curCell(q) === x) ? 4 : 0) : Infinity));
   const floatText = (p, text, col) => floats.push({ x: p.x, y: p.y - S0 * 0.9, t: 0, text, col });
   function spawnGroup() {
     const B = curCell(base);
@@ -476,8 +504,8 @@ AB.IsoSurface = (() => {
     const d = NK(m);
     if (!m.anim && m.path.length) {
       const nx = m.path.shift();
-      const busy = (mobAt(nx) && mobAt(nx) !== m) || nx === curCell(base) || outSquads().some((s) => curCell(s) === nx);
-      if (busy || !passable(nx)) m.path = [];
+      const busy = occupiedBy(nx, m);
+      if (busy || !walk(nx)) m.path = [];
       else { m.face = upx(nx.c, nx.r).x >= upx(m.c, m.r).x ? 1 : -1; m.anim = { to: { c: nx.c, r: nx.r }, t: 0, dur: 60 / d.speed * cost(nx) }; }
     }
     if (!m.anim) return;
@@ -551,7 +579,8 @@ AB.IsoSurface = (() => {
   const siteCell = (key) => { const st = sites.find((x) => x.key === key); return st ? cell(st.c, st.r) : null; };
   function spawnPatrol(gi) {
     const G = PAT().groups[gi], d = PAT().kinds[G.kind], start = siteCell(G.route[0]); if (!start) return;
-    const grp = ++mobSeq, spots = [start, ...nbrs(start).filter((x) => passable(x) && x !== curCell(base))];
+    const around = (c0) => cells.filter((x) => walk(x) && !occupiedBy(x, null) && dist(x, c0) >= 1 && dist(x, c0) <= 2).sort((a, b) => dist(a, c0) - dist(b, c0));
+    const grp = ++mobSeq, spots = around(start);   // №182: выходят рядом со столицей, не в ней
     for (let i = 0; i < G.n && i < spots.length; i++) {
       mobs.push({ id: `pat${++mobSeq}`, kind: G.kind, grp, c: spots[i].c, r: spots[i].r, home: { c: spots[i].c, r: spots[i].r }, hp: d.hp, max: d.hp,
         aggro: null, atkT: Math.random(), atk: null, path: [], anim: null, face: 1, stride: 0, flash: 0, wanderT: 0, repath: 0, deadT: 0,
@@ -1031,7 +1060,7 @@ AB.IsoSurface = (() => {
   }
   function startRaid(cp) {
     const P = PTS(), from = siteCell(P.capital[cp.d.side]), kind = ALLY_KIND[cp.d.side], dk = PAT().kinds[kind]; if (!from) return;
-    const grp = ++mobSeq, spots = [from, ...nbrs(from).filter((x) => passable(x) && !mobAt(x))];
+    const grp = ++mobSeq, spots = cells.filter((x) => walk(x) && !occupiedBy(x, null) && dist(x, from) >= 1 && dist(x, from) <= 2).sort((a, b) => dist(a, from) - dist(b, from));
     for (let i = 0; i < P.raid.n && i < spots.length; i++)
       mobs.push({ id: `raid${++mobSeq}`, kind, raid: cp.key, grp, c: spots[i].c, r: spots[i].r, home: { c: cp.c, r: cp.r }, hp: dk.hp, max: dk.hp,
         aggro: null, atkT: 0, atk: null, path: [], anim: null, face: 1, stride: 0, flash: 0, wanderT: 0, repath: 0, deadT: 0 });
@@ -1118,7 +1147,7 @@ AB.IsoSurface = (() => {
     for (const s of order) {
       const fr = ((qs().form || {})[s.id] || ((VD(s).reach || 1) <= 1 ? 'front' : 'back')) === 'front';   // №163: построение
       const R = fr ? 1 : Math.max(2, Math.min(3, VD(s).reach || 1));
-      const free = (x) => passable(x) && x !== curCell(base) && !mobAt(x) && !used.has(x) && !outSquads().some((q) => q !== s && curCell(q) === x);
+      const free = (x) => walk(x) && !occupiedBy(x, s) && !used.has(x);
       const spot = cells.filter((x) => free(x) && dist(x, C) === R).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0]
         || cells.filter((x) => free(x) && dist(x, C) <= R + 1 && dist(x, C) >= 1).sort((a, b) => dist(a, curCell(s)) - dist(b, curCell(s)))[0];
       if (spot) used.add(spot);
@@ -1156,7 +1185,7 @@ AB.IsoSurface = (() => {
     if (!side) { say('Союзника пока нет: задание «Союз» в Меновом Узле'); return; }
     if (allyCd > 0) { say(`Армия союзника соберётся через ${Math.ceil(allyCd)} с`); return; }
     const C = sgCenter(T), dk = PAT().kinds[ALLY_KIND[side]];
-    const spots = cells.filter((x) => passable(x) && !mobAt(x) && x !== curCell(base) && dist(x, C) >= 2 && dist(x, C) <= 4).sort(() => Math.random() - 0.5);
+    const spots = cells.filter((x) => walk(x) && !occupiedBy(x, null) && dist(x, C) >= 2 && dist(x, C) <= 4).sort(() => Math.random() - 0.5);
     for (let i = 0; i < A.units && i < spots.length; i++) {
       const hp = Math.round(dk.hp * 1.3);
       allies.push({ id: `ally${++mobSeq}`, kind: 'ally', ally: true, d: { ...dk, name: `${dk.name} (союзник)` }, dtype: dk.dtype, state: 'out', T, c: spots[i].c, r: spots[i].r,
@@ -1402,7 +1431,8 @@ AB.IsoSurface = (() => {
       say(`${us.length > 1 ? 'Отряд' : herName(us[0].id)}: атака — ${NK(m).name}`);
       return;
     }
-    const spots = [k, ...nbrs(k).filter((x) => passable(x) && x !== curCell(base) && !mobAt(x))];
+    const near0 = cells.filter((x) => walk(x) && dist(x, k) <= 2 && !occupiedBy(x, null)).sort((a, b) => dist(a, k) - dist(b, k));   // №182: здание и занятые — мимо
+    const spots = near0.length ? near0 : [k];
     us.forEach((s, i) => { s.mode = kind === 'auto' ? 'auto' : 'follow'; s.target = null; s.zone = spots[i % spots.length]; goTo(s, s.zone, true); });
     pendSite = k.site ? { s: k.site, u: us[0] } : null;
     flyU = us[0]; follow = true; barSig = '';
