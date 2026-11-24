@@ -1694,11 +1694,33 @@ AB.IsoSurface = (() => {
     const arm = (A2, ang) => { const im = A2 && P(A2.img); if (!im) return; g.save(); g.translate(A2.pivot[0], A2.pivot[1]); g.rotate(ang); g.drawImage(im, A2.at[0] - A2.pivot[0], A2.at[1] - A2.pivot[1]); g.restore(); };
     const sway = mv ? Math.sin(ph) * 0.14 : Math.sin(time * 1.8) * 0.02;   // руки — в противофазе ногам
     g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]);
-    if (R.arms) arm(R.arms.far, -sway * 0.8 + (at >= 0 ? 0.12 * Math.sin(at * Math.PI) : 0));
+    // №179: рука из трёх деталей — плечо (вокруг плечевого шарнира), предплечье (локоть), кисть (кулак или раскрытая ладонь)
+    const arm3 = (side, sh, el, open) => {
+      const C = R.arms3, S2 = C[side], k3 = C.scale, ua = P('ua' + S2.sfx), fa = P('fa' + S2.sfx), hand = open && !S2.sfx ? P('palm') : P('fist' + S2.sfx);
+      if (!ua || !fa || !hand) return;
+      const H = open && !S2.sfx ? C.palm : C.fist;
+      g.save(); g.translate(S2.shoulder[0], S2.shoulder[1]); g.scale(k3, k3); g.rotate(sh);
+      g.drawImage(ua, -C.ua.top[0], -C.ua.top[1]);
+      g.translate(C.ua.elbow[0] - C.ua.top[0], C.ua.elbow[1] - C.ua.top[1]); g.rotate(el);
+      g.drawImage(fa, -C.fa.top[0], -C.fa.top[1]);
+      g.translate(C.fa.wrist[0] - C.fa.top[0], C.fa.wrist[1] - C.fa.top[1]); g.rotate(H.rot);
+      g.drawImage(hand, -H.wrist[0], -H.wrist[1]);
+      g.restore();
+    };
+    // атака: замах (плечо назад, локоть согнут, ладонь раскрыта) → удар (рука прямая вперёд, кулак) → возврат
+    const sm = (a, b, t) => a + (b - a) * (t * t * (3 - 2 * t));
+    let shN = sway * 1.6 + 0.12, elN = -0.7, open = false;
+    if (at >= 0) {
+      if (at < 0.35) { const t = at / 0.35; shN = sm(shN, 0.6, t); elN = sm(-0.7, -1.9, t); open = t > 0.3; }
+      else if (at < 0.5) { const t = (at - 0.35) / 0.15; shN = sm(0.6, -1.4, t); elN = sm(-1.9, -0.05, t); }
+      else { const t = (at - 0.5) / 0.5; shN = sm(-1.4, 0.12, t); elN = sm(-0.05, -0.7, t); }
+    }
+    if (R.arms3) arm3('far', -sway * 1.4 + 0.1 + (at >= 0 ? -0.25 * Math.sin(at * Math.PI) : 0), -0.75, false);
+    else if (R.arms) arm(R.arms.far, -sway * 0.8 + (at >= 0 ? 0.12 * Math.sin(at * Math.PI) : 0));
     g.drawImage(body, 0, 0);
     g.restore();
     leg(R.hip, th, sh, ph);                                           // ближняя — перед ним
-    if (R.arms) { g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]); arm(R.arms.near, sway + hit); g.restore(); }   // ближняя рука — поверх всего
+    if (R.arms3 || R.arms) { g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]); if (R.arms3) arm3('near', shN, elN, open); else arm(R.arms.near, sway + hit); g.restore(); }   // ближняя рука — поверх всего
     if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(R.hip[0], R.hip[1] - 150, 320, 380, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
     g.restore(); return true;
   }
