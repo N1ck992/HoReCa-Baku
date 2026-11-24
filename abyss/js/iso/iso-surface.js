@@ -591,6 +591,14 @@ AB.IsoSurface = (() => {
   function drawShots() {
     for (const sh of shots) {
       const to = sh.to(), u = Math.min(1, sh.t / sh.dur), fade = sh.t > sh.dur ? 1 - (sh.t - sh.dur) / 0.25 : 1;
+      if (sh.kind === 'impact') {                  // №181: удар кулаком — ударная волна и искры
+        if (!sh.done) continue;
+        const u2 = Math.min(1, (sh.t - sh.dur) / 0.25), a2 = 1 - u2;
+        g.strokeStyle = `rgba(255,230,180,${0.9 * a2})`; g.lineWidth = 4 * a2 + 1; g.beginPath(); g.ellipse(to.x, to.y, 8 + u2 * 34, 5 + u2 * 20, 0, 0, 7); g.stroke();
+        g.fillStyle = `rgba(255,250,220,${0.8 * a2})`; g.beginPath(); g.arc(to.x, to.y, 10 * a2 + 2, 0, 7); g.fill();
+        for (let i = 0; i < 9; i++) { const an = i * 0.7 + sh.dur * 7, r1 = 6 + u2 * 30, r2 = r1 + 10 * a2; g.strokeStyle = `rgba(255,${170 + (i % 3) * 30},70,${a2})`; g.lineWidth = 2; g.beginPath(); g.moveTo(to.x + Math.cos(an) * r1, to.y + Math.sin(an) * r1 * 0.6); g.lineTo(to.x + Math.cos(an) * r2, to.y + Math.sin(an) * r2 * 0.6); g.stroke(); }
+        continue;
+      }
       if (sh.kind === 'zap') {                     // №157: разряд — ломаная молния
         g.globalAlpha = fade; g.strokeStyle = 'rgba(140,230,255,.95)'; g.lineWidth = 2; g.beginPath(); g.moveTo(sh.from.x, sh.from.y);
         for (let i = 1; i < 5; i++) { const u2 = i / 5; g.lineTo(sh.from.x + (to.x - sh.from.x) * u2 + (Math.random() - 0.5) * 10, sh.from.y + (to.y - sh.from.y) * u2 + (Math.random() - 0.5) * 10); }
@@ -674,6 +682,9 @@ AB.IsoSurface = (() => {
         const hit = strike(s, m);                                    // №157: сила удара со способностями
         // экзокостюм — выстрел сгустком: урон — когда сгусток долетит; остальная техника бьёт сразу
         if (v.fx && vfx) vfx.shot(v.fx, () => muzzleOf(s), () => { const p = posOf(m); return { x: p.x, y: p.y - S0 * 0.35 }; }, S0, () => { if (m.hp > 0) { hurtMob(m, hit.dmg, s); afterHit(s, m); } });
+        else if (v.anim && v.anim.kind === 'rig' && v.anim.rig.arms3 && v.reach <= 1) {   // №181: удар всем телом — урон в момент попадания
+          shots.push({ kind: 'impact', from: posOf(m), to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.45 }; }, t: 0, dur: 0.32, hit: () => { if (m.hp > 0 && s.state === 'out') { hurtMob(m, hit.dmg, s); afterHit(s, m); shakeT = 0.22; } } });
+        }
         else { if (v.reach > 1) vehShot(s, m); hurtMob(m, hit.dmg, s); afterHit(s, m); }
       }
     } else if (!s.anim && ((s.repath = (s.repath || 0) - dt) <= 0 || !s.path.length)) {
@@ -1582,7 +1593,8 @@ AB.IsoSurface = (() => {
     const k = kScale();
     g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#05070a'; g.fillRect(0, 0, cv.width, cv.height);
     g.imageSmoothingEnabled = true;
-    g.setTransform(k, 0, 0, k, cv.width / 2 - cam.x * k, cv.height / 2 - cam.y * k);
+    const shk = shakeT > 0 ? shakeT * 18 : 0;                     // №181: тряска при ударе
+    g.setTransform(k, 0, 0, k, cv.width / 2 - cam.x * k + (Math.random() - 0.5) * shk, cv.height / 2 - cam.y * k + (Math.random() - 0.5) * shk);
     g.drawImage(bake, 0, 0);
     g.drawImage(fogCv, 0, 0);
     // память: всё, что дальше обзора, — приглушено (вокруг выбранного)
@@ -1664,6 +1676,21 @@ AB.IsoSurface = (() => {
   function vehPic(src) { let im = vehPics[src]; if (!im) { im = vehPics[src] = new Image(); im.src = src; } return im.complete && im.naturalWidth ? im : null; }
   // №175: шагоход по частям (корпус, бедро, голень; ближняя и дальняя нога): бедро качается вокруг тазобедренного
   // шарнира, голень сгибается в колене, ноги в противофазе, корпус приседает на шаге. false — части ещё не загрузились.
+  // №181: удар всем телом — ключевые позы (rest → замах → удар → удержание → возврат), между ними — плавно
+  const RIG_POSES = {
+    //        dx    dy  lean   nT    nK    fT    fK    shN    elN   shF    elF
+    rest:  [   0,    0, 0.02,  0.04, 0.08, 0.04, 0.08,  0.12, -0.7,  0.1,  -0.75],
+    cock:  [ -30,   34, -0.16, -0.12, 0.62, 0.28, 0.55,  1.45, -2.35, -0.75, -1.2],
+    strike:[  85,   14, 0.3,  -0.62, 0.32, 0.5,  0.06, -1.62, -0.02,  0.85, -0.35],
+  };
+  function rigPose(at) {
+    const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = RIG_POSES;
+    if (at < 0.3) return { q: L(P.rest, P.cock, E(at / 0.3)), open: at > 0.1 };
+    if (at < 0.4) { const t = (at - 0.3) / 0.1; return { q: L(P.cock, P.strike, t * t), open: false, fast: true }; }   // разгон — с ускорением
+    if (at < 0.55) return { q: P.strike, open: false, hold: true };
+    return { q: L(P.strike, P.rest, E((at - 0.55) / 0.45)), open: false };
+  }
+  let shakeT = 0;
   function drawRig(s, v, R, x, y, lunge) {
     const P = (n) => vehPic(R.dir + n + '.webp');
     const body = P('body'), th = P('thigh'), sh = P('shin'), thF = P('thigh_far'), shF = P('shin_far');
@@ -1671,35 +1698,33 @@ AB.IsoSurface = (() => {
     const f = s.face || 1, mv = !!s.anim, ph = s.stride / (R.heavy ? 15 : 11);   // тяжёлый — шаг реже
     const full = R.hip[1] + (R.thigh.knee[1] - R.thigh.top[1]) + (R.shin.foot[1] - R.shin.top[1]);   // от верха корпуса до ступни
     const k = (S0 * 1.6) / full;
-    const bob = mv ? -Math.abs(Math.cos(ph)) * 22 : Math.sin(time * 1.8) * 4;   // в пикселях картинки
-    g.save(); g.translate(x + lunge, y + S0 * 0.24);
-    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
+    const at = s.atk && R.arms3 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at) : null, Q = A ? A.q : null;
+    const bob = A ? 0 : mv ? -Math.abs(Math.cos(ph)) * 22 : Math.sin(time * 1.8) * 4;   // в пикселях картинки
+    g.save(); g.translate(x + (A ? 0 : lunge), y + S0 * 0.24);
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(Q ? Q[0] * k * f * 0.6 : 0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
     g.scale(f * k, k); g.translate(-R.hip[0], -full - bob);
-    const leg = (hip, thImg, shImg, p) => {
+    if (Q) g.translate(Q[0], Q[1]);                                   // удар: рывок вперёд и присед
+    const leg = (hip, thImg, shImg, p, ovA, ovB) => {
       // бедро: sin — нога уходит назад (опора), потом выносится вперёд; колено сгибается, только когда нога идёт вперёд (cos < 0)
-      const a = mv ? Math.sin(p) * 0.4 : 0.04, b = mv ? 0.08 + Math.max(0, -Math.cos(p)) * 0.75 : 0.08;
+      let a = mv ? Math.sin(p) * 0.4 : 0.04, b = mv ? 0.08 + Math.max(0, -Math.cos(p)) * 0.75 : 0.08;
+      if (ovA != null) { a = ovA; b = ovB; }
       g.save(); g.translate(hip[0], hip[1]); g.rotate(a);
       g.drawImage(thImg, -R.thigh.top[0], -R.thigh.top[1]);
       g.translate(R.thigh.knee[0] - R.thigh.top[0], R.thigh.knee[1] - R.thigh.top[1]); g.rotate(b - a * 0.3);
       g.drawImage(shImg, -R.shin.top[0], -R.shin.top[1]);
       g.restore();
     };
-    leg(R.hipFar || R.hip, thF, shF, ph + Math.PI);                   // дальняя нога — за корпусом
-    // №178: атака — замах (кулак назад), удар вперёд-вверх, возврат; корпус подаётся за ударом
-    const at = s.atk ? Math.min(1, s.atk.t / 0.8) : -1;
-    const hit = at < 0 ? 0 : at < 0.35 ? (at / 0.35) * 0.45 : at < 0.5 ? 0.45 - ((at - 0.35) / 0.15) * 1.25 : -0.8 + ((at - 0.5) / 0.5) * 0.8;
-    const push = at < 0 ? 0 : at < 0.35 ? -(at / 0.35) * 0.05 : at < 0.5 ? -0.05 + ((at - 0.35) / 0.15) * 0.14 : 0.09 * (1 - (at - 0.5) / 0.5);
+    leg(R.hipFar || R.hip, thF, shF, ph + Math.PI, Q && Q[5], Q && Q[6]);   // дальняя нога — за корпусом
     // корпус: на ходу наклонён вперёд и раскачивается с шагом (вокруг таза), стоя — чуть дышит
-    const lean = (mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01) + push, roll = mv ? Math.sin(ph) * 6 : 0;
+    const lean = Q ? Q[2] : (mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01), roll = !Q && mv ? Math.sin(ph) * 6 : 0;
     const arm = (A2, ang) => { const im = A2 && P(A2.img); if (!im) return; g.save(); g.translate(A2.pivot[0], A2.pivot[1]); g.rotate(ang); g.drawImage(im, A2.at[0] - A2.pivot[0], A2.at[1] - A2.pivot[1]); g.restore(); };
     const sway = mv ? Math.sin(ph) * 0.14 : Math.sin(time * 1.8) * 0.02;   // руки — в противофазе ногам
-    g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]);
-    // №179: рука из трёх деталей — плечо (вокруг плечевого шарнира), предплечье (локоть), кисть (кулак или раскрытая ладонь)
-    const arm3 = (side, sh, el, open) => {
+    // рука из трёх деталей — плечо (вокруг плечевого шарнира), предплечье (локоть), кисть (кулак или раскрытая ладонь)
+    const arm3 = (side, shA, el, open) => {
       const C = R.arms3, S2 = C[side], k3 = C.scale, ua = P('ua' + S2.sfx), fa = P('fa' + S2.sfx), hand = open && !S2.sfx ? P('palm') : P('fist' + S2.sfx);
       if (!ua || !fa || !hand) return;
       const H = open && !S2.sfx ? C.palm : C.fist;
-      g.save(); g.translate(S2.shoulder[0], S2.shoulder[1]); g.scale(k3, k3); g.rotate(sh);
+      g.save(); g.translate(S2.shoulder[0], S2.shoulder[1]); g.scale(k3, k3); g.rotate(shA);
       g.drawImage(ua, -C.ua.top[0], -C.ua.top[1]);
       g.translate(C.ua.elbow[0] - C.ua.top[0], C.ua.elbow[1] - C.ua.top[1]); g.rotate(el);
       g.drawImage(fa, -C.fa.top[0], -C.fa.top[1]);
@@ -1707,20 +1732,23 @@ AB.IsoSurface = (() => {
       g.drawImage(hand, -H.wrist[0], -H.wrist[1]);
       g.restore();
     };
-    // атака: замах (плечо назад, локоть согнут, ладонь раскрыта) → удар (рука прямая вперёд, кулак) → возврат
-    const sm = (a, b, t) => a + (b - a) * (t * t * (3 - 2 * t));
-    let shN = sway * 1.6 + 0.12, elN = -0.7, open = false;
-    if (at >= 0) {
-      if (at < 0.35) { const t = at / 0.35; shN = sm(shN, 0.6, t); elN = sm(-0.7, -1.9, t); open = t > 0.3; }
-      else if (at < 0.5) { const t = (at - 0.35) / 0.15; shN = sm(0.6, -1.4, t); elN = sm(-1.9, -0.05, t); }
-      else { const t = (at - 0.5) / 0.5; shN = sm(-1.4, 0.12, t); elN = sm(-0.05, -0.7, t); }
-    }
-    if (R.arms3) arm3('far', -sway * 1.4 + 0.1 + (at >= 0 ? -0.25 * Math.sin(at * Math.PI) : 0), -0.75, false);
-    else if (R.arms) arm(R.arms.far, -sway * 0.8 + (at >= 0 ? 0.12 * Math.sin(at * Math.PI) : 0));
+    const torso = () => { g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]); };
+    g.save(); torso();
+    if (R.arms3) arm3('far', Q ? Q[9] : -sway * 1.4 + 0.1, Q ? Q[10] : -0.75, false);
+    else if (R.arms) arm(R.arms.far, -sway * 0.8);
     g.drawImage(body, 0, 0);
     g.restore();
-    leg(R.hip, th, sh, ph);                                           // ближняя — перед ним
-    if (R.arms3 || R.arms) { g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]); if (R.arms3) arm3('near', shN, elN, open); else arm(R.arms.near, sway + hit); g.restore(); }   // ближняя рука — поверх всего
+    leg(R.hip, th, sh, ph, Q && Q[3], Q && Q[4]);                    // ближняя — перед ним
+    if (R.arms3 || R.arms) {
+      g.save(); torso();
+      if (R.arms3) {
+        // след кулака на разгоне и в ударе — полупрозрачные «тени» прежних поз
+        if (A && (A.fast || A.hold)) for (const d of [0.05, 0.035, 0.02]) { const B = rigPose(Math.max(0.3, at - d)); g.globalAlpha = A.hold ? 0.12 : 0.28; arm3('near', B.q[7], B.q[8], false); }
+        g.globalAlpha = 1;
+        arm3('near', Q ? Q[7] : sway * 1.6 + 0.12, Q ? Q[8] : -0.7, A ? A.open : false);
+      } else arm(R.arms.near, sway);
+      g.restore();
+    }
     if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(R.hip[0], R.hip[1] - 150, 320, 380, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
     g.restore(); return true;
   }
@@ -1869,7 +1897,7 @@ AB.IsoSurface = (() => {
     if (!open_) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt; frameDt = dt;
     stepUnit(base, dt); for (const s of outSquads()) stepUnit(s, dt);
-    combatTick(dt);
+    combatTick(dt); shakeT = Math.max(0, shakeT - dt);
     tradeTick(dt);
     if (AB.IsoAudio && AB.IsoAudio.surfaceTick) AB.IsoAudio.surfaceTick(dt);
     barUi();
