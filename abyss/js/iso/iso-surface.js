@@ -527,7 +527,7 @@ AB.IsoSurface = (() => {
   const herName = (id) => AB.ID.get(id).name;
   const fem = (id) => id === 'CHAR-002' || id === 'CHAR-003';
   function hurtSquad(s, dmg, m, opt = {}) {
-    if (s.ally) { const r = Math.max(1, Math.round(dmg * (1 - (s.d.armor || 0)))); s.hp -= r; if (repOn()) repRow(s).taken += r; s.flash = 0.25; floatText(posOf(s), `−${r}`, '#ff8a6a'); if (s.hp <= 0) { s.hp = 0; s.state = 'home'; } return; }   // №157: союзник
+    if (s.ally) { const r = Math.max(1, Math.round(dmg * (1 - (s.d.armor || 0)))); s.hp -= r; if (repOn()) repRow(s).taken += r; m.hitSq = s; m.hitAt = time; /* №190: союзника бьют — отряд рядом ответит */ s.flash = 0.25; floatText(posOf(s), `−${r}`, '#ff8a6a'); if (s.hp <= 0) { s.hp = 0; s.state = 'home'; } return; }   // №157: союзник
     const c = AB.Chars.get(s.id), v = VEFF(s.vehicle) || { armor: 0 }, d = NK(m);
     const mul = AB.Damage ? AB.Damage.mult(d.dtype, v.armorType) : 1;          // №152: тип урона × защита
     let a, k = 1;
@@ -728,10 +728,13 @@ AB.IsoSurface = (() => {
     if (s.pick) { const L = s.pick, k = cell(L.c, L.r); if (!loot.includes(L)) s.pick = null; else if (!s.anim && !s.path.length && dist(curCell(s), k) <= 1) pickLoot(s, L); }
     if (s.siege && siegeStep(s, dt)) return;                         // №157: осада — сперва встать кольцом
     if (s.target && s.target.hp <= 0) { s.target = null; if (s.mode === 'auto' && s.zone && curCell(s) !== s.zone) s.resume = true; }
-    // №184: после цели — никого сам не трогает; в ответ бьёт только тех, кто напал на него самого
-    if (!s.target && s.mode === 'auto') {
-      const foe = alive().filter((m) => m.hitSq === s && time - (m.hitAt || 0) < 8 && dist(curCell(m), curCell(s)) <= 3)
-        .sort((a, b) => dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s)))[0];
+    // №184: после цели — никого сам не трогает; в ответ бьёт тех, кто напал на него самого.
+    // №190: и тех, кто бьёт любого союзника (героя или армию) и стоит в зоне поражения этого героя — даже стоя на месте
+    const idle = !s.anim && !s.path.length;
+    if (!s.target && (s.mode === 'auto' || idle)) {
+      const myReach = (VD(s).reach || 1);
+      const foe = alive().filter((m) => m.hitSq && time - (m.hitAt || 0) < 8 && (m.hitSq === s ? dist(curCell(m), curCell(s)) <= 3 : canShoot(curCell(s), curCell(m), myReach)))
+        .sort((a, b) => (a.hitSq === s ? 0 : 1) - (b.hitSq === s ? 0 : 1) || dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s)))[0];
       if (foe) { s.target = foe; if (s.zone) s.resume = true; }
     }
     const m = s.target;

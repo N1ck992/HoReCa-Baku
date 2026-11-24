@@ -700,7 +700,7 @@ AB.IsoOverworld = (() => {
       } else if (s.atkT <= 0 && !s.anim) {   // №146: в движении не атакуют — бьют только стоя (цель рядом — сначала остановка)
         if (s.path.length) { if (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) s.path = []; continue; }
         const foe = (s.target && s.target.hp > 0 && canHit(s.target, here, sw.reachCells)) ? s.target
-          : mobs.filter((m) => m.hp > 0 && (m.victim === s || s.target === m) && canHit(m, here, sw.reachCells)).sort((a, b) => dist(a, here) - dist(b, here))[0];   // №184: бьёт свою цель или того, кто бьёт его
+          : mobs.filter((m) => m.hp > 0 && ((m.victim && m.hunt) || s.target === m) && canHit(m, here, sw.reachCells)).sort((a, b) => (a.victim === s ? 0 : 1) - (b.victim === s ? 0 : 1) || dist(a, here) - dist(b, here))[0];   // №184/№190: свою цель, того, кто бьёт его, или того, кто бьёт союзника в зоне поражения
         if (foe) {
           s.atk = { m: foe, t: 0 }; s.atkT = sw.cooldown; s.face = px(foe.q, foe.r).x >= px(here.q, here.r).x ? 1 : -1;
           // №147: экзокостюм — выстрел энергосгустком (только картинка; урон — как раньше, в момент удара)
