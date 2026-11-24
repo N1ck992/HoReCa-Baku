@@ -1668,7 +1668,7 @@ AB.IsoSurface = (() => {
     const P = (n) => vehPic(R.dir + n + '.webp');
     const body = P('body'), th = P('thigh'), sh = P('shin'), thF = P('thigh_far'), shF = P('shin_far');
     if (!body || !th || !sh || !thF || !shF) return false;
-    const f = s.face || 1, mv = !!s.anim, ph = s.stride / 11;
+    const f = s.face || 1, mv = !!s.anim, ph = s.stride / (R.heavy ? 15 : 11);   // тяжёлый — шаг реже
     const full = R.hip[1] + (R.thigh.knee[1] - R.thigh.top[1]) + (R.shin.foot[1] - R.shin.top[1]);   // от верха корпуса до ступни
     const k = (S0 * 1.6) / full;
     const bob = mv ? -Math.abs(Math.cos(ph)) * 22 : Math.sin(time * 1.8) * 4;   // в пикселях картинки
