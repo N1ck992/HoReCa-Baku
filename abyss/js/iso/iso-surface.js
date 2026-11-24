@@ -633,6 +633,19 @@ AB.IsoSurface = (() => {
   function drawShots() {
     for (const sh of shots) {
       const to = sh.to(), u = Math.min(1, sh.t / sh.dur), fade = sh.t > sh.dur ? 1 - (sh.t - sh.dur) / 0.25 : 1;
+      if (sh.kind === 'crescent') {                // №186: светящийся след полумесяца перед мечником
+        if (sh.t < 0) continue;
+        const u2 = Math.min(1, sh.t / 0.3), a2 = 1 - u2, F = sh.from, R0 = S0 * 1.35, base0 = -1.9;
+        g.save(); g.translate(F.x, F.y); g.scale(F.f, 0.62);             // смотрит влево — полумесяц зеркально
+        for (let i = 0; i < 6; i++) {
+          const w = (6 - i) * 3.2 * (0.5 + a2), r = R0 - i * 3;
+          g.strokeStyle = i < 2 ? `rgba(255,255,255,${0.9 * a2})` : `rgba(140,220,255,${0.5 * a2 * (1 - i / 6)})`; g.lineWidth = w;
+          g.beginPath(); g.arc(0, 0, r, base0, base0 + 2.3 * (0.4 + 0.6 * Math.min(1, u2 * 3))); g.stroke();
+        }
+        g.restore();
+        if (sh.t > 0.3) sh.done = true;
+        continue;
+      }
       if (sh.kind === 'impact') {                  // №181: удар кулаком — ударная волна и искры
         if (!sh.done) continue;
         const u2 = Math.min(1, (sh.t - sh.dur) / 0.25), a2 = 1 - u2;
@@ -725,7 +738,15 @@ AB.IsoSurface = (() => {
         // экзокостюм — выстрел сгустком: урон — когда сгусток долетит; остальная техника бьёт сразу
         if (v.fx && vfx) vfx.shot(v.fx, () => muzzleOf(s), () => { const p = posOf(m); return { x: p.x, y: p.y - S0 * 0.35 }; }, S0, () => { if (m.hp > 0) { hurtMob(m, hit.dmg, s); afterHit(s, m); } });
         else if (v.anim && v.anim.kind === 'rig' && v.anim.rig.arms3 && v.reach <= 1) {   // №181: удар всем телом — урон в момент попадания
-          shots.push({ kind: 'impact', from: posOf(m), to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.45 }; }, t: 0, dur: 0.32, hit: () => { if (m.hp > 0 && s.state === 'out') { hurtMob(m, hit.dmg, s); afterHit(s, m); shakeT = 0.22; } } });
+          const cl = hasAb(s, 'cleave');
+          if (cl) { const sp = posOf(s), tp = posOf(m); shots.push({ kind: 'crescent', from: { x: sp.x, y: sp.y - S0 * 0.55, f: tp.x >= sp.x ? 1 : -1, ang: Math.atan2(tp.y - sp.y, tp.x - sp.x) }, to: () => tp, t: -0.24, dur: 0.06, hit: () => {} }); }
+          shots.push({ kind: 'impact', from: posOf(m), to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.45 }; }, t: 0, dur: 0.32, hit: () => {
+            if (m.hp > 0 && s.state === 'out') {
+              hurtMob(m, hit.dmg, s); afterHit(s, m); shakeT = 0.22;
+              // №186: «Полумесяц» — ещё двое рядом с целью получают по 50%
+              if (cl) for (const o of alive().filter((x) => x !== m && dist(curCell(x), curCell(m)) <= 1).sort((a, b) => dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s))).slice(0, cl.n)) { hurtMob(o, hit.dmg * cl.part, s); floatText(posOf(o), 'рассечён', '#bfefff'); }
+            }
+          } });
         }
         else { if (v.reach > 1) vehShot(s, m); hurtMob(m, hit.dmg, s); afterHit(s, m); }
       }
@@ -1726,8 +1747,14 @@ AB.IsoSurface = (() => {
     cock:  [ -30,   34, -0.16, -0.12, 0.62, 0.28, 0.55,  1.45, -2.35, -0.75, -1.2],
     strike:[  85,   14, 0.3,  -0.62, 0.32, 0.5,  0.06, -1.62, -0.02,  0.85, -0.35],
   };
-  function rigPose(at) {
-    const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = RIG_POSES;
+  // №186: удар мечом — замах над головой, широкий рубящий взмах вперёд-вниз
+  const RIG_SWORD = {
+    rest:  RIG_POSES.rest,
+    cock:  [ -20,   30, -0.2, -0.1,  0.55, 0.3,  0.5,   2.75, -0.55, -0.6, -1.1],
+    strike:[  80,   18, 0.32, -0.6,  0.35, 0.5,  0.08, -0.85, -0.2,   0.8, -0.4],
+  };
+  function rigPose(at, sword) {
+    const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = sword ? RIG_SWORD : RIG_POSES;
     if (at < 0.3) return { q: L(P.rest, P.cock, E(at / 0.3)), open: at > 0.1 };
     if (at < 0.4) { const t = (at - 0.3) / 0.1; return { q: L(P.cock, P.strike, t * t), open: false, fast: true }; }   // разгон — с ускорением
     if (at < 0.55) return { q: P.strike, open: false, hold: true };
@@ -1741,7 +1768,7 @@ AB.IsoSurface = (() => {
     const f = s.face || 1, mv = !!s.anim, ph = s.stride / (R.heavy ? 15 : 11);   // тяжёлый — шаг реже
     const full = R.hip[1] + (R.thigh.knee[1] - R.thigh.top[1]) + (R.shin.foot[1] - R.shin.top[1]);   // от верха корпуса до ступни
     const k = (S0 * 1.6) / full;
-    const at = s.atk && R.arms3 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at) : null;
+    const SW = !!v.sword, at = s.atk && R.arms3 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at, SW) : null;
     // №183: стоя — боевая стойка (плавно из ходьбы и обратно); на ходу — шаг
     s.stk = Math.max(0, Math.min(1, (s.stk == null ? 1 : s.stk) + (mv ? -frameDt * 5 : frameDt * 2.5)));
     let Q = A ? A.q : null;
@@ -1781,10 +1808,24 @@ AB.IsoSurface = (() => {
       g.drawImage(ua, -C.ua.top[0], -C.ua.top[1]);
       g.translate(C.ua.elbow[0] - C.ua.top[0], C.ua.elbow[1] - C.ua.top[1]); g.rotate(el);
       g.drawImage(fa, -C.fa.top[0], -C.fa.top[1]);
-      g.translate(C.fa.wrist[0] - C.fa.top[0], C.fa.wrist[1] - C.fa.top[1]); g.rotate(H.rot);
+      g.translate(C.fa.wrist[0] - C.fa.top[0], C.fa.wrist[1] - C.fa.top[1]);
+      if (SW && !S2.sfx) drawSword();                                 // №186: меч — под кулаком, рукоять в кулаке
+      g.rotate(H.rot);
       g.drawImage(hand, -H.wrist[0], -H.wrist[1]);
       g.restore();
     };
+    // нодати (до картинки автора): рукоять с обмоткой, латунная цуба, длинный изогнутый клинок с бликом лезвия
+    function drawSword() {
+      g.save(); g.translate(-30, 115); g.rotate(-0.55);
+      g.fillStyle = '#2a1c18'; g.fillRect(-26, -170, 52, 230);                                   // рукоять
+      g.strokeStyle = '#8a1e1e'; g.lineWidth = 9; for (let i = -150; i < 50; i += 36) { g.beginPath(); g.moveTo(-26, i); g.lineTo(26, i + 18); g.stroke(); }
+      g.fillStyle = '#b8902e'; g.beginPath(); g.ellipse(0, 70, 70, 26, 0, 0, 7); g.fill(); g.strokeStyle = '#6a4e14'; g.lineWidth = 6; g.stroke();   // цуба
+      const L = 1150, gr = g.createLinearGradient(-30, 0, 34, 0); gr.addColorStop(0, '#6a7480'); gr.addColorStop(0.55, '#dfe6ee'); gr.addColorStop(1, '#9aa4ae');
+      g.fillStyle = gr; g.beginPath(); g.moveTo(-24, 90); g.quadraticCurveTo(-40, 90 + L * 0.55, -70, 90 + L); g.lineTo(-20, 90 + L * 0.93); g.quadraticCurveTo(26, 90 + L * 0.5, 26, 90); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 5; g.beginPath(); g.moveTo(24, 100); g.quadraticCurveTo(22, 90 + L * 0.5, -22, 90 + L * 0.92); g.stroke();   // лезвие
+      g.strokeStyle = 'rgba(40,46,54,.6)'; g.lineWidth = 3; g.beginPath(); g.moveTo(-6, 110); g.quadraticCurveTo(-14, 90 + L * 0.5, -40, 90 + L * 0.9); g.stroke();      // дол
+      g.restore();
+    }
     const torso = () => { g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]); };
     g.save(); torso();
     if (R.arms3) arm3('far', Q ? Q[9] : -sway * 1.4 + 0.1, Q ? Q[10] : -0.75, false);
@@ -1796,9 +1837,9 @@ AB.IsoSurface = (() => {
       g.save(); torso();
       if (R.arms3) {
         // след кулака на разгоне и в ударе — полупрозрачные «тени» прежних поз
-        if (A && (A.fast || A.hold)) for (const d of [0.05, 0.035, 0.02]) { const B = rigPose(Math.max(0.3, at - d)); g.globalAlpha = A.hold ? 0.12 : 0.28; arm3('near', B.q[7], B.q[8], false); }
+        if (A && (A.fast || A.hold)) for (const d of [0.05, 0.035, 0.02]) { const B = rigPose(Math.max(0.3, at - d), SW); g.globalAlpha = A.hold ? 0.12 : 0.28; arm3('near', B.q[7], B.q[8], false); }
         g.globalAlpha = 1;
-        arm3('near', Q ? Q[7] : sway * 1.6 + 0.12, Q ? Q[8] : -0.7, A ? A.open : false);
+        arm3('near', Q ? Q[7] : sway * 1.6 + 0.12, Q ? Q[8] : -0.7, A && !SW ? A.open : false);
       } else arm(R.arms.near, sway);
       g.restore();
     }

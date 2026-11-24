@@ -59,7 +59,11 @@ Object.assign(AB.VEHICLES, {
   'EQUIP-102': { id: 'EQUIP-102', name: 'Шагоход «Молот»', short: 'Молот', class: 'kinetic', shape: 'walker', img: 'assets/vehicles/hammer.webp' /* №176: собрана из деталей */, anim: { kind: 'rig', rig: { dir: 'assets/vehicles/hammer-rig/', hip: [380, 600], hipFar: [345, 592], thigh: { top: [52, 48], knee: [100, 290] }, shin: { top: [100, 50], foot: [140, 440] }, heavy: true,
       arms3: { scale: 0.6, near: { shoulder: [190, 350], sfx: '' }, far: { shoulder: [505, 385], sfx: '_far' } /* №180: ближнее плечо — большой наплечник слева на корпусе */,
         ua: { top: [140, 118], elbow: [92, 485] }, fa: { top: [38, 45], wrist: [85, 393] }, fist: { wrist: [25, 85], rot: 1.35 }, palm: { wrist: [25, 205], rot: 1.1 } } } } /* №179: руки из 3 деталей (лист автора): плечо, предплечье, кулак/ладонь; точки — в пикселях деталей. Прежние arm/arm_far (№178) — устарели */, speed: 20, attack: 26, rate: 1.4, reach: 1, armor: 0.35, dtype: 'kinetic', armorType: 'kinetic',
-    ability: { id: 'ram', name: 'Таран', text: 'Первый удар по новой цели — двойной.', mult: 2 }, desc: 'Тяжёлый горный шагоход кланов с гидравлическим кулаком. Трофей Каменного стража.' },
+    // №186: меч и «Полумесяц» (решение автора); прежняя способность «Таран» — устарела, хранится в abilityOld
+    gun: 'Нодати клана', sword: true,
+    ability: { id: 'cleave', name: 'Полумесяц', text: 'Рубит мечом полумесяцем: цель — полный урон, ещё двое рядом с ней — по 50%.', part: 0.5, n: 2 },
+    abilityOld: { id: 'ram', name: 'Таран', text: 'Первый удар по новой цели — двойной.', mult: 2, deprecated: true },
+    desc: 'Тяжёлый горный шагоход кланов с огромным мечом-нодати. Трофей Каменного стража.' },
   'EQUIP-103': { id: 'EQUIP-103', name: 'Броневик «Таран»', short: 'Таран', class: 'kinetic', shape: 'tank', img: 'assets/vehicles/ram.webp' /* №173 */, anim: { kind: 'wheels', wheels: [[48, 312, 50, 62, 36, 310], [160, 313, 55, 66, 146, 312], [323, 321, 61, 71, 306, 320]] } /* №174: колёса на картинке: центр, полуоси, ступица */, speed: 34, attack: 16, rate: 1.1, reach: 2, armor: 0.3, dtype: 'kinetic', armorType: 'kinetic',
     ability: { id: 'plates', name: 'Бронелисты', text: 'Выстрелы издалека наносят ему на 30% меньше урона.', mult: 0.7 }, desc: 'Быстрый колёсный броневик Менового Узла со спаренным пулемётом.' },
   'EQUIP-104': { id: 'EQUIP-104', name: 'Краулер «Саламандра»', short: 'Саламандра', class: 'thermal', shape: 'crawler', speed: 24, attack: 12, rate: 0.9, reach: 2, armor: 0.15, dtype: 'thermal', armorType: 'kinetic',
