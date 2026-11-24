@@ -1709,7 +1709,7 @@ AB.IsoSurface = (() => {
   // №181: удар всем телом — ключевые позы (rest → замах → удар → удержание → возврат), между ними — плавно
   const RIG_POSES = {
     //        dx    dy  lean   nT    nK    fT    fK    shN    elN   shF    elF
-    rest:  [   0,    0, 0.02,  0.04, 0.08, 0.04, 0.08,  0.12, -0.7,  0.1,  -0.75],
+    rest:  [   0,   22, 0.05, -0.3,  0.38, 0.34, 0.12,  0.3,  -1.05, -0.2, -0.95],   // №183: боевая стойка — ноги расставлены, присед, кулаки перед собой
     cock:  [ -30,   34, -0.16, -0.12, 0.62, 0.28, 0.55,  1.45, -2.35, -0.75, -1.2],
     strike:[  85,   14, 0.3,  -0.62, 0.32, 0.5,  0.06, -1.62, -0.02,  0.85, -0.35],
   };
@@ -1728,8 +1728,18 @@ AB.IsoSurface = (() => {
     const f = s.face || 1, mv = !!s.anim, ph = s.stride / (R.heavy ? 15 : 11);   // тяжёлый — шаг реже
     const full = R.hip[1] + (R.thigh.knee[1] - R.thigh.top[1]) + (R.shin.foot[1] - R.shin.top[1]);   // от верха корпуса до ступни
     const k = (S0 * 1.6) / full;
-    const at = s.atk && R.arms3 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at) : null, Q = A ? A.q : null;
-    const bob = A ? 0 : mv ? -Math.abs(Math.cos(ph)) * 22 : Math.sin(time * 1.8) * 4;   // в пикселях картинки
+    const at = s.atk && R.arms3 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at) : null;
+    // №183: стоя — боевая стойка (плавно из ходьбы и обратно); на ходу — шаг
+    s.stk = Math.max(0, Math.min(1, (s.stk == null ? 1 : s.stk) + (mv ? -frameDt * 5 : frameDt * 2.5)));
+    let Q = A ? A.q : null;
+    if (!A && R.arms3 && s.stk > 0) {
+      const sw = Math.sin(ph) * 0.14, breathe = Math.sin(time * 1.8);
+      const W = [0, 0, mv ? 0.07 + Math.sin(ph * 2) * 0.03 : 0.02, mv ? Math.sin(ph) * 0.4 : 0.04, mv ? 0.08 + Math.max(0, -Math.cos(ph)) * 0.75 : 0.08,
+        mv ? Math.sin(ph + Math.PI) * 0.4 : 0.04, mv ? 0.08 + Math.max(0, -Math.cos(ph + Math.PI)) * 0.75 : 0.08, sw * 1.6 + 0.12, -0.7, -sw * 1.4 + 0.1, -0.75];
+      const ST = RIG_POSES.rest.slice(); ST[1] += breathe * 3; ST[7] += breathe * 0.03; ST[9] -= breathe * 0.03;
+      const e = s.stk * s.stk * (3 - 2 * s.stk); Q = W.map((v2, i) => v2 + (ST[i] - v2) * e);
+    }
+    const bob = A ? 0 : mv ? -Math.abs(Math.cos(ph)) * 22 * (1 - s.stk) : (R.arms3 ? 0 : Math.sin(time * 1.8) * 4);   // в пикселях картинки
     g.save(); g.translate(x + (A ? 0 : lunge), y + S0 * 0.24);
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(Q ? Q[0] * k * f * 0.6 : 0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
     g.scale(f * k, k); g.translate(-R.hip[0], -full - bob);
@@ -1746,7 +1756,7 @@ AB.IsoSurface = (() => {
     };
     leg(R.hipFar || R.hip, thF, shF, ph + Math.PI, Q && Q[5], Q && Q[6]);   // дальняя нога — за корпусом
     // корпус: на ходу наклонён вперёд и раскачивается с шагом (вокруг таза), стоя — чуть дышит
-    const lean = Q ? Q[2] : (mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01), roll = !Q && mv ? Math.sin(ph) * 6 : 0;
+    const lean = Q ? Q[2] : (mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01), roll = mv && !A ? Math.sin(ph) * 6 * (1 - (s.stk || 0)) : 0;
     const arm = (A2, ang) => { const im = A2 && P(A2.img); if (!im) return; g.save(); g.translate(A2.pivot[0], A2.pivot[1]); g.rotate(ang); g.drawImage(im, A2.at[0] - A2.pivot[0], A2.at[1] - A2.pivot[1]); g.restore(); };
     const sway = mv ? Math.sin(ph) * 0.14 : Math.sin(time * 1.8) * 0.02;   // руки — в противофазе ногам
     // рука из трёх деталей — плечо (вокруг плечевого шарнира), предплечье (локоть), кисть (кулак или раскрытая ладонь)
