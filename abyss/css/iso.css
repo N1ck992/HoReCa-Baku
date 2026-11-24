@@ -1072,3 +1072,9 @@ body.map-fan-on .map-units { visibility: hidden; }
 .map-cmd[data-ctx="site"] [data-cmd="study"] { left: 62px; top: -38px; }
 .map-cmd[data-ctx="loot"] [data-cmd="go"] { left: -40px; top: -46px; }
 #ow-cmd [data-cmd="auto"] { left: -62px; top: -38px; } #ow-cmd [data-cmd="follow"] { left: 0; top: -64px; } #ow-cmd [data-cmd="go"] { left: 62px; top: -38px; }
+/* №195: страница техники — вкладки-иконки справа */
+.un-vpage { grid-template-columns: minmax(150px, 1fr) 1.4fr 44px; }
+.un-vtabs { display: flex; flex-direction: column; gap: 6px; }
+.un-vtabs button { width: 42px; height: 42px; border-radius: 8px; cursor: pointer; font-size: 19px; color: #9fb4bc; background: #0e1519; border: 1px solid rgba(94, 230, 255, .25); }
+.un-vtabs button.on { color: #ffe2a8; border-color: #ffd27a; box-shadow: 0 0 8px rgba(255, 210, 120, .35); }
+@media (max-width: 560px) { .un-vpage { grid-template-columns: 1fr 44px; } .un-vfig { grid-column: 1 / -1; } }

@@ -250,13 +250,39 @@ AB.IsoRoster = (() => {
       <p class="un-where">Откроется: задание «${q ? q.name : '?'}» (зона A1)</p></div></div>`;
   }
   // №172: страница техники в «Юнитах»: техника во весь рост, полное описание, детали (поставить/снять)
+  // №195: страница техники — справа вкладки-иконки: «Подробнее», «Усиления», «Введение»
+  let vtab = 'stats';
+  const VTABS = [['stats', '☰', 'Подробнее'], ['mods', '⚙', 'Усиления'], ['intro', 'ℹ', 'Введение']];
+  function vehStats(vid) {
+    const v = V(vid), e = AB.VehMods ? AB.VehMods.eff(vid) : v, s = sync().find((q) => q.vehicle === vid), drv = s && s.hero ? AB.ID.get(s.hero).name : null;
+    const diff = (a, b, f = (x) => x) => (Math.abs(a - b) > 0.001 ? ` <i class="ro-up">(${f(b)} → ${f(a)})</i>` : '');
+    return `<p><b>${v.name}</b> — ${roleName(v.class)}</p>
+      <p>Скорость <b>${Math.round(e.speed)}</b> кл/мин${diff(e.speed, v.speed, Math.round)}</p>
+      <p>Удар <b>${e.attack}</b>${diff(e.attack, v.attack)} раз в ${e.rate} с${diff(e.rate, v.rate)} · дальность <b>${v.reach}</b></p>
+      <p>Броня <b>${Math.round(e.armor * 100)}%</b>${diff(e.armor, v.armor, (x) => `${Math.round(x * 100)}%`)}${e.hpK > 1 ? ` · прочность +${Math.round((e.hpK - 1) * 100)}%` : ''}${e.crit ? ` · крит ${Math.round(e.crit * 100)}%` : ''}${e.shield0 ? ` · щит ${e.shield0} в начале боя` : ''}</p>
+      ${AB.Damage ? `<p>Урон: <b>${AB.Damage.name(v.dtype || 'kinetic')}</b> · Защита: <b>${AB.Damage.armorName(v.armorType)}</b></p>` : ''}
+      ${v.gun ? `<p>Оружие: <b>${v.gun}</b></p>` : ''}${abilityLine(v.ability)}
+      <p class="un-where">${!owned().includes(vid) ? 'Ещё не получена' : !s ? 'В наличии · не в активном отряде' : drv ? `Ведёт: ${drv}${outFn(s.hero) ? ' · снаружи' : ' · в базе'}` : 'Без экипажа · в базе'}</p>
+      ${owned().includes(vid) ? '<p><button class="ro-pbtn" data-un-edit>◎ В окно «Отряд» — сменить водителя</button></p>' : ''}`;
+  }
+  function vehIntro(vid) {
+    const v = V(vid), I = (AB.VEHICLE_INFO || {})[vid] || {}, R = (AB.VEHICLE_RARITY || {})[I.rarity] || null;
+    return `<p class="un-vh">Введение</p>
+      <p>Полное название: <b>${I.full || v.name}</b></p>
+      <p>Редкость: ${R ? `<b style="color:${R.col}">${R.name}</b>` : '—'}</p>
+      <p>Источник питания: <b>${(AB.VEHICLE_POWER || {})[I.power] || '—'}</b></p>
+      <p>Класс: <b>${roleName(v.class)}</b></p>
+      <p class="un-vh">Информация</p><p>${I.info || v.desc || ''}</p>`;
+  }
   function vehCard(vid) {
     if (vid === 'base') return `<div class="un-detail"><i class="cap big"></i><div><b>Капсула-батискаф</b><small>База отряда: ездит по карте, внутри — трюм с устройствами. Из неё выходят герои в технике.</small><p>Скорость <b>${AB.VEHICLES_BASE.speed}</b> кл/мин</p></div></div>`;
     const s = sync().find((q) => q.vehicle === vid), lk = !!s && locked(s), have = owned().includes(vid);
+    const body = vtab === 'mods'
+      ? (have ? `<p class="un-vh">Усиления${lk ? ' — техника снаружи, менять можно в базе' : ''}</p>${partsRow(vid, lk)}${partPick ? `<div class="un-picker">${pickerHtml(vid, partPick)}</div>` : ''}${modsLine(vid) || '<p class="ro-mods">Детали не стоят. Нажмите на слот — поставить деталь из вещей.</p>'}` : '<p class="ro-mods">Техника ещё не получена — усиления недоступны.</p>')
+      : vtab === 'intro' ? vehIntro(vid) : vehStats(vid);
     return `<div class="un-vpage"><div class="un-vfig"><img src="${vimg(vid)}" alt=""></div>
-      <div class="un-vinfo">${vehDetail(vid)}
-        ${have ? `<p class="un-vh">Детали${lk ? ' — техника снаружи, менять можно в базе' : ''}</p>${partsRow(vid, lk)}${partPick ? `<div class="un-picker">${pickerHtml(vid, partPick)}</div>` : ''}` : ''}
-        ${have ? '<p><button class="ro-pbtn" data-un-edit>◎ В окно «Отряд» — сменить водителя</button></p>' : ''}</div></div>`;
+      <div class="un-vinfo">${body}</div>
+      <div class="un-vtabs">${VTABS.map(([k, ic, nm]) => `<button class="${vtab === k ? 'on' : ''}" data-vtab="${k}" title="${nm}" aria-label="${nm}">${ic}</button>`).join('')}</div></div>`;
   }
   function unitsRender() {
     for (const b of uel.querySelectorAll('[data-utab]')) b.classList.toggle('on', b.dataset.utab === tab);
@@ -293,7 +319,8 @@ AB.IsoRoster = (() => {
       uel.addEventListener('click', (e) => {
         if (e.target === uel || e.target.closest('[data-un-close]')) { uel.hidden = true; return; }
         const b = e.target.closest('[data-utab]'); if (b) { tab = b.dataset.utab; pick = null; unitsRender(); return; }
-        const t = e.target.closest('[data-un]'); if (t) { pick = t.dataset.un; partPick = null; unitsRender(); return; }
+        const vt = e.target.closest('[data-vtab]'); if (vt) { vtab = vt.dataset.vtab; partPick = null; unitsRender(); return; }   // №195
+        const t = e.target.closest('[data-un]'); if (t) { pick = t.dataset.un; partPick = null; vtab = 'stats'; unitsRender(); return; }
         // №172: детали техники на её странице
         if (tab === 'vehicles' && pick && pick !== 'base') {
           const pb = e.target.closest('[data-part]'); if (pb) { partPick = partPick === pb.dataset.part ? null : pb.dataset.part; unitsRender(); return; }
