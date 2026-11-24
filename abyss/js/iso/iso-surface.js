@@ -633,6 +633,17 @@ AB.IsoSurface = (() => {
   function drawShots() {
     for (const sh of shots) {
       const to = sh.to(), u = Math.min(1, sh.t / sh.dur), fade = sh.t > sh.dur ? 1 - (sh.t - sh.dur) / 0.25 : 1;
+      if (sh.kind === 'swave' || sh.kind === 'swavehit') {       // №189: волна самурая
+        if (sh.t < 0) continue;
+        const W2 = WAVE.set, H0 = S0 * 1.25;
+        const put = (im, x, y, ang, sc, a) => { const h = H0 * sc, w = im.naturalWidth * h / im.naturalHeight; g.save(); g.globalAlpha = a; g.globalCompositeOperation = 'lighter'; g.translate(x, y); g.rotate(ang); g.drawImage(im, -w * 0.6, -h / 2, w, h); g.restore(); };
+        if (sh.kind === 'swavehit') { const i = Math.min(5, Math.floor(sh.t / sh.dur * 6)); if (sh.t < sh.dur) put(W2.hit[i], sh.from.x + S0 * 0.3, sh.from.y, 0, 1.3, 1); continue; }
+        if (sh.done) continue;
+        const u2 = Math.min(1, sh.t / sh.dur), x0 = sh.from.x + (to.x - sh.from.x) * u2, y0 = sh.from.y + (to.y - sh.from.y) * u2, ang = Math.atan2(to.y - sh.from.y, to.x - sh.from.x);
+        if (sh.t < 0.15) put(W2.launch[Math.min(5, Math.floor(sh.t / 0.15 * 6))], sh.from.x, sh.from.y, ang, 1, 1);       // вспышка у клинка
+        if (sh.t > 0.05) put(W2.fly[Math.floor(time * 18) % 6], x0, y0, ang, 0.9 + 0.2 * u2, Math.min(1, sh.t / 0.08));   // летит к цели
+        continue;
+      }
       if (sh.kind === 'crescent') {                // №186: светящийся след полумесяца перед мечником
         if (sh.t < 0) continue;
         const u2 = Math.min(1, sh.t / 0.3), a2 = 1 - u2, F = sh.from, R0 = S0 * 1.35, base0 = -1.9;
@@ -739,14 +750,18 @@ AB.IsoSurface = (() => {
         if (v.fx && vfx) vfx.shot(v.fx, () => muzzleOf(s), () => { const p = posOf(m); return { x: p.x, y: p.y - S0 * 0.35 }; }, S0, () => { if (m.hp > 0) { hurtMob(m, hit.dmg, s); afterHit(s, m); } });
         else if (v.anim && v.anim.kind === 'rig' && v.anim.rig.arms3 && (v.reach <= 1 || v.sword)) {   // №181: удар всем телом — урон в момент попадания
           const cl = hasAb(s, 'cleave');
-          if (cl) { const sp = posOf(s), tp = posOf(m); shots.push({ kind: 'crescent', from: { x: sp.x, y: sp.y - S0 * 0.55, f: tp.x >= sp.x ? 1 : -1, ang: Math.atan2(tp.y - sp.y, tp.x - sp.x) }, to: () => tp, t: -0.24, dur: 0.06, hit: () => {} }); }
-          shots.push({ kind: 'impact', from: posOf(m), to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.45 }; }, t: 0, dur: 0.32, hit: () => {
+          const doHit = () => {
             if (m.hp > 0 && s.state === 'out') {
               hurtMob(m, hit.dmg, s); afterHit(s, m); shakeT = 0.22;
               // №186: «Полумесяц» — ещё двое рядом с целью получают по 50%
               if (cl) for (const o of alive().filter((x) => x !== m && dist(curCell(x), curCell(m)) <= 1).sort((a, b) => dist(curCell(a), curCell(s)) - dist(curCell(b), curCell(s))).slice(0, cl.n)) { hurtMob(o, hit.dmg * cl.part, s); floatText(posOf(o), 'рассечён', '#bfefff'); }
             }
-          } });
+          };
+          if (v.sword && WAVE.ready()) {                              // №189: меч рождает волну-полумесяц — летит к цели и взрывается
+            const sp = posOf(s), f0 = posOf(m).x >= sp.x ? 1 : -1, from = { x: sp.x + f0 * S0 * 0.6, y: sp.y - S0 * 0.75 };
+            const tgt = () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.45 }; }, d0 = Math.hypot(tgt().x - from.x, tgt().y - from.y) / S0;
+            shots.push({ kind: 'swave', from, to: tgt, t: -0.26, dur: 0.14 + d0 * 0.09, hit: () => { doHit(); const q = tgt(); shots.push({ kind: 'swavehit', from: q, to: () => q, t: 0, dur: 0.42, hit: () => {} }); } });
+          } else shots.push({ kind: 'impact', from: posOf(m), to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.45 }; }, t: 0, dur: 0.32, hit: doHit });
         }
         else { if (v.reach > 1) vehShot(s, m); hurtMob(m, hit.dmg, s); afterHit(s, m); }
       }
@@ -1747,6 +1762,12 @@ AB.IsoSurface = (() => {
     cock:  [ -30,   34, -0.16, -0.12, 0.62, 0.28, 0.55,  1.45, -2.35, -0.75, -1.2],
     strike:[  85,   14, 0.3,  -0.62, 0.32, 0.5,  0.06, -1.62, -0.02,  0.85, -0.35],
   };
+  // №189: кадры волны самурая (assets/fx/samurai-wave, картинка автора): запуск, полёт (по кругу), взрыв — по 6
+  const WAVE = (() => {
+    const set = { launch: [], fly: [], hit: [] }; let left = 18;
+    for (const k of Object.keys(set)) for (let i = 0; i < 6; i++) { const im = new Image(); im.onload = () => { left--; }; im.src = `assets/fx/samurai-wave/${k}_${i}.webp`; set[k].push(im); }
+    return { set, ready: () => left <= 0 };
+  })();
   // №186: удар мечом — замах над головой, широкий рубящий взмах вперёд-вниз
   const RIG_SWORD = {
     rest:  RIG_POSES.rest,
