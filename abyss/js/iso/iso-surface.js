@@ -737,7 +737,7 @@ AB.IsoSurface = (() => {
         const hit = strike(s, m);                                    // №157: сила удара со способностями
         // экзокостюм — выстрел сгустком: урон — когда сгусток долетит; остальная техника бьёт сразу
         if (v.fx && vfx) vfx.shot(v.fx, () => muzzleOf(s), () => { const p = posOf(m); return { x: p.x, y: p.y - S0 * 0.35 }; }, S0, () => { if (m.hp > 0) { hurtMob(m, hit.dmg, s); afterHit(s, m); } });
-        else if (v.anim && v.anim.kind === 'rig' && v.anim.rig.arms3 && v.reach <= 1) {   // №181: удар всем телом — урон в момент попадания
+        else if (v.anim && v.anim.kind === 'rig' && v.anim.rig.arms3 && (v.reach <= 1 || v.sword)) {   // №181: удар всем телом — урон в момент попадания
           const cl = hasAb(s, 'cleave');
           if (cl) { const sp = posOf(s), tp = posOf(m); shots.push({ kind: 'crescent', from: { x: sp.x, y: sp.y - S0 * 0.55, f: tp.x >= sp.x ? 1 : -1, ang: Math.atan2(tp.y - sp.y, tp.x - sp.x) }, to: () => tp, t: -0.24, dur: 0.06, hit: () => {} }); }
           shots.push({ kind: 'impact', from: posOf(m), to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.45 }; }, t: 0, dur: 0.32, hit: () => {
