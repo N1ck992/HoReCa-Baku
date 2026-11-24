@@ -1659,9 +1659,21 @@ AB.IsoSurface = (() => {
     if (c && (c.hp < max || s.target)) hpBar(x, y - S0 * 1.45, c.hp / max, '#5ee6ff');
   }
   // №157: новая техника (до картинок автора): корпус по форме, цвет — класс; сверху — голова героя
+  // №173: у техники есть картинка автора — рисуем её (смотрит вправо; влево — зеркально)
+  const vehPics = {};
+  function vehPic(src) { let im = vehPics[src]; if (!im) { im = vehPics[src] = new Image(); im.src = src; } return im.complete && im.naturalWidth ? im : null; }
   function drawVeh(s, x, y) {
     const v = VD(s), col = (AB.HERO_ROLES[v.class] || {}).col || '#ccc', f = s.face || 1;
     const bob = s.anim ? Math.abs(Math.sin(s.stride / 10)) * 2 : 0, lunge = s.atk ? Math.sin(Math.min(1, s.atk.t / 0.8) * Math.PI) * 4 * f : 0;
+    const pic = v.img && vehPic(v.img);
+    if (pic) {
+      const h = S0 * 1.45, w = pic.naturalWidth * h / pic.naturalHeight;
+      g.save(); g.translate(x + lunge, y + S0 * 0.22 - bob);
+      g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, -2, w * 0.32, 5, 0, 0, 7); g.fill();
+      g.scale(f, 1); g.drawImage(pic, -w / 2, -h, w, h);
+      if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(0, -h * 0.45, w * 0.35, h * 0.4, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+      g.restore(); return;
+    }
     g.save(); g.translate(x + lunge, y + S0 * 0.15);
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 2, 15, 5, 0, 0, 7); g.fill();
     let top = -26;
