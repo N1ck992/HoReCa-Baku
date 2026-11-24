@@ -1685,11 +1685,20 @@ AB.IsoSurface = (() => {
       g.restore();
     };
     leg(R.hipFar || R.hip, thF, shF, ph + Math.PI);                   // дальняя нога — за корпусом
+    // №178: атака — замах (кулак назад), удар вперёд-вверх, возврат; корпус подаётся за ударом
+    const at = s.atk ? Math.min(1, s.atk.t / 0.8) : -1;
+    const hit = at < 0 ? 0 : at < 0.35 ? (at / 0.35) * 0.45 : at < 0.5 ? 0.45 - ((at - 0.35) / 0.15) * 1.25 : -0.8 + ((at - 0.5) / 0.5) * 0.8;
+    const push = at < 0 ? 0 : at < 0.35 ? -(at / 0.35) * 0.05 : at < 0.5 ? -0.05 + ((at - 0.35) / 0.15) * 0.14 : 0.09 * (1 - (at - 0.5) / 0.5);
     // корпус: на ходу наклонён вперёд и раскачивается с шагом (вокруг таза), стоя — чуть дышит
-    const lean = mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01, roll = mv ? Math.sin(ph) * 6 : 0;
+    const lean = (mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01) + push, roll = mv ? Math.sin(ph) * 6 : 0;
+    const arm = (A2, ang) => { const im = A2 && P(A2.img); if (!im) return; g.save(); g.translate(A2.pivot[0], A2.pivot[1]); g.rotate(ang); g.drawImage(im, A2.at[0] - A2.pivot[0], A2.at[1] - A2.pivot[1]); g.restore(); };
+    const sway = mv ? Math.sin(ph) * 0.14 : Math.sin(time * 1.8) * 0.02;   // руки — в противофазе ногам
     g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]);
-    g.drawImage(body, 0, 0); g.restore();
+    if (R.arms) arm(R.arms.far, -sway * 0.8 + (at >= 0 ? 0.12 * Math.sin(at * Math.PI) : 0));
+    g.drawImage(body, 0, 0);
+    g.restore();
     leg(R.hip, th, sh, ph);                                           // ближняя — перед ним
+    if (R.arms) { g.save(); g.translate(R.hip[0], R.hip[1]); g.rotate(lean); g.translate(-R.hip[0] + roll, -R.hip[1]); arm(R.arms.near, sway + hit); g.restore(); }   // ближняя рука — поверх всего
     if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(R.hip[0], R.hip[1] - 150, 320, 380, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
     g.restore(); return true;
   }
