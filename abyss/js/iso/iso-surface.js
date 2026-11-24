@@ -1662,11 +1662,40 @@ AB.IsoSurface = (() => {
   // №173: у техники есть картинка автора — рисуем её (смотрит вправо; влево — зеркально)
   const vehPics = {};
   function vehPic(src) { let im = vehPics[src]; if (!im) { im = vehPics[src] = new Image(); im.src = src; } return im.complete && im.naturalWidth ? im : null; }
+  // №175: шагоход по частям (корпус, бедро, голень; ближняя и дальняя нога): бедро качается вокруг тазобедренного
+  // шарнира, голень сгибается в колене, ноги в противофазе, корпус приседает на шаге. false — части ещё не загрузились.
+  function drawRig(s, v, R, x, y, lunge) {
+    const P = (n) => vehPic(R.dir + n + '.webp');
+    const body = P('body'), th = P('thigh'), sh = P('shin'), thF = P('thigh_far'), shF = P('shin_far');
+    if (!body || !th || !sh || !thF || !shF) return false;
+    const f = s.face || 1, mv = !!s.anim, ph = s.stride / 11;
+    const full = R.hip[1] + (R.thigh.knee[1] - R.thigh.top[1]) + (R.shin.foot[1] - R.shin.top[1]);   // от верха корпуса до ступни
+    const k = (S0 * 1.6) / full;
+    const bob = mv ? -Math.abs(Math.cos(ph)) * 22 : Math.sin(time * 1.8) * 4;   // в пикселях картинки
+    g.save(); g.translate(x + lunge, y + S0 * 0.24);
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
+    g.scale(f * k, k); g.translate(-R.hip[0], -full - bob);
+    const leg = (hip, thImg, shImg, p) => {
+      const a = mv ? Math.sin(p) * 0.42 : 0.04, b = mv ? 0.12 + Math.max(0, Math.sin(p + 1.3)) * 0.65 : 0.08;
+      g.save(); g.translate(hip[0], hip[1]); g.rotate(a);
+      g.drawImage(thImg, -R.thigh.top[0], -R.thigh.top[1]);
+      g.translate(R.thigh.knee[0] - R.thigh.top[0], R.thigh.knee[1] - R.thigh.top[1]); g.rotate(b - a * 0.3);
+      g.drawImage(shImg, -R.shin.top[0], -R.shin.top[1]);
+      g.restore();
+    };
+    leg(R.hipFar || R.hip, thF, shF, ph + Math.PI);                   // дальняя нога — за корпусом
+    g.drawImage(body, 0, 0);
+    leg(R.hip, th, sh, ph);                                           // ближняя — перед ним
+    if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(R.hip[0], R.hip[1] - 150, 320, 380, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+    g.restore(); return true;
+  }
   function drawVeh(s, x, y) {
     const v = VD(s), col = (AB.HERO_ROLES[v.class] || {}).col || '#ccc', f = s.face || 1;
     const bob = s.anim ? Math.abs(Math.sin(s.stride / 10)) * 2 : 0, lunge = s.atk ? Math.sin(Math.min(1, s.atk.t / 0.8) * Math.PI) * 4 * f : 0;
     // №174: анимация техники с картинкой: шагоход — шаг (покачивание, пружинит), колёса крутятся, носитель парит, дроны летают вокруг
-    const A = v.anim || {}, pic = v.img && vehPic(A.body || v.img);
+    const A = v.anim || {};
+    if (A.kind === 'rig' && drawRig(s, v, A.rig, x, y, lunge)) return;      // №175: шагоход по частям — ноги переставляются
+    const pic = v.img && vehPic(A.body || v.img);
     if (pic) {
       let h = S0 * 1.45, w = pic.naturalWidth * h / pic.naturalHeight;
       if (w > S0 * 1.9) { w = S0 * 1.9; h = pic.naturalHeight * w / pic.naturalWidth; }   // широкая техника (броневик) — по ширине
