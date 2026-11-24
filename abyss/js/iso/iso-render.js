@@ -975,7 +975,30 @@ AB.IsoRender = (() => {
     }
     // №56: снаружи — не герой, а экзокостюм (11 частей, js/data/rigs/EXOSUIT.js)
     if (AB.IsoSuit && AB.IsoSuit.suited(m)) { AB.IsoSuit.draw(ctx, AB.IsoSuit.poseOf(m), p.x, p.y, FIG_K); return; }
+    const H = AB.HEROES && AB.HEROES[m.id];
+    if (H && H.look) { lookFigure(m, H, p); return; }   // №197: открытый герой без своей картинки — простая фигура в его цветах
     if (AB.Render && AB.Render.drawFigure) AB.Render.drawFigure(ctx, m, p.x, p.y, FIG_K);
+  }
+  // №197: фигура героя по «look» (цвет одежды и волос) — пока у героя нет своей картинки
+  function lookFigure(m, H, p) {
+    const k = FIG_K * 1.25, sw = m.moving ? Math.sin((m.stride || 0) * 0.18) : 0, bob = m.moving ? Math.abs(sw) * 1.5 : 0;
+    const role = (AB.HERO_ROLES && AB.HERO_ROLES[H.role]) || {}, f = m.facing || 1;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(k * f, k);
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0, 0, 14, 5, 0, 0, 7); ctx.fill();
+    ctx.translate(0, -bob);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#2a2e33'; ctx.lineWidth = 6;                         // ноги
+    ctx.beginPath(); ctx.moveTo(-3, -34); ctx.lineTo(-3 + sw * 6, -2); ctx.moveTo(3, -34); ctx.lineTo(3 - sw * 6, -2); ctx.stroke();
+    ctx.fillStyle = H.look.body;                                           // туловище
+    ctx.beginPath(); ctx.moveTo(-9, -62); ctx.lineTo(9, -62); ctx.lineTo(8, -32); ctx.lineTo(-8, -32); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = role.col || '#ccc'; ctx.fillRect(-8, -40, 16, 3);       // пояс — цвет роли
+    ctx.strokeStyle = H.look.body; ctx.lineWidth = 5;                      // руки
+    ctx.beginPath(); ctx.moveTo(-8, -58); ctx.lineTo(-10 - sw * 5, -38); ctx.moveTo(8, -58); ctx.lineTo(10 + sw * 5, -38); ctx.stroke();
+    ctx.fillStyle = '#d8b090'; ctx.beginPath(); ctx.arc(1, -70, 7, 0, 7); ctx.fill();   // голова
+    ctx.fillStyle = H.look.hair; ctx.beginPath(); ctx.arc(0, -72, 7.5, Math.PI * 0.95, Math.PI * 2.05); ctx.fill();
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(4, -71, 2, 2);
+    ctx.restore();
   }
 
   function nameTag(m, isLead) {
@@ -1005,7 +1028,9 @@ AB.IsoRender = (() => {
     L.globalCompositeOperation = 'source-over';
     // №133: до питания — гуще темнота (атмосфера), вокруг отряда — небольшое пятно; с питанием — как было
     const powered = AB.World && AB.World.hasPower();
-    const dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.9, lit: 0.3 }, powered) : (powered ? 0.3 : 0.9);
+    let dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.9, lit: 0.3 }, powered) : (powered ? 0.3 : 0.9);
+    if (AB.IsoGame.sector() === 'SECTOR-005') dk = 0;   // №197: своя база — светло, всё видно
+    if (dk <= 0) L.clearRect(0, 0, lightCv.width, lightCv.height);   // №197: в базе слой темноты пустой (иначе оставался прежний)
     L.fillStyle = `rgba(3,4,7,${Math.max(0, dk)})`;   // с питанием светлее (№82: плавно, со вспышкой)
     L.fillRect(0, 0, lightCv.width, lightCv.height);
     L.setTransform(sc * k, 0, 0, sc * k, (cv.width / 2 - cam.x * sc) * k, (cv.height / 2 - cam.y * sc) * k);

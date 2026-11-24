@@ -1078,3 +1078,8 @@ body.map-fan-on .map-units { visibility: hidden; }
 .un-vtabs button { width: 42px; height: 42px; border-radius: 8px; cursor: pointer; font-size: 19px; color: #9fb4bc; background: #0e1519; border: 1px solid rgba(94, 230, 255, .25); }
 .un-vtabs button.on { color: #ffe2a8; border-color: #ffd27a; box-shadow: 0 0 8px rgba(255, 210, 120, .35); }
 @media (max-width: 560px) { .un-vpage { grid-template-columns: 1fr 44px; } .un-vfig { grid-column: 1 / -1; } }
+
+/* №197: выбрано здание — панель стройки узкой полосой сверху, чтобы подсвеченные места были видны */
+#bx-cat.bx-mini { top: calc(150px + env(safe-area-inset-top, 0px)); bottom: auto; max-height: none; gap: 5px; padding: 8px 12px; background: rgba(6, 10, 12, .82); }
+#bx-cat.bx-mini .bx-cost { font-size: 11px; }
+@media (max-height: 460px) { #bx-cat.bx-mini { top: calc(4px + env(safe-area-inset-top, 0px)); } }

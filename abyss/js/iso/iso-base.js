@@ -36,9 +36,14 @@ AB.IsoBase = (() => {
     if (!on) start();
     if (AB.BaseView) AB.BaseView.frame(dt);
     const sim = AB.BaseSim, S = sim.on() ? sim.state() : null;
+    // №197: открытые герои, которые на базе, — тоже фигурами в трюме (появляются у входа)
+    if (S && AB.IsoParty.addNpc) {
+      const have = new Set(crew().map((m) => m.id)), en = AB.BASE_DATA.core ? AB.BASE_DATA.core.enter : null;
+      for (const id of S.present) if (!have.has(id) && AB.HEROES && AB.HEROES[id]) AB.IsoParty.addNpc(id, en ? en.x : 3.5, en ? en.y : 5.5);
+    }
     for (const m of crew()) {
       const w = S && S.crew[m.id];
-      if (!w || w.away || !S.present.includes(m.id)) { if (S && AB.IsoActs.crew().includes(m.id)) m.hidden = true; continue; }
+      if (!w || w.away || !S.present.includes(m.id)) { if (S && (AB.IsoActs.crew().includes(m.id) || (AB.HEROES && AB.HEROES[m.id]))) m.hidden = true; continue; }
       m.hidden = false; m.ext = true;
       const dx = w.x - (m.sx ?? m.x), dy = w.y - (m.sy ?? m.y), went = Math.hypot(dx, dy);
       m.sx = w.x; m.sy = w.y;

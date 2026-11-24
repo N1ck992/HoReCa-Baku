@@ -17,11 +17,14 @@ AB.BaseBuild = (() => {
   let on = false, ghost = null, sel = null, drag = null, delAsk = false, chk = null, chkKey = '';
   // №153: упрощённая стройка — выбранное гнездо трюма
   let slotSel = null;
+  let bpSel = null;                                  // №197: сначала выбирают здание, потом место
+  const fitsSlot = (sl, b) => !sl.core && !sl.dev && ((b.w <= sl.w && b.h <= sl.h) || (b.h <= sl.w && b.w <= sl.h));
+  const freeFor = (b) => sim().slots().filter((q) => fitsSlot(q, b));
   const SIMPLE = () => !!(sim().simple && sim().simple());
 
   function toggle(v) {
     on = v == null ? !on : !!v;
-    ghost = null; sel = null; drag = null; delAsk = false; slotSel = null;
+    ghost = null; sel = null; drag = null; delAsk = false; slotSel = null; bpSel = null;
     if (on && AB.BaseView) AB.BaseView.close();
     render();
   }
@@ -149,6 +152,12 @@ AB.BaseBuild = (() => {
     if (SIMPLE()) {                                    // №153: нажали на гнездо — выбрать его
       const x = Math.floor(c.x), y = Math.floor(c.y);
       const sl = sim().slots().find((q) => x >= q.x && y >= q.y && x < q.x + q.w && y < q.y + q.h);
+      if (bpSel) {                                     // №197: здание выбрано — нажали на подсвеченное место
+        const b = sim().bp(bpSel);
+        if (sl && b && fitsSlot(sl, b)) { buildSel(sl.id); return true; }
+        if (!sl || !sl.dev) return true;               // мимо — выбор здания остаётся
+        bpSel = null;
+      }
       slotSel = sl ? sl.id : null; sel = null; delAsk = false;
       render(); return true;
     }
@@ -188,8 +197,18 @@ AB.BaseBuild = (() => {
   function drawFloor(ctx, toScreen, time, poly, rectPts) {
     const S = sim().state();
     if (SIMPLE()) {                                    // №153: гнёзда — свободные пунктиром с «+», выбранное — жёлтым
+      const bs = bpSel && sim().bp(bpSel);
       for (const sl of sim().slots()) {
         if (sl.core) continue;
+        if (bs) {                                      // №197: куда можно поставить выбранное здание — зелёным, пульсом
+          poly(ctx, toScreen, rectPts(sl));
+          if (fitsSlot(sl, bs)) {
+            const a = 0.22 + Math.sin(time * 4) * 0.1;
+            ctx.fillStyle = `rgba(120,255,170,${a})`; ctx.fill(); ctx.strokeStyle = 'rgba(120,255,170,.95)'; ctx.lineWidth = 2.5; ctx.stroke();
+            const c = toScreen(sl.x + sl.w / 2, sl.y + sl.h / 2); ctx.fillStyle = '#d8ffe6'; ctx.font = '700 20px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('▼', c.x, c.y + 7);
+          } else { ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.stroke(); }
+          continue;
+        }
         const me = sl.id === slotSel;
         poly(ctx, toScreen, rectPts(sl));
         if (!sl.dev) { ctx.fillStyle = me ? 'rgba(255,226,140,.22)' : `rgba(94,230,255,${0.08 + Math.sin(time * 3) * 0.03})`; ctx.fill(); ctx.setLineDash([5, 4]); }
@@ -279,8 +298,21 @@ AB.BaseBuild = (() => {
     if (!on) return;
     const sl = slotSel && sim().slots().find((q) => q.id === slotSel);
     const free = sim().slots().filter((q) => !q.dev).length;
-    if (!sl) {
-      cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Нажмите на свободное место «+» в трюме. Свободно: ${free} из ${sim().slots().length}. Кабели не нужны — питание общее от реактора.</span><button class="bx-chip" data-b="exit">✕ Закрыть</button></div>`;
+    cat.classList.toggle('bx-mini', !!bpSel && !sl);
+    if (bpSel && !sl) {                                // №197: здание выбрано — показываем, куда можно
+      const b = sim().bp(bpSel), n = b ? freeFor(b).length : 0;
+      cat.innerHTML = `<div class="bx-cat-head"><b>${esc(b ? b.name : '')}</b><span class="muted">${n ? `Подходящие места подсвечены зелёным (${n}). Нажмите на любое — или «Авто».` : 'Свободных мест нет — разберите что-нибудь ненужное.'}</span><button class="bx-chip" data-b="bpback">◀ Назад</button></div>
+        <div class="bx-row">${n ? '<button class="bx-chip go" data-b="bpauto">✓ Авто — на первое свободное</button>' : ''}<button class="bx-chip" data-b="exit">✕ Закрыть</button></div>
+        <div class="bx-cost">Цена: ${(b.cost || []).length ? costLine(b.cost) : 'бесплатно'}</div>`;
+      return;
+    }
+    if (!sl) {                                         // №197: стройка начинается со списка зданий
+      const list = sim().slotBps().map((b) => {
+        const cost = (b.cost || []), lack = cost.some(([i, n]) => AB.BaseView.stock(i) < n), n = freeFor(b).length;
+        return `<button class="bx-bp ${lack || !n ? 'lack' : ''}" data-b="pick|${b.id}"><b>${esc(b.name)}</b><span>${b.w}×${b.h} · ${cost.length ? costLine(cost) : 'бесплатно'}</span><span class="muted">${n ? `мест: ${n}` : 'нет места'}${b.desc ? ` · ${esc((String(b.desc).match(/^.*?[.!?](\s|$)/) || [b.desc])[0].trim())}` : ''}</span></button>`;
+      }).join('');
+      cat.innerHTML = `<div class="bx-cat-head"><b>Стройка</b><span class="muted">Выберите здание — игра подсветит, куда его можно поставить. Свободно мест: ${free} из ${sim().slots().length}. Нажмите на постройку в трюме, чтобы открыть или разобрать.</span><button class="bx-chip" data-b="exit">✕ Закрыть</button></div>
+        <div class="bx-cat-list">${list || '<span class="muted">Нет изученных устройств</span>'}</div><div class="muted">Новые устройства — в «Науке».</div>`;
       return;
     }
     if (sl.dev) {
@@ -297,6 +329,12 @@ AB.BaseBuild = (() => {
     }).join('');
     cat.innerHTML = `<div class="bx-cat-head"><b>Место ${esc(sl.id.slice(1))}: что поставить?</b><span class="muted">Устройство появится сразу, материалы спишутся со стеллажей и из шкафчиков.</span><button class="bx-chip" data-b="sback">◀ Назад</button></div>
       <div class="bx-cat-list">${list}</div><div class="muted">Новые устройства — в «Науке».</div>`;
+  }
+  // №197: построить выбранное здание в гнездо
+  function buildSel(slotId) {
+    const b = sim().bp(bpSel), r = sim().buildAt(slotId, bpSel);
+    if (!r.ok) { say(r.miss ? missText(b, r.miss) : `${b.name}: ${r.why}`); render(); return; }
+    AB.Bus.emit('iso:toast', { text: `${b.name}: готово`, kind: 'good' }); bpSel = null; slotSel = null; sim().save(); render();
   }
   const floating = () => !!ghost && sim().bp(ghost.bp).kind === 'device';
   // ставит ✓ / ✕ над призраком: верхний угол призрака на экране → координаты страницы
@@ -316,6 +354,9 @@ AB.BaseBuild = (() => {
     const btn = e.target.closest('[data-b]'); if (!btn || btn.disabled) return;
     const [a, v] = btn.dataset.b.split('|');
     if (a === 'exit') toggle(false);
+    else if (a === 'pick') { bpSel = v; slotSel = null; render(); }
+    else if (a === 'bpback') { bpSel = null; render(); }
+    else if (a === 'bpauto') { const b = sim().bp(bpSel), f = b && freeFor(b)[0]; if (f) buildSel(f.id); }
     else if (a === 'build') {                          // №153: поставить в выбранное гнездо
       const b = sim().bp(v), r = sim().buildAt(slotSel, v);
       if (!r.ok) { say(r.miss ? missText(b, r.miss) : `${b.name}: ${r.why}`); return; }
@@ -344,5 +385,5 @@ AB.BaseBuild = (() => {
   AB.Bus.on('base:view', ({ on: v }) => { if (!v && on) toggle(false); });
   AB.Bus.on('base:plan', () => { if (on) render(); });
 
-  return { auto, toggle, on: () => on, tap, grab, dragTo, drop, drawFloor, startNew, startEdit, confirm, ghost: () => ghost, render };
+  return { auto, toggle, on: () => on, tap, grab, dragTo, drop, drawFloor, startNew, startEdit, confirm, ghost: () => ghost, render, pick: (id) => { bpSel = id; slotSel = null; render(); }, picked: () => bpSel };
 })();

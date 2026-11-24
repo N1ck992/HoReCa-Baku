@@ -18,13 +18,17 @@ AB.BaseView = (() => {
   const toast = (text, kind = 'info') => AB.Bus.emit('iso:toast', { text, kind });
 
   // ---------- адаптер: шкафчики и кто дома ----------
+  // №197: работать на базе может любой открытый герой, а не только экипаж капсулы (Марк и Хейл)
+  const allCrew = () => (AB.IsoRoster && AB.IsoRoster.crew ? AB.IsoRoster.crew() : AB.IsoActs.crew());
   function present() {
     if (!AB.Flags.has('undocked')) return [];
     const sq = AB.IsoOverworld.squads ? AB.IsoOverworld.squads() : [];
+    const sf = AB.IsoSurface && AB.IsoSurface._squads ? AB.IsoSurface._squads() : [];
     const here = AB.IsoGame.sector() === SEC || AB.IsoOverworld.isOpen();
-    return AB.IsoActs.crew().filter((id) => {
+    return allCrew().filter((id) => {
       const s = sq.find((q) => q.id === id);
       if (s && s.vehicle && s.state !== 'home') return false;                    // отряд на карте дна
+      if (sf.some((q) => q.id === id && q.state !== 'home')) return false;     // №197: ушёл на поверхность
       if (!here && AB.IsoParty.members().some((m) => m.id === id)) return false;  // ушёл с отрядом в здание
       const c = AB.Chars.get(id); return !(c && c.dead);
     });
@@ -354,7 +358,7 @@ AB.BaseView = (() => {
   function shortDesc(b) { const t = String(b.short || b.desc || ''); const m = t.match(/^.*?[.!?](\s|$)/); return (m ? m[0] : t).trim(); }
   // №156: шкала «Работник» — портреты назначенных (нажатие снимает) и «+»; «+» открывает ряд иконок героев
   function workerBar(o) {
-    const ws = sim().workers(o.uid), crew = AB.IsoActs.crew(), free = crew.filter((id) => !ws.includes(id));
+    const ws = sim().workers(o.uid), crew = present(), free = crew.filter((id) => !ws.includes(id));
     const ico = (id, act, extra = '') => `<button class="bx-hero ${extra}" data-act="${act}|${id}" title="${esc(crewName(id))}"><canvas data-pt="${id}"></canvas><span>${esc(crewName(id))}</span></button>`;
     const picking = card && card.pick === o.uid;
     return `<div class="bx-work"><span class="bx-work-l">Работник</span>
@@ -438,7 +442,7 @@ AB.BaseView = (() => {
   const JOB_NAME = { build: 'Стройка', haul: 'Переноска' };
   const jobName = (j) => JOB_NAME[j] || title(sim().dev(j)) || j;
   function crewCard() {
-    const S = sim().state(), ids = AB.IsoActs.crew();
+    const S = sim().state(), ids = allCrew();
     const rows = ids.map((id) => {
       const w = sim().worker(id), here = S.present.includes(id);
       const task = !here ? 'не на базе' : w.task ? w.task.label : 'свободен';
