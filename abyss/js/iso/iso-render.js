@@ -405,8 +405,10 @@ AB.IsoRender = (() => {
     ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc);
     ctx.imageSmoothingEnabled = true;
 
-    // пол
-    ctx.drawImage(floorCv, -floorOX, -TH / 2);
+    // пол (№194: в капсуле — картинка трюма вместо пола и стен)
+    const hold = AB.IsoGame.sector() === 'SECTOR-005' && AB.BaseView && AB.BaseView.holdArt ? AB.BaseView.holdArt(toScreen) : null;
+    if (hold) { ctx.save(); ctx.transform(...hold.m); ctx.drawImage(hold.img, 0, 0); ctx.restore(); }
+    else ctx.drawImage(floorCv, -floorOX, -TH / 2);
     fogUpdate(dt, party);
     drawFloorMarks();
     if (AB.IsoReward) AB.IsoReward.drawGround(ctx, toScreen, time, AB.IsoInteract.targets().filter((t) => t.kind === 'item'));   // №81: лучи над наградой
@@ -429,7 +431,7 @@ AB.IsoRender = (() => {
     const { w, h } = AB.IsoWorld.size();
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const k = AB.IsoWorld.cell(x, y);
-      if (k !== AB.IsoWorld.WALL || exitWall(x, y)) continue;
+      if (k !== AB.IsoWorld.WALL || exitWall(x, y) || hold) continue;
       const c = toScreen(x + 0.5, y + 0.5);
       if (!visible(c.x, c.y) || !tileShown(x, y)) continue;
       list.push({ d: x + y + 1, k: 'w', x, y });
@@ -443,7 +445,7 @@ AB.IsoRender = (() => {
     for (const e of AB.IsoEnemies.all()) { const c = toScreen(e.x, e.y); if (visible(c.x, c.y) && (e.story || pointShown(e.x, e.y))) list.push({ d: e.x + e.y + 0.005, k: 'e', e }); }
     // двери сектора (створки), выходы в стене, предметы на полу
     for (const dr of AB.IsoInteract.doors()) if (dr.anim > 0.03) for (const [x, y] of dr.tiles) if (tileShown(x, y)) list.push({ d: x + y + 1, k: 'd', x, y, dr });
-    for (const e of AB.IsoWorld.layout().exits || []) if (!e.floor) {
+    for (const e of (hold ? [] : AB.IsoWorld.layout().exits || [])) if (!e.floor) {
       const wx = e.x + (e.wall === 'w' ? -1 : e.wall === 'e' ? 1 : 0), wy = e.y + (e.wall === 'n' ? -1 : e.wall === 's' ? 1 : 0);
       if (!fog.on || roomShown(e.room)) list.push({ d: wx + wy + 1.001, k: 'x', x: wx, y: wy, e });
     }

@@ -304,22 +304,23 @@ AB.ISO_LAYOUTS['SECTOR-004'] = {
 AB.ISO_LAYOUTS['SECTOR-005'] = {
   name: 'База-капсула',
   areas: [
-    { room: 'ROOM-027', x: 2, y: 3, w: 26, h: 8 },      // №79: открытый трюм
+    { room: 'ROOM-027', x: 2, y: 3, w: 13, h: 10 },     // №194: трюм по картинке автора (был 26 × 8)
   ],
   props: [
-    { kind: 'locker', x: 7, y: 3, w: 2, h: 1, stash: true },   // №86: пульта нет — «Выйти с базы» внизу
-    { kind: 'exorack', x: 25, y: 3, w: 2, h: 1 },
+    { kind: 'locker', x: 5, y: 3, w: 2, h: 1, stash: true },   // №86: пульта нет — «Выйти с базы» внизу
+    { kind: 'exorack', x: 11, y: 3, w: 2, h: 1 },
   ],
   doors: [],
   exits: [
-    { room: 'ROOM-022', door: 'out', x: 27, y: 6, wall: 'e', toName: 'дно (капсула)', to: { overworld: true } },
+    { room: 'ROOM-022', door: 'out', x: 2, y: 5, wall: 'w', toName: 'дно (капсула)', to: { overworld: true } },
   ],
   items: {},
-  crewAt: { 'CHAR-004': { x: 19.5, y: 7.5 } },
-  enter: { x: 24.5, y: 7.5 },
+  crewAt: { 'CHAR-004': { x: 9.5, y: 12.5 } },
+  enter: { x: 3.5, y: 5.5 },
   lights: [
-    { x: 5, y: 6, color: [120, 200, 255], radius: 6 }, { x: 13, y: 6, color: [255, 214, 170], radius: 7 },
-    { x: 19, y: 6, color: [255, 214, 170], radius: 6 }, { x: 25, y: 7, color: [120, 200, 255], radius: 5 },
+    { x: 4, y: 5, color: [120, 200, 255], radius: 6 }, { x: 9, y: 7, color: [255, 214, 170], radius: 8 },
+    { x: 13, y: 10, color: [255, 214, 170], radius: 6 }, { x: 12, y: 4, color: [255, 214, 170], radius: 7 },
+    { x: 4, y: 11, color: [120, 200, 255], radius: 6 }, { x: 14, y: 7, color: [255, 200, 150], radius: 5 },
   ],
 };
 AB.ID.register('SECTOR-005', { id: 'SECTOR-005', name: 'База-капсула', iso: true, pending: true, doors: [] });

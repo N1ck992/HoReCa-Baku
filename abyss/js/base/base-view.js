@@ -512,5 +512,17 @@ AB.BaseView = (() => {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   AB.Bus.on('iso:travel', ({ sector }) => { if (sector === SEC && sim().on()) { layout(); rebuild = true; } else close(); });
 
-  return { frame, drawFloor, drawTop, tap, open, openCrew, openScience, close, title, stock, layout, present, pump, card: () => card };
+  // №194: картинка трюма вместо пола и стен: вписывается в изометрию по трём центрам площадок (D().simple.art)
+  let holdImg = null;
+  function holdArt(toScreen) {
+    const A = D().simple && D().simple.on && D().simple.art; if (!A || !sim().on()) return null;
+    if (!holdImg) { holdImg = new Image(); holdImg.src = A.src; }
+    if (!holdImg.complete || !holdImg.naturalWidth) return null;
+    const [p0, p1, p2] = A.px, [c0, c1, c2] = A.at.map(([x, y]) => toScreen(x, y));
+    const ux = p1[0] - p0[0], uy = p1[1] - p0[1], vx = p2[0] - p0[0], vy = p2[1] - p0[1], det = ux * vy - vx * uy;
+    const sx1 = c1.x - c0.x, sy1 = c1.y - c0.y, sx2 = c2.x - c0.x, sy2 = c2.y - c0.y;
+    const a = (sx1 * vy - sx2 * uy) / det, c = (sx2 * ux - sx1 * vx) / det, b = (sy1 * vy - sy2 * uy) / det, d = (sy2 * ux - sy1 * vx) / det;
+    return { img: holdImg, m: [a, b, c, d, c0.x - a * p0[0] - c * p0[1], c0.y - b * p0[0] - d * p0[1]] };
+  }
+  return { holdArt, frame, drawFloor, drawTop, tap, open, openCrew, openScience, close, title, stock, layout, present, pump, card: () => card };
 })();

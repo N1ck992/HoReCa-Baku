@@ -985,6 +985,19 @@ AB.BaseSim = (() => {
     S.unlocked = S.unlocked.filter((id) => { const b = bp(id); return b && (b.start || S.tech.done.some((t) => (techOf(t).unlock || {}).bp && techOf(t).unlock.bp.includes(id))); });
     for (const d of S.devs) { if (!d.core && !d.lvl) d.lvl = 1; if (!d.core && !d.prio) d.prio = 2; }
     if (!dev('reactor')) S.devs.push({ uid: 'reactor', bp: 'BLD-104', core: true, ...D().core.reactor, built: true, lvl: 1 });
+    // №194: трюм по картинке — перенос со старого длинного трюма: ядро, приёмник, реактор, устройства с прежних мест на места с теми же номерами
+    const core0 = D().core.rooms[0], cr = S.rooms.find((r) => r.uid === 'core');
+    if (cr && (cr.w !== core0.w || cr.h !== core0.h)) {
+      Object.assign(cr, { x: core0.x, y: core0.y, w: core0.w, h: core0.h });
+      const pl = dev('pile'), rc = dev('reactor'); if (pl) Object.assign(pl, D().core.pile); if (rc) Object.assign(rc, D().core.reactor);
+      const OLD = D().simple.slotsOld || [], NEW = D().simple.slots;
+      for (const d of S.devs) {
+        if (d.core) continue;
+        const o = OLD.find((q) => d.x >= q.x && d.x < q.x + 2 && d.y >= q.y && d.y < q.y + 2), n = o && NEW.find((q) => q.id === o.id);
+        if (n) { d.x = n.x; d.y = n.y; } else { const free = NEW.find((q) => !S.devs.some((e) => e !== d && e.x === q.x && e.y === q.y)); if (free) { d.x = free.x; d.y = free.y; } }
+      }
+      for (const w of Object.values(S.crew || {})) if (w && w.x != null) { w.x = D().core.enter.x; w.y = D().core.enter.y; }
+    }
   }
   // база появляется, когда капсулу отстыковали; если сохранение есть — досчитать отсутствие
   function ensure() {

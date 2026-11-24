@@ -16,7 +16,7 @@ AB.IsoBase = (() => {
     if (on) return;
     on = true;
     AB.IsoParty.setScene(true);
-    AB.IsoRender.focus({ x: 14.5, y: 10.5 });
+    AB.IsoRender.focus({ x: 8.5, y: 7.5 });   // №194: центр трюма по картинке
     document.body.classList.add('in-base');
     AB.Bus.emit('base:view', { on: true });
   }
