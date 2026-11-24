@@ -1667,7 +1667,8 @@ AB.IsoSurface = (() => {
     const bob = s.anim ? Math.abs(Math.sin(s.stride / 10)) * 2 : 0, lunge = s.atk ? Math.sin(Math.min(1, s.atk.t / 0.8) * Math.PI) * 4 * f : 0;
     const pic = v.img && vehPic(v.img);
     if (pic) {
-      const h = S0 * 1.45, w = pic.naturalWidth * h / pic.naturalHeight;
+      let h = S0 * 1.45, w = pic.naturalWidth * h / pic.naturalHeight;
+      if (w > S0 * 1.9) { w = S0 * 1.9; h = pic.naturalHeight * w / pic.naturalWidth; }   // широкая техника (броневик) — по ширине
       g.save(); g.translate(x + lunge, y + S0 * 0.22 - bob);
       g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, -2, w * 0.32, 5, 0, 0, 7); g.fill();
       g.scale(f, 1); g.drawImage(pic, -w / 2, -h, w, h);

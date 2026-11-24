@@ -58,7 +58,7 @@ Object.assign(AB.VEHICLES, {
     ability: { id: 'stun', name: 'Перегрузка', text: 'Каждый 3-й выстрел оглушает цель на 1,5 с.', every: 3, time: 1.5 }, desc: 'Лёгкий шагоход Архива с дуговым излучателем. Трофей Стража Архива.' },
   'EQUIP-102': { id: 'EQUIP-102', name: 'Шагоход «Молот»', short: 'Молот', class: 'kinetic', shape: 'walker', speed: 20, attack: 26, rate: 1.4, reach: 1, armor: 0.35, dtype: 'kinetic', armorType: 'kinetic',
     ability: { id: 'ram', name: 'Таран', text: 'Первый удар по новой цели — двойной.', mult: 2 }, desc: 'Тяжёлый горный шагоход кланов с гидравлическим кулаком. Трофей Каменного стража.' },
-  'EQUIP-103': { id: 'EQUIP-103', name: 'Броневик «Таран»', short: 'Таран', class: 'kinetic', shape: 'tank', speed: 34, attack: 16, rate: 1.1, reach: 2, armor: 0.3, dtype: 'kinetic', armorType: 'kinetic',
+  'EQUIP-103': { id: 'EQUIP-103', name: 'Броневик «Таран»', short: 'Таран', class: 'kinetic', shape: 'tank', img: 'assets/vehicles/ram.webp' /* №173 */, speed: 34, attack: 16, rate: 1.1, reach: 2, armor: 0.3, dtype: 'kinetic', armorType: 'kinetic',
     ability: { id: 'plates', name: 'Бронелисты', text: 'Выстрелы издалека наносят ему на 30% меньше урона.', mult: 0.7 }, desc: 'Быстрый колёсный броневик Менового Узла со спаренным пулемётом.' },
   'EQUIP-104': { id: 'EQUIP-104', name: 'Краулер «Саламандра»', short: 'Саламандра', class: 'thermal', shape: 'crawler', speed: 24, attack: 12, rate: 0.9, reach: 2, armor: 0.15, dtype: 'thermal', armorType: 'kinetic',
     ability: { id: 'ignite', name: 'Поджог', text: 'Цель горит: 3 урона в секунду 4 с.', dps: 3, time: 4 }, desc: 'Шестиногий краулер с огнемётом, выращенный… или собранный? Трофей Цветка-пожирателя.' },
