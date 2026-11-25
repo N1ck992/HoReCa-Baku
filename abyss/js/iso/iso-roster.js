@@ -179,10 +179,11 @@ AB.IsoRoster = (() => {
           <small>Техника · ${roleName(v.class)}</small>
           <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><b>${v.short || v.name}</b><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div>
           ${partsRow(s.vehicle, lk)}</div>
-        <div class="ro-info">${partPick ? pickerHtml(s.vehicle, partPick) : infoMode === 'hero' && s.hero ? `${heroDetail(s.hero)}<p><button class="ro-pbtn" data-info="">◀ Назад</button></p>` : infoMode === 'veh' ? `${vehDetail(s.vehicle)}<p><button class="ro-pbtn" data-info="">◀ Назад</button></p>` : `<p class="ro-hint">Нажмите на героя или технику — подробности.</p><p>${stat(AB.VehMods ? AB.VehMods.eff(s.vehicle) : v)}</p>${modsLine(s.vehicle)}${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}`}
+        <div class="ro-info">${partPick ? pickerHtml(s.vehicle, partPick) : infoMode === 'hero' ? altsHtml('hero', s, lk) : infoMode === 'veh' ? altsHtml('veh', s, lk) : infoMode === 'herod' && s.hero ? `${heroDetail(s.hero)}<p><button class="ro-pbtn" data-info="hero">◀ Назад</button></p>` : infoMode === 'vehd' ? `${vehDetail(s.vehicle)}<p><button class="ro-pbtn" data-info="veh">◀ Назад</button></p>` : `<p class="ro-hint">Нажмите на героя или технику — выбрать замену.</p><p>${stat(AB.VehMods ? AB.VehMods.eff(s.vehicle) : v)}</p>${modsLine(s.vehicle)}${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}`}
           <em>${lk ? 'Снаружи — менять можно, когда вернётся в базу' : s.hero ? 'В базе' : 'Техника стоит в базе без экипажа'}</em></div>
-      </div>` + siegeHtml(sl) + reserveHtml() + `<p class="ro-note">Активный отряд: ${sl.filter((q) => q.hero).length}/${MAX}. Ячейку выбирают вкладками сверху или нажатием на ячейку отряда внизу. ◀ ▶ — поставить героя или технику из наличия (или поменять местами с другой ячейкой). Способность героя работает только в технике его класса (✓); техники — всегда.</p>`;
+      </div>` + (AB.Synergy ? AB.Synergy.html() : '') + siegeHtml(sl) + `<p class="ro-note">Активный отряд: ${sl.filter((q) => q.hero).length}/${MAX}. Ячейку выбирают вкладками сверху или нажатием на ячейку отряда внизу. Нажмите на героя или технику — откроются иконки замены (занятые в другой ячейке поменяются местами); ◀ ▶ — листать по очереди. Способность героя работает только в технике его класса (✓); техники — всегда.</p>`;
     for (const c of el.querySelectorAll('canvas[data-full]')) fullFigure(c, c.dataset.full);
+    for (const c of el.querySelectorAll('.ro-alts canvas[data-pt]')) portrait(c, c.dataset.pt, 1);
   }
   // показать в окне ячейку этого героя (нажатие на ячейку отряда внизу карты)
   function focus(hero) { const i = sync().findIndex((q) => q.hero === hero); if (i >= 0) { cur = i; partPick = null; infoMode = null; if (el && !el.hidden) render(); } }
@@ -196,7 +197,22 @@ AB.IsoRoster = (() => {
         <button class="ro-sgsh ${cfg.shield === q.hero ? 'on' : ''}" data-sgsh="${q.hero}" title="Щитоносец: в осаде бьёт первым">🛡</button></div>`; }).join('');
     return `<div class="ro-siege"><small>Осада — построение</small>${rows}<p class="ro-note">«Осада» на цели — техника встаёт кольцом на своей дальности (или вплотную), первым бьёт 🛡.</p></div>`;
   }
-  // №159: кто и что в наличии (не в активном отряде)
+  // №199: замена в ячейке — сетка иконок, как в «Юнитах»: все герои (и «пусто») или вся техника; текущий — подсвечен,
+  // занятый в другой ячейке — с подписью (поменяются местами), снаружи — недоступен
+  function altsHtml(kind, s, lk) {
+    const sl = sync(), here = (id) => sl.findIndex((q) => (kind === 'hero' ? q.hero : q.vehicle) === id);
+    const tag = (id) => { const j = here(id); return j < 0 ? '' : j === cur ? 'сейчас' : `${sl[j].hero ? AB.ID.get(sl[j].hero).name : 'ячейка ' + (j + 1)}`; };
+    const outJ = (id) => { const j = here(id); return j >= 0 && j !== cur && locked(sl[j]); };
+    const tiles = kind === 'hero'
+      ? [...crew().map((id) => { const h = heroInfo(id), ok = h && h.role === (V(s.vehicle) || {}).class;
+          return `<button class="un-tile ${id === s.hero ? 'on' : ''} ${outJ(id) ? 'out' : ''}" data-alt-hero="${id}" ${lk || outJ(id) ? 'disabled' : ''} title="${AB.ID.get(id).name}"><canvas data-pt="${id}"></canvas><span>${AB.ID.get(id).name}${ok ? ' ✓' : ''}</span>${tag(id) ? `<em>${tag(id)}</em>` : ''}</button>`; }),
+        `<button class="un-tile ${!s.hero ? 'on' : ''}" data-alt-hero="" ${lk ? 'disabled' : ''} title="Без героя"><i>∅</i><span>Пусто</span></button>`]
+      : owned().map((vid) => `<button class="un-tile ${vid === s.vehicle ? 'on' : ''} ${outJ(vid) ? 'out' : ''}" data-alt-veh="${vid}" ${lk || outJ(vid) ? 'disabled' : ''} title="${V(vid).name}"><img src="${vimg(vid)}" alt=""><span>${V(vid).short || V(vid).name}</span>${tag(vid) ? `<em>${tag(vid)}</em>` : ''}</button>`);
+    return `<p><b>${kind === 'hero' ? 'Герой в ячейку' : 'Техника в ячейку'}</b>${kind === 'hero' ? ' · ✓ — его класс, способность работает' : ''}</p>
+      <div class="ro-alts un-list grid">${tiles.join('')}</div>
+      <p><button class="ro-pbtn" data-info="${kind === 'hero' ? 'herod' : 'vehd'}">Подробнее</button> <button class="ro-pbtn" data-info="">◀ Назад</button></p>`;
+  }
+  // №159: кто и что в наличии (не в активном отряде) — устарело (№199: автор убрал надпись, замена — иконками)
   function reserveHtml() {
     const sl = sync(), hs = crew().filter((id) => !sl.some((q) => q.hero === id)), vs = owned().filter((v) => !sl.some((q) => q.vehicle === v));
     if (!hs.length && !vs.length) return '';
@@ -211,6 +227,8 @@ AB.IsoRoster = (() => {
         const tb = e.target.closest('[data-cur]'); if (tb) { cur = +tb.dataset.cur; partPick = null; infoMode = null; render(); return; }
         const fp = e.target.closest('[data-fpos]'); if (fp && AB.IsoSurface) { const id = fp.dataset.fpos; AB.IsoSurface.setForm(id, AB.IsoSurface.siegeCfg().form[id] === 'front' ? 'range' : 'front'); render(); return; }
         const sg = e.target.closest('[data-sgsh]'); if (sg && AB.IsoSurface) { AB.IsoSurface.setShield(sg.dataset.sgsh); render(); return; }
+        const ah = e.target.closest('[data-alt-hero],[data-alt-veh]');
+        if (ah) { const r = ah.dataset.altVeh !== undefined ? set(cur, { vehicle: ah.dataset.altVeh }) : set(cur, { hero: ah.dataset.altHero || null }); if (!r.ok) AB.Bus.emit('iso:toast', { text: r.why, kind: 'warn' }); render(); return; }   // №199
         const inf = e.target.closest('[data-info]'); if (inf) { infoMode = inf.dataset.info && infoMode !== inf.dataset.info ? inf.dataset.info : null; partPick = null; render(); return; }
         // №161: детали техники
         const pb = e.target.closest('[data-part]'); if (pb) { partPick = partPick === pb.dataset.part ? null : pb.dataset.part; render(); return; }

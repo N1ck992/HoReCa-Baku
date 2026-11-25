@@ -56,11 +56,12 @@ AB.IsoBase = (() => {
       m.stride = (m.stride || 0) + (m.moving ? went * PX_PER_TILE : 0);
       if (m.moving && Math.abs(dx - dy) > 0.002) m.facing = dx - dy > 0 ? 1 : -1;
       const step = w.task && w.task.steps[w.task.i];
-      const busy = step && (step.craft || step.build || step.take || step.put);
+      const busy = step && (step.craft || step.build || step.take || step.put || step.forage);
       const tr = AB.Anim.current(m.id);
       if (busy) {
         // у прибора — лицом к нему
-        const o = step.craft ? sim.dev(step.craft.uid) : step.build ? sim.obj(step.build.uid) : null;
+        const sp = step.forage && AB.BASE_DATA.forage.spots[step.forage.spot];
+        const o = step.craft ? sim.dev(step.craft.uid) : step.build ? sim.obj(step.build.uid) : sp ? { x: sp.x, y: sp.y, w: 1, h: 1 } : null;
         if (o) { const hx = o.x + o.w / 2 - m.x, hy = o.y + o.h / 2 - m.y; if (Math.abs(hx - hy) > 0.05) m.facing = hx - hy > 0 ? 1 : -1; }
         if (!tr || tr.action !== 'interact' || tr.done) { AB.Anim.play(m.id, 'interact', { restart: true }); m.action = 'interact'; }
       } else {

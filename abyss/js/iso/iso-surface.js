@@ -341,7 +341,8 @@ AB.IsoSurface = (() => {
   const VEFF = (vid) => {
     const v = (AB.VehMods ? AB.VehMods.eff(vid) : AB.VEHICLES[vid]) || null; if (!v) return null;
     const a = TFX('sqAtk'), ar = TFX('sqArmor');
-    return a || ar ? { ...v, attack: Math.round(v.attack * (1 + a)), armor: Math.min(0.8, v.armor + ar) } : v;
+    const w = a || ar ? { ...v, attack: Math.round(v.attack * (1 + a)), armor: Math.min(0.8, v.armor + ar) } : v;
+    return AB.Synergy ? AB.Synergy.apply(w, vid) : w;   // №199: связки отряда
   };
   const base = { id: 'base', kind: 'base', c: 0, r: 0, path: [], anim: null, face: 1, stride: 0 };
   const squads = [];                                 // { id, kind: 'squad', vehicle, state: 'home'|'out'|'retreat', c, r, path, anim, face, stride }

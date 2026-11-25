@@ -116,6 +116,7 @@ AB.BaseSim = (() => {
   function targetsOf(ref) {
     const g = geom();
     if (ref.rest) { const p = restOf(ref.rest), c = nearestWalk(Math.floor(p.x), Math.floor(p.y)); return c ? [c[1] * g.w + c[0]] : []; }
+    if (ref.spot !== undefined) { const p = D().forage.spots[ref.spot], c = p && nearestWalk(Math.floor(p.x), Math.floor(p.y)); return c ? [c[1] * g.w + c[0]] : []; }   // №199
     if (ref.enter) { const p = D().core.enter; return [Math.floor(p.y) * g.w + Math.floor(p.x)]; }
     if (ref.locker) return access(D().core.props.find((p) => p.locker));
     if (ref.pile) return access(dev('pile'));
@@ -338,6 +339,20 @@ AB.BaseSim = (() => {
     if (!src) return null;
     return { kind: 'eat', label: 'идёт поесть', steps: [{ go: src }, { take: { ref: src, item: F.item, n: 1 } }, { eat: { secs: 3 } }] };
   }
+  // №199: «жизнь на базе»: свободный герой идёт к переборке и добывает понемногу (обломки, реголит, провода);
+  // добыча — в руки, дальше обычной доставкой в приёмник или на стеллаж. Изредка — просто отдыхает.
+  function planForage(id, w) {
+    const F = D().forage; if (!F || !F.on || !F.spots.length) return null;
+    if (w.rested === undefined) w.rested = 0;
+    if (Math.random() < F.rest && w.rested < 1) { w.rested++; return null; }
+    w.rested = 0;
+    const taken = new Set(Object.values(S.crew).filter((o) => o !== w && o.task && o.task.spot !== undefined).map((o) => o.task.spot));
+    const free = F.spots.map((_, i) => i).filter((i) => !taken.has(i)); if (!free.length) return null;
+    const i = free[Math.floor(Math.random() * free.length)];
+    let r = Math.random() * F.yield.reduce((a, [, k]) => a + k, 0), item = F.yield[0][0];
+    for (const [it, k] of F.yield) { if ((r -= k) <= 0) { item = it; break; } }
+    return { kind: 'forage', spot: i, label: F.spots[i].label, steps: [{ go: { spot: i } }, { forage: { secs: F.secs, item, spot: i } }] };
+  }
   function plan(id, w) {
     if (w.carry) return planDeposit(w);
     const e = planEat(w); if (e) return e;
@@ -346,6 +361,7 @@ AB.BaseSim = (() => {
       const t = j === 'build' ? planBuild(w) : j === 'haul' ? planHaul(w) : planOperate(id, w, dev(j));
       if (t) return t;
     }
+    const fg = planForage(id, w); if (fg) return fg;   // №199: свободный — не стоит, а добывает
     const rp = restOf(id);
     if (Math.hypot(w.x - rp.x, w.y - rp.y) > 1.5) return { kind: 'rest', label: 'отдыхает', steps: [{ go: { rest: id } }, { idle: { secs: 3 } }] };
     return { kind: 'rest', label: 'отдыхает', steps: [{ idle: { secs: 2 } }] };
@@ -449,6 +465,11 @@ AB.BaseSim = (() => {
       // №73: поесть — съесть то, что принёс со стеллажа
       if (w.el < s.eat.secs) return;
       if (w.carry && w.carry.item === FOOD().item) { w.food = Math.min(100, (w.food ?? 100) + (FOOD().per + fx('food')) * w.carry.n); w.carry = null; w.ate = (w.ate || 0) + 1; }
+      next(w);
+    } else if (s.forage) {                             // №199: работа у переборки — в руки 1 добычи
+      if (w.el < s.forage.secs / Math.max(0.3, eff(w))) return;
+      w.carry = { item: s.forage.item, n: 1 }; S.foraged = (S.foraged || 0) + 1;
+      emit('base:forage', { id: w.id, item: s.forage.item });
       next(w);
     } else if (s.idle) {
       if (w.el >= s.idle.secs) next(w);

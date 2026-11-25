@@ -1083,3 +1083,45 @@ body.map-fan-on .map-units { visibility: hidden; }
 #bx-cat.bx-mini { top: calc(150px + env(safe-area-inset-top, 0px)); bottom: auto; max-height: none; gap: 5px; padding: 8px 12px; background: rgba(6, 10, 12, .82); }
 #bx-cat.bx-mini .bx-cost { font-size: 11px; }
 @media (max-height: 460px) { #bx-cat.bx-mini { top: calc(4px + env(safe-area-inset-top, 0px)); } }
+
+/* №199: «Отряд» — замена героя или техники иконками, как в «Юнитах» */
+.ro-alts { margin: 6px 0; }
+.ro-alts .un-tile { width: 74px; height: 74px; }
+.ro-alts .un-tile canvas { width: 44px; height: 56px; }
+.ro-alts .un-tile img { height: 52px; }
+.ro-alts .un-tile i { font: 26px var(--display); color: #9aa; font-style: normal; margin-bottom: 14px; }
+.un-tile.on { border-color: #ffe2a8; box-shadow: 0 0 0 2px rgba(255, 226, 168, .5) inset; }
+.un-tile[disabled] { opacity: .45; cursor: default; }
+.un-tile em { position: absolute; top: 3px; left: 3px; right: 3px; font: 9px var(--mono); font-style: normal; color: #ffe2a8; text-shadow: 0 0 3px #000; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* №199: связки отряда */
+.ro-syn { display: grid; gap: 4px; margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; background: rgba(10, 16, 20, .6); }
+.ro-syn > small { font: 600 12px var(--display); letter-spacing: .5px; color: #9fe7ff; }
+.syn { display: grid; grid-template-columns: 22px 1fr auto; gap: 2px 8px; align-items: baseline; opacity: .55; }
+.syn.on { opacity: 1; }
+.syn i { font-style: normal; text-align: center; color: #9aa; }
+.syn.on i { color: #ffe2a8; text-shadow: 0 0 6px rgba(255, 226, 168, .6); }
+.syn b { font: 600 12px var(--display); color: #fff; }
+.syn span { font: 11px var(--mono); color: #8cff9a; white-space: nowrap; }
+.syn:not(.on) span { color: var(--muted); }
+.syn small { grid-column: 2 / 4; font-size: 10.5px; color: var(--muted); line-height: 1.3; }
+.syn.on small { display: none; }
+/* №199: вводные задания — панель слева в базе */
+#tut { position: fixed; z-index: 4; left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(62px + env(safe-area-inset-top, 0px)); width: 214px; padding: 8px 10px; display: grid; gap: 5px; font: 11px var(--mono); color: var(--fg); background: rgba(6, 10, 12, .84); border: 1px solid rgba(255, 210, 120, .45); border-radius: 8px; cursor: pointer; }
+#tut[hidden], body.base-build #tut { display: none; }
+#tut .tut-h { display: flex; align-items: center; gap: 6px; }
+#tut .tut-h b { font: 600 13px var(--display); letter-spacing: .5px; color: #ffd27a; }
+#tut .tut-h span { margin-left: auto; color: var(--muted); }
+#tut .tut-h i { font-style: normal; color: #ffd27a; }
+#tut .tut-q { display: grid; gap: 3px; }
+#tut .tut-q b { font: 600 12px var(--display); color: #fff; }
+#tut .tut-q p { margin: 0; line-height: 1.35; color: #cfe6ee; }
+#tut .tut-q u { display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+#tut .tut-q u i { display: block; height: 100%; background: #8cff9a; }
+#tut .tut-q small { color: var(--muted); }
+#tut .tut-r { color: #c6f0a8 !important; }
+#tut button { justify-self: start; font: 11px var(--mono); padding: 3px 9px; border-radius: 5px; cursor: pointer; color: #9fe7ff; background: #10161a; border: 1px solid rgba(94, 230, 255, .4); }
+#tut .tut-all { margin: 4px 0 0; padding: 0; list-style: none; max-height: 34vh; overflow: auto; display: grid; gap: 2px; }
+#tut .tut-all li { color: var(--muted); }
+#tut .tut-all li.ok { color: #8cff9a; }
+#tut .tut-all li.cur { color: #ffd27a; }
+@media (max-height: 460px) { #tut { top: calc(46px + env(safe-area-inset-top, 0px)); width: 196px; } #tut .tut-q p { font-size: 10.5px; } }
