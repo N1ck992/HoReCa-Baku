@@ -286,7 +286,7 @@ AB.IsoOverworld = (() => {
         if (k === 'surface') AB.IsoActs.surface();
         squadsSig = ''; return;
       }
-      if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'out') deploy(id); else recall(id); squadsSig = ''; flyTo(unit(id)); return; }
+      if (b) { const id = b.closest('[data-u]').dataset.u; if (b.dataset.do === 'out') { deploy(id); flyTo(unit(id)); } else recall(id); squadsSig = ''; return; }   // №198: «Вернуть» — камера остаётся на месте
       if (c && AB.IsoRoster && AB.IsoRoster.isOpen()) { AB.IsoRoster.focus(c.dataset.u); return; }   // №160
       if (c) {
         const u = unit(c.dataset.u); if (!u) return;

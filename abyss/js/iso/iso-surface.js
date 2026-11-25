@@ -417,13 +417,13 @@ AB.IsoSurface = (() => {
       const p2 = search(from, (m) => dist(m, k) === 1 && walk(m) && !occupiedBy(m, u), (m) => (walk(m) ? cost(m) + (occupiedBy(m, u) ? 6 : 0) : Infinity));
       if (!p2) { say('Туда не подойти'); return false; }
       if (u.state === 'retreat') u.state = 'out';
-      u.path = p2; flyU = u; follow = true; barSig = ''; return true;
+      u.path = p2; follow = false; barSig = ''; return true;   // №198: после команды камера не прыгает к отряду — в открытом мире она свободна
     }
     if (from === k) { u.path = []; if (k.site) showSite(k.site); return true; }
     const p = search(from, (m) => m === k, (m) => (walk(m) ? cost(m) + (occupiedBy(m, u) ? 6 : 0) : Infinity));
     if (!p) { say('Туда не дойти'); return false; }
     if (u.state === 'retreat') u.state = 'out';
-    u.path = p; flyU = u; follow = true; barSig = '';
+    u.path = p; follow = false; barSig = '';
     return true;
   }
   // №182: в клетке — один юнит (капсула, отряд, NPC, патруль, союзник); занято — подождать и обойти
@@ -1413,7 +1413,7 @@ AB.IsoSurface = (() => {
         if (a === 'pos') F2[id] = F2[id] === 'front' ? 'back' : 'front';
         if (a === 'sh') shieldId = shieldId === id ? null : id;
         if (a === 'x') { el.hidden = true; return; }
-        if (a === 'go') { el.hidden = true; qSave(); barSig = ''; startSiege(formUs, formT); flyU = formUs[0]; follow = true; return; }
+        if (a === 'go') { el.hidden = true; qSave(); follow = false; barSig = ''; startSiege(formUs, formT); return; }
         qSave(); renderForm();
       });
     }
@@ -1470,20 +1470,20 @@ AB.IsoSurface = (() => {
     const T = m || (camp ? { ...camp, isCamp: true } : null);
     if (kind === 'army') { if (T) callArmy(T); return; }
     const us = movers(); if (!us.length) { say('Некому идти — выпустите героя из капсулы'); return; }
-    if (kind === 'siege') { if (T && (camp ? campLeft(camp.key) : m.hp > 0)) { startSiege(us, T); flyU = us[0]; follow = true; barSig = ''; } else say('Здесь уже некого брать в осаду'); return; }   // №191: сразу, без окна — построение в окне «Отряд»
+    if (kind === 'siege') { if (T && (camp ? campLeft(camp.key) : m.hp > 0)) { startSiege(us, T); follow = false; barSig = ''; } else say('Здесь уже некого брать в осаду'); return; }   // №191: сразу, без окна — построение в окне «Отряд»
     if (kind === 'pick') {                                                   // поднять добычу: идёт ближайший
       const L = lootAt(k); if (!L) return;
       const s0 = [...us].sort((a, b) => dist(curCell(a), k) - dist(curCell(b), k))[0];
       Object.assign(s0, { pick: L, target: null, siege: null, mode: 'follow', zone: k, capSpeed: null });
       if (dist(curCell(s0), k) <= 1 && !s0.anim) pickLoot(s0, L); else goTo(s0, k, true);
-      flyU = s0; follow = true; barSig = ''; return;
+      follow = false; barSig = ''; return;
     }
     for (const s of us) { s.siege = null; s.capSpeed = null; }
     if (kind === 'follow' && us.length > 1) { const slow = Math.min(...us.map((q) => (VEFF(q.vehicle) || { speed: 30 }).speed)); for (const q of us) q.capSpeed = slow; }   // №193
     if (kind === 'attack') {
       if (!m || m.hp <= 0) return;
       for (const s of us) { s.mode = 'auto'; s.target = m; s.zone = null; s.path = []; s.repath = 0; s.pick = null; s.capSpeed = null; if (s.state === 'retreat') s.state = 'out'; }
-      flyU = us[0]; follow = true; barSig = '';
+      follow = false; barSig = '';
       say(`${us.length > 1 ? 'Отряд' : herName(us[0].id)}: атака — ${NK(m).name}`);
       return;
     }
@@ -1491,7 +1491,7 @@ AB.IsoSurface = (() => {
     const spots = near0.length ? near0 : [k];
     us.forEach((s, i) => { s.mode = kind === 'auto' ? 'auto' : 'follow'; s.target = null; s.zone = spots[i % spots.length]; goTo(s, s.zone, true); });   // «Идти» и «Следовать» — без боя
     pendSite = k.site ? { s: k.site, u: us[0] } : null;
-    flyU = us[0]; follow = true; barSig = '';
+    follow = false; barSig = '';
     say(kind === 'auto' ? 'Автобой: идут туда и бьют враждебных по пути' : kind === 'follow' ? (us.length > 1 ? 'Следовать: отряд идёт вместе — со скоростью самого медленного' : 'Следовать: идёт, не ввязываясь в бой') : 'Идти: каждый своим ходом, не ввязываясь в бой');
   }
 
@@ -2231,7 +2231,7 @@ AB.IsoSurface = (() => {
     setShield: (id) => { shieldId = shieldId === id ? null : id; qs(); qSave(); barSig = ''; },
     setForm: (id, pos) => { qs().form = qs().form || {}; if (pos === 'front') qs().form[id] = 'front'; else delete qs().form[id]; qSave(); },
     _siegeGo: () => { const b = document.querySelector('#sf-form [data-fm="go"]'); if (b) b.click(); }, _rep: () => rep, _formSet: (id, pos) => { qs().form = qs().form || {}; qs().form[id] = pos; },
-    _camps: () => camps, _loot: () => loot, _allies: () => allies, _energy: (v) => { if (typeof v === 'number') energy = v; return energy; }, _broken: () => broken,
+    _camps: () => camps, _cam: () => ({ x: cam.x, y: cam.y, follow }), _loot: () => loot, _allies: () => allies, _energy: (v) => { if (typeof v === 'number') energy = v; return energy; }, _broken: () => broken,
     _quests: () => qs(), _qAdvance: (id) => qAdvance(QS().find((q) => q.id === id)), _shield: (id) => { shieldId = id; }, _points: () => camps.filter((c) => c.pt), _own: () => qs().own, _raid: (key) => startRaid(camps.find((c) => c.key === key)), _tapCamp: (key) => { const cp = camps.find((x) => x.key === key); tap(cell(cp.c, cp.r), 400, 200); },
     _study: () => document.querySelector('#sf-pop p').textContent, _choose: (side) => chooseAlly(side),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
