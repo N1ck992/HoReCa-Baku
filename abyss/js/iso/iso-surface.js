@@ -229,7 +229,7 @@ AB.IsoSurface = (() => {
   let texReady = false;
   const texTint = 0.38;
   // №209: текстуры автора — почти без подкраски и крупнее (клеток на один повтор); остальные — как были
-  const TEX_ART = { sand: { tint: 0.1, cells: 3.2 }, dune: { tint: 0.1, cells: 3.4 } };
+  const TEX_ART = { sand: { tint: 0.1, cells: 3.2 }, dune: { tint: 0.1, cells: 3.4 }, ruin: { tint: 0.1, cells: 3 }, rustfoot: { tint: 0.12, cells: 3 }, salt: { tint: 0.1, cells: 3 }, scrub: { tint: 0.1, cells: 3 }, oasis: { tint: 0.08, cells: 3.2 } };
   (function loadTex() {
     let left = TEX_KINDS.length;
     for (const k of TEX_KINDS) {
