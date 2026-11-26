@@ -787,9 +787,13 @@ AB.IsoOverworld = (() => {
     const order = [...cells.values()].filter((c) => c.seen).sort((a, b) => a.r - b.r || a.q - b.q);
     for (const c of order) {
       const p0 = px(c.q, c.r), lit = near(c), im = tileOf(c);
-      const lift = im ? 0 : LIFT[c.kind] * size;
+      const lift = im && c.kind !== 'rock' ? 0 : LIFT[c.kind] * size;   // №216: скала с картинкой тоже приподнята
       const p = { x: p0.x, y: p0.y - Math.max(0, lift) };
       if (im) {
+        if (lift > 0) {                                  // №216: скала — тень на дно и каменные бока
+          g.fillStyle = 'rgba(0,6,10,.45)'; hex(p0.x + size * 0.28, p0.y + size * 0.16, size * 0.98); g.fill();
+          sides(p.x, p.y, size * 0.97, lift + size * 0.06, '#1c2328');
+        }
         drawTile(c, im, p.x, p.y, !lit);
         hex(p.x, p.y, size);
       } else {
@@ -800,8 +804,22 @@ AB.IsoOverworld = (() => {
       if (c.kind === 'crystal') { g.fillStyle = `rgba(170,110,255,${0.12 + Math.sin(time * 2 + c.q) * 0.06})`; g.fill(); }
       if (c.kind === 'rock' && !im) { g.fillStyle = 'rgba(255,255,255,.04)'; g.fill(); }
       if (!lit && !im) { g.fillStyle = 'rgba(0,0,0,.5)'; g.fill(); }
-      if (im && (c.kind === 'rock' || c.kind === 'trench')) {   // №115: непроходимо — красноватая пунктирная кромка
-        hex(p.x, p.y, size * 0.94); g.setLineDash([5, 4]); g.strokeStyle = lit ? 'rgba(255,100,70,.8)' : 'rgba(255,100,70,.35)'; g.lineWidth = 2 * dpr; g.stroke(); g.setLineDash([]);
+      // №216: непроходимое — видно по графике (красный пунктир №115 убран): скала — валуны со светом и тенью; расселина — провал
+      if (im && c.kind === 'rock') {
+        let sd = (c.q * 928371 + c.r * 13337) >>> 0; const rnd = () => ((sd = (sd * 1103515245 + 12345) >>> 0) / 4294967296);
+        for (let i = 0; i < 3; i++) {
+          const bx = p.x + (rnd() - 0.5) * size * 0.9, by = p.y + (rnd() - 0.5) * size * 0.45, br = size * (0.16 + rnd() * 0.14);
+          g.fillStyle = 'rgba(0,8,12,.45)'; g.beginPath(); g.ellipse(bx + br * 0.5, by + br * 0.28, br, br * 0.45, 0, 0, 7); g.fill();
+          const gr = g.createRadialGradient(bx - br * 0.35, by - br * 0.7, br * 0.1, bx, by - br * 0.35, br * 1.1);
+          gr.addColorStop(0, lit ? '#7f97a0' : '#3b474d'); gr.addColorStop(0.6, lit ? '#3f525a' : '#202a2f'); gr.addColorStop(1, '#111a1f');
+          g.fillStyle = gr; g.beginPath(); g.moveTo(bx - br, by); g.lineTo(bx - br * 0.6, by - br * 0.85); g.lineTo(bx + br * 0.2, by - br * 1.05); g.lineTo(bx + br, by - br * 0.4); g.lineTo(bx + br * 0.8, by + br * 0.15); g.lineTo(bx - br * 0.3, by + br * 0.25); g.closePath(); g.fill();
+        }
+      }
+      if (im && c.kind === 'trench') {
+        hex(p.x, p.y, size * 0.9); const gr = g.createRadialGradient(p.x, p.y + size * 0.1, size * 0.1, p.x, p.y, size * 0.95);
+        gr.addColorStop(0, 'rgba(0,2,6,.85)'); gr.addColorStop(0.65, 'rgba(0,4,10,.55)'); gr.addColorStop(1, 'rgba(0,4,10,0)'); g.fillStyle = gr; g.fill();
+        g.strokeStyle = lit ? 'rgba(140,190,205,.35)' : 'rgba(140,190,205,.12)'; g.lineWidth = 1.5 * dpr;   // освещённый дальний край обрыва
+        g.beginPath(); for (let i = 3; i <= 6; i++) { const a = Math.PI / 180 * (60 * i - 30), x = p.x + size * 0.86 * Math.cos(a), y = p.y + size * 0.86 * Math.sin(a) * (TILT || 0.62); if (i === 3) g.moveTo(x, y); else g.lineTo(x, y); } g.stroke();
       }
       if (!(im && c.kind !== 'silt' && c.kind !== 'crystal')) { g.strokeStyle = 'rgba(120,180,200,.08)'; g.lineWidth = 1; g.stroke(); }
       if (c.kind === 'crystal') for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(190,140,255,.7)'; g.fillRect(p.x - size * 0.3 + i * size * 0.25, p.y - size * 0.15 - (i % 2) * 6, 3, 8); }
