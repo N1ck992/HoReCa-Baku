@@ -229,7 +229,7 @@ AB.IsoSurface = (() => {
   let texReady = false;
   const texTint = 0.38;
   // №209: текстуры автора — почти без подкраски и крупнее (клеток на один повтор); остальные — как были
-  const TEX_ART = { sand: { tint: 0.1, cells: 3.2 } };
+  const TEX_ART = { sand: { tint: 0.1, cells: 3.2 }, dune: { tint: 0.1, cells: 3.4 } };
   (function loadTex() {
     let left = TEX_KINDS.length;
     for (const k of TEX_KINDS) {
@@ -262,7 +262,7 @@ AB.IsoSurface = (() => {
       fillTex(b, k, p, s * 1.02, pats);
       b.strokeStyle = 'rgba(0,0,0,.08)'; b.lineWidth = 1; b.stroke();
       if (ART()) ART().lightTile(b, p, s, hexPath);    // №204: мягкий свет на клетке
-      deco(b, k, p, s, R);
+      if (TEX_ART[k.kind] && texImg[k.kind]) R(); else deco(b, k, p, s, R);   // №209: у текстур автора свой рисунок — прежние узоры кодом не нужны
     }
     // дороги: от центра к центру соседних дорожных клеток
     const roadCol = (k) => (k.kind === 'bridge' ? '#7a5634' : k.kind === 'ford' ? '#8fb2b6' : k.kind === 'salt' ? '#c8c2ae' : k.side === 'desert' ? '#e2c88e' : k.side === 'east' ? '#a89a7a' : k.side === 'hub' ? '#bba886' : '#5b4a30');
