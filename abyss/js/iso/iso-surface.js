@@ -1808,22 +1808,23 @@ AB.IsoSurface = (() => {
       const ST = RIG_POSES.rest.slice(); ST[1] += breathe * 3; ST[7] += breathe * 0.03; ST[9] -= breathe * 0.03;
       const e = s.stk * s.stk * (3 - 2 * s.stk); Q = W.map((v2, i) => v2 + (ST[i] - v2) * e);
     }
-    const bob = A ? 0 : mv ? -Math.abs(Math.cos(ph)) * 22 * (1 - s.stk) : (R.arms3 ? 0 : Math.sin(time * 1.8) * 4);   // в пикселях картинки
+    const pk = R.pk || 1;                                             // №200: масштаб поз (позы — в пикселях Молота; у Кузнеца картинка вдвое меньше)
+    const bob = (A ? 0 : mv ? -Math.abs(Math.cos(ph)) * 22 * (1 - s.stk) : (R.arms3 ? 0 : Math.sin(time * 1.8) * 4)) * pk;   // в пикселях картинки
     g.save(); g.translate(x + (A ? 0 : lunge), y + S0 * 0.24);
-    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(Q ? Q[0] * k * f * 0.6 : 0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(Q ? Q[0] * pk * k * f * 0.6 : 0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
     g.scale(f * k, k); g.translate(-R.hip[0], -full - bob);
-    if (Q) g.translate(Q[0], Q[1]);                                   // удар: рывок вперёд и присед
-    const leg = (hip, thImg, shImg, p, ovA, ovB) => {
+    if (Q) g.translate(Q[0] * pk, Q[1] * pk);                         // удар: рывок вперёд и присед
+    const leg = (hip, thImg, shImg, p, ovA, ovB, TC = R.thigh, SC = R.shin) => {   // №200: у дальней ноги могут быть свои точки (thighFar/shinFar)
       // бедро: sin — нога уходит назад (опора), потом выносится вперёд; колено сгибается, только когда нога идёт вперёд (cos < 0)
       let a = mv ? Math.sin(p) * 0.4 : 0.04, b = mv ? 0.08 + Math.max(0, -Math.cos(p)) * 0.75 : 0.08;
       if (ovA != null) { a = ovA; b = ovB; }
       g.save(); g.translate(hip[0], hip[1]); g.rotate(a);
-      g.drawImage(thImg, -R.thigh.top[0], -R.thigh.top[1]);
-      g.translate(R.thigh.knee[0] - R.thigh.top[0], R.thigh.knee[1] - R.thigh.top[1]); g.rotate(b - a * 0.3);
-      g.drawImage(shImg, -R.shin.top[0], -R.shin.top[1]);
+      g.drawImage(thImg, -TC.top[0], -TC.top[1]);
+      g.translate(TC.knee[0] - TC.top[0], TC.knee[1] - TC.top[1]); g.rotate(b - a * 0.3);
+      g.drawImage(shImg, -SC.top[0], -SC.top[1]);
       g.restore();
     };
-    leg(R.hipFar || R.hip, thF, shF, ph + Math.PI, Q && Q[5], Q && Q[6]);   // дальняя нога — за корпусом
+    leg(R.hipFar || R.hip, thF, shF, ph + Math.PI, Q && Q[5], Q && Q[6], R.thighFar || R.thigh, R.shinFar || R.shin);   // дальняя нога — за корпусом
     // корпус: на ходу наклонён вперёд и раскачивается с шагом (вокруг таза), стоя — чуть дышит
     const lean = Q ? Q[2] : (mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01), roll = mv && !A ? Math.sin(ph) * 6 * (1 - (s.stk || 0)) : 0;
     const arm = (A2, ang) => { const im = A2 && P(A2.img); if (!im) return; g.save(); g.translate(A2.pivot[0], A2.pivot[1]); g.rotate(ang); g.drawImage(im, A2.at[0] - A2.pivot[0], A2.at[1] - A2.pivot[1]); g.restore(); };
@@ -1832,12 +1833,12 @@ AB.IsoSurface = (() => {
     const arm3 = (side, shA, el, open) => {
       const C = R.arms3, S2 = C[side], k3 = C.scale, ua = P('ua' + S2.sfx), fa = P('fa' + S2.sfx), hand = open && !S2.sfx ? P('palm') : P('fist' + S2.sfx);
       if (!ua || !fa || !hand) return;
-      const H = open && !S2.sfx ? C.palm : C.fist;
-      g.save(); g.translate(S2.shoulder[0], S2.shoulder[1]); g.scale(k3, k3); g.rotate(shA);
-      g.drawImage(ua, -C.ua.top[0], -C.ua.top[1]);
-      g.translate(C.ua.elbow[0] - C.ua.top[0], C.ua.elbow[1] - C.ua.top[1]); g.rotate(el);
-      g.drawImage(fa, -C.fa.top[0], -C.fa.top[1]);
-      g.translate(C.fa.wrist[0] - C.fa.top[0], C.fa.wrist[1] - C.fa.top[1]);
+      const H = open && !S2.sfx ? C.palm : (S2.fist || C.fist), UA = S2.ua || C.ua, FA = S2.fa || C.fa, off = S2.off || [0, 0];   // №200: свои точки и поправка углов у руки
+      g.save(); g.translate(S2.shoulder[0], S2.shoulder[1]); g.scale(k3, k3); g.rotate(shA + off[0]);
+      g.drawImage(ua, -UA.top[0], -UA.top[1]);
+      g.translate(UA.elbow[0] - UA.top[0], UA.elbow[1] - UA.top[1]); g.rotate(el + off[1]);
+      g.drawImage(fa, -FA.top[0], -FA.top[1]);
+      g.translate(FA.wrist[0] - FA.top[0], FA.wrist[1] - FA.top[1]);
       if (SW && !S2.sfx) drawSword();                                 // №186: меч — под кулаком, рукоять в кулаке
       g.rotate(H.rot);
       g.drawImage(hand, -H.wrist[0], -H.wrist[1]);
@@ -1874,7 +1875,7 @@ AB.IsoSurface = (() => {
       } else arm(R.arms.near, sway);
       g.restore();
     }
-    if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(R.hip[0], R.hip[1] - 150, 320, 380, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+    if (s.flash > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * s.flash / 0.25; g.fillStyle = 'rgba(255,90,60,1)'; g.beginPath(); g.ellipse(R.hip[0], R.hip[1] - 150 * pk, 320 * pk, 380 * pk, 0, 0, 7); g.fill(); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
     g.restore(); return true;
   }
   function drawVeh(s, x, y) {
