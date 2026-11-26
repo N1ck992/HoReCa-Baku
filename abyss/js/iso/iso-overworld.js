@@ -350,6 +350,7 @@ AB.IsoOverworld = (() => {
     el.querySelector('[data-cmd="follow"]').hidden = !!cmd.mb;
     el.querySelector('[data-cmd="go"]').hidden = !!cmd.mb;   // №193
     el.querySelector('[data-cmd="attack"]').hidden = !cmd.mb;
+    for (const k of ['siege', 'study', 'army', 'pick']) { const b = el.querySelector(`[data-cmd="${k}"]`); if (b) b.hidden = true; }   // №215: на дне этих команд нет (они — для поверхности)
     el.hidden = false; placeCmd();
   }
   function placeCmd() {
@@ -885,7 +886,9 @@ AB.IsoOverworld = (() => {
     const c = slotPos(s), me = AB.Chars.get(s.id);
     const pose = { gun: gunOf(s), id: (AB.VEHICLES && AB.VEHICLES[s.vehicle] || {}).look || s.id, facing: s.face, phase: s.stride / 78 * Math.PI * 2, moving: !!s.anim, attack: s.atk ? Math.min(1, s.atk.t / 0.8) : -1, hurt: s.flash > 0 ? 1 : 0, dead: false, t: time };
     if (s.state === 'retreat') g.globalAlpha = 0.75;
-    AB.IsoSuit.draw(g, pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height);
+    const V = AB.VEHICLES && AB.VEHICLES[s.vehicle];
+    if (V && !V.look && AB.IsoSurface && AB.IsoSurface.drawVehOn) AB.IsoSurface.drawVehOn(g, s, c.x, c.y, size / 34, time, 1 / 60);   // №215: техника — какая есть, без скафандра
+    else AB.IsoSuit.draw(g, pose, c.x, c.y + size * 0.2, (size * 1.3) / SUIT().height);
     g.globalAlpha = 1;
     const hp = me ? me.hp / AB.ID.get(s.id).stats.maxHp : 1;
     if (hp < 0.999 || mobs.some((m) => m.hp > 0 && m.hunt)) bar(c.x, c.y - size * 1.25, hp, '#5ee6ff');
@@ -1012,7 +1015,7 @@ AB.IsoOverworld = (() => {
     revealAll() { for (const c of cells.values()) c.seen = true; },
     // админ-панель: убрать бродячих тварей (сюжетные не трогаем)
     clearWild() { let n = 0; for (const m of mobs) if (m.hp > 0 && m.kind !== 'story') { m.hp = 0; m.anim = 'DEAD'; m.fade = 0; n++; } return n; },
-    lootAt: (q, r) => loot.get(key(q, r)) || null, time: () => time, _sq: () => squads,
+    lootAt: (q, r) => loot.get(key(q, r)) || null, time: () => time, _sq: () => squads, _tapCell: (q, r) => tapCell({ q, r }),
     _attack: (kind) => { const m = mobs.find((x) => x.hp > 0 && x.kind === kind); if (!m) return false; for (const q of squads) if (q.state === 'out') q.target = m; return true; },   // №170: для проверок — ударить первым
     cell: (q, r) => cells.get(key(q, r)), seenCount: () => [...cells.values()].filter((c) => c.seen).length, total: () => cells.size,
     moving: () => { const u = selU(); return !!u.anim || u.path.length > 0; }, route,

@@ -2376,8 +2376,15 @@ AB.IsoSurface = (() => {
     story = null; built = false; trade = null; mobs.length = 0;
     for (const s2 of squads) Object.assign(s2, { state: 'home', path: [], anim: null, target: null, siege: null });
   }
+  // №215: техника рисуется одинаково везде — на дне (iso-overworld.js) тем же кодом, что на поверхности.
+  // k — масштаб относительно клетки поверхности; когда поверхность закрыта, время анимации берём снаружи.
+  function drawVehOn(ctx, s, x, y, k, t, dt) {
+    const og = g; if (!open_) { time = t; frameDt = dt; }
+    g = ctx; g.save(); g.translate(x, y); g.scale(k, k);
+    try { drawVeh(s, 0, 0); } finally { g.restore(); g = og; }
+  }
   return {
-    enter, close, isOpen: () => open_, say,
+    enter, close, isOpen: () => open_, say, drawVehOn,
     zone: () => 'A1', bridgesOpen: () => { storyLoad(); return bridgesOpen(); }, ownCount: () => Object.keys(qs().own || {}).length, rewindZone,
     // №142: для звука — сколько вокруг выбранного пустыни и болота (0…1)
     ambMix() {
