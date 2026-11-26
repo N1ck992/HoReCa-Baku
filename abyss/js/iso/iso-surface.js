@@ -1827,8 +1827,14 @@ AB.IsoSurface = (() => {
     cock:  [ -34,   34, -0.12, -0.36, 0.42, 0.4, 0.14,  0, 0, 0, 0],   // выстрел — сразу: отдача назад и присед
     strike:[   6,   28, 0.06, -0.36, 0.42, 0.4,  0.14,  0, 0, 0, 0],   // корпус возвращается вперёд
   };
+  // №207: стрелок с руками (Дуга): клешня — у груди, пушка поднимается к цели, отдача — корпус назад; ступни стоят
+  const RIG_GUN = {
+    rest:  RIG_POSES.rest,
+    cock:  [ -34,   34, -0.12, -0.36, 0.42, 0.4, 0.14,  0.45, -1.2, -0.75, -0.45],   // выстрел — сразу: пушка вскинута, отдача
+    strike:[   6,   28, 0.06, -0.36, 0.42, 0.4,  0.14,  0.35, -1.1, -0.45, -0.7],
+  };
   function rigPose(at, sword, shot) {
-    const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = shot ? RIG_SHOT : sword ? RIG_SWORD : RIG_POSES;
+    const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = shot === 'gun' ? RIG_GUN : shot ? RIG_SHOT : sword ? RIG_SWORD : RIG_POSES;
     if (at < 0.3) return { q: L(P.rest, P.cock, E(at / 0.3)), open: at > 0.1 };
     if (at < 0.4) { const t = (at - 0.3) / 0.1; return { q: L(P.cock, P.strike, t * t), open: false, fast: true }; }   // разгон — с ускорением
     if (at < 0.55) return { q: P.strike, open: false, hold: true };
@@ -1842,7 +1848,7 @@ AB.IsoSurface = (() => {
     const f = s.face || 1, mv = !!s.anim, ph = s.stride / (R.heavy ? 15 : 11);   // тяжёлый — шаг реже
     const full = R.hip[1] + (R.thigh.knee[1] - R.thigh.top[1]) + (R.shin.foot[1] - R.shin.top[1]);   // от верха корпуса до ступни
     const k = (S0 * 1.6) / full;
-    const SW = !!v.sword, ST0 = R.arms3 || R.stance, at = s.atk && ST0 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at, SW, !R.arms3) : null;   // №203: стойка и удар/выстрел — у всех мехов
+    const SW = !!v.sword, ST0 = R.arms3 || R.stance, at = s.atk && ST0 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at, SW, R.gun ? 'gun' : !R.arms3) : null;   // №203: стойка и удар/выстрел — у всех мехов
     // №183: стоя — боевая стойка (плавно из ходьбы и обратно); на ходу — шаг
     s.stk = Math.max(0, Math.min(1, (s.stk == null ? 1 : s.stk) + (mv ? -frameDt * 5 : frameDt * 2.5)));
     let Q = A ? A.q : null;
@@ -1944,7 +1950,7 @@ AB.IsoSurface = (() => {
       g.save(); torso();
       if (R.arms3) {
         // след кулака на разгоне и в ударе — полупрозрачные «тени» прежних поз
-        if (A && (A.fast || A.hold)) for (const d of [0.05, 0.035, 0.02]) { const B = rigPose(Math.max(0.3, at - d), SW); g.globalAlpha = A.hold ? 0.12 : 0.28; arm3('near', B.q[7], B.q[8], false); }
+        if (A && !R.gun && (A.fast || A.hold)) for (const d of [0.05, 0.035, 0.02]) { const B = rigPose(Math.max(0.3, at - d), SW); g.globalAlpha = A.hold ? 0.12 : 0.28; arm3('near', B.q[7], B.q[8], false); }
         g.globalAlpha = 1;
         arm3('near', Q ? Q[7] : sway * 1.6 + 0.12, Q ? Q[8] : -0.7, A && !SW ? A.open : false);
       } else arm(R.arms.near, sway);
