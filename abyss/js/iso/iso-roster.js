@@ -173,10 +173,10 @@ AB.IsoRoster = (() => {
     el.querySelector('.ro-list').innerHTML = `<div class="ro-tabs">${tabs}</div>
       <div class="ro-show ${lk ? 'locked' : ''}" data-i="${cur}">
         <div class="ro-fig"><canvas data-full="${s.hero || ''}" data-info="hero" title="Подробнее о герое"></canvas>
-          <small>Герой${hi ? ` · ${roleName(hi.role)}${hi.role === v.class ? ' ✓' : ''}` : ''}</small>
+          <small>Герой${hi ? ` · ${roleName(hi.role)}${hi.role === v.class ? ' ✓' : ''}` : ''}</small>${s.hero && AB.Levels ? AB.Levels.bar('h', s.hero) : ''}
           <div class="ro-sw"><button data-hero="-1" ${lk ? 'disabled' : ''}>◀</button><b>${h ? h.name : '— пусто —'}</b><button data-hero="1" ${lk ? 'disabled' : ''}>▶</button></div></div>
         <div class="ro-vfig"><img src="${vimg(s.vehicle)}" alt="" data-info="veh" title="Подробнее о технике">
-          <small>Техника · ${roleName(v.class)}</small>
+          <small>Техника · ${roleName(v.class)}</small>${AB.Levels ? AB.Levels.bar('v', s.vehicle) : ''}
           <div class="ro-sw"><button data-veh="-1" ${lk ? 'disabled' : ''}>◀</button><b>${v.short || v.name}</b><button data-veh="1" ${lk ? 'disabled' : ''}>▶</button></div>
           ${partsRow(s.vehicle, lk)}</div>
         <div class="ro-info">${partPick ? pickerHtml(s.vehicle, partPick) : infoMode === 'hero' ? altsHtml('hero', s, lk) : infoMode === 'veh' ? altsHtml('veh', s, lk) : infoMode === 'herod' && s.hero ? `${heroDetail(s.hero)}<p><button class="ro-pbtn" data-info="hero">◀ Назад</button></p>` : infoMode === 'vehd' ? `${vehDetail(s.vehicle)}<p><button class="ro-pbtn" data-info="veh">◀ Назад</button></p>` : `<p class="ro-hint">Нажмите на героя или технику — выбрать замену.</p><p>${stat(AB.VehMods ? AB.VehMods.eff(s.vehicle) : v)}</p>${modsLine(s.vehicle)}${hi ? abilityLine(hi.ability) : ''}${abilityLine(v.ability)}`}
@@ -257,6 +257,7 @@ AB.IsoRoster = (() => {
     const d = AB.ID.get(id), c = AB.Chars.get(id), max = (d.stats || {}).maxHp || 100, hp = c ? Math.round(c.hp) : max;
     const w = AB.Inventory && AB.Inventory.weapon ? AB.Inventory.weapon(id) : null, wd = w && AB.ID.get(w.item);
     return `<div class="un-detail"><canvas data-pt="${id}" class="big"></canvas><div><b>${d.name}</b><small>${d.role || ''}</small>
+      ${AB.Levels ? `<p>${AB.Levels.bar('h', id)}</p>` : ''}
       <p>Здоровье <b>${hp}/${max}</b></p><p>В руках: <b>${wd ? wd.name : '—'}</b>${AB.Damage ? ` · урон: <b>${AB.Damage.name(AB.Damage.weaponType(w && w.item, wd && wd.weapon))}</b>` : ''}</p>
       ${AB.Damage ? `<p>Своя защита (без техники): <b>${AB.Damage.armorName(AB.DAMAGE.heroes[id])}</b></p>` : ''}${wd && wd.desc ? `<small>${wd.desc}</small>` : ''}
       ${heroInfo(id) ? `<p>Класс: <b>${roleName(heroInfo(id).role)}</b> — способность работает только в технике этого класса</p>${abilityLine(heroInfo(id).ability)}` : ''}
@@ -274,7 +275,7 @@ AB.IsoRoster = (() => {
   function vehStats(vid) {
     const v = V(vid), e = AB.VehMods ? AB.VehMods.eff(vid) : v, s = sync().find((q) => q.vehicle === vid), drv = s && s.hero ? AB.ID.get(s.hero).name : null;
     const diff = (a, b, f = (x) => x) => (Math.abs(a - b) > 0.001 ? ` <i class="ro-up">(${f(b)} → ${f(a)})</i>` : '');
-    return `<p><b>${v.name}</b> — ${roleName(v.class)}</p>
+    return `<p><b>${v.name}</b> — ${roleName(v.class)}</p>${AB.Levels ? `<p>${AB.Levels.bar('v', vid)} <i class="muted">урон +${Math.round((AB.Levels.level('v', vid) - 1) * AB.LEVELS.vehicle.attack * 100)}%, прочность +${Math.round((AB.Levels.level('v', vid) - 1) * AB.LEVELS.vehicle.hp * 100)}%</i></p>` : ''}
       <p>Скорость <b>${Math.round(e.speed)}</b> кл/мин${diff(e.speed, v.speed, Math.round)}</p>
       <p>Удар <b>${e.attack}</b>${diff(e.attack, v.attack)} раз в ${e.rate} с${diff(e.rate, v.rate)} · дальность <b>${v.reach}</b></p>
       <p>Броня <b>${Math.round(e.armor * 100)}%</b>${diff(e.armor, v.armor, (x) => `${Math.round(x * 100)}%`)}${e.hpK > 1 ? ` · прочность +${Math.round((e.hpK - 1) * 100)}%` : ''}${e.crit ? ` · крит ${Math.round(e.crit * 100)}%` : ''}${e.shield0 ? ` · щит ${e.shield0} в начале боя` : ''}</p>

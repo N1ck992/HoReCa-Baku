@@ -199,10 +199,12 @@ AB.IsoSurface = (() => {
   // земель — пограничный пояс; вокруг Узла — площадь; сверху — ущелье, по краям — обрыв
   function buildRegions(d, rand, n1, n2, n3, nw) {
     const R = d.regions, sides = ['east', 'organic', 'desert'];
+    // №205: органическая масса забирает поверхность — с каждым витком времени её земля шире
+    const orgK = () => 1 + ((AB.WorldGates ? AB.WorldGates.cycle() : 1) - 1) * ((AB.WORLD && AB.WORLD.loop.organicGrow) || 0);
     const pos = (c, r) => upx(c, r), hub = pos(...R.hub.at);
     for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
       const p = pos(c, r), a = n1(c, r), b = n2(c, r), e = n3(c, r), wob = (nw(c, r) - 0.5) * 6;
-      const ds = sides.map((sd) => { const q = pos(...R[sd].at); return { sd, v: Math.hypot(p.x - q.x, p.y - q.y) / SQ3 / R[sd].w + wob * (sd === 'organic' ? 1 : -0.6) }; }).sort((x, y) => x.v - y.v);
+      const ds = sides.map((sd) => { const q = pos(...R[sd].at); return { sd, v: Math.hypot(p.x - q.x, p.y - q.y) / SQ3 / (R[sd].w * (sd === 'organic' ? orgK() : 1)) + wob * (sd === 'organic' ? 1 : -0.6) }; }).sort((x, y) => x.v - y.v);
       let side = ds[0].sd, kind, belt = null;
       const toHub = Math.hypot(p.x - hub.x, p.y - hub.y) / SQ3;
       if (r <= 1) kind = 'gorge';
@@ -351,7 +353,10 @@ AB.IsoSurface = (() => {
     const v = (AB.VehMods ? AB.VehMods.eff(vid) : AB.VEHICLES[vid]) || null; if (!v) return null;
     const a = TFX('sqAtk'), ar = TFX('sqArmor');
     const w = a || ar ? { ...v, attack: Math.round(v.attack * (1 + a)), armor: Math.min(0.8, v.armor + ar) } : v;
-    return AB.Synergy ? AB.Synergy.apply(w, vid) : w;   // №199: связки отряда
+    const w2 = AB.Synergy ? AB.Synergy.apply(w, vid) : w;   // №199: связки отряда
+    if (!AB.Levels) return w2;                               // №205: уровень техники и героя за рулём
+    const sl = AB.IsoRoster ? AB.IsoRoster.list().find((q) => q.vehicle === vid) : null;
+    return AB.Levels.apply(w2, vid, sl && sl.hero);
   };
   const base = { id: 'base', kind: 'base', c: 0, r: 0, path: [], anim: null, face: 1, stride: 0 };
   const squads = [];                                 // { id, kind: 'squad', vehicle, state: 'home'|'out'|'retreat', c, r, path, anim, face, stride }
@@ -582,7 +587,14 @@ AB.IsoSurface = (() => {
     m.hp -= real; m.flash = 0.25; floatText(posOf(m), `−${real}${mul >= 1.24 ? '!' : ''}`, mul >= 1.24 ? '#ffb040' : mul <= 0.76 ? '#9fb4bc' : '#ffe2a8');
     for (const o of alive()) if (o.grp === m.grp && !o.aggro && !o.boss) { o.aggro = s; if (o.patrol) o.home = { c: curCell(o).c, r: curCell(o).r }; }   // за своего вступается вся группа
     m.aggro = m.aggro || s;
+    if (m.hp <= 0 && !s.ally && AB.Levels) giveXp(s, m);         // №205: опыт за победу
     if (m.hp <= 0) mobDead(m);
+  }
+  // №205: опыт — добившему отряду (герою и технике), соседним отрядам до 4 клеток — половина
+  function giveXp(s, m) {
+    const X = AB.LEVELS.xp, n = m.boss ? X.boss((m.d && m.d.lvl) || 1) : X.mob(m.maxHp || NK(m).hp || 40);
+    AB.Levels.give(s.id, s.vehicle, n); floatText({ x: posOf(s).x, y: posOf(s).y - S0 * 0.6 }, `+${n} опыта`, '#c6f0a8');
+    for (const q of outSquads()) if (q !== s && dist(curCell(q), curCell(m)) <= 4) AB.Levels.give(q.id, q.vehicle, n * AB.LEVELS.share);
   }
   function mobDead(m) {
     m.hp = 0; m.deadT = 1.4; m.path = []; m.anim = null; m.burn = null;
@@ -1671,8 +1683,13 @@ AB.IsoSurface = (() => {
     const btn = el.querySelector('[data-sf-act]');
     const open = s.kind === 'bridge' && bridgesOpen();
     if (open) { el.querySelector('i').textContent = 'Мост открыт · зона Б1'; el.querySelector('small').textContent = 'За ущельем — «Железный Предел», земли синтетиков и киборгов. Сама зона — следующий этап.'; }
+    const gate = !f && AB.WorldGates ? AB.WorldGates.check('A1', s.to) : null;   // №205: условия перехода в соседнюю зону
+    if (gate && gate.list.length) {
+      el.querySelector('i').textContent = `Переход в зону ${s.to}${gate.zone ? ` · ${gate.zone.name}` : ''} · ${gate.ok ? 'условия выполнены' : 'закрыто'}`;
+      el.querySelector('small').innerHTML = `<span class="sf-gate">${gate.list.map((c) => `<em class="${c.ok ? 'ok' : ''}">${c.ok ? '✓' : '✗'} ${esc(c.text)}</em>`).join('')}</span>${gate.ok ? 'Сама зона — в следующих обновлениях.' : ''}`;
+    }
     if (s.kind === 'hub' && trade) { el.querySelector('p').innerHTML = `${esc(s.text)}<br>${tradeHtml()}`; el.querySelector('small').textContent = 'Каждая сторона делает своё и везёт соседу по кругу. Перекроют дорогу — дефицит пойдёт дальше по кругу.'; }
-    btn.textContent = f ? ACT[s.kind] : open ? 'Перейти в зону Б1 — скоро' : s.kind === 'bridge' ? 'Мост закрыт — нужна печать Кадзэ' : `Перейти в зону ${s.to} — закрыто`;
+    btn.textContent = f ? ACT[s.kind] : gate && gate.list.length ? (gate.ok ? `Перейти в зону ${s.to} — скоро` : `Зона ${s.to} закрыта — условия выше`) : open ? 'Перейти в зону Б1 — скоро' : s.kind === 'bridge' ? 'Мост закрыт — нужна печать Кадзэ' : `Перейти в зону ${s.to} — закрыто`;
     btn.disabled = true;
     el.hidden = false;
   }
@@ -2195,7 +2212,7 @@ AB.IsoSurface = (() => {
       const on = (selAll && q.state === 'out') || (!selAll && sel === q.id && q.state !== 'home');
       const back = on && q.state === 'out' ? '<button data-do="back" title="Вернуть в капсулу">↩</button>' : '';
       const shb = `<button data-do="shield" class="sh ${shieldId === q.id ? 'on' : ''}" title="Щит отряда: в осаде эта техника бьёт первой">🛡</button>`;   // №157
-      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · ${(AB.VEHICLES[q.vehicle] || {}).name || 'экзокостюм'} · скорость ${(AB.VEHICLES[q.vehicle] || {}).speed || '?'} кл/мин · ${st}"><canvas data-pt="${q.id}"></canvas><img src="${AB.IsoRoster.vimg(q.vehicle)}" alt=""><b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}${shb}</div>`);
+      slots.push(`<div class="ow-slot ${on ? 'on' : ''} st-${q.state}" data-u="${q.id}" title="${d.name} · ${(AB.VEHICLES[q.vehicle] || {}).name || 'экзокостюм'} · скорость ${(AB.VEHICLES[q.vehicle] || {}).speed || '?'} кл/мин · ${st}"><canvas data-pt="${q.id}"></canvas><img src="${AB.IsoRoster.vimg(q.vehicle)}" alt="">${AB.Levels ? `<span class="lv">ур. ${AB.Levels.level('h', q.id)}</span>` : ''}<b>${d.name}</b><span>${st}</span><u><i style="width:${hp}%"></i></u>${back}${shb}</div>`);
     }
     // №171: только активный отряд (до 5); лишние ячейки («+», «Ангар», замок) убраны по решению автора
     const allB = document.querySelector('[data-sf-allsel]'); if (allB) allB.classList.toggle('on', selAll);
@@ -2329,8 +2346,16 @@ AB.IsoSurface = (() => {
   let inZone = false;           // отряд уже на поверхности: из капсулы выходим сюда, а не на дно
   function close() { if (open_) setTimeout(() => AB.Bus.emit('surface:close', {}), 0); open_ = false; const el = document.getElementById('sf'); if (el) el.hidden = true; document.body.classList.remove('sf-on'); }
 
+  // №205: портал — виток времени назад: карта зоны, туман, лагеря, территории, цепочка — заново; задания открытия героев остаются
+  function rewindZone() {
+    for (const k of [SAVE, STORY_KEY]) { try { localStorage.removeItem(k); } catch (e) { /* без хранилища */ } }
+    const q = qs(); q.camps = {}; q.own = {}; q.st = {}; q.ally = null; qSave();
+    story = null; built = false; trade = null; mobs.length = 0;
+    for (const s2 of squads) Object.assign(s2, { state: 'home', path: [], anim: null, target: null, siege: null });
+  }
   return {
     enter, close, isOpen: () => open_, say,
+    zone: () => 'A1', bridgesOpen: () => { storyLoad(); return bridgesOpen(); }, ownCount: () => Object.keys(qs().own || {}).length, rewindZone,
     // №142: для звука — сколько вокруг выбранного пустыни и болота (0…1)
     ambMix() {
       if (!built) return { desert: 1, swamp: 0 };
@@ -2341,7 +2366,7 @@ AB.IsoSurface = (() => {
     revealAll() { for (const k of cells) if (!k.seen) { k.seen = true; clearFog(k); } save(); },
     zoom: (z) => setZoom(z),
     // для проверок
-    _cells: () => cells, _sites: () => sites, _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
+    _cells: () => cells, _sites: () => sites, _showSite: (s) => showSite(s), _lanes: () => lanes, _party: () => selU(), _base: () => base, _squads: () => squads, _drive: (v) => { drive = v; },
     _goTo: (c, r) => goTo(mover(), cell(c, r)), _sel: (id) => { sel = id; }, _tap: (c, r) => tap(cell(c, r)), _pop: () => popSite, _zoom: () => zoomK, _fan: (key) => scaleTo(key), _trade: () => trade, _tradeTick: (dt) => tradeTick(dt), _mobs: () => mobs, _shots: () => shots, _cmd: (kind) => command(kind), _tapAt: (c, r) => tap(cell(c, r), 400, 200), _selAll: (v) => { selAll = v; }, _story: () => story, _storyNext: () => storyAdvance(), _act: () => document.querySelector('#sf-pop [data-sf-act]').click(), _passable: (c, r) => passable(cell(c, r)),
     // №191: настройки осады — из окна «Отряд»: щитоносец и «вплотную» (по умолчанию — на максимальной дальности)
     siegeCfg: () => ({ shield: shieldId, form: { ...(qs().form || {}) } }),

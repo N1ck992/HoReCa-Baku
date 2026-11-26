@@ -100,6 +100,12 @@ AB.IsoDev = (() => {
       st.after = () => { for (const id of Object.keys(AB.HEROES || {})) AB.IsoRoster.unlock({ hero: id }); for (const v of Object.keys(AB.VEHICLES)) AB.IsoRoster.unlock({ vehicle: v }); after(); };
       return st;
     } },
+    // №205: проверить петлю времени — герои и техника открыты, у всех уровень 4, сразу портал (виток назад)
+    { id: 'sf-a1-loop', group: 'Поверхность', name: 'Портал C1: виток времени назад (уровни 4 → 3)', st: () => {
+      const st = JUMPS.find((j) => j.id === 'sf-a1-all').st(), after = st.after;
+      st.after = () => { after(); const L = AB.Levels, n = AB.LEVELS.need(3); for (const id of AB.IsoRoster.crew()) L.add('h', id, n); for (const v of AB.IsoRoster.owned()) L.add('v', v, n); setTimeout(() => { AB.TimeLoop.rewind(); AB.IsoSurface.enter(true); }, 600); };
+      return st;
+    } },
   ];
 
   function jump(id) {

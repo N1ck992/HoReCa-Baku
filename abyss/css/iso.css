@@ -1125,3 +1125,13 @@ body.map-fan-on .map-units { visibility: hidden; }
 #tut .tut-all li.ok { color: #8cff9a; }
 #tut .tut-all li.cur { color: #ffd27a; }
 @media (max-height: 460px) { #tut { top: calc(46px + env(safe-area-inset-top, 0px)); width: 196px; } #tut .tut-q p { font-size: 10.5px; } }
+
+/* №205: условия перехода между зонами; полоска уровня */
+.sf-gate { display: grid; gap: 3px; margin: 2px 0 6px; }
+.sf-gate em { font-style: normal; color: #ff9a7a; }
+.sf-gate em.ok { color: #8cff9a; }
+.lv-bar { display: inline-flex; align-items: center; gap: 6px; font: 11px var(--mono); color: #ffe2a8; }
+.lv-bar b { font: 600 12px var(--display); }
+.lv-bar u { display: inline-block; width: 70px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; text-decoration: none; }
+.lv-bar u i { display: block; height: 100%; background: #ffd27a; }
+.ow-slot .lv { position: absolute; top: 3px; left: 4px; font: 600 10px var(--display); color: #ffe2a8; text-shadow: 0 0 3px #000; }
