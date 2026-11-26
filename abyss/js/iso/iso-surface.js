@@ -224,12 +224,14 @@ AB.IsoSurface = (() => {
   function hexPath(x, y, s, ctx) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); ctx.lineTo(x + s * Math.cos(a), y + s * Math.sin(a) * TILT); } ctx.closePath(); }
   // №167: текстуры местности (assets/surface/tex — Poly Haven, CC0): клетка залита текстурой своего вида,
   // сверху — тон цвета земли (texTint), чтобы стороны треугольника отличались; пока не загрузились — просто цвет
-  const TEX_KINDS = ['sand', 'dune', 'mesa', 'oasis', 'scrub', 'marsh', 'reeds', 'bog', 'growth', 'ford', 'meadow', 'forest', 'mountain', 'thicket', 'mistwood', 'salt', 'rustfoot', 'ruin', 'plaza', 'cliff'];
+  const TEX_KINDS = ['sand2', 'mesa2', 'sand', 'dune', 'mesa', 'oasis', 'scrub', 'marsh', 'reeds', 'bog', 'growth', 'ford', 'meadow', 'forest', 'mountain', 'thicket', 'mistwood', 'salt', 'rustfoot', 'ruin', 'plaza', 'cliff'];
   const texImg = {};
   let texReady = false;
   const texTint = 0.38;
   // №209: текстуры автора — почти без подкраски и крупнее (клеток на один повтор); остальные — как были
-  const TEX_ART = { sand: { tint: 0.1, cells: 3.2 }, dune: { tint: 0.1, cells: 3.4 }, ruin: { tint: 0.1, cells: 3 }, rustfoot: { tint: 0.12, cells: 3 }, salt: { tint: 0.1, cells: 3 }, scrub: { tint: 0.1, cells: 3 }, oasis: { tint: 0.08, cells: 3.2 } };
+  const TEX_ART = { sand: { tint: 0.1, cells: 3.2 }, dune: { tint: 0.1, cells: 3.4 }, ruin: { tint: 0.1, cells: 3 }, rustfoot: { tint: 0.12, cells: 3 }, salt: { tint: 0.1, cells: 3 }, scrub: { tint: 0.1, cells: 3 }, oasis: { tint: 0.08, cells: 3.2 }, mesa: { tint: 0.08, cells: 3 } };
+  // №212: вторые варианты текстур автора — клетки берут их вперемешку (по случайному числу клетки)
+  const TEX_ALT = ['sand2', 'mesa2'];
   (function loadTex() {
     let left = TEX_KINDS.length;
     for (const k of TEX_KINDS) {
@@ -241,7 +243,7 @@ AB.IsoSurface = (() => {
   function fillTex(b, k, p, r, pats) {
     const t = K[k.kind], m = 0.9 + k.v * 0.2;
     hexPath(p.x, p.y, r, b);
-    const pat = pats[k.kind];
+    const pat = (k.v > 0.5 && pats[k.kind + '2']) || pats[k.kind];   // №212: второй вариант текстуры — на половине клеток
     if (pat) { b.fillStyle = pat; b.fill(); b.globalAlpha = (TEX_ART[k.kind] || {}).tint ?? texTint; b.fillStyle = rgb(t.col, m); b.fill(); b.globalAlpha = 1; }
     else { b.fillStyle = rgb(t.col, m); b.fill(); }
   }
@@ -255,7 +257,7 @@ AB.IsoSurface = (() => {
     const R = rng(77);
     // узоры текстур: одна текстура ~2,5 клетки, приплюснута как карта (TILT)
     const pats = {};
-    if (texReady) for (const [kk, im] of Object.entries(texImg)) { const pt = b.createPattern(im, 'repeat'); const sc = (s * ((TEX_ART[kk] || {}).cells || 2.5)) / im.naturalWidth; if (pt.setTransform) pt.setTransform(new DOMMatrix([sc, 0, 0, sc * TILT, 0, 0])); pats[kk] = pt; }
+    if (texReady) for (const [kk, im] of Object.entries(texImg)) { const pt = b.createPattern(im, 'repeat'); const sc = (s * ((TEX_ART[kk.replace(/2$/, '')] || {}).cells || 2.5)) / im.naturalWidth; if (pt.setTransform) pt.setTransform(new DOMMatrix([sc, 0, 0, sc * TILT, 0, 0])); pats[kk] = pt; }
     // плоские клетки
     for (const k of cells) {
       const p = bpx(k.c, k.r), t = K[k.kind];
@@ -305,7 +307,7 @@ AB.IsoSurface = (() => {
         for (let i = 0; i < 4; i++) { b.fillStyle = `rgba(${200 + R() * 55},${90 + R() * 60},${170 + R() * 60},.75)`; b.beginPath(); b.arc(p.x + (R() - 0.5) * s, p.y - h + (R() - 0.5) * s * 0.6, s * (0.08 + R() * 0.12), 0, 7); b.fill(); }
       }
       if (k.kind === 'mountain') { b.fillStyle = 'rgba(240,244,250,.9)'; b.beginPath(); b.moveTo(p.x - s * 0.45, p.y - h - s * 0.05); b.lineTo(p.x, p.y - h - s * 0.42); b.lineTo(p.x + s * 0.45, p.y - h - s * 0.05); b.lineTo(p.x + s * 0.15, p.y - h + s * 0.06); b.lineTo(p.x - s * 0.1, p.y - h - s * 0.08); b.closePath(); b.fill(); }
-      if (k.kind === 'mesa') { b.strokeStyle = 'rgba(60,30,18,.5)'; b.lineWidth = 1; for (let i = 0; i < 3; i++) { const y = p.y - h + s * 0.35 + i * h * 0.25; b.beginPath(); b.moveTo(p.x - s * 0.8, y + h * 0.1); b.lineTo(p.x + s * 0.8, y + h * 0.1); b.stroke(); } }
+      if (k.kind === 'mesa' && !texImg.mesa) { /* №212: у плато с текстурой автора полос кодом нет */ b.strokeStyle = 'rgba(60,30,18,.5)'; b.lineWidth = 1; for (let i = 0; i < 3; i++) { const y = p.y - h + s * 0.35 + i * h * 0.25; b.beginPath(); b.moveTo(p.x - s * 0.8, y + h * 0.1); b.lineTo(p.x + s * 0.8, y + h * 0.1); b.stroke(); } }
     }
     fogCv = document.createElement('canvas'); fogCv.width = bake.width; fogCv.height = bake.height;
     fg = fogCv.getContext('2d'); fg.fillStyle = '#05070a'; fg.fillRect(0, 0, fogCv.width, fogCv.height);
