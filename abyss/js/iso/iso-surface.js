@@ -653,7 +653,7 @@ AB.IsoSurface = (() => {
   // №157: выстрел новой техники (урон уже нанесён — это только след): луч, трассер, огонь
   function vehShot(s, m) {
     const a = posOf(s), b = posOf(m), cls = VD(s).class, kind = cls === 'energy' ? 'zap' : cls === 'thermal' ? 'flame' : 'bullet';
-    shots.push({ kind, from: { x: a.x, y: a.y - S0 * 0.5 }, to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.35 }; }, t: 0, dur: 0.12, hit: () => {} });
+    shots.push({ kind, from: s._muz && Math.hypot(s._muz.x - a.x, s._muz.y - a.y) < S0 * 3 ? { ...s._muz } : { x: a.x, y: a.y - S0 * 0.5 } /* №208: из дула, если оно известно */, to: () => { const q = posOf(m); return { x: q.x, y: q.y - S0 * 0.35 }; }, t: 0, dur: 0.12, hit: () => {} });
   }
   function shotsTick(dt) { for (let i = shots.length - 1; i >= 0; i--) { const sh = shots[i]; sh.t += dt; if (sh.t >= sh.dur && !sh.done) { sh.done = true; sh.hit(); } if (sh.t > sh.dur + 0.25) shots.splice(i, 1); } }
   function drawShots() {
@@ -1719,6 +1719,7 @@ AB.IsoSurface = (() => {
     g.imageSmoothingEnabled = true;
     const shk = shakeT > 0 ? shakeT * 18 : 0;                     // №181: тряска при ударе
     g.setTransform(k, 0, 0, k, cv.width / 2 - cam.x * k + (Math.random() - 0.5) * shk, cv.height / 2 - cam.y * k + (Math.random() - 0.5) * shk);
+    camInv = g.getTransform().inverse();                          // №208: экран → карта (дуло пушки у мехов)
     g.drawImage(bake, 0, 0);
     g.drawImage(fogCv, 0, 0);
     // память: всё, что дальше обзора, — приглушено (вокруг выбранного)
@@ -1830,17 +1831,22 @@ AB.IsoSurface = (() => {
   // №207: стрелок с руками (Дуга): клешня — у груди, пушка поднимается к цели, отдача — корпус назад; ступни стоят
   const RIG_GUN = {
     rest:  RIG_POSES.rest,
-    cock:  [ -34,   34, -0.12, -0.36, 0.42, 0.4, 0.14,  0.45, -1.2, -0.75, -0.45],   // выстрел — сразу: пушка вскинута, отдача
-    strike:[   6,   28, 0.06, -0.36, 0.42, 0.4,  0.14,  0.35, -1.1, -0.45, -0.7],
+    cock:  [ -80,   48, -0.26, -0.36, 0.42, 0.4, 0.14,  0.95, -1.7, -1.25, -0.1],   // №208: выстрел — резкая отдача: корпус назад и вниз, пушка вскинута и вытянута, клешня поджата
+    strike:[  18,   30, 0.08, -0.36, 0.42, 0.4,  0.14,  0.4,  -1.15, -0.7, -0.4],   // корпус возвращается вперёд, пушка опускается к цели
   };
   function rigPose(at, sword, shot) {
     const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = shot === 'gun' ? RIG_GUN : shot ? RIG_SHOT : sword ? RIG_SWORD : RIG_POSES;
+    if (shot === 'gun') {                                           // №208: выстрел — отдача мгновенно, возврат плавно
+      if (at < 0.07) return { q: L(P.rest, P.cock, at / 0.07), open: false, flash: true };
+      if (at < 0.45) return { q: L(P.cock, P.strike, E((at - 0.07) / 0.38)), open: false, flash: at < 0.16 };
+      return { q: L(P.strike, P.rest, E((at - 0.45) / 0.55)), open: false };
+    }
     if (at < 0.3) return { q: L(P.rest, P.cock, E(at / 0.3)), open: at > 0.1 };
     if (at < 0.4) { const t = (at - 0.3) / 0.1; return { q: L(P.cock, P.strike, t * t), open: false, fast: true }; }   // разгон — с ускорением
     if (at < 0.55) return { q: P.strike, open: false, hold: true };
     return { q: L(P.strike, P.rest, E((at - 0.55) / 0.45)), open: false };
   }
-  let shakeT = 0;
+  let shakeT = 0, camInv = null;
   function drawRig(s, v, R, x, y, lunge) {
     const P = (n) => vehPic(R.dir + n + '.webp');
     const body = P('body'), th = P('thigh'), sh = P('shin'), thF = P('thigh_far'), shF = P('shin_far');
@@ -1923,6 +1929,13 @@ AB.IsoSurface = (() => {
       if (SW && !S2.sfx) drawSword();                                 // №186: меч — под кулаком, рукоять в кулаке
       g.rotate(H.rot);
       g.drawImage(hand, -H.wrist[0], -H.wrist[1]);
+      if (S2.muzzle) { const q = g.getTransform().transformPoint({ x: S2.muzzle[0] - H.wrist[0], y: S2.muzzle[1] - H.wrist[1] }), w = camInv ? camInv.transformPoint(q) : null; if (w) s._muz = { x: w.x, y: w.y }; }   // №208: где дуло — луч выстрела отсюда
+      if (S2.muzzle && A && A.flash) {                                // №208: вспышка на дуле пушки
+        const mx = S2.muzzle[0] - H.wrist[0], my = S2.muzzle[1] - H.wrist[1], r = 70 + Math.random() * 30;
+        g.globalCompositeOperation = 'lighter'; const gr = g.createRadialGradient(mx, my, 0, mx, my, r);
+        gr.addColorStop(0, 'rgba(220,255,255,.95)'); gr.addColorStop(0.35, 'rgba(94,230,255,.65)'); gr.addColorStop(1, 'rgba(94,230,255,0)');
+        g.fillStyle = gr; g.beginPath(); g.arc(mx, my, r, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over';
+      }
       g.restore();
     };
     // нодати (до картинки автора): рукоять с обмоткой, латунная цуба, длинный изогнутый клинок с бликом лезвия
