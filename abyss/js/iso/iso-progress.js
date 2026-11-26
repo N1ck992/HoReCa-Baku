@@ -35,9 +35,10 @@ AB.Levels = (() => {
   // опыт отряду (герой + его техника)
   function give(hero, vehicle, n) { add('h', hero, n); add('v', vehicle, n); }
   // откат витка: каждому −k уровней (не ниже 1), опыт — на начало нового уровня
+  // №206: k = 'all' — все снова 1-го уровня (портал)
   function drop(k = 1) {
     for (const kind of ['h', 'v']) for (const id of Object.keys(S()[kind])) {
-      const L = Math.max(1, level(kind, id) - k);
+      const L = k === 'all' ? 1 : Math.max(1, level(kind, id) - k);
       S()[kind][id] = L > 1 ? C().need(L - 1) : 0;
     }
     save();
@@ -73,6 +74,7 @@ AB.WorldGates = (() => {
     if (c.boss) { const ok = (S().boss[c.boss] || 0) > 0; return { ok, text: `Главный босс зоны ${c.boss} (ур. 3) повержен в этом витке` }; }
     if (c.own) { const n = AB.IsoSurface && AB.IsoSurface.ownCount ? AB.IsoSurface.ownCount() : 0; return { ok: n >= c.own, text: `Держать территорий зоны: ${n}/${c.own}` }; }
     if (c.level) { const n = squadLevel(); return { ok: n >= c.level, text: `Средний уровень отряда: ${n}/${c.level}` }; }
+    if (c.labs) { const z = W().zones[c.labs], n = (z.labs || []).filter((l) => S().labs && S().labs[l]).length; return { ok: n >= (z.labs || []).length, text: `Отбито лабораторий ${c.labs}: ${n}/${(z.labs || []).length}` }; }
     if (c.key) { const ok = !!S().keys[c.key]; const z = Object.entries(W().zones).find(([, d]) => d.key === c.key); return { ok, text: `Хранитель ${z ? z[0] : c.key} повержен` }; }
     return { ok: false, text: '?' };
   }
@@ -82,23 +84,43 @@ AB.WorldGates = (() => {
     const list = L.gate.map((c) => cond(c, from));
     return { ok: list.every((x) => x.ok), list, zone: W().zones[to] };
   }
-  return { check, cond, squadLevel, cycle: () => S().cycle, state: () => S(), setKey: (k) => { S().keys[k] = true; save(); },
-    _newCycle: () => { S().cycle++; S().boss = {}; S().keys = {}; save(); }, _reset: () => { st = { cycle: 1, boss: {}, keys: {} }; save(); } };
+  const portalReady = () => (AB.WORLD.loop.portalGate || []).map((c) => cond(c)).every((x) => x.ok);
+  return { check, cond, squadLevel, portalReady, cycle: () => S().cycle, state: () => S(), setKey: (k) => { S().keys[k] = true; save(); }, setLab: (l) => { S().labs = S().labs || {}; S().labs[l] = true; save(); },
+    _newCycle: () => { S().cycle++; S().boss = {}; S().keys = {}; S().labs = {}; save(); }, _reset: () => { st = { cycle: 1, boss: {}, keys: {} }; save(); } };
 })();
 
 AB.TimeLoop = (() => {
   // портал C1: виток времени назад. Остаётся: открытые герои и техника, детали, оружие, вещи, база.
-  // Сбрасывается: карта зоны A1 (туман, лагеря, территории, цепочка), победы над боссами и ключи витка.
-  // Уровни героев и техники — минус levelLoss. Органическая масса с каждым витком шире.
-  function rewind() {
-    const L = AB.WORLD.loop;
+  // Сбрасывается: карты зон (туман, лагеря, территории, цепочка), победы над боссами, ключи и лаборатории витка.
+  // №206: уровни всех героев и техники — снова 1-й; капсула высаживается в выбранной зоне A (окно выбора).
+  // Органическая масса с каждым витком шире.
+  function rewind(zone) {
+    const L = AB.WORLD.loop, z = zone || L.start;
     AB.Levels.drop(L.levelLoss);
     AB.WorldGates._newCycle();
     if (AB.IsoSurface && AB.IsoSurface.rewindZone) AB.IsoSurface.rewindZone();
     const c = AB.WorldGates.cycle();
-    if (AB.IsoMail) AB.IsoMail.add({ kind: 'story', title: `Виток ${c}: портал вернул нас в начало`, html: `<p>Свет портала — и снова берег зоны ${L.start}. Те же холмы, те же деревни… но органика подступила ближе, чем в прошлый раз.</p><p>Уровни героев и техники — на 1 ниже. Всё, что добыто и открыто, — при нас.</p><p>Надо понять, что питает массу, — и как разорвать круг.</p>` });
-    AB.Bus.emit('time:rewind', { cycle: c });
+    if (AB.IsoMail) AB.IsoMail.add({ kind: 'story', title: `Виток ${c}: портал вернул нас в начало`, html: `<p>Свет портала — и капсула снова идёт к берегу: зона ${z}. Те же холмы, те же деревни… но органика подступила ближе, чем в прошлый раз.</p><p>Герои и техника — снова 1-го уровня. Всё, что добыто и открыто, — при нас.</p><p>Надо понять, что питает массу, — и как разорвать круг.</p>` });
+    AB.Bus.emit('time:rewind', { cycle: c, zone: z });
     return c;
   }
-  return { rewind, cycle: () => AB.WorldGates.cycle() };
+  // №206: окно «Точка высадки» — после портала игрок выбирает зону A; играбельные — с кнопкой, остальные — «в разработке»
+  let el = null;
+  function choose() {
+    if (!el) {
+      el = document.createElement('div'); el.id = 'tl-land'; el.hidden = true; document.body.appendChild(el);
+      el.addEventListener('pointerdown', (e) => e.stopPropagation());
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-land]'); if (!b || b.disabled) return;
+        el.hidden = true; rewind(b.dataset.land);
+        if (AB.IsoSurface) AB.IsoSurface.enter(true);
+      });
+    }
+    const Z = AB.WORLD.zones, ring = ['A4', 'A1', 'A2', 'A5', 'A6', 'A7', 'A8', 'A9', 'A3'];
+    el.innerHTML = `<div class="tl-card"><h3>Портал · точка высадки</h3><p>Время свернётся назад. Выберите, где капсула выйдет на берег. Герои и техника станут 1-го уровня — сами они, детали и оружие останутся с вами.</p>
+      <div class="tl-grid">${ring.map((id) => { const d = Z[id]; return `<button data-land="${id}" ${d.playable ? '' : 'disabled'}><b>${id}</b><span>${d.name}</span><small>у ${d.b}${d.playable ? '' : ' · в разработке'}</small></button>`; }).join('')}</div>
+      <p class="tl-note">Виток сейчас: ${AB.WorldGates.cycle()} → станет ${AB.WorldGates.cycle() + 1}. Органическая масса с каждым витком шире.</p></div>`;
+    el.hidden = false;
+  }
+  return { rewind, choose, cycle: () => AB.WorldGates.cycle() };
 })();

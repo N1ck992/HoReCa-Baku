@@ -101,9 +101,9 @@ AB.IsoDev = (() => {
       return st;
     } },
     // №205: проверить петлю времени — герои и техника открыты, у всех уровень 4, сразу портал (виток назад)
-    { id: 'sf-a1-loop', group: 'Поверхность', name: 'Портал C1: виток времени назад (уровни 4 → 3)', st: () => {
+    { id: 'sf-a1-loop', group: 'Поверхность', name: 'Портал C1: виток назад — выбор точки высадки (уровни 4 → 1)', st: () => {
       const st = JUMPS.find((j) => j.id === 'sf-a1-all').st(), after = st.after;
-      st.after = () => { after(); const L = AB.Levels, n = AB.LEVELS.need(3); for (const id of AB.IsoRoster.crew()) L.add('h', id, n); for (const v of AB.IsoRoster.owned()) L.add('v', v, n); setTimeout(() => { AB.TimeLoop.rewind(); AB.IsoSurface.enter(true); }, 600); };
+      st.after = () => { after(); const L = AB.Levels, n = AB.LEVELS.need(3); for (const id of AB.IsoRoster.crew()) L.add('h', id, n); for (const v of AB.IsoRoster.owned()) L.add('v', v, n); setTimeout(() => AB.TimeLoop.choose(), 600); };   // №206: окно выбора точки высадки
       return st;
     } },
   ];
