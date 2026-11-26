@@ -228,6 +228,8 @@ AB.IsoSurface = (() => {
   const texImg = {};
   let texReady = false;
   const texTint = 0.38;
+  // №209: текстуры автора — почти без подкраски и крупнее (клеток на один повтор); остальные — как были
+  const TEX_ART = { sand: { tint: 0.1, cells: 3.2 } };
   (function loadTex() {
     let left = TEX_KINDS.length;
     for (const k of TEX_KINDS) {
@@ -240,7 +242,7 @@ AB.IsoSurface = (() => {
     const t = K[k.kind], m = 0.9 + k.v * 0.2;
     hexPath(p.x, p.y, r, b);
     const pat = pats[k.kind];
-    if (pat) { b.fillStyle = pat; b.fill(); b.globalAlpha = texTint; b.fillStyle = rgb(t.col, m); b.fill(); b.globalAlpha = 1; }
+    if (pat) { b.fillStyle = pat; b.fill(); b.globalAlpha = (TEX_ART[k.kind] || {}).tint ?? texTint; b.fillStyle = rgb(t.col, m); b.fill(); b.globalAlpha = 1; }
     else { b.fillStyle = rgb(t.col, m); b.fill(); }
   }
   function bakeMap() {
@@ -253,7 +255,7 @@ AB.IsoSurface = (() => {
     const R = rng(77);
     // узоры текстур: одна текстура ~2,5 клетки, приплюснута как карта (TILT)
     const pats = {};
-    if (texReady) for (const [kk, im] of Object.entries(texImg)) { const pt = b.createPattern(im, 'repeat'); const sc = (s * 2.5) / im.naturalWidth; if (pt.setTransform) pt.setTransform(new DOMMatrix([sc, 0, 0, sc * TILT, 0, 0])); pats[kk] = pt; }
+    if (texReady) for (const [kk, im] of Object.entries(texImg)) { const pt = b.createPattern(im, 'repeat'); const sc = (s * ((TEX_ART[kk] || {}).cells || 2.5)) / im.naturalWidth; if (pt.setTransform) pt.setTransform(new DOMMatrix([sc, 0, 0, sc * TILT, 0, 0])); pats[kk] = pt; }
     // плоские клетки
     for (const k of cells) {
       const p = bpx(k.c, k.r), t = K[k.kind];
