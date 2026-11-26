@@ -206,6 +206,54 @@ AB.IsoRender = (() => {
   // её низ совпадает с полом (у низкого бортика видна только жёлто-чёрная полоса плинтуса).
   function wallTextured() { return wallImg.face && SHIP_SECTORS.has(AB.IsoGame.sector()); }
   function pat(k) { if (!wallPat[k]) wallPat[k] = ctx.createPattern(wallImg[k], 'repeat'); return wallPat[k]; }
+  // №213: атмосфера корабля — детали на стенах: световые полосы, экраны, красные маячки, трубы, решётки вентиляции.
+  // Выбор детали — по хешу клетки (всегда одинаково). Светящееся (emis) рисуется после темноты — оно не гаснет.
+  const emis = [];
+  const ACC = [[255, 170, 80], [90, 220, 255], [255, 190, 110], [120, 235, 255]];
+  function wallDecor(x, y, hgt, faces, n, e, s, w) {
+    const h = (((x * 73856093) ^ (y * 19349663)) >>> 0) % 100;
+    if (h >= 54) return;
+    const useL = faces.l && (!faces.r || (h & 1)), A = useL ? w : s, B = useL ? s : e, dark = useL ? 0 : 0.18;
+    const P = (u, v) => ({ x: A.x + (B.x - A.x) * u, y: A.y + (B.y - A.y) * u - v * hgt });
+    const quad = (u0, u1, v0, v1) => [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)];
+    const fill = (q, col) => { ctx.fillStyle = col; ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill(); };
+    const cx = x + 0.5, cy = y + 0.5;
+    if (h < 16) {                                       // световая полоса под потолком
+      fill(quad(0.16, 0.84, 0.74, 0.86), '#0d0f12');
+      emis.push({ q: quad(0.2, 0.8, 0.77, 0.83), col: ACC[h % 2 ? 2 : 0], a: 0.95, cx, cy, r: 1.3 });
+    } else if (h < 24) {                                // экран терминала
+      fill(quad(0.26, 0.74, 0.36, 0.66), '#0b0d10');
+      emis.push({ q: quad(0.3, 0.7, 0.4, 0.62), col: ACC[1], a: 0.75, cx, cy, r: 1.1, scan: true });
+    } else if (h < 30) {                                // красный маячок
+      fill(quad(0.42, 0.58, 0.78, 0.9), '#160b0b');
+      emis.push({ q: quad(0.45, 0.55, 0.8, 0.88), col: [255, 60, 45], a: 1, cx, cy, r: 1, pulse: true });
+    } else if (h < 44) {                                // трубы вдоль стены
+      for (const u of [0.18, 0.27]) {
+        const a = P(u, 0.02), b = P(u, 0.98);
+        ctx.lineCap = 'butt'; ctx.strokeStyle = `rgba(30,33,38,${1 - dark})`; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.strokeStyle = 'rgba(140,150,160,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x - 1.5, a.y); ctx.lineTo(b.x - 1.5, b.y); ctx.stroke();
+      }
+      const j = P(0.225, 0.55); ctx.fillStyle = '#3a3f46'; ctx.fillRect(j.x - 6, j.y - 2, 12, 4);
+    } else {                                            // решётка вентиляции
+      const q = quad(0.25, 0.75, 0.12, 0.34); fill(q, '#0c0e11');
+      ctx.strokeStyle = 'rgba(90,98,108,.6)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 5; i++) { const a = P(0.27, 0.12 + i * 0.044), b = P(0.73, 0.12 + i * 0.044); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    }
+  }
+  // светящиеся детали — поверх темноты, с ореолом
+  function drawEmis() {
+    if (!emis.length) return;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const m of emis) {
+      const [r, g2, b] = m.col, a = m.a * (m.pulse ? 0.55 + 0.45 * Math.sin(time * 4 + m.cx) : 1) * (m.scan ? 0.85 + 0.15 * Math.sin(time * 9 + m.cy * 3) : 1);
+      ctx.fillStyle = `rgba(${r},${g2},${b},${a})`; ctx.beginPath(); m.q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill();
+      if (m.scan) { ctx.strokeStyle = `rgba(220,250,255,${a * 0.5})`; ctx.lineWidth = 0.8; for (let i = 1; i < 4; i++) { const t = i / 4, p0 = { x: m.q[0].x + (m.q[3].x - m.q[0].x) * t, y: m.q[0].y + (m.q[3].y - m.q[0].y) * t }, p1 = { x: m.q[1].x + (m.q[2].x - m.q[1].x) * t, y: m.q[1].y + (m.q[2].y - m.q[1].y) * t }; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p0.x + (p1.x - p0.x) * (0.3 + 0.5 * ((i * 37) % 7) / 7), p0.y + (p1.y - p0.y) * (0.3 + 0.5 * ((i * 37) % 7) / 7)); ctx.stroke(); } }
+      const c = m.q.reduce((o, p) => ({ x: o.x + p.x / 4, y: o.y + p.y / 4 }), { x: 0, y: 0 }), R = TW * 0.55 * m.r;
+      const gr = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R); gr.addColorStop(0, `rgba(${r},${g2},${b},${0.32 * a})`); gr.addColorStop(1, `rgba(${r},${g2},${b},0)`);
+      ctx.fillStyle = gr; ctx.fillRect(c.x - R, c.y - R, R * 2, R * 2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
   function texBlock(x, y, hgt, alpha, faces) {
     const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
     const im = wallImg.face, k = WALL_TEX.face.cells / im.width, vs = WALL_FULL / im.height, p = pat('face');
@@ -222,6 +270,7 @@ AB.IsoRender = (() => {
       ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.closePath();
       ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.50)'; ctx.fill();
     }
+    if (hgt >= WALL_FULL * 0.9 && (faces.l || faces.r)) wallDecor(x, y, hgt, faces, n, e, s, w);   // №213
     ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath();
     if (wallImg.top) {
       const t = pat('top'), kt = WALL_TEX.top.cells / wallImg.top.width;
@@ -402,6 +451,7 @@ AB.IsoRender = (() => {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#030305';
     ctx.fillRect(0, 0, cv.width, cv.height);
+    emis.length = 0;                                     // №213: светящиеся детали стен — собираются за кадр
     ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc);
     ctx.imageSmoothingEnabled = true;
 
@@ -1028,7 +1078,7 @@ AB.IsoRender = (() => {
     L.globalCompositeOperation = 'source-over';
     // №133: до питания — гуще темнота (атмосфера), вокруг отряда — небольшое пятно; с питанием — как было
     const powered = AB.World && AB.World.hasPower();
-    let dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.9, lit: 0.3 }, powered) : (powered ? 0.3 : 0.9);
+    let dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.68, lit: 0.18 }, powered) : (powered ? 0.18 : 0.68);   // №213: мягче (было 0.9 / 0.3) — видно помещение, свет ламп читается
     if (AB.IsoGame.sector() === 'SECTOR-005') dk = 0;   // №197: своя база — светло, всё видно
     if (dk <= 0) L.clearRect(0, 0, lightCv.width, lightCv.height);   // №197: в базе слой темноты пустой (иначе оставался прежний)
     L.fillStyle = `rgba(3,4,7,${Math.max(0, dk)})`;   // с питанием светлее (№82: плавно, со вспышкой)
@@ -1044,8 +1094,9 @@ AB.IsoRender = (() => {
     };
     const lights = AB.IsoWorld.layout().lights;
     // до питания лампы — аварийные, тусклые и короче; с питанием — в полную силу
-    for (const li of lights) if (pointShown(li.x, li.y)) hole(li.x, li.y, li.radius * TW * (powered ? 0.6 : 0.45), powered ? 0.9 : 0.5);
-    for (const m of party) hole(m.x, m.y - 0.6, (powered ? 6 : 3.4) * TW * 0.6, powered ? 0.85 : 0.75);
+    for (const li of lights) if (pointShown(li.x, li.y)) hole(li.x, li.y, li.radius * TW * (powered ? 0.7 : 0.6), powered ? 0.95 : 0.75);
+    for (const m of party) hole(m.x, m.y - 0.6, (powered ? 6 : 4.6) * TW * 0.6, powered ? 0.85 : 0.8);
+    for (const m of emis) if (pointShown(m.cx, m.cy)) hole(m.cx + 0.6, m.cy + 0.6, TW * 1.3 * m.r, 0.55);   // №213: светящиеся детали стен подсвечивают пол рядом
     // №133: фонарь на оружии — когда герой целится, луч света в сторону прицела
     const aimL = AB.IsoInput.aim && AB.IsoInput.aim(), ld = AB.IsoParty.lead();
     const beam = aimL && ld ? coneOf(ld, aimL) : null;
@@ -1064,15 +1115,21 @@ AB.IsoRender = (() => {
       const p = toScreen(li.x, li.y), r = li.radius * TW * 0.5, [cr, cg, cb] = li.color;
       ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, 0.6);
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
-      g.addColorStop(0, `rgba(${cr},${cg},${cb},.16)`); g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+      g.addColorStop(0, `rgba(${cr},${cg},${cb},${powered ? 0.34 : 0.26})`); g.addColorStop(0.45, `rgba(${cr},${cg},${cb},${powered ? 0.12 : 0.09})`); g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);   // №213: цветной свет ярче
       ctx.fillStyle = g; ctx.fillRect(-r, -r, r * 2, r * 2); ctx.restore();
+      // №213: пылинки в луче лампы
+      for (let i = 0; i < 7; i++) { const sd = (li.x * 13 + li.y * 7 + i * 31) % 97, ph = ((time * (6 + sd % 5)) + sd * 9) % 70; const px = p.x + Math.sin(sd + time * 0.4) * r * 0.55 * ((sd % 10) / 10), py = p.y - ph + ((sd % 7) - 3) * 6, al = Math.sin(Math.PI * ph / 70) * 0.5;
+        ctx.fillStyle = `rgba(${Math.min(255, cr + 60)},${Math.min(255, cg + 60)},${Math.min(255, cb + 60)},${al})`; ctx.fillRect(px, py, 1.6, 1.6); }
     }
+    drawEmis();                                          // №213
     if (beam) {   // тёплое свечение луча
       const g = ctx.createLinearGradient(beam.o.x, beam.o.y, beam.f.x, beam.f.y);
       g.addColorStop(0, 'rgba(255,236,200,.13)'); g.addColorStop(0.6, 'rgba(255,236,200,.05)'); g.addColorStop(1, 'rgba(255,236,200,0)');
       ctx.fillStyle = g; ctx.beginPath(); beam.pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
+    { ctx.setTransform(1, 0, 0, 1, 0, 0); const W2 = cv.width, H2 = cv.height, vg = ctx.createRadialGradient(W2 / 2, H2 / 2, Math.min(W2, H2) * 0.42, W2 / 2, H2 / 2, Math.max(W2, H2) * 0.72);   // №213: края экрана темнее
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.45)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W2, H2); }
   }
   // луч фонаря: от оружия (у пояса героя) конусом ±20° на 7 клеток, в экранных координатах сцены
   function coneOf(m, dir) {
