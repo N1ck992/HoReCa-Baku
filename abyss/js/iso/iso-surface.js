@@ -1814,19 +1814,47 @@ AB.IsoSurface = (() => {
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(Q ? Q[0] * pk * k * f * 0.6 : 0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
     g.scale(f * k, k); g.translate(-R.hip[0], -full - bob);
     if (Q) g.translate(Q[0] * pk, Q[1] * pk);                         // удар: рывок вперёд и присед
-    const leg = (hip, thImg, shImg, p, ovA, ovB, TC = R.thigh, SC = R.shin) => {   // №200: у дальней ноги могут быть свои точки (thighFar/shinFar)
+    // №202: ступни стоят на месте — в стойке, на замахе и в ударе ступня «приклеена» к земле там, где она в боевой стойке,
+    // а углы бедра и колена подбираются под неё (две кости: бедро и голень). На ходу (w = 0) — шаг как прежде.
+    const RP = RIG_POSES.rest, Qo = Q ? [Q[0] * pk, Q[1] * pk] : [0, 0];
+    const ikW = A ? 1 : Q ? (s.stk * s.stk * (3 - 2 * s.stk)) : 0;
+    const rot = (v, t) => [v[0] * Math.cos(t) - v[1] * Math.sin(t), v[0] * Math.sin(t) + v[1] * Math.cos(t)];
+    const footAt = (hip, TC, SC, a, c) => { const T = [TC.knee[0] - TC.top[0], TC.knee[1] - TC.top[1]], Sv = [SC.foot[0] - SC.top[0], SC.foot[1] - SC.top[1]];
+      const t1 = rot(T, a), t2 = rot(Sv, a + c); return [hip[0] + t1[0] + t2[0], hip[1] + t1[1] + t2[1]]; };
+    function solveIK(hip, TC, SC, tgt, a0, c0) {
+      const T = [TC.knee[0] - TC.top[0], TC.knee[1] - TC.top[1]], Sv = [SC.foot[0] - SC.top[0], SC.foot[1] - SC.top[1]];
+      const L1 = Math.hypot(...T), L2 = Math.hypot(...Sv), al1 = Math.atan2(T[1], T[0]), al2 = Math.atan2(Sv[1], Sv[0]);
+      const D = [tgt[0] - hip[0], tgt[1] - hip[1]], d = Math.max(Math.abs(L1 - L2) + 1, Math.min(L1 + L2 - 1, Math.hypot(...D)));
+      const phi = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)))), base = Math.atan2(D[1], D[0]);
+      let best = null;
+      for (const sg of [1, -1]) {                                    // из двух сгибов колена — ближний к позе
+        const th1 = base + sg * phi, K = [hip[0] + L1 * Math.cos(th1), hip[1] + L1 * Math.sin(th1)], th2 = Math.atan2(tgt[1] - K[1], tgt[0] - K[0]);
+        const a = th1 - al1, c = th2 - al2 - a, err = Math.abs(a - a0) + Math.abs(c - c0);
+        if (!best || err < best.err) best = { a, c, err };
+      }
+      return best;
+    }
+    const leg = (hip, thImg, shImg, p, ovA, ovB, TC = R.thigh, SC = R.shin, rc) => {   // №200: у дальней ноги могут быть свои точки (thighFar/shinFar)
       // бедро: sin — нога уходит назад (опора), потом выносится вперёд; колено сгибается, только когда нога идёт вперёд (cos < 0)
       let a = mv ? Math.sin(p) * 0.4 : 0.04, b = mv ? 0.08 + Math.max(0, -Math.cos(p)) * 0.75 : 0.08;
       if (ovA != null) { a = ovA; b = ovB; }
+      let c = b - a * 0.3;
+      if (ikW > 0 && rc) {                                            // №202: ступня — где в стойке (в кадре без сдвига позы)
+        const ra = RP[rc[0]], rcK = RP[rc[1]] - RP[rc[0]] * 0.3;
+        const f0 = footAt([hip[0] + RP[0] * pk, hip[1] + RP[1] * pk], TC, SC, ra, rcK), tgt = [f0[0] - Qo[0], f0[1] - Qo[1]];
+        const sol = solveIK(hip, TC, SC, tgt, a, c);
+        a += (sol.a - a) * ikW; c += (sol.c - c) * ikW;
+      }
       g.save(); g.translate(hip[0], hip[1]); g.rotate(a);
       g.drawImage(thImg, -TC.top[0], -TC.top[1]);
-      g.translate(TC.knee[0] - TC.top[0], TC.knee[1] - TC.top[1]); g.rotate(b - a * 0.3);
+      g.translate(TC.knee[0] - TC.top[0], TC.knee[1] - TC.top[1]); g.rotate(c);
       g.drawImage(shImg, -SC.top[0], -SC.top[1]);
+      if (window.__rigDbg) { const q = g.getTransform().transformPoint({ x: SC.foot[0] - SC.top[0], y: SC.foot[1] - SC.top[1] }); (s._feet = s._feet || {})[rc ? rc[0] : 'x'] = [Math.round(q.x), Math.round(q.y)]; }   // тест: где ступня на экране
       g.restore();
     };
     // №201: у Кузнеца ближняя нога — задняя (у Молота — передняя): позы ног меняются местами, иначе ноги скрещиваются
     const LN = R.swapLegs ? [5, 6] : [3, 4], LF = R.swapLegs ? [3, 4] : [5, 6];
-    leg(R.hipFar || R.hip, thF, shF, ph + Math.PI, Q && Q[LF[0]], Q && Q[LF[1]], R.thighFar || R.thigh, R.shinFar || R.shin);   // дальняя нога — за корпусом
+    leg(R.hipFar || R.hip, thF, shF, ph + Math.PI, Q && Q[LF[0]], Q && Q[LF[1]], R.thighFar || R.thigh, R.shinFar || R.shin, LF);   // дальняя нога — за корпусом
     // корпус: на ходу наклонён вперёд и раскачивается с шагом (вокруг таза), стоя — чуть дышит
     const lean = Q ? Q[2] : (mv ? 0.07 + Math.sin(ph * 2) * 0.03 : Math.sin(time * 1.8) * 0.01), roll = mv && !A ? Math.sin(ph) * 6 * (1 - (s.stk || 0)) : 0;
     const arm = (A2, ang) => { const im = A2 && P(A2.img); if (!im) return; g.save(); g.translate(A2.pivot[0], A2.pivot[1]); g.rotate(ang); g.drawImage(im, A2.at[0] - A2.pivot[0], A2.at[1] - A2.pivot[1]); g.restore(); };
@@ -1866,7 +1894,7 @@ AB.IsoSurface = (() => {
     else if (R.arms) arm(R.arms.far, -sway * 0.8);
     g.drawImage(body, 0, 0);
     g.restore();
-    leg(R.hip, th, sh, ph, Q && Q[LN[0]], Q && Q[LN[1]]);                    // ближняя — перед ним
+    leg(R.hip, th, sh, ph, Q && Q[LN[0]], Q && Q[LN[1]], R.thigh, R.shin, LN);                    // ближняя — перед ним
     if (R.arms3 || R.arms) {
       g.save(); torso();
       if (R.arms3) {
