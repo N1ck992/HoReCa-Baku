@@ -1782,8 +1782,14 @@ AB.IsoSurface = (() => {
     cock:  [ -20,   38, -0.2, -0.46, 0.6,  0.48, 0.36,  2.75, -0.55, -0.6, -1.1],   // №201: и с мечом — широкий упор
     strike:[  80,   26, 0.32, -0.66, 0.42, 0.6,  0.1,  -0.85, -0.2,   0.8, -0.4],
   };
-  function rigPose(at, sword) {
-    const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = sword ? RIG_SWORD : RIG_POSES;
+  // №203: выстрел меха без рук (Дуга): упор — присел, корпус вперёд; отдача — корпус назад; ступни стоят (ноги — как в стойке)
+  const RIG_SHOT = {
+    rest:  RIG_POSES.rest,
+    cock:  [ -34,   34, -0.12, -0.36, 0.42, 0.4, 0.14,  0, 0, 0, 0],   // выстрел — сразу: отдача назад и присед
+    strike:[   6,   28, 0.06, -0.36, 0.42, 0.4,  0.14,  0, 0, 0, 0],   // корпус возвращается вперёд
+  };
+  function rigPose(at, sword, shot) {
+    const L = (A, B, t) => A.map((v, i) => v + (B[i] - v) * t), E = (t) => t * t * (3 - 2 * t), P = shot ? RIG_SHOT : sword ? RIG_SWORD : RIG_POSES;
     if (at < 0.3) return { q: L(P.rest, P.cock, E(at / 0.3)), open: at > 0.1 };
     if (at < 0.4) { const t = (at - 0.3) / 0.1; return { q: L(P.cock, P.strike, t * t), open: false, fast: true }; }   // разгон — с ускорением
     if (at < 0.55) return { q: P.strike, open: false, hold: true };
@@ -1797,11 +1803,11 @@ AB.IsoSurface = (() => {
     const f = s.face || 1, mv = !!s.anim, ph = s.stride / (R.heavy ? 15 : 11);   // тяжёлый — шаг реже
     const full = R.hip[1] + (R.thigh.knee[1] - R.thigh.top[1]) + (R.shin.foot[1] - R.shin.top[1]);   // от верха корпуса до ступни
     const k = (S0 * 1.6) / full;
-    const SW = !!v.sword, at = s.atk && R.arms3 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at, SW) : null;
+    const SW = !!v.sword, ST0 = R.arms3 || R.stance, at = s.atk && ST0 ? Math.min(1, s.atk.t / 0.8) : -1, A = at >= 0 ? rigPose(at, SW, !R.arms3) : null;   // №203: стойка и удар/выстрел — у всех мехов
     // №183: стоя — боевая стойка (плавно из ходьбы и обратно); на ходу — шаг
     s.stk = Math.max(0, Math.min(1, (s.stk == null ? 1 : s.stk) + (mv ? -frameDt * 5 : frameDt * 2.5)));
     let Q = A ? A.q : null;
-    if (!A && R.arms3 && s.stk > 0) {
+    if (!A && ST0 && s.stk > 0) {
       const sw = Math.sin(ph) * 0.14, breathe = Math.sin(time * 1.8);
       const W = [0, 0, mv ? 0.07 + Math.sin(ph * 2) * 0.03 : 0.02, mv ? Math.sin(ph) * 0.4 : 0.04, mv ? 0.08 + Math.max(0, -Math.cos(ph)) * 0.75 : 0.08,
         mv ? Math.sin(ph + Math.PI) * 0.4 : 0.04, mv ? 0.08 + Math.max(0, -Math.cos(ph + Math.PI)) * 0.75 : 0.08, sw * 1.6 + 0.12, -0.7, -sw * 1.4 + 0.1, -0.75];
@@ -1809,7 +1815,7 @@ AB.IsoSurface = (() => {
       const e = s.stk * s.stk * (3 - 2 * s.stk); Q = W.map((v2, i) => v2 + (ST[i] - v2) * e);
     }
     const pk = R.pk || 1;                                             // №200: масштаб поз (позы — в пикселях Молота; у Кузнеца картинка вдвое меньше)
-    const bob = (A ? 0 : mv ? -Math.abs(Math.cos(ph)) * 22 * (1 - s.stk) : (R.arms3 ? 0 : Math.sin(time * 1.8) * 4)) * pk;   // в пикселях картинки
+    const bob = (A ? 0 : mv ? -Math.abs(Math.cos(ph)) * 22 * (1 - s.stk) : (ST0 ? 0 : Math.sin(time * 1.8) * 4)) * pk;   // в пикселях картинки
     g.save(); g.translate(x + (A ? 0 : lunge), y + S0 * 0.24);
     g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(Q ? Q[0] * pk * k * f * 0.6 : 0, -2, S0 * 0.55, 5, 0, 0, 7); g.fill();
     g.scale(f * k, k); g.translate(-R.hip[0], -full - bob);
