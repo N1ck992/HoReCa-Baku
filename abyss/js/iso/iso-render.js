@@ -1056,10 +1056,13 @@ AB.IsoRender = (() => {
     ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center';
     ctx.fillStyle = isLead ? '#bfefff' : 'rgba(217,207,194,.85)';
     const suit = AB.IsoSuit && AB.IsoSuit.suited(m);
-    ctx.fillText(suit ? 'Экзокостюм' : AB.ID.get(m.id).name, p.x, p.y - (suit ? 104 : 96));
+    // №214: подпись — сразу над головой: стоя ниже, чем раньше; лёжа (пробуждение, сон, ранен) — над лежащей фигурой
+    const tr = AB.Anim && AB.Anim.current(m.id), low = (tr && /wake|sleep|lie|down|dead|crawl|getup/.test(tr.action || '') && !tr.done) || m.down || (AB.Chars.get(m.id) || {}).dead;
+    const hy = suit ? 92 : low ? 36 : 75;
+    ctx.fillText(suit ? 'Экзокостюм' : AB.ID.get(m.id).name, p.x, p.y - hy);
     // в базе — чем занят
     const task = AB.IsoBase && AB.IsoBase.active() ? AB.IsoBase.taskOf(m.id) : '';
-    if (task) { ctx.font = '9px "Share Tech Mono", monospace'; ctx.fillStyle = 'rgba(160,220,235,.8)'; ctx.fillText(task, p.x, p.y - 85); }
+    if (task) { ctx.font = '9px "Share Tech Mono", monospace'; ctx.fillStyle = 'rgba(160,220,235,.8)'; ctx.fillText(task, p.x, p.y - hy + 11); }
   }
 
   function drawMarker() {
@@ -1129,7 +1132,8 @@ AB.IsoRender = (() => {
     }
     ctx.globalCompositeOperation = 'source-over';
     { ctx.setTransform(1, 0, 0, 1, 0, 0); const W2 = cv.width, H2 = cv.height, vg = ctx.createRadialGradient(W2 / 2, H2 / 2, Math.min(W2, H2) * 0.42, W2 / 2, H2 / 2, Math.max(W2, H2) * 0.72);   // №213: края экрана темнее
-      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.45)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W2, H2); }
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.45)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W2, H2);
+      ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); }   // №214: вернуть камеру — дальше подписи над героями
   }
   // луч фонаря: от оружия (у пояса героя) конусом ±20° на 7 клеток, в экранных координатах сцены
   function coneOf(m, dir) {
