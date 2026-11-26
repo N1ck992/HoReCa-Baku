@@ -217,6 +217,7 @@ AB.IsoSurface = (() => {
   }
 
   // ---------- рисунок карты (один раз — в запасной холст) ----------
+  const ART = () => AB.SurfArt || null;               // №204: оформление карты (js/iso/iso-surface-art.js)
   const rgb = (c, m = 1, a = 1) => `rgba(${Math.round(c[0] * m)},${Math.round(c[1] * m)},${Math.round(c[2] * m)},${a})`;
   function hexPath(x, y, s, ctx) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); ctx.lineTo(x + s * Math.cos(a), y + s * Math.sin(a) * TILT); } ctx.closePath(); }
   // №167: текстуры местности (assets/surface/tex — Poly Haven, CC0): клетка залита текстурой своего вида,
@@ -256,6 +257,7 @@ AB.IsoSurface = (() => {
       const p = bpx(k.c, k.r), t = K[k.kind];
       fillTex(b, k, p, s * 1.02, pats);
       b.strokeStyle = 'rgba(0,0,0,.08)'; b.lineWidth = 1; b.stroke();
+      if (ART()) ART().lightTile(b, p, s, hexPath);    // №204: мягкий свет на клетке
       deco(b, k, p, s, R);
     }
     // дороги: от центра к центру соседних дорожных клеток
@@ -276,15 +278,22 @@ AB.IsoSurface = (() => {
       }
       if (k.kind === 'ford') { b.fillStyle = 'rgba(210,220,210,.5)'; for (let i = 0; i < 5; i++) { b.beginPath(); b.ellipse(p.x + (R() - 0.5) * s, p.y + (R() - 0.5) * s * 0.6, s * 0.09, s * 0.06, 0, 0, 7); b.fill(); } }
     }
+    // №204: объёмные детали на ровной земле (камни, деревья, руины, кристаллы) — не на дорогах и не у сооружений
+    if (ART()) { const RP = rng(204); for (const k of cells) if (!K[k.kind].lift && !k.road && !k.site) ART().props(b, k, bpx(k.c, k.r), s, RP); }
+    // №204: тени скал на землю — до самих скал
+    if (ART()) for (const k of cells) { const t = K[k.kind]; if (t.lift) ART().liftShadow(b, bpx(k.c, k.r), s, s * t.lift * (0.8 + k.v * 0.4), TILT); }
     // поднятые клетки (скалы, обрывы, органика) — по строкам сверху вниз
     for (const k of cells) {
       const t = K[k.kind]; if (!t.lift) continue;
       const p = bpx(k.c, k.r), h = s * t.lift * (0.8 + k.v * 0.4);
+      if (ART()) ART().liftSides(b, p, s, h, t.col, TILT, rgb);   // №204: грани разной яркости от одного «солнца»
+      else {
       b.fillStyle = rgb(t.col, 0.55);
       b.beginPath();
       for (let i = 0; i <= 3; i++) { const a = Math.PI / 180 * (60 * i - 30 + 0); const x = p.x + s * Math.cos(a), y = p.y + s * Math.sin(a) * TILT; if (i === 0) b.moveTo(x, y); else b.lineTo(x, y); }
       for (let i = 3; i >= 0; i--) { const a = Math.PI / 180 * (60 * i - 30); b.lineTo(p.x + s * Math.cos(a), p.y + s * Math.sin(a) * TILT - h); }
       b.closePath(); b.fill();
+      }
       if (pats[k.kind]) { fillTex(b, k, { x: p.x, y: p.y - h }, s, pats); b.globalAlpha = 0.12; b.fillStyle = '#fff'; b.fill(); b.globalAlpha = 1; }   // №167: верх скалы — текстура, чуть светлее
       else { hexPath(p.x, p.y - h, s, b); b.fillStyle = rgb(t.col, 1.05 + k.v * 0.1); b.fill(); }
       b.strokeStyle = rgb(t.col, 1.35, 0.5); b.lineWidth = 1.5; b.stroke();
@@ -1164,7 +1173,17 @@ AB.IsoSurface = (() => {
   }
   function drawPoint(cp) {
     const p = bpx(cp.c, cp.r), x = p.x, y = p.y, own = !!qs().own[cp.key], col = own ? '#5ee6ff' : CIV_COL[cp.d.side];
-    if (cp.d.kind === 'mine') {                                      // шахта: вход в штольню, вагонетка, копёр
+    const A = ART();
+    if (A && cp.d.kind === 'mine') {                                 // №204: шахта объёмом — скальный выход со штольней, копёр, вагонетка
+      A.rock(g, x - 2, y + 4, 15, '#6a5a48'); g.fillStyle = '#120c08'; g.beginPath(); g.ellipse(x - 4, y, 4.5, 6, 0, Math.PI, 0); g.fill();
+      g.strokeStyle = '#6a5038'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + 2, y - 6); g.lineTo(x + 9, y - 26); g.lineTo(x + 16, y - 6); g.moveTo(x + 4, y - 14); g.lineTo(x + 14, y - 14); g.stroke();
+      g.fillStyle = '#3a2a1a'; g.beginPath(); g.arc(x + 9, y - 26, 3, 0, 7); g.fill();
+      A.prism(g, x + 13, y + 6, 4.5, 4, '#5a4a3a', { sh: 0.25 }); g.fillStyle = '#c87a3a'; g.fillRect(x + 10, y + 0.5, 6, 2);
+    } else if (A) {                                                  // №204: укрепление — каменная башня с зубцами
+      A.prism(g, x, y, 7, 24, '#6a6460', { windows: own ? 'rgba(130,230,255,.85)' : 'rgba(255,200,120,.8)' });
+      for (const [dx, dy] of [[-5, -2.5], [0, -5], [5, -2.5], [0, 0]]) A.prism(g, x + dx, y - 24 + dy, 1.8, 3.5, '#7a746e', { noShadow: true });
+      A.prism(g, x + 12, y + 6, 6, 7, '#5a5450', { sh: 0.22 });
+    } else if (cp.d.kind === 'mine') {                                      // шахта: вход в штольню, вагонетка, копёр
       g.fillStyle = '#3a2e24'; g.beginPath(); g.arc(x, y + 2, 11, Math.PI, 0); g.fill(); g.fillStyle = '#120c08'; g.beginPath(); g.arc(x, y + 2, 7, Math.PI, 0); g.fill();
       g.strokeStyle = '#6a5038'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 9, y - 6); g.lineTo(x, y - 22); g.lineTo(x + 9, y - 6); g.stroke();
       g.fillStyle = '#5a4a3a'; g.fillRect(x + 10, y - 2, 9, 6); g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(x + 12, y + 5, 2, 0, 7); g.arc(x + 17, y + 5, 2, 0, 7); g.fill();
@@ -1181,7 +1200,8 @@ AB.IsoSurface = (() => {
   function drawCamp(cp) {
     if (cp.pt) { drawPoint(cp); return; }
     const p = bpx(cp.c, cp.r), x = p.x, y = p.y, done = !!qs().camps[cp.key];
-    const tent = (tx, ty, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(tx - 9, ty); g.lineTo(tx, ty - 13); g.lineTo(tx + 9, ty); g.fill(); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(tx - 2, ty - 5, 4, 5); };
+    const tent = ART() ? (tx, ty, col) => { ART().pyramid(g, tx, ty, 9, 13, col); g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.moveTo(tx - 3, ty + 1); g.lineTo(tx, ty - 6); g.lineTo(tx, ty + 3); g.fill(); }   // №204: шатры объёмом
+      : (tx, ty, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(tx - 9, ty); g.lineTo(tx, ty - 13); g.lineTo(tx + 9, ty); g.fill(); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(tx - 2, ty - 5, 4, 5); };
     tent(x - 12, y + 2, '#6a5038'); tent(x + 12, y + 4, '#5a4a38');
     g.fillStyle = 'rgba(255,140,60,.8)'; g.beginPath(); g.arc(x, y + 8, 3 + Math.sin(time * 8) * 0.8, 0, 7); g.fill();
     g.strokeStyle = '#2a2a2a'; g.lineWidth = 1.6;                  // клетка с пленником
@@ -1710,6 +1730,7 @@ AB.IsoSurface = (() => {
     drawShots(); drawRings();
     if (vfx) vfx.draw(g, frameDt);
     drawFloats();
+    if (ART()) ART().atmosphere(g, { x: cam.x - cv.width / 2 / k, y: cam.y - cv.height / 2 / k, w: cv.width / k, h: cv.height / k }, time, frameDt, S0);   // №204: облака, пыль, споры
     if (cmd) { const p = cmd.m ? posOf(cmd.m) : bpx(cmd.k.c, cmd.k.r); g.strokeStyle = cmd.m ? 'rgba(255,120,90,.95)' : 'rgba(255,226,140,.95)'; g.lineWidth = 2.5; hexPath(p.x, p.y, S0 * 0.82, g); g.stroke(); }
     // подписи — постоянного размера на экране
     const fs = 11 * dpr / k;
@@ -1721,6 +1742,7 @@ AB.IsoSurface = (() => {
       g.lineWidth = 3 * dpr / k; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(t, p.x, y);
       g.fillStyle = { desert: '#ffe2a8', east: '#f6c38a', organic: '#c6f0a8', swamp: '#c6f0a8', exit: '#9fe7ff' }[s.side] || '#e6e0d6'; g.fillText(t, p.x, y);
     }
+    if (ART()) { g.setTransform(1, 0, 0, 1, 0, 0); ART().vignette(g, cv.width, cv.height); }   // №204: края экрана чуть темнее
   }
   // №140: батискаф-база — та же картинка, что на дне (assets/seabed/base-capsule*.webp)
   const baseImg = new Image(); baseImg.src = 'assets/seabed/base-capsule.webp';
@@ -1989,7 +2011,64 @@ AB.IsoSurface = (() => {
     if (s.flash > 0) { const fr = g.createRadialGradient(0, -14, 2, 0, -14, 22); fr.addColorStop(0, `rgba(255,90,60,${0.55 * s.flash / 0.25})`); fr.addColorStop(1, 'rgba(255,90,60,0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = fr; g.beginPath(); g.arc(0, -14, 22, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over'; }
     g.restore();
   }
+  // №204: сооружения объёмом (изометрические блоки, крыши, купола, шатры — свет сверху-слева и тени); true — нарисовано
+  function drawSiteArt(s) {
+    const A = ART(), p = bpx(s.c, s.r), x = p.x, y = p.y, u = S0;
+    const plinth = (r, col) => { const h = 4; hexPath(x, y + h, r, g); g.fillStyle = 'rgba(0,0,0,.35)'; g.fill(); hexPath(x, y, r, g); g.fillStyle = col; g.fill(); g.strokeStyle = 'rgba(255,240,220,.18)'; g.lineWidth = 1; g.stroke(); };
+    const flag = (fx, fy, col) => { A.mast(g, fx, fy, 22, '#3a2a1a'); g.fillStyle = col; g.beginPath(); g.moveTo(fx, fy - 22); g.lineTo(fx + 10 + Math.sin(time * 4 + fx) * 1.5, fy - 19); g.lineTo(fx, fy - 15); g.fill(); };
+    const fire = (fx, fy) => { const a = 0.6 + 0.3 * Math.sin(time * 9 + fx); const gr = g.createRadialGradient(fx, fy, 0, fx, fy, 9); gr.addColorStop(0, `rgba(255,190,90,${a})`); gr.addColorStop(1, 'rgba(255,120,40,0)'); g.fillStyle = gr; g.beginPath(); g.arc(fx, fy, 9, 0, 7); g.fill(); };
+    const warm = `rgba(255,210,130,${0.75 + 0.2 * Math.sin(time * 2 + x)})`, cold = `rgba(130,230,255,${0.7 + 0.25 * Math.sin(time * 2.4 + x)})`;
+    switch (s.kind) {
+      case 'capital':
+        if (s.side === 'desert') {                     // Железный Предел: платформа, бункеры, купол над входом под землю, мачты связи
+          plinth(u * 0.95, '#5a6068');
+          A.prism(g, x - 17, y - 4, 7, 9, '#6a727a', { windows: cold }); A.prism(g, x + 17, y - 3, 7, 11, '#6a727a', { windows: cold });
+          A.mast(g, x - 22, y - 12, 26, '#9aa4ab', 'rgba(94,230,255,A)', time); A.mast(g, x + 22, y - 10, 30, '#9aa4ab', 'rgba(94,230,255,A)', time);
+          A.dome(g, x, y + 2, 17, '#8a949e');
+          g.fillStyle = '#2a3038'; g.beginPath(); g.ellipse(x + 2, y + 1, 6, 4, 0, Math.PI, 0); g.fill(); g.fillStyle = cold; g.fillRect(x - 1, y - 2, 6, 2);
+          A.prism(g, x - 6, y + 13, 6, 6, '#5a6268'); A.prism(g, x + 9, y + 12, 5, 5, '#5a6268');
+        } else {                                       // Цитадель Кадзэ: стена из блоков и трёхъярусная пагода
+          plinth(u * 0.95, '#7a6a52');
+          for (const [wx, wy] of [[-20, -8], [0, -15], [20, -8]]) A.prism(g, x + wx, y + wy, 9, 7, '#b8a682', { sh: 0.2 });
+          let yy = y + 2;
+          for (let i = 0; i < 3; i++) { const a = 15 - i * 3.6, h = 8; A.prism(g, x, yy, a, h, '#d8c39a', { noShadow: i > 0, noTop: true, windows: i === 0 ? warm : null }); A.gable(g, x, yy, a + 2, h, 6, '#8a2a20', true); yy -= h + 6; }
+          for (const [wx, wy] of [[-20, 10], [20, 10]]) A.prism(g, x + wx, y + wy, 8, 6, '#b8a682', { sh: 0.2 });
+          flag(x - 25, y + 6, '#b8342a'); flag(x + 25, y + 6, '#b8342a');
+        }
+        return true;
+      case 'village':
+        if (s.side === 'desert') {                     // посёлок Наследников: металлические блоки с окнами, солнечная панель, антенна
+          A.prism(g, x + 6, y - 4, 8, 12, '#7a828a', { windows: cold });
+          g.fillStyle = '#26425e'; g.beginPath(); g.moveTo(x - 17, y - 9); g.lineTo(x - 5, y - 15); g.lineTo(x - 1, y - 9); g.lineTo(x - 13, y - 3); g.closePath(); g.fill();
+          g.strokeStyle = 'rgba(160,220,255,.35)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x - 15, y - 6); g.lineTo(x - 3, y - 12); g.stroke();
+          A.prism(g, x - 9, y + 3, 7, 9, '#7a828a', { windows: cold });
+          A.mast(g, x + 14, y + 2, 22, '#9aa4ab', 'rgba(94,230,255,A)', time);
+          A.prism(g, x, y + 11, 6, 7, '#6a727a');
+        } else if (s.side === 'east') {                // деревня кланов: домики под изогнутыми крышами, знамя, огонь
+          const house = (hx, hy, a) => { A.prism(g, hx, hy, a, 7, '#d8c39a', { noTop: true, windows: warm }); A.gable(g, hx, hy, a + 2, 7, 6, '#6a2a22', true); };
+          house(x + 7, y - 3, 8); house(x - 9, y + 2, 7); fire(x + 4, y + 8); house(x + 1, y + 11, 6); flag(x + 17, y + 7, '#b8342a');
+        } else {                                       // поселение Единого: свечение, хижины из органики
+          const gr = g.createRadialGradient(x, y - 4, 0, x, y - 4, 22); gr.addColorStop(0, `rgba(150,255,140,${0.35 + 0.15 * Math.sin(time * 2.2)})`); gr.addColorStop(1, 'rgba(150,255,140,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y - 4, 22, 0, 7); g.fill();
+          const hut = (hx, hy) => { A.prism(g, hx, hy, 6, 6, '#5a4028', { noTop: true }); A.pyramid(g, hx, hy - 6, 8, 11, '#6b7a3a', true); };
+          hut(x + 8, y - 1); hut(x - 8, y + 4); hut(x + 1, y + 11);
+          A.crystal(g, x - 15, y - 4, 6, '#b04a90'); A.crystal(g, x + 16, y + 9, 5, '#7a5ab0');
+        }
+        return true;
+      case 'hub': {                                    // Меновой Узел: площадь, кольцо стен, шатры трёх фракций, сторожевая башня
+        plinth(u * 1.05, '#8a7a5e');
+        for (const [wx, wy] of [[-24, -4], [-12, -14], [12, -14], [24, -4]]) A.prism(g, x + wx, y + wy, 7, 6, '#a89470', { sh: 0.2 });
+        A.prism(g, x, y - 10, 5, 22, '#9a8462', { windows: warm }); A.pyramid(g, x, y - 32, 7, 8, '#6a4a2a', true); flag(x, y - 38, '#d9a23e');
+        A.pyramid(g, x - 13, y + 2, 9, 13, '#b8342a'); A.pyramid(g, x + 13, y + 1, 9, 12, '#7a848e');
+        fire(x, y + 6);
+        A.pyramid(g, x - 3, y + 13, 8, 11, '#5a9a5a'); A.pyramid(g, x + 11, y + 13, 7, 10, '#d9a23e');
+        for (const [wx, wy] of [[-24, 10], [24, 10]]) A.prism(g, x + wx, y + wy, 7, 6, '#a89470', { sh: 0.2 });
+        return true;
+      }
+      default: return false;
+    }
+  }
   function drawSite(s) {
+    if (ART() && drawSiteArt(s)) return;              // №204: объёмные сооружения; ниже — прежний рисунок (если оформление не загрузилось)
     const p = bpx(s.c, s.r), x = p.x, y = p.y, u = S0;
     const box = (bx, by, w, h, top, side) => { g.fillStyle = side; g.fillRect(bx - w / 2, by - h, w, h); g.fillStyle = top; g.fillRect(bx - w / 2 - 1, by - h - 3, w + 2, 4); };
     const flag = (fx, fy, col) => { g.strokeStyle = '#3a2a1a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx, fy - 18); g.stroke(); g.fillStyle = col; g.beginPath(); g.moveTo(fx, fy - 18); g.lineTo(fx + 9 + Math.sin(time * 4 + fx) * 1.5, fy - 15); g.lineTo(fx, fy - 12); g.fill(); };
@@ -2269,7 +2348,7 @@ AB.IsoSurface = (() => {
     setShield: (id) => { shieldId = shieldId === id ? null : id; qs(); qSave(); barSig = ''; },
     setForm: (id, pos) => { qs().form = qs().form || {}; if (pos === 'front') qs().form[id] = 'front'; else delete qs().form[id]; qSave(); },
     _siegeGo: () => { const b = document.querySelector('#sf-form [data-fm="go"]'); if (b) b.click(); }, _rep: () => rep, _formSet: (id, pos) => { qs().form = qs().form || {}; qs().form[id] = pos; },
-    _camps: () => camps, _cam: () => ({ x: cam.x, y: cam.y, follow }), _loot: () => loot, _allies: () => allies, _energy: (v) => { if (typeof v === 'number') energy = v; return energy; }, _broken: () => broken,
+    _camps: () => camps, _cam: () => ({ x: cam.x, y: cam.y, follow }), _look: (c, r) => { const p = bpx(c, r); follow = false; cam.x = p.x; cam.y = p.y; clampCam(); }, _loot: () => loot, _allies: () => allies, _energy: (v) => { if (typeof v === 'number') energy = v; return energy; }, _broken: () => broken,
     _quests: () => qs(), _qAdvance: (id) => qAdvance(QS().find((q) => q.id === id)), _shield: (id) => { shieldId = id; }, _points: () => camps.filter((c) => c.pt), _own: () => qs().own, _raid: (key) => startRaid(camps.find((c) => c.key === key)), _tapCamp: (key) => { const cp = camps.find((x) => x.key === key); tap(cell(cp.c, cp.r), 400, 200); },
     _study: () => document.querySelector('#sf-pop p').textContent, _choose: (side) => chooseAlly(side),
     _path: (a, b) => search(cell(a[0], a[1]), (m) => m.c === b[0] && m.r === b[1], (m) => (passable(m) ? cost(m) : Infinity)),
