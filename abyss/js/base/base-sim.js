@@ -1,0 +1,1044 @@
+// =====================================================================
+// БАЗА: СИМУЛЯЦИЯ (дополнение №71). Сердце конструктора базы — план
+// (помещения, устройства, проходы), склады и работа экипажа. Без экрана,
+// без DOM и без мира изометрии: только данные и время. Поэтому тот же код
+// может считать базу на сервере, пока игрок не в игре (офлайн-ход): состояние
+// — простой JSON, а время — секунды реального мира.
+//
+// Связь с остальной игрой — только через адаптер ext (setExt):
+//   count(item) / take(item, n) / give(item, n) — шкафчики экипажа (общий
+//   инвентарь, металлолом, электроника…); present() — кто из экипажа сейчас
+//   на базе (герой в отряде на карте дна не работает).
+//
+// Работа героя — как в Kenshi: у каждого свой список работ по приоритету
+// (устройство, «Переноска», «Стройка»); герой берёт первое дело, где есть
+// работа. Все перемещения — по клеткам плана, время пути = длина / скорость.
+// =====================================================================
+
+AB.BaseSim = (() => {
+  const D = () => AB.BASE_DATA;
+  const KEY = 'abyss_base_v1';
+  const STEP_ACT = 0.5;                 // секунды: взять / положить
+  let S = null, G = null;               // состояние и кэш геометрии
+  let ext = { count: () => 0, take: () => 0, give: () => 0, present: null };
+  const emit = (ev, data) => { if (AB.Bus) AB.Bus.emit(ev, data); };
+
+  const BP = new Map();
+  const bp = (id) => { if (!BP.size) D().blueprints.forEach((b) => BP.set(b.id, b)); return BP.get(id); };
+  const GR = () => AB.BaseGrids;
+  const rcells = (r) => GR().rectCells(r);                 // клетки прямоугольника (устройства, кабели, обстановка)
+  const cellsOf = (o) => GR().cellsOf(o);                  // клетки помещения по его сетке
+  // №74: корпус растёт исследованиями
+  function hull() { const H = D().hull; return { x: H.x, y: H.y, w: H.w + fx('hullW'), h: H.h + fx('hullH') }; }
+  const nm = (item) => { const d = AB.ID.get(item); return d ? d.name.toLowerCase() : item; };
+
+  // ---------- состояние ----------
+  function fresh() {
+    const c = D().core;
+    return {
+      v: 1, t: 0, seq: 0, savedAt: Date.now(), grid: D().grid, hull: { ...D().hull },
+      rooms: c.rooms.map((r) => ({ ...r, bp: null, core: true, built: true })),
+      devs: [{ uid: 'pile', bp: 'BLD-100', core: true, ...c.pile, built: true }, { uid: 'reactor', bp: 'BLD-104', core: true, ...c.reactor, built: true, lvl: 1 }],
+      cables: [],
+      pile: {}, crew: {}, orders: [], present: [],
+      unlocked: D().blueprints.filter((b) => b.start).map((b) => b.id),
+      grids: AB.BaseGrids.all().filter((g) => g.start).map((g) => g.id),   // №74: изученные сетки
+      tech: { done: [], cur: null },                                      // №74: исследования
+      done: {},                          // какие чертежи уже хоть раз построены
+    };
+  }
+  const uid = (p) => `${p}${++S.seq}`;
+  const room = (u) => S.rooms.find((r) => r.uid === u);
+  const dev = (u) => S.devs.find((d) => d.uid === u);
+  const cable = (u) => S.cables.find((c) => c.uid === u);
+  const obj = (u) => room(u) || dev(u) || cable(u);
+  const racks = () => S.devs.filter((d) => d.built && bp(d.bp).store);
+  const frames = () => [...S.rooms, ...S.devs, ...S.cables].filter((o) => !o.built).sort((a, b) => a.seq - b.seq);
+  function dirty() { G = null; P = null; emit('base:plan', {}); }
+  // №72: параметры устройства с учётом уровня (каждый уровень меняет скорость, вместимость, потребление)
+  function par(d) {
+    const b = bp(d.bp), p = { ...(b.recipe || {}), draw: b.draw || 0, gen: b.gen || 0, cap: b.store ? b.store.cap : 0, battery: b.battery || 0 };
+    const L = b.levels || [];
+    for (let i = 1; i < (d.lvl || 1) && i < L.length; i++) { const { up, work, ...rest } = L[i]; Object.assign(p, rest); }
+    return p;
+  }
+  const rec = (d) => (d && bp(d.bp).recipe ? par(d) : null);
+  // №73: сырьё рецепта списком — у станка может быть несколько видов сырья или ни одного (водозабор)
+  const insOf = (r) => r.ins || (r.in ? [[r.in, r.inN]] : []);
+  const hasIn = (r, item) => insOf(r).some(([i]) => i === item);
+  // сытость: голодный работает медленнее (не умирает)
+  const FOOD = () => D().food;
+  const eff = (w) => { const f = w.food == null ? 100 : w.food; return f <= 0 ? FOOD().starving : f < FOOD().hungry ? FOOD().slow : 1; };
+
+  // ---------- геометрия: где пол, проходы, что занято ----------
+  function geom() {
+    if (G) return G;
+    const HH = hull(), w = HH.x + HH.w + 1, h = HH.y + HH.h + 1, walk = new Uint8Array(w * h), roomAt = new Array(w * h).fill(null);
+    const set = (x, y, v) => { if (x >= 0 && y >= 0 && x < w && y < h) walk[y * w + x] = v; };
+    for (const r of S.rooms) if (r.built) for (const [x, y] of cellsOf(r)) { set(x, y, 1); roomAt[y * w + x] = r.uid; }
+    const doors = [];
+    for (let i = 0; i < S.rooms.length; i++) for (let j = i + 1; j < S.rooms.length; j++) {
+      const a = S.rooms[i], b = S.rooms[j], cells = GR().door(a, b);
+      if (!cells) continue;
+      doors.push({ a: a.uid, b: b.uid, cells, open: a.built || b.built });
+      if (a.built || b.built) for (const [x, y] of cells) { set(x, y, 1); roomAt[y * w + x] = a.built ? a.uid : b.uid; }
+    }
+    for (const p of D().core.props) for (const [x, y] of rcells(p)) set(x, y, 0);
+    for (const d of S.devs) for (const [x, y] of rcells(d)) set(x, y, 0);
+    // №79: клетки стен — вокруг пола помещений (туда можно класть кабель)
+    const wall = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (roomAt[y * w + x]) continue;
+      let near = false;
+      for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < w && Y < h && roomAt[Y * w + X] && walk[Y * w + X] !== undefined) { near = true; break; } }
+      if (near) wall[y * w + x] = 1;
+    }
+    G = { w, h, walk, roomAt, doors, wall };
+    return G;
+  }
+  const walkable = (x, y) => { const g = geom(); return x >= 0 && y >= 0 && x < g.w && y < g.h && g.walk[y * g.w + x] === 1; };
+
+  // клетки, откуда можно работать с предметом: соседние с ним проходимые (у помещения-каркаса — его проходы)
+  function access(o) {
+    const out = [], g = geom();
+    if (o.grid && o.grid !== 'GRID-001') {             // помещение-каркас непрямоугольной сетки: соседние с его клетками
+      const own = new Set(cellsOf(o).map(([x, y]) => y * g.w + x));
+      for (const [x, y] of cellsOf(o)) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = (y + dy) * g.w + x + dx; if (!own.has(k) && walkable(x + dx, y + dy) && !out.includes(k)) out.push(k); }
+      return out;
+    }
+    const r = o.rect || o;
+    for (let x = r.x - 1; x <= r.x + r.w; x++) for (let y = r.y - 1; y <= r.y + r.h; y++) {
+      const inside = x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h, corner = (x < r.x || x >= r.x + r.w) && (y < r.y || y >= r.y + r.h);
+      if (!inside && !corner && walkable(x, y)) out.push(y * g.w + x);
+    }
+    return out;
+  }
+  function targetsOf(ref) {
+    const g = geom();
+    if (ref.rest) { const p = restOf(ref.rest), c = nearestWalk(Math.floor(p.x), Math.floor(p.y)); return c ? [c[1] * g.w + c[0]] : []; }
+    if (ref.spot !== undefined) { const p = D().forage.spots[ref.spot], c = p && nearestWalk(Math.floor(p.x), Math.floor(p.y)); return c ? [c[1] * g.w + c[0]] : []; }   // №199
+    if (ref.enter) { const p = D().core.enter; return [Math.floor(p.y) * g.w + Math.floor(p.x)]; }
+    if (ref.locker) return access(D().core.props.find((p) => p.locker));
+    if (ref.pile) return access(dev('pile'));
+    const o = obj(ref.uid);
+    return o ? access(o) : [];
+  }
+  // место отдыха героя: у каждого своё (номер в экипаже)
+  function restOf(id) { const list = D().core.rest, i = Math.max(0, Object.keys(S.crew).indexOf(id)); return list[i % list.length]; }
+  function nearestWalk(x, y) {
+    if (walkable(x, y)) return [x, y];
+    for (let r = 1; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) === r && walkable(x + dx, y + dy)) return [x + dx, y + dy];
+    }
+    return null;
+  }
+  // путь по клеткам (8 направлений, углы не срезать) до любой из целей → { pts, len }
+  function route(px, py, targets) {
+    const g = geom(), s = nearestWalk(Math.floor(px), Math.floor(py));
+    if (!s || !targets.length) return null;
+    const goal = new Set(targets), start = s[1] * g.w + s[0];
+    const prev = new Int32Array(g.w * g.h).fill(-2);
+    prev[start] = -1;
+    const q = [start];
+    let hit = goal.has(start) ? start : -1;
+    for (let qi = 0; qi < q.length && hit < 0; qi++) {
+      const c = q[qi], cx = c % g.w, cy = (c / g.w) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = cx + dx, ny = cy + dy;
+        if (!walkable(nx, ny)) continue;
+        if (dx && dy && (!walkable(cx + dx, cy) || !walkable(cx, cy + dy))) continue;
+        const n = ny * g.w + nx;
+        if (prev[n] !== -2) continue;
+        prev[n] = c; q.push(n);
+        if (goal.has(n)) { hit = n; break; }
+      }
+    }
+    if (hit < 0) return null;
+    const cells = [];
+    for (let c = hit; c !== -1; c = prev[c]) cells.push(c);
+    cells.reverse();
+    const pts = [{ x: px, y: py }, ...cells.map((c) => ({ x: (c % g.w) + 0.5, y: ((c / g.w) | 0) + 0.5 }))];
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    return { pts, len };
+  }
+  const reach = (ref, from) => { const p = from || D().core.enter; return !!route(p.x, p.y, targetsOf(ref)); };
+
+  // ---------- склады и запасы ----------
+  const CARRY = () => D().carry;
+  function amount(ref, item) {
+    if (ref.pile) return S.pile[item] || 0;
+    if (ref.locker) return ext.count(item);
+    const d = dev(ref.uid); if (!d) return 0;
+    if (ref.slot === 'store') return d.mat === item ? d.n || 0 : 0;
+    return (d[ref.slot] || {})[item] || 0;
+  }
+  function space(ref, item) {
+    if (ref.pile) return Infinity;
+    const o = obj(ref.uid); if (!o) return 0;
+    if (ref.slot === 'frame') { const need = (o.need.find(([i]) => i === item) || [0, 0])[1]; return Math.max(0, need - (o.got[item] || 0)); }
+    const b = bp(o.bp);
+    if (ref.slot === 'store') return o.mat && o.mat !== item ? 0 : par(o).cap - (o.n || 0);
+    if (ref.slot === 'in') { const r = rec(o); return r && hasIn(r, item) ? r.inCap - ((o.in || {})[item] || 0) : 0; }
+    return 0;
+  }
+  function takeFrom(ref, item, n) {
+    n = Math.min(n, amount(ref, item));
+    if (n <= 0) return 0;
+    if (ref.pile) { S.pile[item] -= n; if (!S.pile[item]) delete S.pile[item]; return n; }
+    if (ref.locker) return ext.take(item, n);
+    const d = dev(ref.uid);
+    if (ref.slot === 'store') { d.n -= n; return n; }
+    d[ref.slot][item] -= n; return n;
+  }
+  function putTo(ref, item, n) {
+    n = Math.min(n, space(ref, item));
+    if (n <= 0) return 0;
+    if (ref.pile) { S.pile[item] = (S.pile[item] || 0) + n; return n; }
+    const o = obj(ref.uid);
+    if (ref.slot === 'frame') { o.got[item] = (o.got[item] || 0) + n; return n; }
+    if (ref.slot === 'store') { o.mat = item; o.n = (o.n || 0) + n; return n; }
+    o.in = o.in || {}; o.in[item] = (o.in[item] || 0) + n; return n;
+  }
+  // сколько уже несут к цели (чтобы двое не таскали одно и то же)
+  function reserved(uidTo, item) {
+    let n = 0;
+    for (const w of Object.values(S.crew)) if (w.task && w.task.res && w.task.res.to === uidTo && w.task.res.item === item) n += w.task.res.n;
+    return n;
+  }
+  function dist(w, ref) { const r = route(w.x, w.y, targetsOf(ref)); return r ? r.len : Infinity; }
+  // откуда брать материал для стройки: стеллажи с этим материалом, шкафчики экипажа
+  function sourceOf(w, item) {
+    const opts = racks().filter((d) => d.mat === item && d.n > 0).map((d) => ({ uid: d.uid, slot: 'store' }));
+    if (ext.count(item) > 0) opts.push({ locker: true });
+    let best = null, bd = Infinity;
+    for (const o of opts) { const d = dist(w, o); if (d < bd) { bd = d; best = o; } }
+    return best;
+  }
+  function rackFor(w, item, autoOnly) {
+    let best = null, bd = Infinity;
+    for (const d of racks()) {
+      if (d.mat !== item || (autoOnly && !d.auto)) continue;
+      if (space({ uid: d.uid, slot: 'store' }, item) - reserved(d.uid, item) <= 0) continue;
+      const k = dist(w, { uid: d.uid }); if (k < bd) { bd = k; best = d; }
+    }
+    return best;
+  }
+
+  // ---------- задачи героев ----------
+  // задача — список шагов (только данные, чтобы её можно было сохранить):
+  // go {ref} · take {ref,item,n} · put {ref,item} · craft {uid} · build {uid} · idle {secs}
+  const haulTask = (label, from, item, n, to, res) => ({ kind: 'haul', label, res, steps: [
+    { go: from }, { take: { ref: from, item, n } }, { go: { uid: to.uid } }, { put: { ref: to, item } }] });
+
+  function planDeposit(w) {
+    const item = w.carry.item;
+    if (w.jobs.includes('build')) for (const f of frames()) {
+      const need = (f.need.find(([i]) => i === item) || [0, 0])[1];
+      if (need - (f.got[item] || 0) - reserved(f.uid, item) > 0 && reach({ uid: f.uid }, w)) {
+        return { kind: 'build', label: `несёт ${nm(item)} на стройку`, res: { to: f.uid, item, n: w.carry.n }, steps: [{ go: { uid: f.uid } }, { put: { ref: { uid: f.uid, slot: 'frame' }, item } }] };
+      }
+    }
+    for (const u of w.jobs) {
+      const d = dev(u); if (!d || !d.built || !rec(d) || !hasIn(rec(d), item)) continue;
+      if (space({ uid: u, slot: 'in' }, item) - reserved(u, item) > 0) return { kind: 'op', label: `загружает ${nm(item)}`, res: { to: u, item, n: w.carry.n }, steps: [{ go: { uid: u } }, { put: { ref: { uid: u, slot: 'in' }, item } }] };
+    }
+    const r = rackFor(w, item, false);
+    if (r) return { kind: 'haul', label: `несёт ${nm(item)} на склад`, res: { to: r.uid, item, n: w.carry.n }, steps: [{ go: { uid: r.uid } }, { put: { ref: { uid: r.uid, slot: 'store' }, item } }] };
+    return { kind: 'haul', label: `относит ${nm(item)} в приёмник`, steps: [{ go: { pile: true } }, { put: { ref: { pile: true }, item } }] };
+  }
+  function planOrder(id, w) {
+    for (const o of [...S.orders]) {
+      const to = dev(o.to);
+      const left = amount(o.from, o.item), room_ = to ? space({ uid: o.to, slot: 'store' }, o.item) - reserved(o.to, o.item) : 0;
+      if (!to || left <= 0 || room_ <= 0) { if (!to || left <= 0 || space({ uid: o.to, slot: 'store' }, o.item) <= 0) S.orders.splice(S.orders.indexOf(o), 1); continue; }
+      if (!(w.jobs.includes('haul') || (o.from.uid && w.jobs.includes(o.from.uid)))) continue;
+      const n = Math.min(CARRY(), left, room_);
+      return haulTask(`несёт ${nm(o.item)} на склад (приказ)`, o.from, o.item, n, { uid: o.to, slot: 'store' }, { to: o.to, item: o.item, n });
+    }
+    return null;
+  }
+  function planOperate(id, w, d) {
+    if (!d || !d.built) return null;
+    const b_ = bp(d.bp);
+    // №74: научный терминал — работник ведёт текущее исследование
+    if (b_.research) {
+      if (!S.tech.cur) { d.block = 'noresearch'; return null; }
+      if (d.crafter && d.crafter !== id && S.crew[d.crafter] && S.crew[d.crafter].task && S.crew[d.crafter].task.kind === 'study') return null;
+      if (!canPower(d)) { d.block = 'nopower'; return null; }
+      d.block = null;
+      return { kind: 'study', label: `исследует: ${techName(S.tech.cur.id)}`, steps: [{ go: { uid: d.uid } }, { study: { uid: d.uid, secs: 12 } }] };
+    }
+    const r = rec(d); if (!r) return null;
+    // №74: бур работает, только когда капсула стоит у россыпи реголита
+    if (b_.site === 'deposit' && !(S.dep && S.dep.left > 0)) { d.block = 'nodeposit'; return null; }
+    d.in = d.in || {}; d.out = d.out || {};
+    if ((d.out[r.out] || 0) >= r.outCap) {
+      const rk = rackFor(w, r.out, true);
+      if (rk) { d.block = null; const n = Math.min(CARRY(), d.out[r.out], space({ uid: rk.uid, slot: 'store' }, r.out)); return haulTask(`уносит ${nm(r.out)} на склад`, { uid: d.uid, slot: 'out' }, r.out, n, { uid: rk.uid, slot: 'store' }, { to: rk.uid, item: r.out, n }); }
+      d.block = 'full';
+      return null;
+    }
+    // не хватает какого-то сырья — несут его (со стеллажа этого сырья, а если там нет — из шкафчиков экипажа)
+    let waiting = false;
+    for (const [item, need] of insOf(r)) {
+      if ((d.in[item] || 0) >= need) continue;
+      const want = r.inCap - (d.in[item] || 0) - reserved(d.uid, item);
+      if (want <= 0) { waiting = true; continue; }
+      const opts = racks().filter((k) => k.mat === item && k.n > 0).map((k) => ({ uid: k.uid, slot: 'store' })).sort((a, b) => dist(w, a) - dist(w, b));
+      if (!opts.length && ext.count(item) > 0) opts.push({ locker: true });
+      const src = opts[0];
+      if (!src) { d.block = 'noinput'; d.blockItem = item; return null; }
+      d.block = null;
+      const n = Math.min(CARRY(), want, amount(src, item));
+      return haulTask(`несёт ${nm(item)} к станку`, src, item, n, { uid: d.uid, slot: 'in' }, { to: d.uid, item, n });
+    }
+    if (waiting) return null;
+    if (d.crafter && d.crafter !== id && S.crew[d.crafter] && S.crew[d.crafter].task && S.crew[d.crafter].task.kind === 'craft') return null;
+    if (r.draw > 0 && !canPower(d)) { d.block = 'nopower'; return null; }
+    d.block = null;
+    return { kind: 'craft', label: `работает: ${bp(d.bp).name}`, steps: [{ go: { uid: d.uid } }, { craft: { uid: d.uid } }] };
+  }
+  function planHaul(w) {
+    for (const item of Object.keys(S.pile)) {
+      if (!(S.pile[item] > 0)) continue;
+      const rk = rackFor(w, item, true); if (!rk) continue;
+      const n = Math.min(CARRY(), S.pile[item], space({ uid: rk.uid, slot: 'store' }, item) - reserved(rk.uid, item));
+      return haulTask(`разносит ${nm(item)} из приёмника`, { pile: true }, item, n, { uid: rk.uid, slot: 'store' }, { to: rk.uid, item, n });
+    }
+    for (const d of S.devs) {
+      const r = d.built && rec(d); if (!r || !((d.out || {})[r.out] > 0)) continue;
+      const rk = rackFor(w, r.out, true); if (!rk) continue;
+      const n = Math.min(CARRY(), d.out[r.out], space({ uid: rk.uid, slot: 'store' }, r.out) - reserved(rk.uid, r.out));
+      return haulTask(`уносит ${nm(r.out)} от станка`, { uid: d.uid, slot: 'out' }, r.out, n, { uid: rk.uid, slot: 'store' }, { to: rk.uid, item: r.out, n });
+    }
+    return null;
+  }
+  function planBuild(w) {
+    for (const f of frames()) {
+      if (!reach({ uid: f.uid }, w)) continue;
+      let all = true;
+      for (const [item, need] of f.need) {
+        const m = need - (f.got[item] || 0);
+        if (m <= 0) continue;
+        all = false;
+        const left = m - reserved(f.uid, item);
+        if (left <= 0) continue;
+        const src = sourceOf(w, item); if (!src) continue;
+        const n = Math.min(CARRY(), left, amount(src, item));
+        return haulTask(`несёт ${nm(item)} на стройку`, src, item, n, { uid: f.uid, slot: 'frame' }, { to: f.uid, item, n });
+      }
+      if (all && f.work > 0) return { kind: 'build', label: `строит: ${f.name}`, steps: [{ go: { uid: f.uid } }, { build: { uid: f.uid, secs: 10 } }] };
+    }
+    return null;
+  }
+  function planEat(w) {
+    const F = FOOD(), f = w.food ?? 100;
+    if (f >= F.hungry) return null;
+    const src = racks().filter((k) => k.mat === F.item && k.n > 0).map((k) => ({ uid: k.uid, slot: 'store' })).sort((a, b) => dist(w, a) - dist(w, b))[0];
+    if (!src) return null;
+    return { kind: 'eat', label: 'идёт поесть', steps: [{ go: src }, { take: { ref: src, item: F.item, n: 1 } }, { eat: { secs: 3 } }] };
+  }
+  // №199: «жизнь на базе»: свободный герой идёт к переборке и добывает понемногу (обломки, реголит, провода);
+  // добыча — в руки, дальше обычной доставкой в приёмник или на стеллаж. Изредка — просто отдыхает.
+  function planForage(id, w) {
+    const F = D().forage; if (!F || !F.on || !F.spots.length) return null;
+    if (w.rested === undefined) w.rested = 0;
+    if (Math.random() < F.rest && w.rested < 1) { w.rested++; return null; }
+    w.rested = 0;
+    const taken = new Set(Object.values(S.crew).filter((o) => o !== w && o.task && o.task.spot !== undefined).map((o) => o.task.spot));
+    const free = F.spots.map((_, i) => i).filter((i) => !taken.has(i)); if (!free.length) return null;
+    const i = free[Math.floor(Math.random() * free.length)];
+    let r = Math.random() * F.yield.reduce((a, [, k]) => a + k, 0), item = F.yield[0][0];
+    for (const [it, k] of F.yield) { if ((r -= k) <= 0) { item = it; break; } }
+    return { kind: 'forage', spot: i, label: F.spots[i].label, steps: [{ go: { spot: i } }, { forage: { secs: F.secs, item, spot: i } }] };
+  }
+  function plan(id, w) {
+    if (w.carry) return planDeposit(w);
+    const e = planEat(w); if (e) return e;
+    const o = planOrder(id, w); if (o) return o;
+    for (const j of w.jobs) {
+      const t = j === 'build' ? planBuild(w) : j === 'haul' ? planHaul(w) : planOperate(id, w, dev(j));
+      if (t) return t;
+    }
+    const fg = planForage(id, w); if (fg) return fg;   // №199: свободный — не стоит, а добывает
+    const rp = restOf(id);
+    if (Math.hypot(w.x - rp.x, w.y - rp.y) > 1.5) return { kind: 'rest', label: 'отдыхает', steps: [{ go: { rest: id } }, { idle: { secs: 3 } }] };
+    return { kind: 'rest', label: 'отдыхает', steps: [{ idle: { secs: 2 } }] };
+  }
+
+  // ---------- выполнение шагов ----------
+  function abort(w, why) {
+    const t = w.task;
+    if (t) for (const s of t.steps) { const u = (s.craft || s.study || {}).uid; if (u) { const d = dev(u); if (d && d.crafter === w.id) d.crafter = null; } }
+    w.task = null; w.wait = 1.5; w.why = why || null;
+  }
+  function begin(w) {
+    const s = w.task.steps[w.task.i];
+    w.el = 0;
+    if (s.go) {
+      const r = route(w.x, w.y, targetsOf(s.go));
+      if (!r) { abort(w, 'нет пути'); return false; }
+      w.path = r.pts; w.dur = r.len / D().speed;
+    }
+    if (s.craft) {
+      const d = dev(s.craft.uid), r = rec(d);
+      if (!r || !d.built || insOf(r).some(([i, n]) => (d.in[i] || 0) < n) || (d.out[r.out] || 0) >= r.outCap) { abort(w); return false; }
+      d.crafter = w.id; d.prog = d.prog || 0;
+    }
+    if (s.study) { const d = dev(s.study.uid); if (!d || !d.built || !S.tech.cur) { abort(w); return false; } d.crafter = w.id; }
+    return true;
+  }
+  function next(w) {
+    w.task.i++; w.path = null;
+    if (w.task.i >= w.task.steps.length) { w.task = null; w.wait = 0; return; }
+    begin(w);
+  }
+  function stepWorker(w, dt) {
+    if (!w.task) {
+      if (w.wait > 0) { w.wait -= dt; return; }
+      w.task = plan(w.id, w); w.why = null;
+      if (!w.task) { w.wait = 1; return; }
+      w.task.i = 0;
+      if (!begin(w)) return;
+    }
+    const s = w.task.steps[w.task.i];
+    w.el += dt;
+    if (s.go) {
+      const pts = w.path || [];
+      let d = Math.min(w.el, w.dur) * D().speed;
+      for (let i = 1; i < pts.length; i++) {
+        const L = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        if (d <= L || i === pts.length - 1) { const k = L ? Math.min(1, d / L) : 1; w.x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k; w.y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k; break; }
+        d -= L;
+      }
+      if (w.el >= w.dur) next(w);
+    } else if (s.take) {
+      if (w.el < STEP_ACT) return;
+      if (w.carry && w.carry.item !== s.take.item) { abort(w); return; }
+      const n = takeFrom(s.take.ref, s.take.item, Math.min(s.take.n, CARRY() - (w.carry ? w.carry.n : 0)));
+      if (n <= 0) { abort(w, 'пусто'); return; }
+      w.carry = { item: s.take.item, n: (w.carry ? w.carry.n : 0) + n };
+      if (w.task.res) w.task.res.n = w.carry.n;
+      next(w);
+    } else if (s.put) {
+      if (w.el < STEP_ACT) return;
+      if (w.carry) {
+        const n = putTo(s.put.ref, s.put.item, w.carry.n);
+        w.carry.n -= n;
+        if (w.carry.n <= 0) w.carry = null;
+        if (s.put.ref.slot === 'frame') checkFrame(obj(s.put.ref.uid));
+      }
+      w.task.res = null;
+      next(w);
+    } else if (s.craft) {
+      const d = dev(s.craft.uid), r = rec(d);
+      if (!r || !d.built) { abort(w); return; }
+      // №72: без энергии станок стоит; долго нет энергии — работник уходит к другим делам
+      if (!d.powered) { d.dark = (d.dark || 0) + dt; if (d.dark > 4) { d.block = 'nopower'; d.dark = 0; abort(w, 'нет энергии'); } return; }
+      d.dark = 0;
+      d.prog += dt * eff(w);
+      if (d.prog >= r.time) {
+        d.prog = 0; d.crafter = null;
+        for (const [i, n] of insOf(r)) d.in[i] -= n;
+        if (bp(d.bp).site === 'deposit' && S.dep) { const k = Math.min(r.outN, S.dep.left); S.dep.left -= k; if (ext.mine) ext.mine(S.dep, k); }
+        d.out[r.out] = (d.out[r.out] || 0) + r.outN;
+        d.made = (d.made || 0) + r.outN;
+        next(w);
+      }
+    } else if (s.build) {
+      const f = obj(s.build.uid);
+      if (!f || f.built) { next(w); return; }
+      f.work -= dt * eff(w);
+      if (f.work <= 0) complete(f);
+      if (f.built || w.el >= s.build.secs) next(w);
+    } else if (s.study) {
+      // №74: исследование идёт, пока работник у терминала и есть энергия
+      const d = dev(s.study.uid);
+      if (!d || !d.built || !S.tech.cur) { if (d) d.crafter = null; next(w); return; }
+      if (!d.powered) { d.dark = (d.dark || 0) + dt; if (d.dark > 4) { d.block = 'nopower'; d.dark = 0; abort(w, 'нет энергии'); } return; }
+      d.dark = 0;
+      S.tech.cur.left -= dt * eff(w) * (1 + fx('research'));
+      if (S.tech.cur.left <= 0) { finishTech(); d.crafter = null; next(w); return; }
+      if (w.el >= s.study.secs) { d.crafter = null; next(w); }
+    } else if (s.eat) {
+      // №73: поесть — съесть то, что принёс со стеллажа
+      if (w.el < s.eat.secs) return;
+      if (w.carry && w.carry.item === FOOD().item) { w.food = Math.min(100, (w.food ?? 100) + (FOOD().per + fx('food')) * w.carry.n); w.carry = null; w.ate = (w.ate || 0) + 1; }
+      next(w);
+    } else if (s.forage) {                             // №199: работа у переборки — в руки 1 добычи
+      if (w.el < s.forage.secs / Math.max(0.3, eff(w))) return;
+      w.carry = { item: s.forage.item, n: 1 }; S.foraged = (S.foraged || 0) + 1;
+      emit('base:forage', { id: w.id, item: s.forage.item });
+      next(w);
+    } else if (s.idle) {
+      if (w.el >= s.idle.secs) next(w);
+    }
+  }
+
+  // ---------- стройка ----------
+  function costOf(b, r) {
+    if (b.kind === 'room') { const k = GR().get(r.grid).costK, c = cellsOf(r).length; return b.costPerCell.map(([i, n]) => [i, Math.ceil(n * c * k)]); }
+    if (b.kind === 'cable') return [[b.costPer.item, Math.ceil((r.w * r.h) / b.costPer.cells)]];
+    return (b.cost || []).map(([i, n]) => [i, n]);
+  }
+  const workOf = (b, r) => (b.kind === 'room' ? Math.max(1, Math.round(b.workPerCell * cellsOf(r).length * GR().get(r.grid).workK)) : b.kind === 'cable' ? Math.max(1, Math.round(b.workPerCell * r.w * r.h)) : b.work);
+  function checkFrame(f) { if (f && !f.built && f.need.every(([i, n]) => (f.got[i] || 0) >= n) && f.work <= 0) complete(f); }
+  function complete(f) {
+    if (f.upTo) { f.lvl = f.upTo; delete f.upTo; f.need = f.baseNeed || costOf(bp(f.bp), f); delete f.baseNeed; f.built = true; f.work = 0; f.got = {}; dirty(); emit('base:built', { uid: f.uid, bp: f.bp, name: `${f.name} — уровень ${f.lvl}`, up: true }); return; }
+    f.built = true; f.work = 0; f.got = {};
+    const first = !S.done[f.bp];
+    S.done[f.bp] = (S.done[f.bp] || 0) + 1;
+    dirty();
+    emit('base:built', { uid: f.uid, bp: f.bp, name: f.name, first });
+  }
+  // помещения связаны проходами с ядром капсулы?
+  function connected(rooms) {
+    const seen = new Set(rooms.filter((r) => r.core).map((r) => r.uid)), q = [...seen];
+    while (q.length) {
+      const u = q.shift(), a = rooms.find((r) => r.uid === u);
+      for (const b of rooms) if (!seen.has(b.uid) && GR().door(a, b)) { seen.add(b.uid); q.push(b.uid); }
+    }
+    return rooms.every((r) => seen.has(r.uid));
+  }
+  // можно ли поставить (или передвинуть / изменить) — { ok, why, cost }
+  function check(spec) {
+    const b = bp(spec.bp), H = hull();
+    const r = { x: spec.x, y: spec.y, w: spec.w, h: spec.h };
+    if (b && b.kind === 'room') r.grid = spec.grid || (spec.uid && obj(spec.uid) && obj(spec.uid).grid) || 'GRID-001';
+    const self = spec.uid ? obj(spec.uid) : null;
+    const res = (ok, why) => ({ ok, why, cost: costOf(b, r) });
+    if (!b) return res(false, 'Нет такого чертежа');
+    if (!S.unlocked.includes(b.id) && !self) return res(false, 'Чертёж не изучен');
+    if (b.kind === 'room') {
+      const G_ = GR().get(r.grid);
+      if (!(b.grids || ['GRID-001']).includes(r.grid)) return res(false, `${b.name} — только на сетке: ${(b.grids || ['GRID-001']).map((q) => GR().get(q).name.toLowerCase()).join(', ')}`);
+      if (!S.grids.includes(r.grid) && !self) return res(false, `Сетка «${G_.name}» ещё не изучена`);
+      const why = G_.sizeOk(b, r.w, r.h); if (why) return res(false, why);
+      const cl = cellsOf(r);
+      if (cl.some(([x, y]) => x < H.x + 1 || y < H.y + 1 || x >= H.x + H.w - 1 || y >= H.y + H.h - 1)) return res(false, 'За пределами корпуса (расширение — в исследованиях)');
+      if ((D().reserved || []).some((z) => cl.some(([x, y]) => x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h))) return res(false, 'Здесь выход из шлюза');
+      const others = S.rooms.filter((o) => o !== self);
+      if (others.some((o) => !GR().apart(r, o))) return res(false, G_.touch ? 'Пересекается с помещением (вплотную стыкуются только модульные)' : 'Нужна стена между помещениями (клетка зазора)');
+      if (!others.some((o) => GR().door(r, o))) return res(false, G_.touch ? 'Нужно примкнуть к модульному отсеку вплотную или к любому помещению через клетку стены' : 'Нужно примкнуть к помещению через одну клетку стены — там будет проход');
+      const next_ = [...others, { ...r, uid: '__new' }];
+      if (!connected(next_)) return res(false, 'Другие помещения останутся без прохода к шлюзу');
+      if (self) {
+        const own = new Set(cl.map(([x, y]) => `${x},${y}`));
+        const inside = (d) => rcells(d).every(([x, y]) => own.has(`${x},${y}`));
+        const moved = spec.moveBy;
+        for (const d of S.devs.filter((q) => q.room === self.uid)) {
+          const nd = moved ? { ...d, x: d.x + moved.x, y: d.y + moved.y } : d;
+          if (!inside(nd)) return res(false, 'Устройства не помещаются — сначала уберите их');
+        }
+      }
+      return res(true, null);
+    }
+    if (b.kind === 'cable') {
+      if (Math.min(r.w, r.h) !== 1 || Math.max(r.w, r.h) > b.size.long[1]) return res(false, `Кабель — линия в 1 клетку, до ${b.size.long[1]} клеток`);
+      for (const [x, y] of rcells(r)) {
+        const gm_ = geom(), inWall = x >= 0 && y >= 0 && x < gm_.w && y < gm_.h && gm_.wall[y * gm_.w + x];
+        if (!walkable(x, y) && !inWall) return res(false, 'Кабель — по полу, через проходы или внутри стен');
+        if (S.cables.some((c2) => c2 !== self && x >= c2.x && y >= c2.y && x < c2.x + c2.w && y < c2.y + c2.h)) return res(false, 'Здесь уже кабель');
+      }
+      return res(true, null);
+    }
+    // устройство: внутри одного построенного помещения, на свободном полу
+    const cells = rcells(r), gm = geom();
+    const host = cells.length && gm.roomAt[cells[0][1] * gm.w + cells[0][0]];
+    const hostRoom = host && room(host);
+    if (!hostRoom || !hostRoom.built) return res(false, 'Ставится внутри построенного помещения');
+    // №79: оборудование ставится только вдоль проводки — к нему должен примыкать кабель (по полу или в стене)
+    if (!b.core && !spec.skipWire && !SIMPLE()) {
+      const own = new Set(cells.map(([x, y]) => `${x},${y}`));
+      const along = S.cables.some((c2) => rcells(c2).some(([cx, cy]) => !own.has(`${cx},${cy}`) && cells.some(([x, y]) => Math.abs(cx - x) + Math.abs(cy - y) === 1)));
+      if (!along) return res(false, 'Только вдоль проводки: сначала проложите кабель (можно внутри стены)');
+    }
+    for (const [x, y] of cells) {
+      if (x < 0 || y < 0 || x >= gm.w || y >= gm.h || gm.roomAt[y * gm.w + x] !== host) return res(false, 'Не помещается в помещение');
+      if (!walkable(x, y) && !(self && x >= self.x && y >= self.y && x < self.x + self.w && y < self.y + self.h)) return res(false, 'Место занято');
+    }
+    // не перекрыть проходы: после установки всё должно оставаться доступным
+    const saved = S.devs, tmp = { ...r, uid: '__new' };
+    S.devs = [...saved.filter((d) => d !== self), tmp]; G = null;
+    const p = D().core.enter;
+    const bad = !targetsOf({ uid: '__new' }).length || [...S.devs.map((d) => ({ uid: d.uid })), { locker: true }, ...S.rooms.filter((q) => !q.built).map((q) => ({ uid: q.uid }))]
+      .some((ref) => !route(p.x, p.y, targetsOf(ref)));
+    const roomsCut = S.rooms.filter((q) => q.built).some((q) => !route(p.x, p.y, cellsOf(q).filter(([x, y]) => walkable(x, y)).map(([x, y]) => y * geom().w + x)));
+    S.devs = saved; G = null;
+    if (bad || roomsCut) return res(false, 'Перекроет проход');
+    return { ...res(true, null), room: hostRoom.uid };
+  }
+  function place(spec) {
+    const c = check(spec);
+    if (!c.ok) return c;
+    const b = bp(spec.bp), r = { x: spec.x, y: spec.y, w: spec.w, h: spec.h };
+    const o = { uid: uid(b.kind === 'room' ? 'r' : 'd'), bp: b.id, name: b.name, ...r, seq: S.seq, built: false, need: costOf(b, r), got: {}, work: workOf(b, r) };
+    if (b.kind === 'room') { o.grid = spec.grid || 'GRID-001'; o.need = costOf(b, o); o.work = workOf(b, o); }
+    if (b.kind === 'cable') { o.uid = o.uid.replace(/^d/, 'c'); S.cables.push(o); } else if (b.kind === 'room') { o.look = b.look; S.rooms.push(o); } else { o.lvl = 1; o.prio = 2; o.room = c.room; S.devs.push(o); if (b.store) { o.mat = null; o.n = 0; o.auto = false; o.no = S.devs.filter((d) => d.bp === b.id).length; } }
+    dirty();
+    if (SIMPLE() && b.kind === 'device') { for (const [i, n] of o.need) spend(i, n); complete(o); }   // №153: сразу готово
+    return { ...c, uid: o.uid };
+  }
+  // №153: гнёзда трюма: какое занято чем
+  function slots() {
+    if (!SIMPLE()) return [];
+    const over = (a, b2) => a.x < b2.x + b2.w && b2.x < a.x + a.w && a.y < b2.y + b2.h && b2.y < a.y + a.h;
+    return D().simple.slots.map((sl) => { const d = S.devs.find((q) => over(q, sl)); return { ...sl, dev: d ? d.uid : null, core: !!(d && d.core) }; });
+  }
+  // что можно поставить в гнездо (изученное, не ядро, не «на россыпи»)
+  const slotBps = () => S.unlocked.map(bp).filter((b) => b && b.kind === 'device' && !b.core && !b.site);
+  function buildAt(slotId, bpId) {
+    const sl = slots().find((q) => q.id === slotId), b = bp(bpId);
+    if (!sl || !b) return { ok: false, why: 'Нет такого места' };
+    if (sl.dev) return { ok: false, why: 'Место занято' };
+    let w = b.w, h = b.h; if (w > sl.w || h > sl.h) [w, h] = [h, w];
+    if (w > sl.w || h > sl.h) return { ok: false, why: 'Не помещается в гнездо' };
+    const lack = costOf(b, { w, h }).filter(([i, n]) => stockOf(i) < n);
+    if (lack.length) return { ok: false, why: `Не хватает: ${lack.map(([i, n]) => `${nm(i)} ${stockOf(i)}/${n}`).join(', ')}`, miss: lack.map(([i, n]) => [i, n, stockOf(i)]) };
+    return place({ bp: bpId, x: sl.x, y: sl.y, w, h, skipWire: true, slot: true });
+  }
+  // передвинуть или изменить размер. Каркас — бесплатно; построенное снова становится каркасом:
+  // уже вложенное засчитывается, недостающее довезут, работы — треть от новой постройки
+  function modify(uidX, rect) {
+    const o = obj(uidX); if (!o || o.core) return { ok: false, why: 'Ядро капсулы не перестраивается' };
+    const b = bp(o.bp);
+    const moveBy = rect.w === o.w && rect.h === o.h ? { x: rect.x - o.x, y: rect.y - o.y } : null;
+    const c = check({ bp: o.bp, uid: uidX, ...rect, moveBy });
+    if (!c.ok) return c;
+    if (b.kind === 'device' && o.built) {   // устройство переносят целиком
+      Object.assign(o, rect, { room: c.room }); dirty(); return c;
+    }
+    const credit = o.built ? Object.fromEntries(o.need) : { ...o.got };
+    const was = { ...o };
+    Object.assign(o, rect);
+    o.need = costOf(b, o);
+    o.got = {};
+    for (const [i, n] of o.need) o.got[i] = Math.min(n, credit[i] || 0);
+    for (const [i, n] of Object.entries(credit)) { const extra = n - (o.got[i] || 0); if (extra > 0) S.pile[i] = (S.pile[i] || 0) + extra; }
+    o.work = was.built ? Math.max(2, Math.round(workOf(b, o) / 3)) : workOf(b, o);
+    o.built = false;
+    o.seq = ++S.seq;
+    if (moveBy) for (const d of S.devs.filter((q) => q.room === o.uid)) { d.x += moveBy.x; d.y += moveBy.y; }
+    dirty();
+    return c;
+  }
+  function remove(uidX) {
+    const o = obj(uidX);
+    if (!o || o.core) return { ok: false, why: 'Ядро капсулы не сносится' };
+    const b = bp(o.bp);
+    if (b.kind === 'room') {
+      if (S.devs.some((d) => d.room === o.uid)) return { ok: false, why: 'Сначала уберите устройства из помещения' };
+      if (!connected(S.rooms.filter((r) => r !== o))) return { ok: false, why: 'Другие помещения останутся без прохода' };
+    }
+    const back = {};
+    if (o.built) for (const [i, n] of o.need || costOf(b, o)) back[i] = Math.floor(n * D().refund);
+    else Object.assign(back, o.got);
+    if (o.upTo) for (const [i, n] of o.baseNeed || costOf(b, o)) back[i] = (back[i] || 0) + Math.floor(n * D().refund);
+    if (o.in) for (const [i, n] of Object.entries(o.in)) back[i] = (back[i] || 0) + n;
+    if (o.out) for (const [i, n] of Object.entries(o.out)) back[i] = (back[i] || 0) + n;
+    if (o.mat && o.n) back[o.mat] = (back[o.mat] || 0) + o.n;
+    for (const [i, n] of Object.entries(back)) if (n > 0) S.pile[i] = (S.pile[i] || 0) + n;
+    if (b.kind === 'room') S.rooms.splice(S.rooms.indexOf(o), 1); else if (b.kind === 'cable') S.cables.splice(S.cables.indexOf(o), 1); else S.devs.splice(S.devs.indexOf(o), 1);
+    for (const w of Object.values(S.crew)) {
+      w.jobs = w.jobs.filter((j) => j !== o.uid);
+      if (w.task && JSON.stringify(w.task).includes(`"${o.uid}"`)) abort(w);
+    }
+    S.orders = S.orders.filter((q) => q.to !== o.uid && q.from.uid !== o.uid);
+    dirty();
+    return { ok: true, refund: back };
+  }
+
+  // ---------- экипаж ----------
+  function worker(id) {
+    if (!S.crew[id]) { const p = D().core.enter; S.crew[id] = { id, jobs: ['build', 'haul'], x: p.x, y: p.y, task: null, carry: null, wait: 0, el: 0, away: false }; }
+    return S.crew[id];
+  }
+  function setJobs(id, jobs) { worker(id).jobs = jobs.filter((j, i) => jobs.indexOf(j) === i); }
+  // назначить героя на устройство (в начало списка работ) или снять
+  function assign(id, uidDev, on) {
+    const w = worker(id);
+    w.jobs = w.jobs.filter((j) => j !== uidDev);
+    if (on) w.jobs.unshift(uidDev);
+    if (!on && w.task && JSON.stringify(w.task).includes(`"${uidDev}"`)) abort(w);
+  }
+  const workers = (uidDev) => Object.values(S.crew).filter((w) => w.jobs.includes(uidDev)).map((w) => w.id);
+  // приказ: отнести материал (из приёмника или с выхода станка) на выбранный стеллаж; стеллаж запоминает материал
+  function order(from, item, to) {
+    const r = dev(to);
+    if (!r || !bp(r.bp).store) return { ok: false, why: 'Это не склад' };
+    if (r.mat && r.mat !== item) return { ok: false, why: `Этот стеллаж хранит: ${nm(r.mat)}` };
+    if (amount(from, item) <= 0) return { ok: false, why: 'Нечего нести' };
+    r.mat = item;
+    S.orders = S.orders.filter((o) => !(o.to === to && o.item === item && JSON.stringify(o.from) === JSON.stringify(from)));
+    S.orders.push({ from, item, to });
+    return { ok: true };
+  }
+  function setRack(uidR, patch) {
+    const r = dev(uidR); if (!r) return false;
+    if ('mat' in patch) { if (r.n > 0 && patch.mat !== r.mat) return false; r.mat = patch.mat; if (!r.mat) r.auto = false; }
+    if ('auto' in patch) { if (!r.mat) return false; r.auto = !!patch.auto; }
+    return true;
+  }
+
+  // ---------- №86: стройка в одно нажатие ----------
+  // Игрок выбирает чертёж — игра сама ищет свободное место; устройству — сама тянет проводку от сети с питанием.
+  // Если не хватает материалов (с учётом проводов на кабель) — возвращает, чего именно.
+  const K2 = (x, y) => `${x},${y}`;
+  function wirePath(rect) {
+    const g = geom();
+    const ok = (x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h && (g.walk[y * g.w + x] === 1 || g.wall[y * g.w + x] === 1) && !(x >= rect.x && y >= rect.y && x < rect.x + rect.w && y < rect.y + rect.h);
+    // источники: клетки кабелей сети, где есть выработка, и клетки рядом с реактором/генераторами
+    const nets = networks(), live = new Set();
+    for (const d of S.devs) if (d.built && par(d).gen) { const n = nets.of.get(d.uid); if (n != null) live.add(n); }
+    const src = new Set(), wired = new Set();          // wired — клетки, где кабель уже лежит
+    for (const c of S.cables) if (live.has(nets.of.get(c.uid)) || !c.built) for (const [x, y] of rcells(c)) { src.add(K2(x, y)); wired.add(K2(x, y)); }
+    for (const d of S.devs) if (par(d).gen) for (let x = d.x - 1; x <= d.x + d.w; x++) for (let y = d.y - 1; y <= d.y + d.h; y++) {
+      if (((x < d.x || x >= d.x + d.w) !== (y < d.y || y >= d.y + d.h)) && ok(x, y)) src.add(K2(x, y));
+    }
+    // цели: клетки, примыкающие к стороне устройства
+    const goal = new Set();
+    for (let x = rect.x - 1; x <= rect.x + rect.w; x++) for (let y = rect.y - 1; y <= rect.y + rect.h; y++) {
+      if (((x < rect.x || x >= rect.x + rect.w) !== (y < rect.y || y >= rect.y + rect.h)) && ok(x, y)) goal.add(K2(x, y));
+    }
+    if (!src.size || !goal.size) return null;
+    for (const k of goal) if (wired.has(k)) return [];             // уже у кабеля — тянуть не нужно
+    for (const k of goal) if (src.has(k)) return [k.split(',').map(Number)];   // рядом с реактором — одна клетка кабеля
+    const prev = new Map(), q = [];
+    for (const k of src) { prev.set(k, null); q.push(k); }
+    let hit = null;
+    for (let i = 0; i < q.length && !hit; i++) {
+      const [x, y] = q[i].split(',').map(Number);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, k = K2(nx, ny);
+        if (prev.has(k) || !ok(nx, ny)) continue;
+        prev.set(k, q[i]); q.push(k);
+        if (goal.has(k)) { hit = k; break; }
+      }
+    }
+    if (!hit) return null;
+    const cells = [];
+    for (let k = hit; k && !wired.has(k); k = prev.get(k)) cells.push(k.split(',').map(Number));   // до уже лежащего кабеля (клетку у реактора — тоже кладём)
+    return cells.reverse();
+  }
+  // прямые отрезки пути (до 12 клеток) → кабели
+  function runs(cells) {
+    const out = []; let cur = null;
+    for (const [x, y] of cells) {
+      if (cur && cur.len < 12 && ((cur.dir === 'x' && y === cur.y && x === cur.x + cur.len) || (cur.dir === 'y' && x === cur.x && y === cur.y + cur.len) || (!cur.dir && ((y === cur.y && x === cur.x + 1) || (x === cur.x && y === cur.y + 1))))) {
+        if (!cur.dir) cur.dir = y === cur.y ? 'x' : 'y'; cur.len++; continue;
+      }
+      // идём назад по оси — начать новый отрезок с меньшей координаты
+      if (cur && cur.len < 12 && ((cur.dir !== 'y' && y === cur.y && x === cur.x - 1) || (cur.dir !== 'x' && x === cur.x && y === cur.y - 1))) {
+        cur.dir = y === cur.y ? 'x' : 'y'; if (cur.dir === 'x') cur.x = x; else cur.y = y; cur.len++; continue;
+      }
+      cur = { x, y, len: 1, dir: null }; out.push(cur);
+    }
+    return out.map((c) => ({ x: c.x, y: c.y, w: c.dir === 'y' ? 1 : c.len, h: c.dir === 'y' ? c.len : 1 }));
+  }
+  function lack(cost) { return cost.filter(([i, n]) => stockOf(i) < n).map(([i, n]) => [i, n, stockOf(i)]); }
+  // №112: opt.dry — только рассчитать место и проводку (ничего не строить); opt.at — поставить ровно сюда
+  function autoPlace(bpId, opt = {}) {
+    const b = bp(bpId); if (!b) return { ok: false, why: 'Нет такого чертежа' };
+    if (!S.unlocked.includes(bpId)) return { ok: false, why: 'Чертёж не изучен' };
+    const g = geom(), core = D().core.rooms[0], cx = core.x + core.w / 2, cy = core.y + core.h / 2;
+    if (b.kind === 'room') {
+      const sizes = b.size.short[0] === 1 ? [[1, 4], [4, 1]] : [[Math.max(4, b.size.short[0]), Math.max(4, b.size.long[0])]];
+      const H = hull(); let best = null, bd = 1e9;
+      for (const [w, h] of sizes) for (let y = H.y + 1; y + h <= H.y + H.h - 1; y++) for (let x = H.x + 1; x + w <= H.x + H.w - 1; x++) {
+        const d = Math.hypot(x + w / 2 - cx, y + h / 2 - cy); if (d >= bd) continue;
+        if (check({ bp: bpId, x, y, w, h }).ok) { bd = d; best = { x, y, w, h }; }
+      }
+      if (!best) return { ok: false, why: 'Нет места под помещение — расширьте корпус в «Науке»' };
+      const cost = costOf(b, best), miss = lack(cost);
+      if (miss.length) return { ok: false, miss };
+      const r = place({ bp: bpId, ...best }); return { ...r, cables: 0 };
+    }
+    // устройство: места в построенных помещениях, ближе к питанию; проводка — кратчайшая
+    let best = null;
+    if (opt.at) {
+      if (!check({ bp: bpId, ...opt.at, skipWire: true }).ok) return { ok: false, why: 'Сюда поставить нельзя — занято или вне помещения' };
+      const p = wirePath(opt.at); if (!p) return { ok: false, why: 'Отсюда нет пути для проводки к питанию' };
+      best = { ...opt.at, path: p };
+    }
+    const cand = [];
+    const dims = b.w === b.h ? [[b.w, b.h]] : [[b.w, b.h], [b.h, b.w]];
+    if (!best) {
+    for (const r of S.rooms.filter((q) => q.built)) for (const [w, h] of dims) for (let y = r.y; y + h <= r.y + r.h; y++) for (let x = r.x; x + w <= r.x + r.w; x++) {
+      if (check({ bp: bpId, x, y, w, h, skipWire: true }).ok) cand.push({ x, y, w, h, d: Math.hypot(x - cx, y - cy) });
+      if (cand.length > 120) break;
+    }
+    if (!cand.length) return { ok: false, why: 'Нет свободного места в помещениях — постройте ещё отсек' };
+    cand.sort((a, c) => a.d - c.d);
+    for (const c of cand.slice(0, 40)) {
+      const p = wirePath(c); if (!p) continue;
+      if (!best || p.length < best.path.length) best = { ...c, path: p };
+      if (best.path.length === 0) break;
+    }
+    if (!best) return { ok: false, why: 'Нет пути для проводки к источнику питания' };
+    }
+    const cab = runs(best.path), wires = cab.reduce((a, r) => a + Math.ceil((r.w * r.h) / bp('BLD-110').costPer.cells), 0);
+    const cost = costOf(b, best).map(([i, n]) => [i, n]);
+    if (wires) { const w = cost.find(([i]) => i === 'ITEM-003'); if (w) w[1] += wires; else cost.push(['ITEM-003', wires]); }
+    const miss = lack(cost);
+    if (opt.dry) return { ok: !miss.length, plan: { x: best.x, y: best.y, w: best.w, h: best.h }, cab, cells: best.path.length, cost, miss: miss.length ? miss : null };
+    if (miss.length) return { ok: false, miss };
+    for (const r of cab) place({ bp: 'BLD-110', ...r });
+    const res = place({ bp: bpId, x: best.x, y: best.y, w: best.w, h: best.h });
+    return { ...res, cables: cab.length, cells: best.path.length };
+  }
+
+  // №79: где показывать сетку стройки — только там, где можно что-то поставить:
+  // пол построенных помещений (устройства) и свободные клетки корпуса, куда может встать помещение
+  function buildable() {
+    const g = geom(), H = hull(), out = [];
+    const near = (x, y) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < g.w && Y < g.h && (g.roomAt[Y * g.w + X] || roomCell(X, Y))) return true; } return false; };
+    const frameCells = new Set(); for (const r of S.rooms) if (!r.built) for (const [x, y] of cellsOf(r)) frameCells.add(y * g.w + x);
+    const roomCell = (x, y) => frameCells.has(y * g.w + x);
+    const res = D().reserved || [];
+    for (let y = H.y + 1; y < H.y + H.h - 1; y++) for (let x = H.x + 1; x < H.x + H.w - 1; x++) {
+      if (res.some((z) => x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h)) continue;
+      const k = y * g.w + x;
+      if (g.roomAt[k]) { out.push([x, y, 1]); continue; }          // внутри помещения
+      if (g.wall[k] || roomCell(x, y)) continue;                   // стена или каркас
+      if (!near(x, y)) out.push([x, y, 0]);                         // свободно под новое помещение
+    }
+    return out;
+  }
+
+  // ---------- №72: энергия и электросеть ----------
+  // Сеть — связанные кабели и всё, к чему они примыкают (устройства, реактор, батареи, турбины).
+  // Устройства друг через друга ток не передают — только кабелем.
+  let P = null;           // кэш сетей: { nets: [{ id, members:[uid] }], of: Map(uid → id) }
+  // №153: упрощённая стройка — готовые гнёзда, общее питание, постройка сразу
+  const SIMPLE = () => !!(D().simple && D().simple.on);
+  function networks() {
+    if (P) return P;
+    if (SIMPLE()) {                                    // одна сеть на всю капсулу: кабели не нужны
+      const members = S.devs.filter((d) => d.built && (par(d).draw || par(d).gen || par(d).battery)).map((d) => d.uid);
+      P = { nets: [{ id: 0, members }], of: new Map(members.map((u) => [u, 0])) };
+      return P;
+    }
+    const g = geom(), W = g.w;
+    const parent = new Map(), find = (a) => { while (parent.get(a) !== a) { parent.set(a, parent.get(parent.get(a))); a = parent.get(a); } return a; };
+    const union = (a, b) => { const x = find(a), y = find(b); if (x !== y) parent.set(x, y); };
+    const cells = new Map();                           // клетка → кабели
+    for (const c of S.cables) if (c.built) { parent.set(c.uid, c.uid); for (const [x, y] of rcells(c)) cells.set(y * W + x, [...(cells.get(y * W + x) || []), c.uid]); }
+    const devs = S.devs.filter((d) => d.built && (par(d).draw || par(d).gen || par(d).battery));
+    for (const d of devs) parent.set(d.uid, d.uid);
+    for (const [k, list] of cells) {
+      for (const u of list) union(list[0], u);
+      const x = k % W, y = (k / W) | 0;
+      for (const n of [k + 1, k + W]) if (cells.has(n) && (n !== k + 1 || (n % W) === x + 1)) union(list[0], cells.get(n)[0]);
+      void y;
+    }
+    for (const d of devs) {
+      for (let x = d.x - 1; x <= d.x + d.w; x++) for (let y = d.y - 1; y <= d.y + d.h; y++) {
+        const side = (x < d.x || x >= d.x + d.w) !== (y < d.y || y >= d.y + d.h);
+        if (!side) continue;
+        const list = cells.get(y * W + x); if (list) union(d.uid, list[0]);
+      }
+    }
+    const groups = new Map();
+    for (const u of parent.keys()) { const r = find(u); groups.set(r, [...(groups.get(r) || []), u]); }
+    const nets = [], of = new Map();
+    for (const members of groups.values()) { const id = nets.length; nets.push({ id, members }); for (const u of members) of.set(u, id); }
+    P = { nets, of };
+    return P;
+  }
+  // выработка генератора сейчас (турбина течения колеблется)
+  function genOf(d) {
+    const p = par(d), b = bp(d.bp);
+    if (!p.gen) return 0;
+    if (d.uid === 'reactor') return p.gen + fx('reactor');      // №74: разгон реактора
+    if (!b.wave) return p.gen;
+    const ph = (d.x * 7 + d.y * 13) % 17;
+    return p.gen * (0.55 + 0.45 * Math.sin((S.t / b.wave) * Math.PI * 2 + ph));
+  }
+  // есть ли у устройства сеть, которая может дать энергию (выработка или заряд батарей)
+  function canPower(d) {
+    const n = networks().of.get(d.uid); if (n == null) return false;
+    const st = (S.power || {}).nets && S.power.nets[n];
+    return !!st && (st.gen > 0.01 || st.store > 0.5);
+  }
+  function power(dt) {
+    const { nets } = networks();
+    const stats = [];
+    for (const net of nets) {
+      const ds = net.members.map(dev).filter(Boolean);
+      const gen = ds.reduce((a, d) => a + genOf(d), 0);
+      const bats = ds.filter((d) => par(d).battery);
+      const cap = bats.reduce((a, d) => a + par(d).battery, 0);
+      // кому нужна энергия прямо сейчас: станки, у которых работают; по приоритету (3 — высокий)
+      const want = ds.filter((d) => par(d).draw > 0 && d.crafter).sort((a, b) => (b.prio || 2) - (a.prio || 2));
+      let avail = gen * dt + bats.reduce((a, d) => a + (d.charge || 0), 0), used = 0, need = 0;
+      for (const d of want) {
+        const e = par(d).draw * dt; need += e;
+        if (avail + 1e-9 >= e) { d.powered = true; avail -= e; used += e; } else d.powered = false;
+      }
+      for (const d of ds) if (!want.includes(d)) d.powered = false;
+      // остаток — в батареи; нехватка — из батарей
+      let bal = gen * dt - used;
+      for (const d of bats) {
+        const c = d.charge || 0, room_ = par(d).battery - c;
+        if (bal > 0) { const k = Math.min(room_, bal); d.charge = c + k; bal -= k; } else if (bal < 0) { const k = Math.min(c, -bal); d.charge = c - k; bal += k; }
+      }
+      const store = bats.reduce((a, d) => a + (d.charge || 0), 0);
+      stats[net.id] = { gen, use: used / Math.max(dt, 1e-6), need: need / Math.max(dt, 1e-6), store, cap, short: need - used > 1e-6, members: net.members.length };
+    }
+    for (const d of S.devs) if (networks().of.get(d.uid) == null) d.powered = false;
+    S.power = { nets: stats };
+  }
+  // улучшить устройство: каркас улучшения — строители приносят материалы и работают; пока идёт — устройство стоит
+  function upgrade(uidX) {
+    const d = dev(uidX); if (!d || d.core || !d.built) return { ok: false, why: 'Улучшать можно построенное устройство' };
+    const L = bp(d.bp).levels || [], to = (d.lvl || 1) + 1;
+    if (to > L.length) return { ok: false, why: 'Уже наивысший уровень' };
+    if (L[to - 1].tech && !S.tech.done.includes(L[to - 1].tech)) return { ok: false, why: `Нужно исследование «${techName(L[to - 1].tech)}»` };
+    d.baseNeed = d.need; d.upTo = to; d.built = false; d.need = L[to - 1].up.map(([i, n]) => [i, n]); d.got = {}; d.work = L[to - 1].work; d.seq = ++S.seq;
+    d.crafter = null;
+    for (const w of Object.values(S.crew)) if (w.task && w.task.kind === 'craft' && JSON.stringify(w.task).includes(`"${d.uid}"`)) abort(w);
+    dirty();
+    return { ok: true };
+  }
+  function setPrio(uidX, p) { const d = dev(uidX); if (d) d.prio = Math.max(1, Math.min(3, p)); }
+
+  // ---------- №74: исследования ----------
+  const TECH = () => AB.BASE_TECH;
+  const techOf = (id) => TECH().find((t) => t.id === id) || {};
+  const techName = (id) => techOf(id).name || id;
+  function fx(key) { if (!S || !S.tech) return 0; let n = 0; for (const id of S.tech.done) n += (techOf(id).fx || {})[key] || 0; return n; }
+  // каждое изученное делает следующее дороже: всё дерево не открыть — приходится выбирать направление
+  const techK = () => 1 + D().techEscalation * S.tech.done.length;
+  function techCost(id) { const t = techOf(id), k = techK(); return { cost: (t.cost || []).map(([i, n]) => [i, Math.ceil(n * k)]), work: Math.round(t.work * k) }; }
+  function techState(id) {
+    const t = techOf(id);
+    if (S.tech.done.includes(id)) return { s: 'done' };
+    if (S.tech.cur && S.tech.cur.id === id) return { s: 'cur' };
+    const miss = (t.req || []).filter((q) => !S.tech.done.includes(q));
+    if (miss.length) return { s: 'locked', why: `Сначала: ${miss.map(techName).join(', ')}` };
+    return { s: 'open' };
+  }
+  // сколько материала на базе для исследований: стеллажи + приёмник + шкафчики
+  function stockOf(item) { let n = S.pile[item] || 0; for (const d of racks()) if (d.mat === item) n += d.n; return n + ext.count(item); }
+  function spend(item, n) {
+    for (const d of racks()) if (n > 0 && d.mat === item) { const k = Math.min(n, d.n); d.n -= k; n -= k; }
+    if (n > 0 && S.pile[item]) { const k = Math.min(n, S.pile[item]); S.pile[item] -= k; n -= k; }
+    if (n > 0) n -= ext.take(item, n);
+    return n <= 0;
+  }
+  function research(id) {
+    const st = techState(id);
+    if (st.s === 'done') return { ok: false, why: 'Уже изучено' };
+    if (st.s === 'locked') return { ok: false, why: st.why };
+    if (S.tech.cur) return { ok: false, why: `Уже идёт: ${techName(S.tech.cur.id)}` };
+    const { cost, work } = techCost(id);
+    const lack = cost.filter(([i, n]) => stockOf(i) < n);
+    if (lack.length) return { ok: false, why: `Не хватает: ${lack.map(([i, n]) => `${nm(i)} ${stockOf(i)}/${n}`).join(', ')}` };
+    for (const [i, n] of cost) spend(i, n);
+    S.tech.cur = { id, left: work, total: work };
+    emit('base:tech', { id, start: true });
+    return { ok: true };
+  }
+  function finishTech() {
+    const id = S.tech.cur.id, t = techOf(id);
+    S.tech.done.push(id); S.tech.cur = null;
+    for (const b of (t.unlock || {}).bp || []) if (!S.unlocked.includes(b)) S.unlocked.push(b);
+    for (const g of (t.unlock || {}).grid || []) if (!S.grids.includes(g)) S.grids.push(g);
+    G = null; P = null;
+    dirty();
+    emit('base:tech', { id, done: true, name: t.name });
+  }
+
+  // ---------- время ----------
+  function tick(dt) {
+    if (!S) return;
+    S.t += dt;
+    if (ext.deposit && !catching) S.dep = ext.deposit();   // №74: у какой россыпи стоит капсула (на карте дна)
+    power(dt);
+    const present = ext.present && !catching ? ext.present() : S.present;   // при досчёте — кто был на базе, когда игрок ушёл
+    S.present = present;
+    for (const w of Object.values(S.crew)) if (!present.includes(w.id) && !w.away) { w.away = true; if (w.task) abort(w); }
+    for (const id of present) {
+      const w = worker(id);
+      if (w.away) { w.away = false; const p = D().core.enter; w.x = p.x; w.y = p.y; w.task = null; w.wait = 0; }
+      // герой оказался на занятой клетке (поставили устройство) — шаг на свободную
+      if (!w.task && !walkable(Math.floor(w.x), Math.floor(w.y))) { const n = nearestWalk(Math.floor(w.x), Math.floor(w.y)); if (n) { w.x = n[0] + 0.5; w.y = n[1] + 0.5; } }
+      w.food = Math.max(0, (w.food ?? 100) - dt * 100 / FOOD().period);   // №73: сытость тает, пока герой на базе
+      stepWorker(w, dt);
+    }
+  }
+  // досчитать время, пока игрока не было (офлайн-ход): шагами по секунде
+  let catching = false;
+  function catchUp(secs) {
+    const n = Math.min(secs, D().catchupMax);
+    catching = true;
+    try { for (let t = 0; t < n; t += 1) tick(Math.min(1, n - t)); } finally { catching = false; }
+    return n;
+  }
+
+  // ---------- сохранение (сейчас — браузер; позже то же состояние хранит сервер) ----------
+  const store = { get() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }, set(v) { try { if (v == null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, v); } catch (e) { /* хранилище недоступно */ } } };
+  function save() { if (!S) return; S.savedAt = Date.now(); store.set(JSON.stringify(S)); }
+  function load() {
+    let raw = null;
+    try { raw = JSON.parse(store.get()); } catch (e) { raw = null; }
+    if (!raw || raw.v !== 1) return 0;
+    S = raw; G = null; P = null;
+    migrate();
+    const away = Math.max(0, (Date.now() - (S.savedAt || Date.now())) / 1000);
+    const done = catchUp(away);
+    dirty();
+    return done;
+  }
+  // старые сохранения (до №72): кабелей и реактора не было
+  function migrate() {
+    S.cables = S.cables || [];
+    // №79: три помещения ядра → один открытый трюм; убранная обстановка освобождает клетки
+    if (S.rooms.some((r) => r.uid === 'core-cab')) {
+      S.rooms = S.rooms.filter((r) => !r.uid.startsWith('core-'));
+      S.rooms.unshift({ ...D().core.rooms[0], bp: null, core: true, built: true });
+      for (const d of S.devs) if (d.room && d.room.startsWith('core-')) d.room = 'core';
+    }
+    S.grids = S.grids || AB.BaseGrids.all().filter((g) => g.start).map((g) => g.id);
+    S.tech = S.tech || { done: [], cur: null };
+    for (const b of D().blueprints) if (b.start && !S.unlocked.includes(b.id)) S.unlocked.push(b.id);   // новые стартовые чертежи
+    S.unlocked = S.unlocked.filter((id) => { const b = bp(id); return b && (b.start || S.tech.done.some((t) => (techOf(t).unlock || {}).bp && techOf(t).unlock.bp.includes(id))); });
+    for (const d of S.devs) { if (!d.core && !d.lvl) d.lvl = 1; if (!d.core && !d.prio) d.prio = 2; }
+    if (!dev('reactor')) S.devs.push({ uid: 'reactor', bp: 'BLD-104', core: true, ...D().core.reactor, built: true, lvl: 1 });
+    // №194: трюм по картинке — перенос со старого длинного трюма: ядро, приёмник, реактор, устройства с прежних мест на места с теми же номерами
+    const core0 = D().core.rooms[0], cr = S.rooms.find((r) => r.uid === 'core');
+    if (cr && (cr.w !== core0.w || cr.h !== core0.h)) {
+      Object.assign(cr, { x: core0.x, y: core0.y, w: core0.w, h: core0.h });
+      const pl = dev('pile'), rc = dev('reactor'); if (pl) Object.assign(pl, D().core.pile); if (rc) Object.assign(rc, D().core.reactor);
+      const OLD = D().simple.slotsOld || [], NEW = D().simple.slots;
+      for (const d of S.devs) {
+        if (d.core) continue;
+        const o = OLD.find((q) => d.x >= q.x && d.x < q.x + 2 && d.y >= q.y && d.y < q.y + 2), n = o && NEW.find((q) => q.id === o.id);
+        if (n) { d.x = n.x; d.y = n.y; } else { const free = NEW.find((q) => !S.devs.some((e) => e !== d && e.x === q.x && e.y === q.y)); if (free) { d.x = free.x; d.y = free.y; } }
+      }
+      for (const w of Object.values(S.crew || {})) if (w && w.x != null) { w.x = D().core.enter.x; w.y = D().core.enter.y; }
+    }
+  }
+  // база появляется, когда капсулу отстыковали; если сохранение есть — досчитать отсутствие
+  function ensure() {
+    if (S) return S;
+    if (!load() && !S) {
+      S = fresh();
+      for (const [i, n] of D().starter || []) ext.give(i, n);      // ремкомплект капсулы — в шкафчики экипажа
+      S.starter = true;
+      dirty();
+      emit('base:new', {});
+    }
+    return S;
+  }
+
+  return {
+    ensure, tick, catchUp, save, load, reset() { S = null; G = null; store.set(null); },
+    setExt(e) { ext = { ...ext, ...e }; },
+    insOf, eff, hull, fx, buildable, autoPlace, research, techState, techCost, techName, stockOf, cellsOf, state: () => S, on: () => !!S, bp, room, dev, cable, obj, racks, frames, par, networks, upgrade, setPrio, canPower, genOf, geom, walkable, route, targetsOf, access,
+    check, place, modify, remove, assign, slots, slotBps, buildAt, simple: SIMPLE, workers, setJobs, worker, order, setRack, amount,
+    receive(item, n) { ensure(); S.pile[item] = (S.pile[item] || 0) + n; },
+    costOf, workOf,
+  };
+})();

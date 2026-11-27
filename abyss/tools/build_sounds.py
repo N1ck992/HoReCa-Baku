@@ -1,0 +1,100 @@
+# Использование: скачать наборы из assets/audio/CREDITS.txt (одиночные файлы — в dl/ и dl2/, архивы распаковать в x/ и x2/),
+# затем из этой папки: python3 <путь>/tools/build_sounds.py <путь>/assets/audio
+# Сборка звуков игры (№108): обрезка тишины, нарезка длинных записей по паузам, выравнивание громкости, моно MP3.
+import subprocess, numpy as np, os, json, sys
+SR = 44100; OUT = sys.argv[1]; os.makedirs(OUT, exist_ok=True)
+def load(f):
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', f, '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'], capture_output=True).stdout
+    return np.frombuffer(raw, np.float32).copy()
+def save(x, name, q=5):
+    p = OUT + '/' + name + '.mp3'
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'f32le', '-ar', str(SR), '-ac', '1', '-i', '-', '-c:a', 'libmp3lame', '-q:a', str(q), p], input=x.astype(np.float32).tobytes())
+    return os.path.getsize(p)
+def trim(x, db=-42):
+    th = np.abs(x).max() * 10 ** (db / 20); idx = np.nonzero(np.abs(x) > th)[0]
+    if not len(idx): return x
+    a = max(0, idx[0] - int(0.004 * SR)); b = min(len(x), idx[-1] + int(0.03 * SR)); return x[a:b]
+def fade(x, out=0.03, inn=0.003):
+    n = min(len(x), int(out * SR)); x[-n:] *= np.linspace(1, 0, n); m = min(len(x), int(inn * SR)); x[:m] *= np.linspace(0, 1, m); return x
+def norm(x, peak=-1.0, rms=None):
+    if rms is not None: x = x * (10 ** (rms / 20) / (np.sqrt((x ** 2).mean()) + 1e-9))
+    pk = np.abs(x).max() + 1e-9; lim = 10 ** (peak / 20)
+    if pk > lim: x = x * (lim / pk)
+    return x
+def split(x, db=-34, gap=0.12, minlen=0.35):
+    fr = int(0.02 * SR); e = np.array([np.sqrt((x[i:i + fr] ** 2).mean()) for i in range(0, len(x) - fr, fr)])
+    th = np.abs(x).max() * 10 ** (db / 20); on = e > th; segs = []; i = 0
+    while i < len(on):
+        if on[i]:
+            j = i
+            while j < len(on) and (on[j] or (j + int(gap / 0.02) < len(on) and on[j:j + int(gap / 0.02)].any())): j += 1
+            if (j - i) * 0.02 >= minlen: segs.append(x[max(0, i * fr - int(0.02 * SR)):min(len(x), j * fr + int(0.05 * SR))])
+            i = j
+        else: i += 1
+    return segs
+M = {}; total = 0
+def one(group, files, rms=-20, peak=-1, q=5, pre=None):
+    global total
+    M[group] = []
+    for k, f in enumerate(files):
+        x = load(f) if isinstance(f, str) else f
+        if pre: x = pre(x)
+        x = fade(norm(trim(x), peak, rms)); n = f'{group}_{k + 1}'; total += save(x, n, q); M[group].append(n)
+X = 'x/'
+one('step_metal', [X + f'metal_steps_48k24b/metal_steps_{i:02d}.wav' for i in (1, 2, 5, 6, 8, 13, 16, 17)], rms=-22)
+one('pipe_hit', [X + f'sfx_breaking_and_falling/bfh1_metal_hit_0{i}.ogg' for i in (2, 4, 6)], rms=-19)
+one('flesh_hit', [X + f'independent_nu_ljudbank-hits_and_punches/{d}' for d in []] or [os.path.join(r, f) for r, _, fs in os.walk(X + 'independent_nu_ljudbank-hits_and_punches') for f in fs if f in ('hit03.mp3.flac', 'hit09.mp3.flac', 'hit07.mp3.flac')], rms=-18)
+one('plasma_shot', [X + f'60-sci-fi-sfx_0/sfx_02{c}.ogg' for c in 'abcd'], rms=-19)
+one('plasma_hit', [X + f'60-sci-fi-sfx_0/sfx_15{c}.ogg' for c in 'abc'], rms=-20)
+C = X + '80-CC0-creature-SFX_0/'
+one('mutant_alert', [C + 'monster_03.ogg', C + 'monster_06.ogg', C + 'grunt_01.ogg'], rms=-17)
+one('mutant_attack', [C + 'roar_03.ogg', C + 'grunt_04.ogg', C + 'roar_01.ogg'], rms=-16)
+one('mutant_hurt', [C + 'hurt_03.ogg', C + 'hurt_05.ogg', C + 'grunt_02.ogg'], rms=-17)
+one('mutant_death', [C + 'monster_07.ogg', C + 'monster_04.ogg'], rms=-15)
+zm = [s for s in split(load('dl/darsycho__zombie-moans_0.ogg')) if 0.5 < len(s) / SR < 3.5][:6]; one('mutant_idle', zm, rms=-22)
+tr = [s for s in split(load('dl/troll-roars_0.ogg'), minlen=0.5) if 0.6 < len(s) / SR < 4][:4]; one('brute_roar', tr, rms=-14)
+one('boss_roar', [C + 'monster_04.ogg', C + 'roar_02.ogg'], rms=-13, pre=lambda x: np.interp(np.arange(0, len(x), 0.8), np.arange(len(x)), x).astype(np.float32))   # ниже на треть
+one('door', [X + 'yd-Sounds/yd-Sounds/door_open.ogg'], rms=-20)
+one('distant', [X + f'dark_ambiences/dark_ambiences/ambience-{i}.wav' for i in (1, 3, 5)], rms=-20)
+# зацикленные фоны: длиннее, качество пониже
+def loop(name, f, a=0, b=None, rms=-24):
+    global total
+    x = load(f); b = len(x) / SR if b is None else b; x = x[int(a * SR):int(b * SR)]
+    n = int(0.25 * SR); x[:n] = x[:n] * np.linspace(0, 1, n) + x[-n:] * np.linspace(1, 0, n); x = x[:-n]   # стык — перекрёстно
+    x = norm(x, -1, rms); total += save(x, name, 7); M[name] = [name]
+loop('amb_hum', X + 'sci-fi-sfx/loop_ambient_01.ogg', rms=-22)
+loop('amb_dark', 'dl/dungeon_ambient_1_0.ogg', 22, 70, rms=-26)
+loop('amb_drips', 'dl/atmosbasement.mp3_.flac', 1.5, 20, rms=-30)
+loop('amb_machine', X + 'sci-fi-sfx/loop_machine_02.ogg', rms=-24)
+
+# ---- №109: новые шаги (ботинки + шорох одежды), мир, интерфейс, меч ----
+Y = 'x2/'
+L = [load(Y + f'footsteps/footsteps/step_lth{i}.ogg') for i in (1, 2, 4, 33)]
+CL = [load(Y + f'footsteps/footsteps/step_cloth{i}.ogg') for i in (1, 2, 3, 4)]
+mix = []
+for i in range(8):
+    a = trim(L[i % 4]).copy(); b = trim(CL[(i * 3 + 1) % 4]); n = max(len(a), len(b)); m = np.zeros(n, np.float32); m[:len(a)] += a; m[:len(b)] += b * 0.45; mix.append(m)
+one('step_boot', mix, rms=-21)
+one('heavy_step', ['dl2/stomp.flac'], rms=-17)
+one('sword_swing', [Y + f'swishes/swishes/swish-{i}.wav' for i in (10, 11, 12, 13)], rms=-17)
+one('sword_hit', [Y + f'sword_-_starninjas_1/sword - StarNinjas/sword.{i}.ogg' for i in (3, 4, 6)], rms=-17)
+one('sword_clash', [Y + f'sword_clash_-_starninjas_0/sword_clash.{i}.ogg' for i in (2, 4)], rms=-17)
+one('cloth', [Y + f'footsteps/footsteps/step_cloth{i}.ogg' for i in (1, 2, 3, 4)], rms=-24)
+K = Y + 'kenney_interfaceSounds/Audio/'
+one('ui_click', [K + 'click_003.ogg', K + 'click_002.ogg'], rms=-22)
+one('ui_open', [K + 'open_001.ogg'], rms=-24)
+one('ui_close', [K + 'close_001.ogg'], rms=-24)
+one('ui_denied', [K + 'error_002.ogg'], rms=-21)
+one('quest_new', [K + 'confirmation_004.ogg'], rms=-19)
+one('quest_done', ['dl2/completetask_0.mp3'], rms=-19)
+one('reward', [Y + 'SoundPack01/Rise03.aif'], rms=-19)
+one('pickup', ['dl2/key-176034.mp3'], rms=-21)
+one('spark', ['dl2/continuousspark.wav', 'dl2/spark.wav'], rms=-21)
+one('alarm', ['dl2/alarm_0.ogg'], rms=-18)
+one('turret_shot', ['dl/burst%20fire_1.mp3'], rms=-20)
+one('grate_break', [X + 'sfx_breaking_and_falling/bfh1_metal_falling_01.ogg', X + 'sfx_breaking_and_falling/bfh1_metal_falling_02.ogg'], rms=-17)
+one('grate_fix', [X + 'metal_interactions/metal_interactions/metal_interaction1.wav', X + 'metal_interactions/metal_interactions/metal_interaction2.wav'], rms=-19)
+g = load('dl2/loop_generator_1.mp3')[:int(3.0 * SR)]; n = int(1.2 * SR); g[:n] *= np.linspace(0, 1, n) ** 2; one('power_on', [g], rms=-17)
+
+json.dump(M, open(OUT + '/sounds.json', 'w'), ensure_ascii=False, indent=0)
+print('файлов', sum(len(v) for v in M.values()), 'всего', total // 1024, 'КБ'); print({k: len(v) for k, v in M.items()})

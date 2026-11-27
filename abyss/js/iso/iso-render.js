@@ -1,0 +1,1166 @@
+// =====================================================================
+// ISO RENDER (этап 1 изометрии, дополнение №45). Изометрическая проекция
+// 2:1 в духе Diablo II: клетка 64×32 пикселя, стены и предметы — объёмные
+// 2D-блоки, персонажи — существующие составные фигуры (AB.Render.drawFigure).
+// Сетка на экран не выводится. Камера держит ведущего в центре,
+// приближение/отдаление, подстройка под размер экрана и плотность пикселей.
+// Стены и предметы, закрывающие отряд, становятся полупрозрачными.
+// =====================================================================
+
+AB.IsoRender = (() => {
+  const TW = 64, TH = 32, WALL_FULL = 86;
+  let WALL_H = WALL_FULL;                 // №79: в базе-капсуле стены низкие, чтобы не закрывать обзор
+  const ZMIN = 0.45, ZMAX = 2.2;
+  const FIG_K = 0.62;                 // масштаб фигур вида сбоку в изометрии
+  const U = AB.util;
+  let cv, ctx, lightCv, lctx, floorCv = null, floorOX = 0;
+  let dpr = 1, vw = 0, vh = 0;
+  const cam = { x: 0, y: 0, z: 1 };
+  let time = 0, snap = true;
+  const fade = new Map();             // ключ блока → текущая непрозрачность
+  let marker = null;                  // куда идёт ведущий
+
+  try { const z = parseFloat(localStorage.getItem('abyss_iso_zoom')); if (z >= ZMIN && z <= ZMAX) cam.z = z; } catch (e) { /* хранилище недоступно */ }
+
+  // мир (клетки) → экран (пиксели мира, до камеры)
+  const toScreen = (x, y) => ({ x: (x - y) * TW / 2, y: (x + y) * TH / 2 });
+  const toWorld = (sx, sy) => ({ x: sy / TH + sx / TW, y: sy / TH - sx / TW });
+
+  const PROP_LOOK = {
+    bunk: { h: 30, top: '#3b4048', l: '#2a2e35', r: '#22262c' },
+    locker: { h: 70, top: '#4a525c', l: '#343a42', r: '#2b3037' },
+    table: { h: 24, top: '#47423a', l: '#332f29', r: '#29261f' },
+    crate: { h: 40, top: '#5a4a32', l: '#433722', r: '#382e1c' },
+    shelf: { h: 64, top: '#44494f', l: '#30343a', r: '#272b30' },
+    algaetank: { h: 58, top: '#2f6b4a', l: '#1e4a33', r: '#173c29', glow: [90, 230, 130] },
+    algaefarm: { h: 34, top: '#3e5a44', l: '#2a3f2f', r: '#223427', glow: [120, 255, 160] },
+    pipe: { h: 76, top: '#5a5550', l: '#3d3935', r: '#33302c' },
+    pump: { h: 46, top: '#55504a', l: '#3b3732', r: '#312e2a' },
+    reservoir: { h: 66, top: '#2a4f52', l: '#1c383a', r: '#173032', glow: [80, 200, 190] },
+    cabindoor: { h: 84, top: '#3d3a33', l: '#4d473c', r: '#3a362e' },
+    cryopod: { h: 40, top: '#3c5560', l: '#2a3a42', r: '#223038' },
+    console: { h: 52, top: '#2d3640', l: '#38424c', r: '#2a323a' },
+    medbed: { h: 22, top: '#4a4f55', l: '#33373c', r: '#2a2e33' },
+    panel: { h: 70, top: '#3a3f45', l: '#4b4f52', r: '#3a3d40' },
+    cable: { h: 26, top: '#3c3630', l: '#2e2925', r: '#26221e' },
+    generator: { h: 64, top: '#4a4438', l: '#3a3428', r: '#2f2a20' },
+    fueltank: { h: 48, top: '#5a3a2a', l: '#46301f', r: '#3a2818' },
+    glass: { h: 90, top: 'rgba(120,200,230,.25)', l: 'rgba(120,200,230,.18)', r: 'rgba(120,200,230,.12)', edge: 'rgba(160,230,255,.4)' },
+    exorack: { h: 96, top: '#3a3f44', l: '#4a5058', r: '#383d44' },
+    // №55: мастерская, ангар, дно
+    bench: { h: 30, top: '#55504a', l: '#403b35', r: '#35312c' },
+    cocoon: { h: 46, top: '#8a7a98', l: '#5a4a66', r: '#463a52', glow: [190, 120, 255] },   // №118: кокон из органической массы
+    capsule: { h: 70, top: '#c9a24a', l: '#8a6e30', r: '#6e5726', glow: [255, 210, 120] },
+    rock: { h: 46, top: '#2a3438', l: '#1d2528', r: '#171e21' },
+    crystal: { h: 34, top: '#9a6cff', l: '#6a44c0', r: '#55369c', glow: [170, 110, 255] },
+    // №61: гнездо модуля в капсуле — пустое / с пристыкованным модулем
+    bay: { h: 14, top: '#2a2f34', l: '#202428', r: '#1a1d20' },
+    baybuilt: { h: 54, top: '#3e6a58', l: '#2c4c40', r: '#243f35', glow: [120, 255, 170] },
+    // №71: устройства конструктора базы
+    printer: { h: 62, top: '#4a5560', l: '#3a434c', r: '#2e353c', glow: [255, 170, 90] },
+    rack: { h: 74, top: '#5a5246', l: '#433d33', r: '#38322a' },
+    pile: { h: 18, top: '#5c4a36', l: '#463828', r: '#3a2e20' },
+    intake: { h: 66, top: '#2c4a56', l: '#203a44', r: '#1a3038', glow: [80, 200, 230] },
+    algae: { h: 50, top: '#2f6b4a', l: '#1e4a33', r: '#173c29', glow: [90, 230, 130] },
+    bioreactor: { h: 70, top: '#4a5a3a', l: '#38462c', r: '#2e3a24', glow: [170, 230, 90] },
+    terminal: { h: 64, top: '#2d3a4a', l: '#38465a', r: '#2a3444', glow: [120, 180, 255] },
+    drill: { h: 72, top: '#5a4a32', l: '#46392a', r: '#3a2e20', glow: [255, 170, 90] },
+    reactor: { h: 80, top: '#3a4a5a', l: '#2c3a48', r: '#24303c', glow: [150, 120, 255] },
+    battery: { h: 46, top: '#3c4a3a', l: '#2c3a2a', r: '#243024', glow: [120, 255, 140] },
+    turbine: { h: 58, top: '#3a4650', l: '#2c363e', r: '#242c33', glow: [94, 230, 255] },
+    devframe: { h: 10, top: 'rgba(94,230,255,.25)', l: 'rgba(94,230,255,.18)', r: 'rgba(94,230,255,.12)', edge: 'rgba(94,230,255,.6)' },
+  };
+  const ROOM_TINT = {
+    'ROOM-002': [52, 48, 50], 'ROOM-005': [56, 54, 50], 'ROOM-013': [40, 56, 48],
+    'ROOM-014': [48, 46, 46], 'ROOM-015': [50, 48, 44], 'ROOM-016': [38, 50, 52],
+    'ROOM-001': [42, 50, 58], 'ROOM-011': [50, 46, 44], 'ROOM-003': [54, 50, 42], 'ROOM-012': [36, 44, 46],
+    'ROOM-008': [44, 52, 60], 'ROOM-007': [46, 54, 52], 'ROOM-006': [52, 50, 46], 'ROOM-009': [44, 48, 50], 'ROOM-010': [46, 50, 56],
+    'ROOM-004': [52, 50, 44], 'ROOM-017': [44, 50, 58], 'ROOM-018': [42, 48, 54], 'ROOM-019': [26, 38, 44], 'ROOM-024': [40, 38, 40],
+    'ROOM-025': [50, 52, 54], 'ROOM-026': [42, 44, 48],   // №71: помещения, построенные игроком
+  };
+
+  // №89: текстуры пола (вид сверху, бесшовные) — натягиваются на ромбы изометрии.
+  // Набор по помещению; без набора — прежняя ровная заливка ROOM_TINT. cells — сколько клеток на одну плитку текстуры.
+  const FLOOR_TEX = { F1: { src: 'assets/tiles/F1-a.jpg', cells: 4 } };
+  // решение автора: «Абисс» — один корабль, один общий пол на все его помещения (ROOM-001…018)
+  const ROOM_FLOOR = {};
+  for (let i = 1; i <= 18; i++) ROOM_FLOOR[`ROOM-${String(i).padStart(3, '0')}`] = 'F1';
+  // №91: стены корабля — W1 (вид спереди, бесшовно по горизонтали; низ картинки = пол) и верх стены WT
+  const WALL_TEX = { face: { src: 'assets/tiles/W1-a.jpg', cells: 2.5 }, top: { src: 'assets/tiles/WT-a.jpg', cells: 2 }, door: { src: 'assets/tiles/D1-a.jpg' }, grate: { src: 'assets/tiles/D2-a.png' }, exit: { src: 'assets/tiles/D3-a.jpg' } };   // №94: exit — проход/лифт D3 в стене   // №93: grate — решётка-баррикада D2   // №92: door — гермодверь D1
+  const SHIP_SECTORS = new Set(['SECTOR-001', 'SECTOR-002', 'SECTOR-003', 'SECTOR-004']);
+  const wallImg = {}, wallPat = {};
+  for (const [k, t] of Object.entries(WALL_TEX)) { const im = new Image(); im.onload = () => { wallImg[k] = im; }; im.src = t.src; }
+  const texImg = {};
+  for (const [k, t] of Object.entries(FLOOR_TEX)) {
+    const im = new Image(); im.onload = () => { texImg[k] = im; floorCv = null; }; im.src = t.src;
+  }
+
+  function init(canvas) {
+    cv = canvas; ctx = cv.getContext('2d');
+    lightCv = document.createElement('canvas'); lctx = lightCv.getContext('2d');
+    resize();
+    window.addEventListener('resize', resize);
+    AB.Bus.on('iso:world', () => { floorCv = null; snap = true; });
+  }
+  // №133: качество графики — разрешение холста (главная нагрузка на телефоне — число пикселей) и мелкие детали
+  const Q = { res: 2, rims: true, auto: false };
+  // №133: «Авто» — начинаем с 1,5 и подстраиваемся: кадр дольше 30 мс в среднем за 2 с — ниже (до 1), быстрее 15 мс 6 с — выше
+  const QA = { t: 0, n: 0, sum: 0, last: 0, steps: [1, 1.25, 1.5, 2] };
+  function autoQuality(now) {
+    if (!Q.auto) return;
+    const ms = QA.last ? now - QA.last : 16; QA.last = now;
+    if (ms > 200) return;                                // вкладка была в фоне
+    QA.sum += ms; QA.n++; QA.t += ms;
+    const avg = QA.sum / QA.n, i = QA.steps.indexOf(Q.res);
+    if (QA.t > 2000 && avg > 30 && i > 0) { Q.res = QA.steps[i - 1]; resize(); QA.t = QA.sum = QA.n = 0; }
+    else if (QA.t > 6000) { if (avg < 15 && i >= 0 && i < QA.steps.length - 1 && Q.res < Math.min(2, window.devicePixelRatio || 1)) { Q.res = QA.steps[i + 1]; resize(); } QA.t = QA.sum = QA.n = 0; }
+  }
+  function resize() {
+    dpr = Math.max(1, Math.min(Q.res, window.devicePixelRatio || 1));
+    vw = cv.clientWidth; vh = cv.clientHeight;
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+    lightCv.width = Math.ceil(cv.width / 2); lightCv.height = Math.ceil(cv.height / 2);
+  }
+  // на маленьких экранах чуть крупнее не надо — видно больше; на больших — ровно
+  const baseScale = () => dpr * U.clamp(Math.min(vw, vh) / 620, 0.62, 1.15);
+  const S = () => baseScale() * cam.z;
+
+  // экран (CSS-пиксели) → мир (клетки)
+  function pick(cx, cy) {
+    const r = cv.getBoundingClientRect();
+    const px = (cx - r.left) * dpr, py = (cy - r.top) * dpr;
+    return toWorld((px - cv.width / 2) / S() + cam.x, (py - cv.height / 2) / S() + cam.y);
+  }
+  // мир → экран (CSS-пиксели), для интерфейса и проверок
+  function screenOf(x, y) {
+    const p = toScreen(x, y);
+    return { x: ((p.x - cam.x) * S() + cv.width / 2) / dpr, y: ((p.y - cam.y) * S() + cv.height / 2) / dpr };
+  }
+
+  // ---------- Пол: один раз в отдельный холст (сетки не видно) ----------
+  function buildFloor() {
+    const { w, h } = AB.IsoWorld.size();
+    floorOX = h * TW / 2 + TW;
+    const c = document.createElement('canvas');
+    c.width = (w + h) * TW / 2 + TW * 2; c.height = (w + h) * TH / 2 + TH * 2;
+    const g = c.getContext('2d');
+    const rng = U.rng(17);
+    const diamond = (x, y, grow) => {
+      const p = toScreen(x, y), cx = p.x + floorOX, cy = p.y + TH / 2;
+      g.beginPath();
+      g.moveTo(cx, cy - TH / 2 - grow); g.lineTo(cx + TW / 2 + grow * 2, cy); g.lineTo(cx, cy + TH / 2 + grow); g.lineTo(cx - TW / 2 - grow * 2, cy);
+      g.closePath();
+      return { cx, cy };
+    };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = AB.IsoWorld.cell(x, y);
+      if (k !== AB.IsoWorld.FLOOR && k !== AB.IsoWorld.PROP && k !== AB.IsoWorld.DOOR) continue;
+      const t = ROOM_TINT[AB.IsoWorld.room(x + 0.5, y + 0.5)] || [48, 48, 48];
+      const v = (rng() - 0.5) * 6;
+      g.fillStyle = `rgb(${t[0] + v | 0},${t[1] + v | 0},${t[2] + v | 0})`;
+      diamond(x, y, 0.6); g.fill();
+    }
+    // №89: текстурные полы — один путь на набор, заливка узором в изометрической проекции
+    for (const [k, t] of Object.entries(FLOOR_TEX)) {
+      const im = texImg[k]; if (!im) continue;
+      g.beginPath(); let any = false;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const c = AB.IsoWorld.cell(x, y);
+        if (c !== AB.IsoWorld.FLOOR && c !== AB.IsoWorld.PROP && c !== AB.IsoWorld.DOOR) continue;
+        if (ROOM_FLOOR[AB.IsoWorld.room(x + 0.5, y + 0.5)] !== k) continue;
+        const p = toScreen(x, y), cx = p.x + floorOX, cy = p.y + TH / 2, gr = 0.6;
+        g.moveTo(cx, cy - TH / 2 - gr); g.lineTo(cx + TW / 2 + gr * 2, cy); g.lineTo(cx, cy + TH / 2 + gr); g.lineTo(cx - TW / 2 - gr * 2, cy); g.closePath();
+        any = true;
+      }
+      if (!any) continue;
+      const pat = g.createPattern(im, 'repeat'), s = t.cells / im.width;   // пиксель текстуры → доля клетки
+      pat.setTransform(new DOMMatrix([TW / 2 * s, TH / 2 * s, -TW / 2 * s, TH / 2 * s, floorOX, 0]));
+      g.fillStyle = pat; g.fill();
+      g.fillStyle = 'rgba(8,12,18,.22)'; g.fill();   // чуть темнее — под общую гамму корабля
+    }
+    // грязь, пятна, потёртости — крупнее клетки, чтобы сетка не читалась
+    for (let i = 0; i < w * h * 0.35; i++) {
+      const x = rng() * w, y = rng() * h;
+      if (AB.IsoWorld.cell(Math.floor(x), Math.floor(y)) !== AB.IsoWorld.FLOOR) continue;
+      const p = toScreen(x, y), cx = p.x + floorOX, cy = p.y, r = 8 + rng() * 40;
+      const gr = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+      const dark = rng() < 0.7;
+      gr.addColorStop(0, dark ? `rgba(0,0,0,${0.08 + rng() * 0.12})` : `rgba(255,240,220,${0.03 + rng() * 0.04})`);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.save(); g.translate(cx, cy); g.scale(1, 0.5); g.translate(-cx, -cy);
+      g.fillRect(cx - r, cy - r, r * 2, r * 2); g.restore();
+    }
+    // редкие швы палубных плит — длинными линиями, не по клеткам
+    g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 1;
+    for (let i = 0; i < w * h * 0.04; i++) {
+      const x = Math.floor(rng() * w), y = Math.floor(rng() * h), along = rng() < 0.5, len = 2 + Math.floor(rng() * 4);
+      if (AB.IsoWorld.cell(x, y) !== AB.IsoWorld.FLOOR) continue;
+      const a = toScreen(x, y), b = toScreen(x + (along ? len : 0), y + (along ? 0 : len));
+      g.beginPath(); g.moveTo(a.x + floorOX, a.y); g.lineTo(b.x + floorOX, b.y); g.stroke();
+    }
+    floorCv = c;
+  }
+
+  // ---------- Блоки: стена или часть предмета ----------
+  // №91: текстурная стена корабля. Грань — параллелограмм; текстура идёт вдоль стены,
+  // её низ совпадает с полом (у низкого бортика видна только жёлто-чёрная полоса плинтуса).
+  function wallTextured() { return wallImg.face && SHIP_SECTORS.has(AB.IsoGame.sector()); }
+  function pat(k) { if (!wallPat[k]) wallPat[k] = ctx.createPattern(wallImg[k], 'repeat'); return wallPat[k]; }
+  // №213: атмосфера корабля — детали на стенах: световые полосы, экраны, красные маячки, трубы, решётки вентиляции.
+  // Выбор детали — по хешу клетки (всегда одинаково). Светящееся (emis) рисуется после темноты — оно не гаснет.
+  const emis = [];
+  const ACC = [[255, 170, 80], [90, 220, 255], [255, 190, 110], [120, 235, 255]];
+  function wallDecor(x, y, hgt, faces, n, e, s, w) {
+    const h = (((x * 73856093) ^ (y * 19349663)) >>> 0) % 100;
+    if (h >= 54) return;
+    const useL = faces.l && (!faces.r || (h & 1)), A = useL ? w : s, B = useL ? s : e, dark = useL ? 0 : 0.18;
+    const P = (u, v) => ({ x: A.x + (B.x - A.x) * u, y: A.y + (B.y - A.y) * u - v * hgt });
+    const quad = (u0, u1, v0, v1) => [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)];
+    const fill = (q, col) => { ctx.fillStyle = col; ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill(); };
+    const cx = x + 0.5, cy = y + 0.5;
+    if (h < 16) {                                       // световая полоса под потолком
+      fill(quad(0.16, 0.84, 0.74, 0.86), '#0d0f12');
+      emis.push({ q: quad(0.2, 0.8, 0.77, 0.83), col: ACC[h % 2 ? 2 : 0], a: 0.95, cx, cy, r: 1.3 });
+    } else if (h < 24) {                                // экран терминала
+      fill(quad(0.26, 0.74, 0.36, 0.66), '#0b0d10');
+      emis.push({ q: quad(0.3, 0.7, 0.4, 0.62), col: ACC[1], a: 0.75, cx, cy, r: 1.1, scan: true });
+    } else if (h < 30) {                                // красный маячок
+      fill(quad(0.42, 0.58, 0.78, 0.9), '#160b0b');
+      emis.push({ q: quad(0.45, 0.55, 0.8, 0.88), col: [255, 60, 45], a: 1, cx, cy, r: 1, pulse: true });
+    } else if (h < 44) {                                // трубы вдоль стены
+      for (const u of [0.18, 0.27]) {
+        const a = P(u, 0.02), b = P(u, 0.98);
+        ctx.lineCap = 'butt'; ctx.strokeStyle = `rgba(30,33,38,${1 - dark})`; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.strokeStyle = 'rgba(140,150,160,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x - 1.5, a.y); ctx.lineTo(b.x - 1.5, b.y); ctx.stroke();
+      }
+      const j = P(0.225, 0.55); ctx.fillStyle = '#3a3f46'; ctx.fillRect(j.x - 6, j.y - 2, 12, 4);
+    } else {                                            // решётка вентиляции
+      const q = quad(0.25, 0.75, 0.12, 0.34); fill(q, '#0c0e11');
+      ctx.strokeStyle = 'rgba(90,98,108,.6)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 5; i++) { const a = P(0.27, 0.12 + i * 0.044), b = P(0.73, 0.12 + i * 0.044); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    }
+  }
+  // светящиеся детали — поверх темноты, с ореолом
+  function drawEmis() {
+    if (!emis.length) return;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const m of emis) {
+      const [r, g2, b] = m.col, a = m.a * (m.pulse ? 0.55 + 0.45 * Math.sin(time * 4 + m.cx) : 1) * (m.scan ? 0.85 + 0.15 * Math.sin(time * 9 + m.cy * 3) : 1);
+      ctx.fillStyle = `rgba(${r},${g2},${b},${a})`; ctx.beginPath(); m.q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill();
+      if (m.scan) { ctx.strokeStyle = `rgba(220,250,255,${a * 0.5})`; ctx.lineWidth = 0.8; for (let i = 1; i < 4; i++) { const t = i / 4, p0 = { x: m.q[0].x + (m.q[3].x - m.q[0].x) * t, y: m.q[0].y + (m.q[3].y - m.q[0].y) * t }, p1 = { x: m.q[1].x + (m.q[2].x - m.q[1].x) * t, y: m.q[1].y + (m.q[2].y - m.q[1].y) * t }; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p0.x + (p1.x - p0.x) * (0.3 + 0.5 * ((i * 37) % 7) / 7), p0.y + (p1.y - p0.y) * (0.3 + 0.5 * ((i * 37) % 7) / 7)); ctx.stroke(); } }
+      const c = m.q.reduce((o, p) => ({ x: o.x + p.x / 4, y: o.y + p.y / 4 }), { x: 0, y: 0 }), R = TW * 0.55 * m.r;
+      const gr = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R); gr.addColorStop(0, `rgba(${r},${g2},${b},${0.32 * a})`); gr.addColorStop(1, `rgba(${r},${g2},${b},0)`);
+      ctx.fillStyle = gr; ctx.fillRect(c.x - R, c.y - R, R * 2, R * 2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  function texBlock(x, y, hgt, alpha, faces) {
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    const im = wallImg.face, k = WALL_TEX.face.cells / im.width, vs = WALL_FULL / im.height, p = pat('face');
+    ctx.globalAlpha = alpha;
+    if (faces.l) {   // юго-западная грань: вдоль x
+      const o = toScreen(0, y + 1);
+      p.setTransform(new DOMMatrix([TW / 2 * k, TH / 2 * k, 0, vs, o.x, o.y - WALL_FULL]));
+      ctx.beginPath(); ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath();
+      ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.30)'; ctx.fill();
+    }
+    if (faces.r) {   // юго-восточная грань: вдоль y (в другую сторону) — темнее
+      const o = toScreen(x + 1, 0);
+      p.setTransform(new DOMMatrix([-TW / 2 * k, TH / 2 * k, 0, vs, o.x, o.y - WALL_FULL]));
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.closePath();
+      ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.50)'; ctx.fill();
+    }
+    if (hgt >= WALL_FULL * 0.9 && (faces.l || faces.r)) wallDecor(x, y, hgt, faces, n, e, s, w);   // №213
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath();
+    if (wallImg.top) {
+      const t = pat('top'), kt = WALL_TEX.top.cells / wallImg.top.width;
+      t.setTransform(new DOMMatrix([TW / 2 * kt, TH / 2 * kt, -TW / 2 * kt, TH / 2 * kt, 0, -hgt]));
+      ctx.fillStyle = t; ctx.fill(); ctx.fillStyle = 'rgba(6,9,14,.35)'; ctx.fill();
+    } else { ctx.fillStyle = WALL_LOOK.top; ctx.fill(); }
+    // №119: стены не сливаются с полом — светлая кромка по верху; низкий передний бортик — заметнее
+    if (Q.rims) { ctx.strokeStyle = hgt < 20 ? 'rgba(235,205,130,.75)' : 'rgba(200,215,225,.55)'; ctx.lineWidth = hgt < 20 ? 2 : 1.5; ctx.stroke(); }
+    if (Q.rims && (faces.l || faces.r)) {   // тёмная полоса у основания стены — граница с полом
+      ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2; ctx.beginPath();
+      if (faces.l) { ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); }
+      if (faces.r) { ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // №92: гермодверь D1 — одна картинка на всю ширину двери (3–4 клетки) по лицевой грани;
+  // при открытии створка уходит в пол: верх картинки едет вниз вместе с краем, ниже пола — не видно.
+  const DOOR_H = 74;
+  function texDoor(x, y, hgt, alpha, dr, faces, key = 'door') {
+    if (hgt < 0.5) return;
+    const see = key === 'grate';   // №93: решётка прозрачная — без затемняющей заливки, торца и верха
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    const im = wallImg[key], p = pat(key), len = dr.tiles.length, vs = DOOR_H / im.height, k = len / im.width;
+    const alongY = dr.axis !== 'y';   // axis 'x' — проход вдоль x, створка тянется вдоль y
+    const x0 = Math.min(...dr.tiles.map((t) => t[0])), y0 = Math.min(...dr.tiles.map((t) => t[1]));
+    ctx.globalAlpha = alpha;
+    const face = (pts, mat, shade) => {
+      p.setTransform(new DOMMatrix(mat));
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y); ctx.closePath();
+      ctx.fillStyle = p; ctx.fill(); if (!see) { ctx.fillStyle = `rgba(6,9,14,${shade})`; ctx.fill(); }
+    };
+    if (alongY && faces.r) {
+      const o = toScreen(x + 1, y0);
+      face([s, e, { x: e.x, y: e.y - hgt }, { x: s.x, y: s.y - hgt }], [TW / 2 * k, -TH / 2 * k, 0, vs, o.x - TW / 2 * len, o.y + TH / 2 * len - hgt], 0.38);
+    } else if (!alongY && faces.l) {
+      const o = toScreen(x0, y + 1);
+      face([w, s, { x: s.x, y: s.y - hgt }, { x: w.x, y: w.y - hgt }], [TW / 2 * k, TH / 2 * k, 0, vs, o.x, o.y - hgt], 0.2);
+    }
+    if (see) { ctx.globalAlpha = 1; return; }
+    // торец и верх створки — тёмная сталь
+    ctx.fillStyle = '#2a2e34';
+    if (alongY && faces.l) { ctx.beginPath(); ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.fill(); }
+    if (!alongY && faces.r) { ctx.fillStyle = '#1f2328'; ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = '#33373d';
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // №94: выход в стене (лифт, проход в другой сектор) — картинка D3 ровно на одну клетку по обеим граням
+  function texExit(x, y, alpha) {
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    const im = wallImg.exit, p = pat('exit'), k = 1 / im.width, vs = WALL_FULL / im.height, h = WALL_H;
+    ctx.globalAlpha = alpha;
+    const face = (pts, mat, shade) => {
+      p.setTransform(new DOMMatrix(mat));
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y); ctx.closePath();
+      ctx.fillStyle = p; ctx.fill(); ctx.fillStyle = `rgba(6,9,14,${shade})`; ctx.fill();
+    };
+    face([w, s, { x: s.x, y: s.y - h }, { x: w.x, y: w.y - h }], [TW / 2 * k, TH / 2 * k, 0, vs, w.x, w.y - WALL_FULL], 0.25);
+    face([s, e, { x: e.x, y: e.y - h }, { x: s.x, y: s.y - h }], [TW / 2 * k, -TH / 2 * k, 0, vs, s.x, s.y - WALL_FULL], 0.45);
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - h); ctx.lineTo(e.x, e.y - h); ctx.lineTo(s.x, s.y - h); ctx.lineTo(w.x, w.y - h); ctx.closePath();
+    ctx.fillStyle = '#23262b'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function block(x, y, hgt, look, alpha, faces) {
+    if (look === WALL_LOOK && wallTextured()) { texBlock(x, y, hgt, alpha, faces); return; }
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    ctx.globalAlpha = alpha;
+    if (faces.l) {   // юго-западная грань
+      ctx.fillStyle = look.l;
+      ctx.beginPath(); ctx.moveTo(w.x, w.y); ctx.lineTo(s.x, s.y); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.fill();
+    }
+    if (faces.r) {   // юго-восточная грань
+      ctx.fillStyle = look.r;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = look.top;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.fill();
+    if (look.edge) { ctx.strokeStyle = look.edge; ctx.lineWidth = 1; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  const WALL_LOOK = { top: '#23262b', l: '#3a3f47', r: '#2c3036', edge: 'rgba(255,255,255,.04)' };
+  const DOOR_LOOK = { top: '#4a4434', l: '#5a5240', r: '#463f30', edge: 'rgba(230,190,60,.35)' };
+  const EXIT_LOOK = { top: '#2a2f36', l: '#454c55', r: '#363c44', edge: 'rgba(94,230,255,.25)' };
+
+  // закрывает ли блок кого-то из отряда (он ближе к камере и перекрывает фигуру на экране)
+  function occludes(x, y, hgt, party) {
+    const c = toScreen(x + 0.5, y + 0.5);
+    for (const m of party) {
+      if (x + y + 1 <= m.x + m.y) continue;
+      const p = toScreen(m.x, m.y);
+      if (Math.abs(c.x - p.x) < TW * 0.9 && c.y + TH / 2 > p.y - 96 && c.y - hgt - TH / 2 < p.y) return true;
+    }
+    return false;
+  }
+  function alphaFor(key, hidden, dt) {
+    const cur = fade.has(key) ? fade.get(key) : 1;
+    const want = hidden ? 0.22 : 1;
+    const v = cur + (want - cur) * Math.min(1, dt * 9);
+    if (Math.abs(v - 1) < 0.01) fade.delete(key); else fade.set(key, v);
+    return v;
+  }
+
+  // ---------- Кадр ----------
+  const look = { x: 0, y: 0 }, LOOK = 3.2;   // №126: смещение камеры к прицелу, клеток
+
+  // ---------- №133: туман помещений — видно только то помещение, где отряд ----------
+  // Помещения без отряда тёмные: их стены, предметы, враги, свет и вспышки не рисуются (и кадр легче).
+  // Открытые (где отряд уже был) помнятся — по ним можно вести отряд с большой карты. Плавный переход.
+  // Нет тумана: в базе-капсуле, снаружи (на дне) и в секторах из одного помещения.
+  const fog = { a: new Map(), vis: new Set(), seen: new Set(), on: false, near: null, nearKey: '' };
+  function fogUpdate(dt, party) {
+    const W = AB.IsoWorld, lay = W.layout() || {};
+    const rooms = new Set((lay.areas || []).map((a) => a.room));
+    fog.on = !lay.outside && !document.body.classList.contains('in-base') && rooms.size > 1;
+    fog.vis.clear();
+    for (const m of party) { if (m.hidden) continue; const r = W.room(m.x, m.y); if (r) fog.vis.add(r); }
+    if (!fog.vis.size) { const l = AB.IsoParty.lead(), r = l && W.room(l.x, l.y); if (r) fog.vis.add(r); }
+    for (const r of fog.vis) fog.seen.add(r);
+    const k = Math.min(1, dt * 5);
+    for (const r of rooms) { const want = !fog.on || fog.vis.has(r) ? 0 : 1, cur = fog.a.has(r) ? fog.a.get(r) : want; fog.a.set(r, cur + (want - cur) * k); }
+    // клетки стен/дверей → помещения вокруг (кэш на сектор)
+    const key = `${lay.name}|${W.size().w}x${W.size().h}`;
+    if (fog.nearKey !== key) {
+      fog.nearKey = key; fog.near = new Map();
+      const { w, h } = W.size();
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const own = W.room(x + 0.5, y + 0.5); if (own) continue;
+        const set = new Set();
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const r = W.room(x + dx + 0.5, y + dy + 0.5); if (r) set.add(r); }
+        if (set.size) fog.near.set(y * w + x, [...set]);
+      }
+    }
+  }
+  const roomFog = (r) => (fog.on && r && fog.a.has(r) ? fog.a.get(r) : 0);
+  const roomShown = (r) => roomFog(r) < 0.95;
+  // клетка видна: её помещение видно; для стен и дверей — видно хоть одно соседнее помещение
+  function tileShown(x, y) {
+    if (!fog.on) return true;
+    const r = AB.IsoWorld.room(x + 0.5, y + 0.5);
+    if (r) return roomShown(r);
+    const near = fog.near && fog.near.get(y * AB.IsoWorld.size().w + x);
+    return !near || near.some(roomShown);
+  }
+  const pointShown = (x, y) => !fog.on || roomShown(AB.IsoWorld.room(x, y)) || tileShown(Math.floor(x), Math.floor(y));
+  function drawFog() {
+    if (!fog.on) return;
+    for (const a of AB.IsoWorld.layout().areas) {
+      const f = roomFog(a.room); if (f < 0.01) continue;
+      const p = [toScreen(a.x, a.y), toScreen(a.x + a.w, a.y), toScreen(a.x + a.w, a.y + a.h), toScreen(a.x, a.y + a.h)];
+      ctx.beginPath(); p.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath();
+      ctx.fillStyle = `rgba(3,3,5,${Math.min(1, f * 1.02)})`; ctx.fill();
+    }
+  }
+  function frame(dt) {
+    autoQuality(performance.now());
+    WALL_H = WALL_FULL;               // №80: передние стены теперь — бортик везде, задние снова в полный рост и в базе
+    time += dt;
+    if (AB.Render && AB.Render.tick) AB.Render.tick(dt);
+    if (!floorCv) buildFloor();
+    const party = AB.IsoParty.members(), l = AB.IsoParty.lead();
+    if (!l) return;
+    const fp = focusPt || l;                          // №68: в базе камера держит всю капсулу
+    // №126: целится — камера показывает больше пространства в сторону прицела (плавно)
+    const aimV = !focusPt && AB.IsoInput.aim ? AB.IsoInput.aim() : null, lk = U.clamp(dt * 3, 0, 1);
+    look.x += ((aimV ? aimV.x * LOOK : 0) - look.x) * lk; look.y += ((aimV ? aimV.y * LOOK : 0) - look.y) * lk;
+    const t = toScreen(fp.x + look.x, fp.y - 0.4 + look.y);
+    if (snap) { cam.x = t.x; cam.y = t.y; snap = false; }
+    cam.x = U.lerp(cam.x, t.x, 1 - Math.pow(0.002, dt));
+    cam.y = U.lerp(cam.y, t.y, 1 - Math.pow(0.002, dt));
+    const sc = S();
+    const fx = AB.IsoStory ? AB.IsoStory.fx : {};
+    if (fx.shake > 0) { cam.x += (Math.random() - 0.5) * fx.shakePower * 6; cam.y += (Math.random() - 0.5) * fx.shakePower * 6; }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#030305';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    emis.length = 0;                                     // №213: светящиеся детали стен — собираются за кадр
+    ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc);
+    ctx.imageSmoothingEnabled = true;
+
+    // пол (№194: в капсуле — картинка трюма вместо пола и стен)
+    const hold = AB.IsoGame.sector() === 'SECTOR-005' && AB.BaseView && AB.BaseView.holdArt ? AB.BaseView.holdArt(toScreen) : null;
+    if (hold) { ctx.save(); ctx.transform(...hold.m); ctx.drawImage(hold.img, 0, 0); ctx.restore(); }
+    else ctx.drawImage(floorCv, -floorOX, -TH / 2);
+    fogUpdate(dt, party);
+    drawFloorMarks();
+    if (AB.IsoReward) AB.IsoReward.drawGround(ctx, toScreen, time, AB.IsoInteract.targets().filter((t) => t.kind === 'item'));   // №81: лучи над наградой
+    drawMarker();
+    { const aim = AB.IsoInput.aim && AB.IsoInput.aim(), l = AB.IsoParty.lead();   // №124: линия прицела правого стика
+      if (aim && l) { const a0 = toScreen(l.x, l.y), b0 = toScreen(l.x + aim.x * 6, l.y + aim.y * 6);
+        ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,110,80,.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a0.x, a0.y - 34); ctx.lineTo(b0.x, b0.y - 34); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,110,80,.9)'; ctx.beginPath(); ctx.arc(b0.x, b0.y - 34, 4, 0, 7); ctx.fill(); ctx.restore(); } }
+    if (AB.IsoFX) AB.IsoFX.drawGround(ctx, toScreen);   // №111: пятна и красные зоны замаха
+    drawShafts(dt);                                     // №127: люки и решётки, из которых вылезли монстры
+    if (AB.IsoMiraP) AB.IsoMiraP.drawGround(ctx, toScreen);   // №123: бой с Мирой — зоны, разрядники, разлом
+
+    drawFog();                                          // №133: помещения без отряда — в темноте (поверх следов на полу)
+    // видимая область в клетках (с запасом на высоту стен)
+    const hw = cv.width / 2 / sc + TW * 2, hh = cv.height / 2 / sc + WALL_H + TH * 2;
+    const visible = (sx, sy) => Math.abs(sx - cam.x) < hw && sy - cam.y < hh && cam.y - sy < hh + WALL_H;
+
+    // всё объёмное — по глубине (x + y): дальнее раньше
+    const list = [];
+    const { w, h } = AB.IsoWorld.size();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = AB.IsoWorld.cell(x, y);
+      if (k !== AB.IsoWorld.WALL || exitWall(x, y) || hold) continue;
+      const c = toScreen(x + 0.5, y + 0.5);
+      if (!visible(c.x, c.y) || !tileShown(x, y)) continue;
+      list.push({ d: x + y + 1, k: 'w', x, y });
+    }
+    for (const p of AB.IsoWorld.props()) for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) {
+      const c = toScreen(x + 0.5, y + 0.5);
+      if (visible(c.x, c.y) && tileShown(x, y)) list.push({ d: x + y + 1, k: 'p', x, y, p });
+    }
+    for (const m of party) list.push({ d: m.x + m.y + 0.01, k: 'c', m });
+    for (const m of AB.IsoParty.npcs()) if (pointShown(m.x, m.y)) list.push({ d: m.x + m.y + 0.01, k: 'c', m, npc: true });
+    for (const e of AB.IsoEnemies.all()) { const c = toScreen(e.x, e.y); if (visible(c.x, c.y) && (e.story || pointShown(e.x, e.y))) list.push({ d: e.x + e.y + 0.005, k: 'e', e }); }
+    // двери сектора (створки), выходы в стене, предметы на полу
+    for (const dr of AB.IsoInteract.doors()) if (dr.anim > 0.03) for (const [x, y] of dr.tiles) if (tileShown(x, y)) list.push({ d: x + y + 1, k: 'd', x, y, dr });
+    for (const e of (hold ? [] : AB.IsoWorld.layout().exits || [])) if (!e.floor) {
+      const wx = e.x + (e.wall === 'w' ? -1 : e.wall === 'e' ? 1 : 0), wy = e.y + (e.wall === 'n' ? -1 : e.wall === 's' ? 1 : 0);
+      if (!fog.on || roomShown(e.room)) list.push({ d: wx + wy + 1.001, k: 'x', x: wx, y: wy, e });
+    }
+    const near = AB.IsoInteract.nearest(), hov = AB.IsoInteract.hovered();
+    hl = new Set([near && near.id, hov && hov.id]);
+    for (const t of AB.IsoInteract.targets()) if (t.kind === 'item' && pointShown(t.x, t.y)) list.push({ d: t.x + t.y, k: 'i', t });
+    // №57: турели оружейной и пушки в зале Колосса
+    const lay0 = AB.IsoWorld.layout(), ns0 = AB.IsoNest.state(), bs0 = AB.IsoBoss.state();
+    if (lay0.nest && lay0.nest.turrets) lay0.nest.turrets.forEach((g, i) => tileShown(g.x, g.y) && list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!ns0 && !!ns0.tur && ns0.tur[i].on, big: g.type === 'heavy' }));
+    if (lay0.boss) lay0.boss.cannons.forEach((g, i) => tileShown(g.x, g.y) && list.push({ d: g.x + g.y + 1, k: 'g', g, on: !!bs0 && bs0.on[i], big: true }));
+    list.sort((a, b) => a.d - b.d);
+
+    for (const o of list) {
+      if (o.k === 'w') {
+        // №80: передние (нижние, ближние к камере) стены не рисуем во весь рост — только низкий бортик,
+        // чтобы не закрывали обзор; задние стены — как раньше. Столкновения не меняются.
+        const W = AB.IsoWorld, fl = (x, y) => { const c = W.cell(x, y); return c === W.FLOOR || c === W.PROP || c === W.DOOR; };
+        const back = fl(o.x + 1, o.y) || fl(o.x, o.y + 1) || fl(o.x + 1, o.y + 1);
+        const hgt = back ? WALL_H : 7;
+        const hid = back && occludes(o.x, o.y, hgt, party);
+        const a = alphaFor(`w${o.x},${o.y}`, hid, dt);
+        block(o.x, o.y, hgt, WALL_LOOK, a, { l: W.cell(o.x, o.y + 1) !== W.WALL, r: W.cell(o.x + 1, o.y) !== W.WALL });
+      } else if (o.k === 'p') {
+        // №136: предметы-картинки (бак с водорослями) — один раз, на последней клетке предмета
+        const pim = PROP_IMG[o.p.kind];
+        if (pim && pim.im.complete && pim.im.naturalWidth) {
+          if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) drawPropImg(o.p, pim, alphaFor(`p${o.x},${o.y}`, occludes(o.x, o.y, pim.h, party), dt), !!(o.p.equip && hl.has(`equip:${o.p.equip}`)));
+          continue;
+        }
+        // №111: криокапсула — картинка (закрытая/открытая) вместо брусков; рисуется один раз, на последней клетке
+        if (o.p.kind === 'cryopod' && podImg.closed && podImg.closed.complete && podImg.closed.naturalWidth) {
+          if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) drawPod(o.p, alphaFor(`p${o.x},${o.y}`, occludes(o.x, o.y, 40, party), dt));
+          continue;
+        }
+        const look = o.p.bay && AB.IsoActs.built(o.p.bay) ? PROP_LOOK.baybuilt : PROP_LOOK[o.p.kind] || PROP_LOOK.crate;
+        const hid = occludes(o.x, o.y, look.h, party);
+        const a = alphaFor(`p${o.x},${o.y}`, hid, dt);
+        const inside = (xx, yy) => xx >= o.p.x && yy >= o.p.y && xx < o.p.x + o.p.w && yy < o.p.y + o.p.h;
+        block(o.x, o.y, look.h, look, a, { l: !inside(o.x, o.y + 1), r: !inside(o.x + 1, o.y) });
+        if ((o.p.equip && hl.has(`equip:${o.p.equip}`)) || (o.p.container && [...hl].some((h) => h && h.startsWith('box:') && h.endsWith(`:${o.p.container}`)))) outlineTop(o.x, o.y, look.h);
+        if (o.p.kind === 'cryopod') podGlass(o.x, o.y, look.h, o.p);
+        // подпись заглушки: ID картинки или вид предмета — на первой клетке предмета
+        if (o.x === o.p.x + o.p.w - 1 && o.y === o.p.y + o.p.h - 1) propTag(o.p, look);
+      } else if (o.k === 'd') {
+        const hid = occludes(o.x, o.y, 74, party);
+        const a = alphaFor(`d${o.x},${o.y}`, hid, dt);
+        const dr = o.dr, along = (xx, yy) => dr.tiles.some(([tx, ty]) => tx === xx && ty === yy);
+        const grate = dr.barricade && dr.state === 'closed';   // №59: решётка — сквозь неё видно
+        if (grate && wallImg.grate && wallTextured()) texDoor(o.x, o.y, 74 * o.dr.anim, a, dr, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) }, 'grate');
+        else if (wallImg.door && wallTextured()) texDoor(o.x, o.y, 74 * o.dr.anim, grate ? a * 0.35 : a, dr, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
+        else block(o.x, o.y, 74 * o.dr.anim, DOOR_LOOK, grate ? a * 0.35 : a, { l: !along(o.x, o.y + 1), r: !along(o.x + 1, o.y) });
+        if (grate && !(wallImg.grate && wallTextured())) {
+          const b0 = toScreen(o.x + 0.5, o.y), b1 = toScreen(o.x + 0.5, o.y + 1);
+          ctx.strokeStyle = 'rgba(190,190,180,.85)'; ctx.lineWidth = 2;
+          for (let i = 0; i <= 4; i++) { const t = i / 4, x = b0.x + (b1.x - b0.x) * t, y = b0.y + (b1.y - b0.y) * t; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 70); ctx.stroke(); }
+          ctx.beginPath(); ctx.moveTo(b0.x, b0.y - 35); ctx.lineTo(b1.x, b1.y - 35); ctx.moveTo(b0.x, b0.y - 68); ctx.lineTo(b1.x, b1.y - 68); ctx.stroke();
+        }
+        if (o.x === dr.tiles[dr.tiles.length - 1][0] && o.y === dr.tiles[dr.tiles.length - 1][1]) doorLamp(dr);
+      } else if (o.k === 'x') {
+        const a = alphaFor(`w${o.x},${o.y}`, occludes(o.x, o.y, WALL_H, party), dt);
+        if (wallImg.exit && wallTextured()) texExit(o.x, o.y, a); else block(o.x, o.y, WALL_H, EXIT_LOOK, a, { l: true, r: true });
+        exitLamp(o.e, o.x, o.y);
+      } else if (o.k === 'i') drawItem(o.t);
+      else if (o.k === 'g') drawGun(o.g, o.on, o.big);
+      else if (o.k === 'e') drawEnemy(o.e);
+      else drawMember(o.m, o.m === l && !o.npc);
+    }
+
+    drawTrueForm(fx);
+    updateFx(dt);
+    drawFx();
+    if (AB.IsoReward) AB.IsoReward.drawFx(ctx, toScreen, dt);   // №81: вспышка награды
+    if (AB.IsoFX) AB.IsoFX.draw(ctx, toScreen);                 // №111: брызги, искры, след рывка
+    lighting(sc, party);
+    for (const m of party) if (!m.hidden) nameTag(m, m === l);
+    for (const m of AB.IsoParty.npcs()) if (!m.hidden && pointShown(m.x, m.y)) nameTag(m, false);
+    beacons();
+    defenseMarks();
+    overlays(fx);
+    for (const e of AB.IsoEnemies.all()) if (e.story || pointShown(e.x, e.y)) enemyBar(e);
+    if (AB.BaseView) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.BaseView.drawTop(ctx, toScreen, time); }   // №71: станки, склады, груз
+    if (AB.IsoCompanion) { ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); AB.IsoCompanion.draw(ctx, toScreen, time); }   // №85: дрон-спутник
+    if (AB.IsoFX) { ctx.setTransform(1, 0, 0, 1, 0, 0); AB.IsoFX.draw2d(ctx, cv.width, cv.height); }   // №111: красная кромка при ранении
+  }
+
+  // №57: турель / пушка — тумба со стволом; включена — светится и смотрит на ближайшего врага
+  function drawGun(g, on, big) {
+    const c = toScreen(g.x + 0.5, g.y + 0.5), h = big ? 34 : 22;
+    block(g.x, g.y, h, { h, top: on ? '#4a5a52' : '#3a3f44', l: '#2e3338', r: '#25292d' }, 1, { l: true, r: true });
+    let ang = -0.6;
+    const foe = AB.IsoEnemies.alive().sort((a, b) => Math.hypot(a.x - g.x, a.y - g.y) - Math.hypot(b.x - g.x, b.y - g.y))[0];
+    if (on && foe) { const f = toScreen(foe.x, foe.y); ang = Math.atan2(f.y - (c.y - h), f.x - c.x); }
+    ctx.save(); ctx.translate(c.x, c.y - h - 4); ctx.rotate(ang);
+    ctx.fillStyle = on ? '#9adbb0' : '#5a6066'; ctx.fillRect(0, -3, big ? 30 : 20, big ? 7 : 5);
+    ctx.restore();
+    ctx.fillStyle = on ? 'rgba(120,255,170,.95)' : 'rgba(255,90,60,.8)';
+    ctx.beginPath(); ctx.arc(c.x, c.y - h - 4, big ? 6 : 4, 0, 7); ctx.fill();
+  }
+  // приёмник биоматериала на полу: кольцо с подписью
+  function drawPad(p, text, col) {
+    const c = toScreen(p.x, p.y), a = 0.5 + Math.sin(time * 4) * 0.25;
+    ctx.strokeStyle = `rgba(${col},${a})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, 22, 11, 0, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, 12, 6, 0, 0, 7); ctx.stroke();
+    ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(${col},.95)`;
+    ctx.fillText(text, c.x, c.y + 26);
+  }
+  function defenseMarks() {
+    const L = AB.IsoWorld.layout(), ns = AB.IsoNest.state(), bs = AB.IsoBoss.state();
+    if (ns && !ns.over && L.nest) {
+      const carry = AB.IsoStash.count('ITEM-007'), ld = AB.IsoParty.lead();
+      // Марк несёт: светящийся мешок над плечом
+      if (ld && carry) {
+        const c = toScreen(ld.x, ld.y), a = 0.7 + Math.sin(time * 6) * 0.2;
+        ctx.fillStyle = `rgba(120,255,170,${a * 0.35})`; ctx.beginPath(); ctx.arc(c.x - 10, c.y - 70, 13, 0, 7); ctx.fill();
+        ctx.fillStyle = `rgba(80,190,110,${a})`; ctx.beginPath(); ctx.ellipse(c.x - 10, c.y - 70, 8, 7, 0, 0, 7); ctx.fill();
+        ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#c6ffd8'; ctx.fillText(`${carry}/${AB.IsoNest.RULES.carryMax}`, c.x - 10, c.y - 82);
+      }
+      // прочность турелей
+      if (ns.tur) L.nest.turrets.forEach((g, i) => {
+        const t = ns.tur[i], T = AB.IsoNest.RULES.turretTypes[t.type], p = toScreen(g.x + 0.5, g.y + 0.5), w = 30;
+        if (t.on) {
+          ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(p.x - w / 2, p.y - 58, w, 4);
+          ctx.fillStyle = t.hitT ? '#ff6a4a' : '#7fe6a2'; ctx.fillRect(p.x - w / 2, p.y - 58, w * t.hp / T.hp, 4);
+        } else {
+          // №84: сюда нести биоматериал — кольцо у турели и сколько ещё нужно
+          drawPad({ x: g.x + 0.5, y: g.y + 0.5 }, `${t.broken ? 'Разрушена · ' : ''}био ${t.bank}/${T.cost}`, carry ? '120,255,170' : '200,200,200');
+        }
+      });
+    }
+    if (bs && L.boss) L.boss.cannons.forEach((c, i) => { if (!bs.on[i]) drawPad(c.pad, `Пушка ${bs.bank[i]}/${L.boss.cost}`, '255,200,90'); });
+    // прочность дверей лаборатории
+    for (const d of AB.IsoInteract.doors()) {
+      if (!d.barricade || !ns) continue;
+      const [x, y] = d.tiles[0], p = toScreen(x + 0.5, y + 0.5), w = 34, f = d.hp / d.max;
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(p.x - w / 2, p.y - 92, w, 5);
+      ctx.fillStyle = d.state === 'broken' ? '#444' : f > 0.5 ? '#e0b640' : f > 0.25 ? '#ff8a3a' : '#ff3b2f';
+      ctx.fillRect(p.x - w / 2, p.y - 92, w * f, 5);
+      if (d.hitT) { ctx.fillStyle = 'rgba(255,80,40,.5)'; ctx.fillRect(p.x - w / 2, p.y - 92, w, 5); }
+      if (d.state === 'broken') { ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ff6a4a'; ctx.fillText('ВЫБИТА', p.x, p.y - 96); }
+    }
+  }
+
+  // Метки того, с чем можно что-то сделать (№55): поверх темноты — чтобы не пройти мимо.
+  // Предметы на полу и не обысканные тайники — жёлтый ромб и луч света; оружие — ярче и с названием;
+  // оборудование, которое ещё не готово, — голубой ромб; запертая дверь, которую можно взломать, — тоже.
+  function beacons() {
+    const l = AB.IsoParty.lead();
+    for (const t of AB.IsoInteract.targets()) {
+      let col = null, big = false, text = null;
+      if (t.kind === 'item') { const d = AB.ID.get(t.ref.item); col = d.weapon ? '255,200,90' : '255,214,120'; big = !!d.weapon || d.category === 'key'; text = big ? d.name : null; }
+      else if (t.kind === 'container') { if (AB.Rooms.isSearched(t.room, t.ref.key)) continue; const loot = t.ref.loot || []; big = loot.some(([i]) => AB.ID.get(i).weapon); col = big ? '255,200,90' : '255,214,120'; text = big ? t.name : null; }
+      else if (t.kind === 'equip') { if (AB.Equip.state(t.ref.id) === 'done' || t.ref.hidden) continue; col = '94,230,255'; }
+      else if (t.kind === 'bay') { const on = AB.IsoActs.built(t.ref.id), can = AB.IsoActs.canBuild(t.ref.id); col = on ? '120,255,170' : can ? '94,230,255' : '150,150,150'; big = true; text = `${t.name}${on ? '' : can ? ' — можно пристыковать' : ' — нужны ресурсы'}`; }
+      else if (t.kind === 'pilot' || t.kind === 'stash') { col = '94,230,255'; text = t.name; }
+      else if (t.kind === 'door' && t.ref.def.hack && t.ref.state !== 'open' && !t.ref.hacked && !AB.IsoNest.state()) { col = '94,230,255'; big = true; text = t.ref.def.name; }
+      else continue;
+      const p = toScreen(t.x, t.y), far = Math.hypot(t.x - l.x, t.y - l.y);
+      if (far > 22 || !pointShown(t.x, t.y)) continue;   // №133: в тёмных помещениях маячков не видно
+      const lift = t.kind === 'item' ? 26 : 62, bob = Math.sin(time * 3 + t.x) * 3, a = 0.55 + Math.sin(time * 4 + t.y) * 0.25;
+      // луч
+      const g = ctx.createLinearGradient(0, p.y - lift - 30, 0, p.y);
+      g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(1, `rgba(${col},${big ? 0.32 : 0.18})`);
+      ctx.fillStyle = g; ctx.fillRect(p.x - (big ? 7 : 4), p.y - lift - 30, big ? 14 : 8, lift + 30);
+      // ромб
+      const r = big ? 7 : 5, y = p.y - lift + bob;
+      ctx.fillStyle = `rgba(${col},${a})`; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.x, y - r); ctx.lineTo(p.x + r * 0.75, y); ctx.lineTo(p.x, y + r); ctx.lineTo(p.x - r * 0.75, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+      if (text) {
+        ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillText(text, p.x + 1, y - r - 5);
+        ctx.fillStyle = `rgba(${col},.95)`; ctx.fillText(text, p.x, y - r - 6);
+      }
+    }
+  }
+
+  // Портрет по пояс для окна диалога (№55): та же составная фигура, крупно, видна верхняя половина
+  function portrait(cv2, id, facing, dim) {
+    const r = cv2.getBoundingClientRect(), dp = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(r.width * dp), h = Math.round(r.height * dp);
+    if (!w || !h) return;
+    if (cv2.width !== w || cv2.height !== h) { cv2.width = w; cv2.height = h; }
+    const c2 = cv2.getContext('2d');
+    c2.setTransform(1, 0, 0, 1, 0, 0); c2.clearRect(0, 0, w, h);
+    const m = AB.IsoParty.find(id);
+    const fig = { ...(m || { id, x: 0, y: 0 }), facing, hidden: false, down: false, path: null };
+    const k = (h / dp) / 72;                     // видно примерно до пояса
+    c2.setTransform(dp, 0, 0, dp, 0, 0);
+    if (AB.Render && AB.Render.drawFigure) {
+      try { AB.Render.drawFigure(c2, fig, w / dp / 2, 4 + 126 * k * 0.98, k); } catch (e) { /* фигуры нет — пустой портрет */ }
+    }
+    // снизу — растворение в окно диалога
+    c2.setTransform(1, 0, 0, 1, 0, 0);
+    c2.globalCompositeOperation = 'destination-out';
+    const g = c2.createLinearGradient(0, h * 0.62, 0, h);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+    c2.fillStyle = g; c2.fillRect(0, 0, w, h);
+    c2.globalCompositeOperation = 'source-over';
+  }
+
+  let hl = new Set();
+  let focusPt = null;
+  function exitWall(x, y) {
+    for (const e of AB.IsoWorld.layout().exits || []) {
+      if (e.floor) continue;
+      const wx = e.x + (e.wall === 'w' ? -1 : e.wall === 'e' ? 1 : 0), wy = e.y + (e.wall === 'n' ? -1 : e.wall === 's' ? 1 : 0);
+      if (wx === x && wy === y) return true;
+    }
+    return false;
+  }
+  function outlineTop(x, y, hgt) {
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    ctx.strokeStyle = `rgba(94,230,255,${0.55 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt); ctx.lineTo(e.x, e.y - hgt); ctx.lineTo(s.x, s.y - hgt); ctx.lineTo(w.x, w.y - hgt); ctx.closePath(); ctx.stroke();
+  }
+  // порог открытой двери, люки в полу, подсветка выходов
+  function drawFloorMarks() {
+    for (const dr of AB.IsoInteract.doors()) for (const [x, y] of dr.tiles) {
+      const a = toScreen(x + (dr.axis === 'x' ? 0.4 : 0), y + (dr.axis === 'x' ? 0 : 0.4)), b = toScreen(x + (dr.axis === 'x' ? 0.4 : 1), y + (dr.axis === 'x' ? 1 : 0.4));
+      ctx.strokeStyle = 'rgba(200,160,40,.35)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      if (hl.has(`door:${dr.key}`)) { ctx.strokeStyle = `rgba(94,230,255,${0.5 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+    for (const lk of AB.IsoWorld.layout().links || []) for (const end of [lk.a, lk.b]) {
+      const c = toScreen(end.x + 0.5, end.y + 0.5);
+      ctx.save(); ctx.translate(c.x, c.y); ctx.scale(1, 0.5);
+      ctx.fillStyle = '#050507'; ctx.fillRect(-18, -18, 36, 36);
+      ctx.strokeStyle = 'rgba(200,160,40,.5)'; ctx.lineWidth = 3; ctx.strokeRect(-20, -20, 40, 40);
+      ctx.restore();
+      if (hl.has(`link:${lk.key}:${end.room}`)) { ctx.strokeStyle = `rgba(94,230,255,${0.5 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 13, 0, 0, 7); ctx.stroke(); }
+    }
+    for (const e of AB.IsoWorld.layout().exits || []) {
+      const id = `exit:${e.room}:${e.door}`, c = toScreen(e.x + 0.5, e.y + 0.5);
+      if (e.floor) {
+        // люк в полу: тёмный проём с рамой
+        ctx.save(); ctx.translate(c.x, c.y); ctx.scale(1, 0.5);
+        ctx.fillStyle = '#050507'; ctx.fillRect(-18, -18, 36, 36);
+        ctx.strokeStyle = 'rgba(200,160,40,.5)'; ctx.lineWidth = 3; ctx.strokeRect(-20, -20, 40, 40);
+        ctx.restore();
+      }
+      if (hl.has(id)) { ctx.strokeStyle = `rgba(94,230,255,${0.5 + Math.sin(time * 5) * 0.25})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 13, 0, 0, 7); ctx.stroke(); }
+    }
+  }
+  function doorLamp(dr) {
+    const [x, y] = dr.tiles[0], p = toScreen(x + 0.5, y + 0.5), lockd = AB.IsoInteract.locked(dr);
+    ctx.fillStyle = lockd ? 'rgba(255,70,50,.9)' : dr.state === 'open' ? 'rgba(90,230,130,.9)' : 'rgba(255,200,80,.9)';
+    ctx.beginPath(); ctx.arc(p.x, p.y - 74 * dr.anim - 6, 2.5, 0, 7); ctx.fill();
+  }
+  function exitLamp(e, x, y) {
+    const rd = (AB.ID.get(e.room).doors || []).find((q) => q.key === e.door), ok = rd && AB.Rooms.canPass(rd).ok;
+    const p = toScreen(x + 0.5, y + 0.5);
+    ctx.fillStyle = ok ? 'rgba(90,230,130,.9)' : 'rgba(255,70,50,.9)';
+    ctx.beginPath(); ctx.arc(p.x, p.y - WALL_H - 6, 3, 0, 7); ctx.fill();
+  }
+  // предмет на полу: ящичек со свечением и подписью (заглушка — короткое имя предмета)
+  function drawItem(t) {
+    const p = toScreen(t.x, t.y), def = AB.ID.get(t.ref.item), on = hl.has(t.id);
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 18);
+    g.addColorStop(0, `rgba(255,214,120,${on ? 0.35 : 0.18 + Math.sin(time * 3) * 0.06})`); g.addColorStop(1, 'rgba(255,214,120,0)');
+    ctx.fillStyle = g; ctx.fillRect(p.x - 18, p.y - 18, 36, 36);
+    ctx.fillStyle = '#6a5a3a'; ctx.fillRect(p.x - 7, p.y - 9, 14, 8);
+    ctx.fillStyle = '#8a7650'; ctx.fillRect(p.x - 7, p.y - 11, 14, 3);
+    ctx.font = '600 9px "Oswald", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = on ? '#ffe6a8' : 'rgba(255,230,170,.75)';
+    ctx.fillText(on ? def.name : def.short || def.name, p.x, p.y - 16);
+  }
+
+  // крышка капсулы: светится, пока внутри спит Марк; открывается в сцене пробуждения
+  // №111: картинки капсулы (автор): закрытая — Марк спит (голубой свет под стеклом), открытая — после пробуждения
+  // №136: картинки предметов от автора. base — доля ширины картинки, которую занимает основание;
+  // foot — где по высоте картинки нижний угол основания; scale — какую часть клеток предмета займёт основание
+  const PROP_IMG = {
+    algaetank: { src: 'assets/props/algaetank.webp', base: 0.72, foot: 0.973, scale: 0.68, h: 100 },
+    // №139 (автор): на корабле ферма (EQUIP-009) выглядит как остальные баки — бак тот же, с ним просто можно работать
+    algaefarm: { src: 'assets/props/algaetank.webp', base: 0.72, foot: 0.973, scale: 0.68, h: 100 },
+    // №139: своя, миниатюрная ферма — в батискафе (здание конструктора BLD-107, prop 'algae').
+    // До постройки сети питания — приглушённый вид, при питании — яркий «рабочий» (№137–138)
+    algae: { src: 'assets/props/algaefarm.webp', base: 0.78, foot: 0.98, scale: 0.62, h: 70,
+      on: { src: 'assets/props/algaefarm-on.webp', base: 0.8, foot: 0.985 } },
+  };
+  for (const v of Object.values(PROP_IMG)) for (const o of [v, v.on].filter(Boolean)) { o.im = new Image(); o.im.src = o.src; }
+  // питание предмета: устройство базы — своя сеть (BaseSim), остальное — главное питание корабля
+  function propPowered(p) {
+    if (p.dev && AB.BaseSim && AB.BaseSim.on()) { const d = AB.BaseSim.dev(p.dev); return !!d && AB.BaseSim.canPower(d); }
+    return !!(AB.World && AB.World.hasPower());
+  }
+  function drawPropImg(p, spec, alpha, lit) {
+    // есть питание и у предмета есть «рабочая» картинка — показываем её (пропорции свои)
+    if (spec.on && spec.on.im.complete && spec.on.im.naturalWidth && propPowered(p)) spec = { ...spec, ...spec.on };
+    const im = spec.im, Wd = (p.w + p.h) * TW / 2 * spec.scale / spec.base, Hd = Wd * im.naturalHeight / im.naturalWidth;
+    const c = toScreen(p.x + p.w / 2, p.y + p.h / 2), bottom = c.y + (p.w + p.h) * TH / 4 * spec.scale;
+    ctx.save(); ctx.globalAlpha = alpha;
+    if (lit) { ctx.shadowColor = 'rgba(255,226,140,.95)'; ctx.shadowBlur = 14; }   // подсветка: с этим можно что-то сделать
+    ctx.drawImage(im, c.x - Wd / 2, bottom - Hd * spec.foot, Wd, Hd); ctx.restore();
+  }
+  const podImg = {};
+  for (const n of ['closed', 'open', 'broken']) { const im = new Image(); im.src = `assets/props/cryopod-${n}.webp`; podImg[n] = im; }
+  function drawPod(p, alpha) {
+    const st = p.prop && AB.IsoStory && AB.IsoStory.fx.props[p.prop];
+    const main = !!p.main, eq = p.equip && AB.Equip && AB.Equip.state ? AB.Equip.state(p.equip) : null;
+    const open = main ? !(st === 'closed' || st === 'opening') : eq === 'done';
+    const ok = (q) => q && q.complete && q.naturalWidth;
+    const im = p.look === 'broken' && ok(podImg.broken) ? podImg.broken : open && ok(podImg.open) ? podImg.open : podImg.closed;
+    const c = toScreen(p.x + p.w / 2, p.y + p.h / 2), Wd = (p.w + p.h) * TW / 2 * 1.2, Hd = Wd * im.naturalHeight / im.naturalWidth;
+    ctx.save(); ctx.globalAlpha = alpha;
+    if (!main && !p.equip) ctx.filter = p.look === 'broken' ? 'brightness(0.8)' : 'brightness(0.55) saturate(0.6)';   // пустые капсулы — без питания, тёмные
+    ctx.drawImage(im, c.x - Wd / 2, c.y - Hd * 0.6, Wd, Hd);
+    ctx.filter = 'none';
+    if (main && !open) {                                                      // живой свет под инеем
+      const g = ctx.createRadialGradient(c.x, c.y - Hd * 0.32, 2, c.x, c.y - Hd * 0.32, Wd * 0.4);
+      const a = st === 'opening' ? 0.3 + Math.sin(time * 8) * 0.12 : 0.22;
+      g.addColorStop(0, `rgba(120,210,255,${a})`); g.addColorStop(1, 'rgba(120,210,255,0)');
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(c.x - Wd / 2, c.y - Hd, Wd, Hd); ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+  }
+  function podGlass(x, y, hgt, p) {
+    const st = p.prop && AB.IsoStory && AB.IsoStory.fx.props[p.prop];
+    const n = toScreen(x, y), e = toScreen(x + 1, y), s = toScreen(x + 1, y + 1), w = toScreen(x, y + 1);
+    const a = st === 'closed' ? 0.45 : st === 'opening' ? 0.25 + Math.sin(time * 8) * 0.1 : 0.12;
+    ctx.fillStyle = `rgba(120,210,255,${a})`;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y - hgt - 1); ctx.lineTo(e.x, e.y - hgt - 1); ctx.lineTo(s.x, s.y - hgt - 1); ctx.lineTo(w.x, w.y - hgt - 1); ctx.closePath(); ctx.fill();
+  }
+  // истинный облик (ASSET-CHAR002-02): на миг в помещении, между ними, — непонятно, кто это
+  const miraTrue = new Image(); miraTrue.src = 'assets/char002/true/mira-true.webp';
+  function drawTrueForm(fx) {
+    const tf = fx.trueForm;
+    if (!tf) return;
+    const a = AB.Assets.get('ASSET-CHAR002-02'), k = Math.sin(Math.min(1, 1 - tf.t / tf.dur) * Math.PI);
+    const p = toScreen(tf.x, tf.y);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, k * 1.4) * (Math.sin(time * 40) > -0.6 ? 0.9 : 0.4);
+    // №119: истинный облик Миры — картинка автора (худая паучиха из плоти)
+    if (miraTrue.complete && miraTrue.naturalWidth) { const h = 230, w = miraTrue.naturalWidth * (h / miraTrue.naturalHeight); if (AB.IsoMiraP) AB.IsoMiraP.drawMesh(ctx, miraTrue, p.x - w / 2, p.y - h * 0.97, w, h, time, 0.22, false); else ctx.drawImage(miraTrue, p.x - w / 2, p.y - h * 0.97, w, h); }
+    else if (a.status === 'ready') { const h = 150, w = a.img.width * (h / a.img.height); ctx.drawImage(a.img, p.x - w / 2, p.y - h, w, h); }
+    else { ctx.fillStyle = '#0a1418'; ctx.beginPath(); ctx.ellipse(p.x, p.y - 40, 50, 30, 0, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+  // внешние камеры шлюза: дно океана, лучи прожекторов, проходящий левиафан
+  function cameraView(fx) {
+    if (!(fx.window > 0)) return;
+    const W = cv.width, H = cv.height, a = Math.min(1, fx.window);
+    const w = Math.min(W * 0.8, 900 * dpr), h = w * 0.42, x = (W - w) / 2, y = H * 0.16;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#01060c'); g.addColorStop(1, '#031820');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    // лучи прожекторов
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [sx0, ang] of [[0.25, 0.25], [0.7, -0.2]]) {
+      const lg = ctx.createLinearGradient(x + w * sx0, y, x + w * sx0 + ang * h, y + h);
+      lg.addColorStop(0, 'rgba(140,200,220,.18)'); lg.addColorStop(1, 'rgba(140,200,220,0)');
+      ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(x + w * sx0 - 6, y); ctx.lineTo(x + w * sx0 + 6, y); ctx.lineTo(x + w * sx0 + ang * h + 90, y + h); ctx.lineTo(x + w * sx0 + ang * h - 90, y + h); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // морской снег
+    ctx.fillStyle = 'rgba(200,230,240,.35)';
+    for (let i = 0; i < 70; i++) { const px = x + ((i * 97 + time * 8) % w), py = y + ((i * 53 + time * (6 + (i % 5))) % h); ctx.fillRect(px, py, 1.5 * dpr, 1.5 * dpr); }
+    // дно
+    ctx.fillStyle = '#02090c'; ctx.beginPath(); ctx.moveTo(x, y + h);
+    for (let i = 0; i <= 12; i++) ctx.lineTo(x + (w / 12) * i, y + h * (0.8 + Math.sin(i * 1.7) * 0.06)); ctx.lineTo(x + w, y + h); ctx.fill();
+    // левиафан: огромная тень проходит над дном
+    if (fx.leviathan >= 0) {
+      const t = fx.leviathan / 9, lx = x - w * 0.6 + t * w * 2.2, ly = y + h * 0.42;
+      ctx.fillStyle = 'rgba(0,0,0,.85)';
+      ctx.beginPath(); ctx.ellipse(lx, ly, w * 0.42, h * 0.11, -0.04, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(lx - w * 0.38, ly); ctx.lineTo(lx - w * 0.58, ly - h * 0.12); ctx.lineTo(lx - w * 0.55, ly + h * 0.1); ctx.fill();
+      ctx.fillStyle = 'rgba(120,220,255,.6)'; ctx.beginPath(); ctx.arc(lx + w * 0.34, ly - h * 0.02, 3 * dpr, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(94,230,255,.5)'; ctx.lineWidth = 2 * dpr; ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(94,230,255,.8)'; ctx.font = `${11 * dpr}px "Share Tech Mono", monospace`; ctx.textAlign = 'left';
+    ctx.fillText('ВНЕШНЯЯ КАМЕРА · ГЛУБИНА 3000 М', x + 10 * dpr, y + 18 * dpr);
+    ctx.restore();
+  }
+  // экранные эффекты сцен: затемнение, тревога, мерцание света, помехи на пульте
+  function overlays(fx) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const W = cv.width, H = cv.height;
+    if (fx.alarm) { ctx.fillStyle = `rgba(160,10,10,${0.08 + Math.sin(time * 3.2) * 0.06})`; ctx.fillRect(0, 0, W, H); }
+    if (fx.flicker > 0) {
+      const r = Math.sin(time * 47) + Math.sin(time * 23);
+      ctx.fillStyle = `rgba(0,0,0,${r > 0.6 ? 0.05 : r > -0.4 ? 0.45 : 0.8})`; ctx.fillRect(0, 0, W, H);
+    }
+    if (fx.ghost > 0) {
+      ctx.fillStyle = `rgba(120,220,255,${0.06 + (Math.sin(time * 60) > 0.5 ? 0.06 : 0)})`; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(200,250,255,.15)';
+      for (let i = 0; i < 5; i++) { const y = (time * 700 + i * 157) % H; ctx.fillRect(0, y, W, 2 * dpr); }
+    }
+    if (fx.trueForm) { const k = Math.sin(Math.min(1, 1 - fx.trueForm.t / fx.trueForm.dur) * Math.PI); ctx.fillStyle = `rgba(120,220,255,${0.08 * k})`; ctx.fillRect(0, 0, W, H); }
+    cameraView(fx);
+    const f = Math.max(fx.fade || 0, AB.IsoGame ? AB.IsoGame.fade() : 0);
+    if (f > 0) { ctx.fillStyle = `rgba(0,0,0,${f})`; ctx.fillRect(0, 0, W, H); }
+  }
+
+  function propTag(p, look) {
+    if (!AB.isoShowIds) return;
+    const c = toScreen(p.x + p.w / 2, p.y + p.h / 2);
+    ctx.font = '8px "Share Tech Mono", monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(200,210,220,.55)';
+    ctx.fillText(p.asset || p.kind, c.x, c.y - look.h - 6);
+  }
+
+  // противник: составная фигура мутанта тем же кодом, что вид сбоку; цель — красное кольцо
+  const ENEMY_K = 0.62;
+  // №127: шахты, из которых вылезают монстры: люк в полу или решётка в стене; остаются открытыми и гаснут
+  const shafts = [];
+  AB.Bus.on('enemy:emerge', (s) => { shafts.push({ ...s, t: 0 }); if (shafts.length > 12) shafts.shift(); });
+  function drawShafts(dt) {
+    for (let i = shafts.length - 1; i >= 0; i--) { shafts[i].t += dt; if (shafts[i].t > 9) shafts.splice(i, 1); }
+    for (const s of shafts) {
+      const a = Math.min(1, s.t * 4) * Math.min(1, (9 - s.t) / 2), open = Math.min(1, s.t / 0.35);
+      const c = toScreen(s.x, s.y);
+      ctx.save(); ctx.globalAlpha = a;
+      if (s.kind === 'floor') {
+        const q = (dx, dy) => toScreen(s.x + dx, s.y + dy);
+        const pts = [q(-0.38, -0.38), q(0.38, -0.38), q(0.38, 0.38), q(-0.38, 0.38)];
+        ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath();
+        ctx.fillStyle = '#050607'; ctx.fill(); ctx.strokeStyle = 'rgba(150,140,120,.8)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.strokeStyle = 'rgba(80,75,65,.7)'; ctx.lineWidth = 1;
+        for (let k = 1; k < 4; k++) { const u = -0.38 + k * 0.19, p1 = q(u, -0.38), p2 = q(u, 0.38); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+        // откинутая крышка
+        const h0 = pts[0], h1 = pts[1], lift = 26 * open;
+        ctx.beginPath(); ctx.moveTo(h0.x, h0.y); ctx.lineTo(h1.x, h1.y); ctx.lineTo(h1.x, h1.y - lift); ctx.lineTo(h0.x, h0.y - lift); ctx.closePath();
+        ctx.fillStyle = '#3a3c3f'; ctx.fill(); ctx.strokeStyle = 'rgba(190,180,150,.6)'; ctx.stroke();
+      } else {
+        const w = 26, h = 22, y0 = c.y - 30;
+        ctx.fillStyle = '#050607'; ctx.fillRect(c.x - w / 2, y0 - h, w, h);
+        ctx.strokeStyle = 'rgba(150,140,120,.85)'; ctx.lineWidth = 2; ctx.strokeRect(c.x - w / 2, y0 - h, w, h);
+        // сорванная решётка висит
+        ctx.save(); ctx.translate(c.x - w / 2, y0 - h); ctx.rotate(0.9 * open);
+        ctx.strokeStyle = 'rgba(120,115,100,.9)'; ctx.lineWidth = 1.5; for (let k = 0; k <= 4; k++) { ctx.beginPath(); ctx.moveTo(0, (k / 4) * h); ctx.lineTo(w, (k / 4) * h); ctx.stroke(); }
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  }
+  function drawEnemy(e) {
+    const p = toScreen(e.x, e.y);
+    if (e.emerge > 0 && e.shaft) {   // №127: вылезает: из пола — поднимается из люка; из стены — выползает из решётки
+      const k = 1 - e.emerge / 1.1;
+      ctx.save();
+      if (e.shaft.kind === 'floor') { ctx.beginPath(); ctx.rect(p.x - 120, p.y - 400, 240, 402); ctx.clip(); ctx.translate(0, (1 - k) * 90); }
+      else { const w0 = toScreen(e.shaft.x, e.shaft.y); ctx.translate((w0.x - p.x) * (1 - k), (w0.y - 30 - p.y) * (1 - k)); ctx.globalAlpha = 0.3 + 0.7 * k; }
+      if (AB.Render && AB.Render.drawEnemyFigure) AB.Render.drawEnemyFigure(ctx, e, p.x, p.y, ENEMY_K);
+      ctx.restore();
+      return;
+    }
+    const tgt = AB.IsoCombat.target() === e.id, hov = AB.IsoInput.hoverFoe() === e;
+    if ((tgt || hov) && e.state !== 'DEAD') {
+      ctx.strokeStyle = `rgba(255,70,50,${0.55 + Math.sin(time * 6) * 0.2})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 24, 12, 0, 0, 7); ctx.stroke();
+    }
+    if (e.vulnT > 0 && e.state !== 'DEAD') {   // №120: под препаратом Хейл — болезненно-зелёные пятна и кольцо
+      const k = Math.min(1, e.vulnT / 1.5);
+      ctx.strokeStyle = `rgba(170,255,90,${(0.45 + Math.sin(time * 9) * 0.2) * k})`; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 27, 13, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = '700 10px "Share Tech Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(190,255,120,${k})`; ctx.fillText(`×${e.vulnMult}`, p.x + 26, p.y - 70);
+    }
+    const dd = AB.ID.get(e.id);
+    if (AB.IsoMiraP && AB.IsoMiraP.drawLarva(ctx, e, p, (f, q) => AB.Render.drawFigure(ctx, f, q.x, q.y, FIG_K))) return;   // №123: «Разум» — личинки как люди
+    if (dd && dd.type === 'mira' && AB.IsoMira) { AB.IsoMira.draw(ctx, e, p, (f, q) => AB.Render.drawFigure(ctx, f, q.x, q.y, FIG_K)); return; }   // №118: облик Миры
+    if (AB.Render && AB.Render.drawEnemyFigure) AB.Render.drawEnemyFigure(ctx, e, p.x, p.y, ENEMY_K);
+  }
+  // полоса здоровья: у раненых, у цели и под указателем
+  function enemyBar(e) {
+    if (e.state === 'DEAD') return;
+    const d = AB.ID.get(e.id), tgt = AB.IsoCombat.target() === e.id, hov = AB.IsoInput.hoverFoe() === e;
+    if (e.hp >= d.hp && !tgt && !hov) return;
+    const p = toScreen(e.x, e.y), f = Math.max(0, e.hp / d.hp);
+    ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 22, p.y - 84, 44, 5);
+    ctx.fillStyle = f > 0.3 ? '#c0392b' : '#ff6a3a'; ctx.fillRect(p.x - 21, p.y - 83, 42 * f, 3);
+    if (tgt || hov) { ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffb38a'; ctx.fillText(d.name, p.x, p.y - 90); }
+  }
+
+  // ---------- Частицы: кровь, следы выстрелов, искры ----------
+  const fx = [];
+  AB.Bus.on('iso:enemyHit', ({ x, y }) => { for (let i = 0; i < 14; i++) fx.push({ k: 'blood', x, y, z: 0.9, vx: (Math.random() - 0.5) * 2.4, vy: (Math.random() - 0.5) * 2.4, vz: 1 + Math.random() * 2, life: 0.9, age: 0 }); });
+  AB.Bus.on('iso:charHit', ({ x, y }) => { for (let i = 0; i < 8; i++) fx.push({ k: 'blood', x, y, z: 1.1, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, vz: 1 + Math.random() * 1.5, life: 0.8, age: 0 }); });
+  AB.Bus.on('iso:shot', ({ from, to, landed, energy, dart, cut }) => {
+    fx.push({ k: energy ? 'bolt' : 'tracer', x: from.x, y: from.y, x2: to.x, y2: to.y, life: energy ? Math.max(0.1, Math.hypot(to.x - from.x, to.y - from.y) / 40) : cut ? 0.2 : 0.14, age: 0, dart, landed, cut });
+  });
+  const decals = [];
+  function updateFx(dt) {
+    for (let i = fx.length - 1; i >= 0; i--) {
+      const f = fx[i];
+      f.age += dt;
+      if (f.k === 'blood') {
+        f.x += f.vx * dt; f.y += f.vy * dt; f.vz -= 9 * dt; f.z += f.vz * dt;
+        if (f.z <= 0) { if (decals.length < 160) decals.push({ x: f.x, y: f.y, r: 2 + Math.random() * 4 }); fx.splice(i, 1); continue; }
+      }
+      if (f.age > f.life) fx.splice(i, 1);
+    }
+  }
+  function drawFx() {
+    for (const d of decals) { const p = toScreen(d.x, d.y); ctx.fillStyle = 'rgba(60,8,8,.7)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, d.r, d.r * 0.5, 0, 0, 7); ctx.fill(); }
+    for (const f of fx) {
+      const a = 1 - f.age / f.life;
+      if (f.k === 'blood') { const p = toScreen(f.x, f.y); ctx.fillStyle = `rgba(120,12,12,${a})`; ctx.fillRect(p.x - 1.5, p.y - f.z * 40 - 1.5, 3, 3); continue; }
+      const a0 = toScreen(f.x, f.y), b0 = toScreen(f.x2, f.y2), h = 48;
+      if (f.k === 'tracer') {
+        ctx.strokeStyle = f.cut ? `rgba(255,170,70,${0.95 * a})` : f.dart ? `rgba(150,255,190,${0.9 * a})` : `rgba(220,250,255,${0.9 * a})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(a0.x, a0.y - h); ctx.lineTo(b0.x, b0.y - h); ctx.stroke();
+      } else {
+        const t = Math.min(1, f.age / f.life), x = a0.x + (b0.x - a0.x) * t, y = a0.y - h + (b0.y - a0.y) * t;
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(x, y, 0, x, y, 14);
+        g.addColorStop(0, 'rgba(240,250,255,1)'); g.addColorStop(0.4, 'rgba(140,220,255,.8)'); g.addColorStop(1, 'rgba(120,90,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(x - 14, y - 14, 28, 28);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+
+  function drawMember(m, isLead) {
+    const p = toScreen(m.x, m.y);
+    if (AB.IsoMiraP && AB.IsoMiraP.drawMember(ctx, m, p)) return;   // №123: «Разум» — Хейл видится чудовищем
+    // аура лечения дротикового пистолета: мягкое зелёное кольцо
+    if (AB.IsoCombat.hasAura(m.id) && !(AB.Chars.get(m.id) || {}).dead) {
+      const on = AB.IsoCombat.auraActive(m.id), r = AB.IsoCombat.weaponOf(m.id).weapon.aura.radius / 50;
+      ctx.strokeStyle = `rgba(110,255,170,${on ? 0.28 : 0.08})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, r * TW / 2 * 1.41, r * TH / 2 * 1.41, 0, 0, 7); ctx.stroke();
+    }
+    if (isLead) {
+      ctx.strokeStyle = `rgba(94,230,255,${0.45 + Math.sin(time * 4) * 0.15})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 10, 0, 0, 7); ctx.stroke();
+    }
+    // №56: снаружи — не герой, а экзокостюм (11 частей, js/data/rigs/EXOSUIT.js)
+    if (AB.IsoSuit && AB.IsoSuit.suited(m)) { AB.IsoSuit.draw(ctx, AB.IsoSuit.poseOf(m), p.x, p.y, FIG_K); return; }
+    const H = AB.HEROES && AB.HEROES[m.id];
+    if (H && H.look) { lookFigure(m, H, p); return; }   // №197: открытый герой без своей картинки — простая фигура в его цветах
+    if (AB.Render && AB.Render.drawFigure) AB.Render.drawFigure(ctx, m, p.x, p.y, FIG_K);
+  }
+  // №197: фигура героя по «look» (цвет одежды и волос) — пока у героя нет своей картинки
+  function lookFigure(m, H, p) {
+    const k = FIG_K * 1.25, sw = m.moving ? Math.sin((m.stride || 0) * 0.18) : 0, bob = m.moving ? Math.abs(sw) * 1.5 : 0;
+    const role = (AB.HERO_ROLES && AB.HERO_ROLES[H.role]) || {}, f = m.facing || 1;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(k * f, k);
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0, 0, 14, 5, 0, 0, 7); ctx.fill();
+    ctx.translate(0, -bob);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#2a2e33'; ctx.lineWidth = 6;                         // ноги
+    ctx.beginPath(); ctx.moveTo(-3, -34); ctx.lineTo(-3 + sw * 6, -2); ctx.moveTo(3, -34); ctx.lineTo(3 - sw * 6, -2); ctx.stroke();
+    ctx.fillStyle = H.look.body;                                           // туловище
+    ctx.beginPath(); ctx.moveTo(-9, -62); ctx.lineTo(9, -62); ctx.lineTo(8, -32); ctx.lineTo(-8, -32); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = role.col || '#ccc'; ctx.fillRect(-8, -40, 16, 3);       // пояс — цвет роли
+    ctx.strokeStyle = H.look.body; ctx.lineWidth = 5;                      // руки
+    ctx.beginPath(); ctx.moveTo(-8, -58); ctx.lineTo(-10 - sw * 5, -38); ctx.moveTo(8, -58); ctx.lineTo(10 + sw * 5, -38); ctx.stroke();
+    ctx.fillStyle = '#d8b090'; ctx.beginPath(); ctx.arc(1, -70, 7, 0, 7); ctx.fill();   // голова
+    ctx.fillStyle = H.look.hair; ctx.beginPath(); ctx.arc(0, -72, 7.5, Math.PI * 0.95, Math.PI * 2.05); ctx.fill();
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(4, -71, 2, 2);
+    ctx.restore();
+  }
+
+  function nameTag(m, isLead) {
+    const p = toScreen(m.x, m.y);
+    ctx.font = '600 10px "Oswald", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = isLead ? '#bfefff' : 'rgba(217,207,194,.85)';
+    const suit = AB.IsoSuit && AB.IsoSuit.suited(m);
+    // №214: подпись — сразу над головой: стоя ниже, чем раньше; лёжа (пробуждение, сон, ранен) — над лежащей фигурой
+    const tr = AB.Anim && AB.Anim.current(m.id), low = (tr && /wake|sleep|lie|down|dead|crawl|getup/.test(tr.action || '') && !tr.done) || m.down || (AB.Chars.get(m.id) || {}).dead;
+    const hy = suit ? 92 : low ? 36 : 75;
+    ctx.fillText(suit ? 'Экзокостюм' : AB.ID.get(m.id).name, p.x, p.y - hy);
+    // в базе — чем занят
+    const task = AB.IsoBase && AB.IsoBase.active() ? AB.IsoBase.taskOf(m.id) : '';
+    if (task) { ctx.font = '9px "Share Tech Mono", monospace'; ctx.fillStyle = 'rgba(160,220,235,.8)'; ctx.fillText(task, p.x, p.y - hy + 11); }
+  }
+
+  function drawMarker() {
+    const l = AB.IsoParty.lead();
+    if (!l.goal) { marker = null; return; }
+    marker = l.goal;
+    const p = toScreen(marker.x, marker.y), a = 0.5 + Math.sin(time * 6) * 0.25;
+    ctx.strokeStyle = `rgba(94,230,255,${a})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, 12 + Math.sin(time * 6) * 2, 6, 0, 0, 7); ctx.stroke();
+  }
+
+  // свет: темнота с «дырами» у ламп и у отряда, сверху — цветное свечение
+  function lighting(sc, party) {
+    const L = lctx, k = 0.5;
+    L.setTransform(1, 0, 0, 1, 0, 0);
+    L.globalCompositeOperation = 'source-over';
+    // №133: до питания — гуще темнота (атмосфера), вокруг отряда — небольшое пятно; с питанием — как было
+    const powered = AB.World && AB.World.hasPower();
+    let dk = AB.IsoReward ? AB.IsoReward.darkness({ dark: 0.68, lit: 0.18 }, powered) : (powered ? 0.18 : 0.68);   // №213: мягче (было 0.9 / 0.3) — видно помещение, свет ламп читается
+    if (AB.IsoGame.sector() === 'SECTOR-005') dk = 0;   // №197: своя база — светло, всё видно
+    if (dk <= 0) L.clearRect(0, 0, lightCv.width, lightCv.height);   // №197: в базе слой темноты пустой (иначе оставался прежний)
+    L.fillStyle = `rgba(3,4,7,${Math.max(0, dk)})`;   // с питанием светлее (№82: плавно, со вспышкой)
+    L.fillRect(0, 0, lightCv.width, lightCv.height);
+    L.setTransform(sc * k, 0, 0, sc * k, (cv.width / 2 - cam.x * sc) * k, (cv.height / 2 - cam.y * sc) * k);
+    L.globalCompositeOperation = 'destination-out';
+    const hole = (x, y, r, a) => {
+      const p = toScreen(x, y);
+      L.save(); L.translate(p.x, p.y); L.scale(1, 0.62);
+      const g = L.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(0.6, `rgba(0,0,0,${a * 0.45})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      L.fillStyle = g; L.fillRect(-r, -r, r * 2, r * 2); L.restore();
+    };
+    const lights = AB.IsoWorld.layout().lights;
+    // до питания лампы — аварийные, тусклые и короче; с питанием — в полную силу
+    for (const li of lights) if (pointShown(li.x, li.y)) hole(li.x, li.y, li.radius * TW * (powered ? 0.7 : 0.6), powered ? 0.95 : 0.75);
+    for (const m of party) hole(m.x, m.y - 0.6, (powered ? 6 : 4.6) * TW * 0.6, powered ? 0.85 : 0.8);
+    for (const m of emis) if (pointShown(m.cx, m.cy)) hole(m.cx + 0.6, m.cy + 0.6, TW * 1.3 * m.r, 0.55);   // №213: светящиеся детали стен подсвечивают пол рядом
+    // №133: фонарь на оружии — когда герой целится, луч света в сторону прицела
+    const aimL = AB.IsoInput.aim && AB.IsoInput.aim(), ld = AB.IsoParty.lead();
+    const beam = aimL && ld ? coneOf(ld, aimL) : null;
+    if (beam) {
+      const g = L.createLinearGradient(beam.o.x, beam.o.y, beam.f.x, beam.f.y);
+      g.addColorStop(0, 'rgba(0,0,0,.95)'); g.addColorStop(0.7, 'rgba(0,0,0,.7)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      L.fillStyle = g; L.beginPath(); beam.pts.forEach((q, i) => (i ? L.lineTo(q.x, q.y) : L.moveTo(q.x, q.y))); L.closePath(); L.fill();
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(lightCv, 0, 0, cv.width, cv.height);
+    // цветное свечение ламп
+    ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const li of lights) {
+      if (!pointShown(li.x, li.y)) continue;
+      const p = toScreen(li.x, li.y), r = li.radius * TW * 0.5, [cr, cg, cb] = li.color;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, 0.6);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0, `rgba(${cr},${cg},${cb},${powered ? 0.34 : 0.26})`); g.addColorStop(0.45, `rgba(${cr},${cg},${cb},${powered ? 0.12 : 0.09})`); g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);   // №213: цветной свет ярче
+      ctx.fillStyle = g; ctx.fillRect(-r, -r, r * 2, r * 2); ctx.restore();
+      // №213: пылинки в луче лампы
+      for (let i = 0; i < 7; i++) { const sd = (li.x * 13 + li.y * 7 + i * 31) % 97, ph = ((time * (6 + sd % 5)) + sd * 9) % 70; const px = p.x + Math.sin(sd + time * 0.4) * r * 0.55 * ((sd % 10) / 10), py = p.y - ph + ((sd % 7) - 3) * 6, al = Math.sin(Math.PI * ph / 70) * 0.5;
+        ctx.fillStyle = `rgba(${Math.min(255, cr + 60)},${Math.min(255, cg + 60)},${Math.min(255, cb + 60)},${al})`; ctx.fillRect(px, py, 1.6, 1.6); }
+    }
+    drawEmis();                                          // №213
+    if (beam) {   // тёплое свечение луча
+      const g = ctx.createLinearGradient(beam.o.x, beam.o.y, beam.f.x, beam.f.y);
+      g.addColorStop(0, 'rgba(255,236,200,.13)'); g.addColorStop(0.6, 'rgba(255,236,200,.05)'); g.addColorStop(1, 'rgba(255,236,200,0)');
+      ctx.fillStyle = g; ctx.beginPath(); beam.pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    { ctx.setTransform(1, 0, 0, 1, 0, 0); const W2 = cv.width, H2 = cv.height, vg = ctx.createRadialGradient(W2 / 2, H2 / 2, Math.min(W2, H2) * 0.42, W2 / 2, H2 / 2, Math.max(W2, H2) * 0.72);   // №213: края экрана темнее
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.45)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W2, H2);
+      ctx.setTransform(sc, 0, 0, sc, cv.width / 2 - cam.x * sc, cv.height / 2 - cam.y * sc); }   // №214: вернуть камеру — дальше подписи над героями
+  }
+  // луч фонаря: от оружия (у пояса героя) конусом ±20° на 7 клеток, в экранных координатах сцены
+  function coneOf(m, dir) {
+    const LEN = 7, HALF = 0.35, a0 = Math.atan2(dir.y, dir.x), lift = 34;
+    const up = (p) => ({ x: p.x, y: p.y - lift });
+    const o = up(toScreen(m.x + dir.x * 0.3, m.y + dir.y * 0.3)), f = up(toScreen(m.x + dir.x * LEN, m.y + dir.y * LEN));
+    const pts = [o];
+    for (let i = 0; i <= 8; i++) { const a = a0 - HALF + (2 * HALF * i) / 8; pts.push(up(toScreen(m.x + Math.cos(a) * LEN, m.y + Math.sin(a) * LEN))); }
+    return { o, f, pts };
+  }
+
+  return {
+    TW, TH, init, frame, pick, screenOf, toScreen, toWorld, portrait,
+    fog: () => ({ on: fog.on, vis: [...fog.vis], seen: [...fog.seen] }), roomSeen: (r) => !fog.on || fog.seen.has(r), roomVisible: (r) => !fog.on || fog.vis.has(r),
+    quality: () => ({ ...Q, dpr }), setQuality(q) { Object.assign(Q, q); QA.t = QA.sum = QA.n = 0; resize(); floorCv = null; },
+    focus(p) { focusPt = p ? { ...p } : null; },
+    // №69: свободная камера в базе — сдвиг обзора на (dx, dy) CSS-пикселей
+    panBy(dx, dy) {
+      if (!focusPt) return;
+      const k = dpr / S(), w0 = toWorld(0, 0), w1 = toWorld(-dx * k, -dy * k), sz = AB.IsoWorld.size();
+      focusPt.x = U.clamp(focusPt.x + w1.x - w0.x, 0, sz.w); focusPt.y = U.clamp(focusPt.y + w1.y - w0.y, 0, sz.h);
+      const t = toScreen(focusPt.x, focusPt.y - 0.4); cam.x = t.x; cam.y = t.y;
+    },
+    zoom(dz) { if (dz) { cam.z = U.clamp(Math.round((cam.z + dz) * 100) / 100, ZMIN, ZMAX); try { localStorage.setItem('abyss_iso_zoom', String(cam.z)); } catch (e) { /* хранилище недоступно */ } } return cam.z; },
+    setZoom(z) { cam.z = U.clamp(z, ZMIN, ZMAX); return cam.z; },
+    camera: () => ({ ...cam }),
+    fadeOf: (key) => (fade.has(key) ? fade.get(key) : 1),
+    snap() { snap = true; },
+  };
+})();

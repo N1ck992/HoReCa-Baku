@@ -1,0 +1,17 @@
+{
+  "rig": "MUTANT",
+  "height_units": 112,
+  "out_dir": "assets/enemy001/v1",
+  "js_out": "js/data/rigs/MUTANT.js",
+  "background": "green",
+  "variants": { "01": { "image": "assets/source/ENEMY001-01.png" } },
+  "points": {
+    "crown": [1135, 150], "neck": [985, 175], "hip": [600, 420],
+    "shoulder_near": [820, 200], "elbow_near": [660, 360], "wrist_near": [820, 510], "hand_near": [930, 640],
+    "shoulder_far": [960, 270], "elbow_far": [925, 420], "wrist_far": [1085, 520], "hand_far": [1200, 660],
+    "knee_near": [570, 690], "ankle_near": [370, 865], "toe_near": [450, 995],
+    "knee_far": [800, 655], "ankle_far": [765, 880], "toe_far": [950, 980],
+    "sole_y": 1000
+  },
+  "radius": { "head": 100, "torso": 150, "arm": 50, "leg": 75 }
+}

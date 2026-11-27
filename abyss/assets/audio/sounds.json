@@ -1,0 +1,178 @@
+{
+"step_metal": [
+"step_metal_1",
+"step_metal_2",
+"step_metal_3",
+"step_metal_4",
+"step_metal_5",
+"step_metal_6",
+"step_metal_7",
+"step_metal_8"
+],
+"pipe_hit": [
+"pipe_hit_1",
+"pipe_hit_2",
+"pipe_hit_3"
+],
+"flesh_hit": [
+"flesh_hit_1",
+"flesh_hit_2",
+"flesh_hit_3"
+],
+"plasma_shot": [
+"plasma_shot_1",
+"plasma_shot_2",
+"plasma_shot_3",
+"plasma_shot_4"
+],
+"plasma_hit": [
+"plasma_hit_1",
+"plasma_hit_2",
+"plasma_hit_3"
+],
+"mutant_alert": [
+"mutant_alert_1",
+"mutant_alert_2",
+"mutant_alert_3"
+],
+"mutant_attack": [
+"mutant_attack_1",
+"mutant_attack_2",
+"mutant_attack_3"
+],
+"mutant_hurt": [
+"mutant_hurt_1",
+"mutant_hurt_2",
+"mutant_hurt_3"
+],
+"mutant_death": [
+"mutant_death_1",
+"mutant_death_2"
+],
+"mutant_idle": [
+"mutant_idle_1",
+"mutant_idle_2",
+"mutant_idle_3",
+"mutant_idle_4",
+"mutant_idle_5",
+"mutant_idle_6"
+],
+"brute_roar": [
+"brute_roar_1",
+"brute_roar_2",
+"brute_roar_3",
+"brute_roar_4"
+],
+"boss_roar": [
+"boss_roar_1",
+"boss_roar_2"
+],
+"door": [
+"door_1"
+],
+"distant": [
+"distant_1",
+"distant_2",
+"distant_3"
+],
+"amb_hum": [
+"amb_hum"
+],
+"amb_dark": [
+"amb_dark"
+],
+"amb_drips": [
+"amb_drips"
+],
+"amb_machine": [
+"amb_machine"
+],
+"step_boot": [
+"step_boot_1",
+"step_boot_2",
+"step_boot_3",
+"step_boot_4",
+"step_boot_5",
+"step_boot_6",
+"step_boot_7",
+"step_boot_8"
+],
+"heavy_step": [
+"heavy_step_1"
+],
+"sword_swing": [
+"sword_swing_1",
+"sword_swing_2",
+"sword_swing_3",
+"sword_swing_4"
+],
+"sword_hit": [
+"sword_hit_1",
+"sword_hit_2",
+"sword_hit_3"
+],
+"sword_clash": [
+"sword_clash_1",
+"sword_clash_2"
+],
+"cloth": [
+"cloth_1",
+"cloth_2",
+"cloth_3",
+"cloth_4"
+],
+"ui_click": [
+"ui_click_1",
+"ui_click_2"
+],
+"ui_open": [
+"ui_open_1"
+],
+"ui_close": [
+"ui_close_1"
+],
+"ui_denied": [
+"ui_denied_1"
+],
+"quest_new": [
+"quest_new_1"
+],
+"quest_done": [
+"quest_done_1"
+],
+"reward": [
+"reward_1"
+],
+"pickup": [
+"pickup_1"
+],
+"spark": [
+"spark_1",
+"spark_2"
+],
+"alarm": [
+"alarm_1"
+],
+"turret_shot": [
+"turret_shot_1"
+],
+"grate_break": [
+"grate_break_1",
+"grate_break_2"
+],
+"grate_fix": [
+"grate_fix_1",
+"grate_fix_2"
+],
+"power_on": [
+"power_on_1"
+],
+"nailgun": [
+"nailgun_1",
+"nailgun_2",
+"nailgun_3"
+],
+"cutter_shot": [
+"cutter_shot"
+]
+}

@@ -1,0 +1,23 @@
+Текстуры поверхности (зона A1) — Poly Haven (https://polyhaven.com), лицензия CC0 (общественное достояние,
+можно использовать без ограничений и без указания авторства). Уменьшены до 256×256, WebP.
+Вид местности → исходная текстура:
+  sand → aerial_sand (polyhaven.com/a/aerial_sand)
+  dune → coast_sand_01 (polyhaven.com/a/coast_sand_01)
+  mesa → cracked_red_ground (polyhaven.com/a/cracked_red_ground)
+  oasis → leafy_grass (polyhaven.com/a/leafy_grass)
+  scrub → dry_ground_rocks (polyhaven.com/a/dry_ground_rocks)
+  marsh → brown_mud_leaves_01 (polyhaven.com/a/brown_mud_leaves_01)
+  reeds → mud_forest (polyhaven.com/a/mud_forest)
+  bog → brown_mud_02 (polyhaven.com/a/brown_mud_02)
+  growth → lichen_rock (polyhaven.com/a/lichen_rock)
+  ford → river_small_rocks (polyhaven.com/a/river_small_rocks)
+  meadow → sparse_grass (polyhaven.com/a/sparse_grass)
+  forest → forest_leaves_02 (polyhaven.com/a/forest_leaves_02)
+  mountain → aerial_rocks_02 (polyhaven.com/a/aerial_rocks_02)
+  thicket → forest_floor (polyhaven.com/a/forest_floor)
+  mistwood → forrest_ground_01 (polyhaven.com/a/forrest_ground_01)
+  salt → mud_cracked_dry_03 (polyhaven.com/a/mud_cracked_dry_03)
+  rustfoot → red_dirt_mud_01 (polyhaven.com/a/red_dirt_mud_01)
+  ruin → cracked_concrete (polyhaven.com/a/cracked_concrete)
+  plaza → gravel_road (polyhaven.com/a/gravel_road)
+  cliff → aerial_rocks_01 (polyhaven.com/a/aerial_rocks_01)
